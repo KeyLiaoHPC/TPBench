@@ -1,0 +1,8 @@
+*.o
+*.ko
+*.x
+./data
+*.symvers
+*.order
+*.mod.c
+*.csv
