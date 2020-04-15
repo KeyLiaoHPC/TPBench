@@ -1,0 +1,10 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-O3 -fno-builtin -march=armv8-a+simd -mtune=native
+DEF=-DNTIMES=100 -DKIB_SIZE=32768 -DUSE_MPI
+
+bench_mpi.x: bench_var.h main.c kernels.c
+	$(CC) $(CFLAGS) $(DEF) -o $@ $^
+
+clean:
+	rm -f *.x *.o
