@@ -1,4 +1,4 @@
-# TPBench - A Cycle-Level Throuputs Benchmark Tool
+# TPBench - A Cycle-Level Throughputs Benchmark Tool
 ## 1 - Introduction
 ### 1.1 - License
 TPBench - A Cycle-Level Throuputs Benchmark Tool (v0.1-beta)
@@ -19,11 +19,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ### 1.2 - Introduction
 TPBench is developed by Key Liao, Dr. James Lin in Center for High-Performance Computing, Shanghai Jiao Tong University. The projects provide cycle-level parallel timer and parallel bandwidth tests for Armv8 processors. The source is provide "AS-IS" and only tested on ThunderX2, KunPeng-920 and BCM2711.
+| Kernels | Calculation | Data Operations | Ops|
+| --- | --- | --- | ---  | ---  |
+| Init   |a[i] = s |1 Load, WA |0
+| Sum    |s += a[i] |1 Load + 1 Store  |1
+| Copy   |a[i] = b[i] |1 Load + 1 Store + WA | 0
+| Update |b[i] = b[i] * s |1Load + 1 Store | 1
+| Triad  |b[i] = a[i] + s * c[i] |2 Load + 1 Store + WA | 2
+| Daxpy  |a[i] = a[i] + c[i] * d[i] |2 Load + 1 Store | 2
+| STriad |b[i] = a[i] + c[i] * d[i] |3 Load + 1 Store + WA |  2
+| SDaxpy |d[i] = d[i] + b[i] * c[i] |3 Load + 1 Store | 2
 
 ### 1.3 - Acknowledgement
  - This project is highly inspired by John McClpin's **STREAM Benchmark** and RRZE's **TheBandwidthBenchmark**.
  - This project is developed with computing facility in the Center of High-Performance Computing, Shanghai Jiao Tong University.
-## 2 - Usage
+## 2 - Build and Run
 ### 2.1 - Specifications
  - Tested on ThunderX2 and Hisilicon KunPeng 920. 
  - Detailed data in ./data is more useful than screen outputs.
