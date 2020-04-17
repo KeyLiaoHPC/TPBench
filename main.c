@@ -38,12 +38,14 @@
 #endif
 #include "bench_var.h"
 
+extern int make_dir(char *);
+
 int
 main(int argc, char **argv){
     int nrank = 1, myid = 0;
     int err, cpuid;
-    uint64_t nbyte, narr;
-    char fname[100]; // Cycle filename.
+    uint64_t nbyte, narr, nkib;
+    char fname[1024], dirname[1024]; // Cycle filename.
     TYPE s, eps[5] = {0,0,0,0,0}; // s
 
     double *a, *b, *c, *d; 
@@ -57,14 +59,14 @@ main(int argc, char **argv){
     FILE    *fp;
     
     Kern_Type kerns[8] = {
-        {"Init:   ", 1, 0},
-        {"Sum:    ", 1, 1},
-        {"Copy:   ", 2, 0},
-        {"Update: ", 2, 1},
-        {"Triad:  ", 3, 2},
-        {"Daxpy:  ", 3, 2},
-        {"STriad: ", 4, 2},
-        {"SDaxpy: ", 4, 2}
+        {"Init", 1, 0},
+        {"Sum ", 1, 1},
+        {"Copy", 2, 0},
+        {"Update", 2, 1},
+        {"Triad", 3, 2},
+        {"Daxpy", 3, 2},
+        {"STriad", 4, 2},
+        {"SDaxpy", 4, 2}
     };
 
     struct timespec ts;
@@ -72,13 +74,15 @@ main(int argc, char **argv){
 // =============================================================================
 // STAGE 1 - Initialization
 // =============================================================================
+    printf(DHLINE "TPBench v" VER "\n");
 
     for(int i = 0; i < 8; i ++){
         tp_mean[i] = 0.0;
         tp_max[i] = 0.0;
         tp_min[i] = FLT_MAX;
     }
-    nbyte = KIB_SIZE * 1024;
+    nkib = KIB_SIZE;
+    nbyte = nkib * 1024;
     narr = nbyte / sizeof(TYPE);
     // MPI init.
 #ifdef USE_MPI
@@ -133,23 +137,30 @@ main(int argc, char **argv){
         exit(1);
     }
     b = (double *)malloc(nbyte);
-    if(a == NULL){
+    if(b == NULL){
         printf("EXIT: Failed on array b allocation. [errno: %d]\n", err);
         exit(1);
     }
     c = (double *)malloc(nbyte);
-    if(a == NULL){
+    if(c == NULL){
         printf("EXIT: Failed on array c allocation. [errno: %d]\n", err);
         exit(1);
     }
     d = (double *)malloc(nbyte);
-    if(a == NULL){
+    if(d == NULL){
         printf("EXIT: Failed on array d allocation. [errno: %d]\n", err);
         exit(1);
     }
 
 #endif
-
+    // Result dir
+    sprintf(dirname, "./data/%llu", nkib);
+    printf("Detail results are stored in %s.\n", dirname);
+    err = make_dir(dirname);
+    if(err){
+        printf("Failed when create results directory. [errno: %d]\n", err);
+        exit(1);
+    }
     for(int i = 0; i < narr; i ++){
         a[i] = A;
         b[i] = B;
@@ -189,6 +200,7 @@ main(int argc, char **argv){
         s = S;
         init(a, s, narr, &cys[0][0]);
         sum(a, &s, narr, &cys[0][1]);
+        s /= (double)narr;
         copy(a, b, narr, &cys[0][2]);
         update(b, s, narr, &cys[0][3]);
         triad(a, b, c, s, narr, &cys[0][4]);
@@ -203,6 +215,8 @@ main(int argc, char **argv){
 // =============================================================================
 // STAGE 3 - Benchmarking
 // =============================================================================
+    printf("Start benchmarking.\n");
+
     s = S;
     for(int i = 0; i < narr; i ++){
         a[i] = A;
@@ -218,6 +232,7 @@ main(int argc, char **argv){
 #ifdef TUNE
         tune_init(a, s, narr, &cys[i][0]);
         tune_sum(a, &s, narr, &cys[i][1]);
+        s /= (double)narr;
         tune_copy(a, b, narr, &cys[i][2]);
         tune_update(b, s, narr, &cys[i][3]);
         tune_triad(a, b, c, s, narr, &cys[i][4]);
@@ -245,8 +260,8 @@ main(int argc, char **argv){
 // STAGE 4 - Verification and Results
 // =============================================================================
 
-    // Output throuputs.
-    sprintf(fname, "%d_r0_c%d_cy.csv", narr, myid, cpuid); 
+    // Output throughputs for each core.
+    sprintf(fname, "%s/%d_r%d_c%d_cy.csv", dirname, narr, myid, cpuid); 
     fp = fopen(fname, "w");
     for(int i = 0; i < NTIMES; i ++){
         for(int j = 0; j < 7; j ++){
@@ -278,10 +293,20 @@ main(int argc, char **argv){
         tp_mean[i] /= NTIMES;
     }
 #endif
+   
+    // Output overall results
+    sprintf(fname, "%s/overall.csv", dirname); 
+    fp = fopen(fname, "w");
+    fprintf(fp, "kernel,narr,nbyte,mean,max,min\n");
+    for(int i = 0; i < 8; i ++){
+        fprintf(fp, "%s,%llu,%llu,%.4f,%.4f,%.4f\n", kerns[i].name, narr, nbyte, tp_mean[i], 
+                tp_max[i], tp_min[i]);
+    }
+    fclose(fp);
     if(myid == 0){
         printf(DHLINE"\n%d Cores Overall Throuphputs:\n", nrank);
         for(int i = 0; i < 8; i ++){
-            printf("%s Mean: %7.4f, Max: %7.4f, Min: %7.4f\n", 
+            printf("%s:\t\tMean: %7.4f, Max: %7.4f, Min: %7.4f\n", 
                    kerns[i].name, tp_mean[i], tp_max[i], tp_min[i]);
         }
     }
@@ -295,7 +320,7 @@ main(int argc, char **argv){
             eps[2] += abs(c[i] - sc);
             eps[3] += abs(d[i] - sd);
         }
-        printf(HLINE"Verification:\neps_a = %.7f, eps_b = %.7f, eps_c = %.7f, eps_d = %.7f\n",
+        printf(HLINE"Verification:\neps_a = %.7f, eps_b = %.7f, eps_c = %.7f, eps_d = %.7f\n"DHLINE,
                eps[0], eps[1], eps[2], eps[3]);
     }
 

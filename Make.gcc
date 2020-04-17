@@ -1,9 +1,11 @@
+#!/bin/sh
 CC=gcc
 CFLAGS=-O3 -fno-builtin -march=armv8-a+simd -mtune=native
-DEF=-DNTIMES=100 -DKIB_SIZE=32768
+DEF=-DNTIMES=100 
+SIZE=-DKIB_SIZE=32768
 
-bench.x: bench_var.h main.c kernels.c
-	$(CC) $(CFLAGS) $(DEF) -o $@ $^
+bench.x: bench_var.h main.c kernels.c utils.c
+	$(CC) $(CFLAGS) $(DEF) $(SIZE) -o $@ $^
 
 clean:
 	rm -f *.x *.o
