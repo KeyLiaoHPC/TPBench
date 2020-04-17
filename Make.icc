@@ -1,0 +1,11 @@
+#!/bin/sh
+CC=icc
+CFLAGS=-O3 -xHost -std=gnu11
+DEF=-DNTIMES=100 
+SIZE=-DKIB_SIZE=32768
+
+bench.x: bench_var.h main.c kernels.c utils.c
+	$(CC) $(CFLAGS) $(DEF) $(SIZE) -o $@ $^
+
+clean:
+	rm -f *.x *.o

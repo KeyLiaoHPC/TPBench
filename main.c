@@ -74,7 +74,6 @@ main(int argc, char **argv){
 // =============================================================================
 // STAGE 1 - Initialization
 // =============================================================================
-    printf(DHLINE "TPBench v" VER "\n");
 
     for(int i = 0; i < 8; i ++){
         tp_mean[i] = 0.0;
@@ -94,6 +93,9 @@ main(int argc, char **argv){
     // if either of these fail there is something really screwed up!
     MPI_Comm_size(MPI_COMM_WORLD, &nrank);
     MPI_Comm_rank(MPI_COMM_WORLD, &myid);
+    if(myid == 0){
+        printf(DHLINE "TPBench v" VER "\n");
+    }
 #endif
     for(int i = 0; i < 8; i ++){
         kerns[i].nbyte = kerns[i].nbyte * nbyte;
@@ -155,7 +157,9 @@ main(int argc, char **argv){
 #endif
     // Result dir
     sprintf(dirname, "./data/%llu", nkib);
-    printf("Detail results are stored in %s.\n", dirname);
+    if(myid == 0){
+        printf("Detail results are stored in %s.\n", dirname);
+    }
     err = make_dir(dirname);
     if(err){
         printf("Failed when create results directory. [errno: %d]\n", err);
@@ -167,7 +171,6 @@ main(int argc, char **argv){
         c[i] = C;
         d[i] = D;
     }
-    //printf("Init done. %.2f MiB memory is allocated.\n", (double)KIB_SIZE / 1024 * 4);
 
 // =============================================================================
 // STAGE 2 - Timer init and warming up.
@@ -191,7 +194,6 @@ main(int argc, char **argv){
         sb = sa + sc * sd;
         sd = sd + sb * sc;
     }
-    //printf("%f, %f, %f, %f, %f\n", sa, sb, sc, sd, ss);
 
     clock_gettime(CLOCK_MONOTONIC, &ts);
     t0 = ts.tv_sec * 1e9 + ts.tv_nsec;
@@ -215,8 +217,9 @@ main(int argc, char **argv){
 // =============================================================================
 // STAGE 3 - Benchmarking
 // =============================================================================
-    printf("Start benchmarking.\n");
-
+    if(myid == 0){
+        printf("Start benchmarking.\n");
+    }
     s = S;
     for(int i = 0; i < narr; i ++){
         a[i] = A;

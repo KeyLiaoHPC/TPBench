@@ -28,27 +28,61 @@
 #include <stdlib.h>
 #include "bench_var.h"
 
+#ifdef __aarch64__
+
+#define TIME_ST uint64_t cy0, cy1;                              \
+                asm volatile(                                   \
+                    "DMB NSH"    "\n\t"                         \
+                    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+
+#define TIME_EN asm volatile(                                   \
+                    "DMB NSHST"    "\n\t"                       \
+                    "mrs %0, pmccntr_el0" : "=r" (cy1) : : );   \
+                *cy = cy1 - cy0;
+#else
+
+#define TIME_ST uint64_t hi1, lo1, hi2, lo2;            \
+                asm volatile(                           \
+                    "RDTSCP"        "\n\t"              \
+                    "RDTSC"         "\n\t"              \
+                    "CPUID"         "\n\t"              \
+                    "RDTSCP"        "\n\t"              \
+                    "mov %%rdx, %0" "\n\t"              \
+                    "mov %%rax, %1" "\n\t"              \
+                    :"=r" (hi1), "=r" (lo1)             \
+                    :                                   \
+                    :"%rax", "%rbx", "%rcx", "%rdx");
+
+#define TIME_EN asm volatile ( \
+                    "RDTSC"         "\n\t"              \
+                    "mov %%rdx, %0" "\n\t"              \
+                    "mov %%rax, %1" "\n\t"              \
+                    "CPUID"         "\n\t"              \
+                    :"=r" (hi2), "=r" (lo2)             \
+                    :                                   \
+                    :"%rax", "%rbx", "%rcx", "%rdx");   \
+                *cy = ((hi2 << 32) | lo2) - ((hi1 << 32) | lo1);
+#endif
+
 /*
  * init
  * 1 Store + WA, 0 flops
  */
-
 void
 init(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = s;
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -57,20 +91,22 @@ init(TYPE *a, TYPE s, int narr, uint64_t *cy){
  */
 void
 sum(TYPE *a, TYPE *s, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    // asm volatile(
+    //     "DMB NSH"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         *s += a[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -79,20 +115,22 @@ sum(TYPE *a, TYPE *s, int narr, uint64_t *cy){
  */
 void
 copy(TYPE *a, TYPE *b, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    //asm volatile(
+    //    "DMB NSH"    "\n\t"
+    //    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = b[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -101,20 +139,22 @@ copy(TYPE *a, TYPE *b, int narr, uint64_t *cy){
  */
 void
 update(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    // asm volatile(
+    //     "DMB NSH"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = s * a[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -123,21 +163,23 @@ update(TYPE *a, TYPE s, int narr, uint64_t *cy){
  */
 void
 triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    // asm volatile(
+    //     "DMB NSH"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         //a[i] = b[i] + s * c[i];
         b[i] = a[i] + s * c[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -146,20 +188,22 @@ triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
  */
 void
 daxpy(TYPE *a, TYPE *b, TYPE s, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    // asm volatile(
+    //     "DMB NSH"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = a[i] + b[i] * s;
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -168,21 +212,22 @@ daxpy(TYPE *a, TYPE *b, TYPE s, int narr, uint64_t *cy){
  */
 void
 striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
+    // uint64_t cy0, cy1;
+    //asm volatile(
+    //    "DMB NSH"    "\n\t"
+    //    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
        // a[i] = b[i] + c[i] * d[i];
        b[i] = a[i] + c[i] * d[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
 
 /*
@@ -191,18 +236,20 @@ striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
  */
 void
 sdaxpy(TYPE *a, TYPE *b, TYPE *c, int narr, uint64_t *cy){
-    uint64_t cy0, cy1;
-    asm volatile(
-        "DMB NSH"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
+    // uint64_t cy0, cy1;
+    // asm volatile(
+    //     "DMB NSH"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
 
+    TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = a[i] + b[i] * c[i];
     }
+    TIME_EN;
 
-    asm volatile(
-        "DMB NSHST"    "\n\t"
-        "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
+    // asm volatile(
+    //     "DMB NSHST"    "\n\t"
+    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
 
-    *cy = cy1 - cy0;
+    // *cy = cy1 - cy0;
 }
