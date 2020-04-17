@@ -1,6 +1,6 @@
 #!/bin/sh
-CC=gcc
-CFLAGS=-O3 -fno-builtin -march=armv8-a+simd -mtune=native
+CC=icc
+CFLAGS=-O3 -xHost -std=gnu11
 DEF=-DNTIMES=100 
 SIZE=-DKIB_SIZE=32768
 

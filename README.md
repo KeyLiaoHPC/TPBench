@@ -69,7 +69,21 @@ Modifying timer with <code>rdtscp</code> to adjust for x86.
 ### 2.4 - TODO
 Using virtual timer to sync instead of MPI_Barrier().
 ## 3 - FAQ
- 
-## 4 - Make contributions
+
+## 4 - Changelog
+
+### Version 0.2
+ - Enable x86 cycle timer.
+ - Automatic print final log into overall.csv
+ - All detail timing results are placed in ./data/${KIB_SIZE}.
+ - Bug fixes.
+
+### Version 0.1
+ - Initial beta version.
+ - Enable AArch64 cycle timer.
+
+
+
+## 5 - Make contributions
 Putting issues with resonable advices or reproducible problems.
 
