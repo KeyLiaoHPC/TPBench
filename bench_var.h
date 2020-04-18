@@ -51,7 +51,7 @@
 
 #define A 0.0002
 #define B 0.11
-#define C -0.13
+#define C -0.003
 #define D 0.23
 #define S 0.002
 
