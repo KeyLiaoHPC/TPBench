@@ -254,6 +254,9 @@ main(int argc, char **argv){
         striad(a, b, c, d, narr, &cys[i][6]);
         sdaxpy(d, b, c, narr, &cys[i][7]);
 #endif
+        if(myid == 0){
+            printf("%d,%f,%f,%f,%f,%f\n", i, a[0],b[0],c[0],d[0],s);
+        }
 #ifdef USE_MPI
         MPI_Barrier(MPI_COMM_WORLD);
 #endif 
