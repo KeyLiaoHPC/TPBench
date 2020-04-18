@@ -72,6 +72,9 @@ Using virtual timer to sync instead of MPI_Barrier().
 
 ## 4 - Changelog
 
+### Version 0.21
+ - Decrease C to avoid overflow when N is huge.
+
 ### Version 0.2
  - Enable x86 cycle timer.
  - Automatic print final log into overall.csv
