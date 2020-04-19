@@ -106,6 +106,7 @@ main(int argc, char **argv){
     if(myid == 0){
         printf(DHLINE"MPI version, %d processes.\n", nrank);
         printf("Single thread memory: %llu bytes, narr = %d.\n", nbyte, narr);
+        printf("NTIMES = %d\n", itoa(NTIMES));
     }
 #else
     printf(DHLINE"Single-core version.\n");

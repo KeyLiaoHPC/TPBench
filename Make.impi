@@ -1,6 +1,6 @@
 #!/bin/sh
 CC=mpiicc
-CFLAGS=-O3 -xHost -std=gnu11
+CFLAGS=-O2 -xHost -std=gnu11
 DEF=-DNTIMES=1000  -DUSE_MPI
 SIZE=-DKIB_SIZE=32768
 
