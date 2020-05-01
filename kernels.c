@@ -70,19 +70,11 @@
  */
 void
 init(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = s;
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -91,22 +83,11 @@ init(TYPE *a, TYPE s, int narr, uint64_t *cy){
  */
 void
 sum(TYPE *a, TYPE *s, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    // asm volatile(
-    //     "DMB NSH"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         *s += a[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -115,22 +96,11 @@ sum(TYPE *a, TYPE *s, int narr, uint64_t *cy){
  */
 void
 copy(TYPE *a, TYPE *b, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    //asm volatile(
-    //    "DMB NSH"    "\n\t"
-    //    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = b[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -139,22 +109,11 @@ copy(TYPE *a, TYPE *b, int narr, uint64_t *cy){
  */
 void
 update(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    // asm volatile(
-    //     "DMB NSH"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = s * a[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -163,23 +122,12 @@ update(TYPE *a, TYPE s, int narr, uint64_t *cy){
  */
 void
 triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    // asm volatile(
-    //     "DMB NSH"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         //a[i] = b[i] + s * c[i];
         b[i] = a[i] + s * c[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -188,22 +136,11 @@ triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
  */
 void
 daxpy(TYPE *a, TYPE *b, TYPE s, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    // asm volatile(
-    //     "DMB NSH"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = a[i] + b[i] * s;
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -212,22 +149,11 @@ daxpy(TYPE *a, TYPE *b, TYPE s, int narr, uint64_t *cy){
  */
 void
 striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    //asm volatile(
-    //    "DMB NSH"    "\n\t"
-    //    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
     TIME_ST;
     for(int i = 0; i < narr; i ++){
-       // a[i] = b[i] + c[i] * d[i];
        b[i] = a[i] + c[i] * d[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }
 
 /*
@@ -236,20 +162,9 @@ striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
  */
 void
 sdaxpy(TYPE *a, TYPE *b, TYPE *c, int narr, uint64_t *cy){
-    // uint64_t cy0, cy1;
-    // asm volatile(
-    //     "DMB NSH"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
     TIME_ST;
     for(int i = 0; i < narr; i ++){
         a[i] = a[i] + b[i] * c[i];
     }
     TIME_EN;
-
-    // asm volatile(
-    //     "DMB NSHST"    "\n\t"
-    //     "mrs %0, pmccntr_el0" : "=r" (cy1) : : );
-
-    // *cy = cy1 - cy0;
 }

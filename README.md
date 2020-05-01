@@ -28,7 +28,7 @@ TPBench is developed by Key Liao, Dr. James Lin in Center for High-Performance C
 | Copy   |a[i] = b[i] |1 Load + 1 Store + WA | 0 |
 | Update |b[i] = b[i] * s |1Load + 1 Store | 1 |
 | Triad  |b[i] = a[i] + s * c[i] |2 Load + 1 Store + WA | 2 |
-| Daxpy  |a[i] = a[i] + c[i] * d[i] |2 Load + 1 Store | 2 |
+| Daxpy  |a[i] = a[i] + s * b[i] |2 Load + 1 Store | 2 |
 | STriad |b[i] = a[i] + c[i] * d[i] |3 Load + 1 Store + WA  |  2 |
 | SDaxpy |d[i] = d[i] + b[i] * c[i] |3 Load + 1 Store | 2 |
 
