@@ -44,7 +44,7 @@ int
 main(int argc, char **argv){
     int nrank = 1, myid = 0;
     int err, cpuid;
-    uint64_t nbyte, narr, nkib;
+    uint64_t nbyte, narr, nkib, ntimes = NTIMES;
     char fname[1024], dirname[1024]; // Cycle filename.
     TYPE s, eps[5] = {0,0,0,0,0}; // s
 
@@ -57,6 +57,12 @@ main(int argc, char **argv){
 #endif
     uint64_t cy0, cy1, t0, t1;
     FILE    *fp;
+
+    //if(argc){
+    //    printf("")
+    //} else{
+    //    printf("Not ready.\n");
+    //}
     
     Kern_Type kerns[8] = {
         {"Init", 1, 0},
@@ -106,7 +112,7 @@ main(int argc, char **argv){
     if(myid == 0){
         printf(DHLINE"MPI version, %d processes.\n", nrank);
         printf("Single thread memory: %llu bytes, narr = %d.\n", nbyte, narr);
-        printf("NTIMES = %d\n", itoa(NTIMES));
+        printf("NTIMES = %llu\n", ntimes);
     }
 #else
     printf(DHLINE"Single-core version.\n");
@@ -302,12 +308,14 @@ main(int argc, char **argv){
 #endif
    
     // Output overall results
-    sprintf(fname, "%s/overall.csv", dirname); 
-    fp = fopen(fname, "w");
-    fprintf(fp, "kernel,narr,nbyte,mean,max,min\n");
-    for(int i = 0; i < 8; i ++){
-        fprintf(fp, "%s,%llu,%llu,%.4f,%.4f,%.4f\n", kerns[i].name, narr, nbyte, tp_mean[i], 
-                tp_max[i], tp_min[i]);
+    if(myid == 0){
+        sprintf(fname, "%s/overall.csv", dirname); 
+        fp = fopen(fname, "w");
+        fprintf(fp, "kernel,narr,nbyte,mean,max,min\n");
+        for(int i = 0; i < 8; i ++){
+            fprintf(fp, "%s,%llu,%llu,%.4f,%.4f,%.4f\n", kerns[i].name, narr, nbyte, tp_mean[i], 
+                    tp_max[i], tp_min[i]);
+        }
     }
     fclose(fp);
     if(myid == 0){

@@ -27,7 +27,7 @@
 #ifndef BENCH_VAR
 #define BENCH_VAR
 
-#define VER "0.2"
+#define VER "0.3"
 
 #include <stdint.h>
 
