@@ -272,9 +272,12 @@ main(int argc, char **argv){
 // =============================================================================
 // STAGE 4 - Verification and Results
 // =============================================================================
-
+    if(myid == 0){
+        printf("Benchmark finished, writing results.\n");
+    }
     // Output throughputs for each core.
     sprintf(fname, "%s/%d_r%d_c%d_cy.csv", dirname, narr, myid, cpuid); 
+    // printf("%d: %s\n", myid, fname);
     fp = fopen(fname, "w");
     for(int i = 0; i < NTIMES; i ++){
         for(int j = 0; j < 7; j ++){
@@ -316,8 +319,8 @@ main(int argc, char **argv){
             fprintf(fp, "%s,%llu,%llu,%.4f,%.4f,%.4f\n", kerns[i].name, narr, nbyte, tp_mean[i], 
                     tp_max[i], tp_min[i]);
         }
+        fclose(fp);
     }
-    fclose(fp);
     if(myid == 0){
         printf(DHLINE"\n%d Cores Overall Throuphputs:\n", nrank);
         for(int i = 0; i < 8; i ++){
@@ -339,11 +342,8 @@ main(int argc, char **argv){
                eps[0], eps[1], eps[2], eps[3]);
     }
 
-    free(a);
-    free(b);
-    free(c);
-    free(d);
 #ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
 #endif
     return 0;

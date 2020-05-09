@@ -109,8 +109,13 @@ $ make SETUP=GCC
 
 ### 2.2 - Specifications
 
+- Using both cycle- and nanosecond-level timer.
+- Adopting memory fence to guarantee executing order around timing instructions.
+- At least 1-sec warming up.
 - Tested on ThunderX2 and Hisilicon KunPeng 920.
-- Detailed data in ./data is more useful than screen outputs.
+- Manual time sync to mitigate synchronization overhead.(TBD)
+- Using double MPI_Barrier to decrease overhead and variations at barrier. (If manual time sync is not available.)
+- Detailed and overall data in ./data is more useful than standard outputs.
 
 ### 2.3 - Build and run
 
