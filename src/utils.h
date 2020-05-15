@@ -1,6 +1,6 @@
 /*
  * =================================================================================
- * Arm-BwBench - A bandwidth benchmarking suite for Armv8
+ * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
  * 
@@ -19,15 +19,20 @@
  * utils.h
  * Description: Headers for accessory functions.
  * Author: Key Liao
- * Modified: Apr. 18th, 2020
+ * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-
 #include <string.h>
-#include <limits.h>     /* PATH_MAX */
-#include <sys/stat.h>   /* mkdir(2) */
+#include <limits.h> 
+#include <sys/stat.h>   
 #include <errno.h>
+#include <stdint.h>
+
+#define DHLINE "================================================================================\n"
+#define HLINE  "--------------------------------------------------------------------------------\n"
+
+
 
 int
 make_dir(const char *path);

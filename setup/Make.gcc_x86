@@ -1,0 +1,5 @@
+#!/bin/sh
+CC=gcc
+CFLAGS=-O1 -fno-builtin -mtune=native
+DEF=-DNTIMES=1000
+SIZE=-DKIB_SIZE=32768

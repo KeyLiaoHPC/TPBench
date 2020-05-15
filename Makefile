@@ -6,8 +6,8 @@ VPATH = ./src
 
 .PHONY: clean
 
-bench.x: bench_var.h main.c kernels.c utils.c
-	$(CC) $(CFLAGS) $(DEF) $(SIZE) -o $@ $^
+tpbench.x: main.c kernels.c utils.c 
+	$(CC) -g $(CFLAGS) $(DEF) $(SIZE) -I. -o $@ $^
 
 clean:
 	-rm -f *.x *.o

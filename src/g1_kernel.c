@@ -16,8 +16,8 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * tune_kernels.c
- * Description: Optimized kernels for benchmarking.
+ * g1_kernel.c
+ * Description: Group 1 kernels, one-line kernel performing very simple operations.
  * Author: Key Liao
  * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
@@ -124,7 +124,8 @@ void
 triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
     TIME_ST;
     for(int i = 0; i < narr; i ++){
-        b[i] = a[i] + s * c[i];
+        //a[i] = b[i] + s * c[i];
+        a[i] = b[i] + s * c[i];
     }
     TIME_EN;
 }
@@ -150,8 +151,7 @@ void
 striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
     TIME_ST;
     for(int i = 0; i < narr; i ++){
-       // a[i] = b[i] + c[i] * d[i];
-       b[i] = a[i] + c[i] * d[i];
+       a[i] = b[i] + c[i] * d[i];
     }
     TIME_EN;
 }

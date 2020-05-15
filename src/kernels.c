@@ -1,6 +1,6 @@
 /*
  * =================================================================================
- * Arm-BwBench - A bandwidth benchmarking suite for Armv8
+ * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
  * 
@@ -17,154 +17,249 @@
  * 
  * =================================================================================
  * kernels.c
- * Description: Computing kernels for benchmarking.
+ * Description: Main entry of benchmarking kernels.
  * Author: Key Liao
- * Modified: Apr. 14th, 2020
+ * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
+#include <stdio.h>
+#include <string.h>
+#include "kernels.h"
 
-#include <stdint.h>
-#include <stdlib.h>
-#include "bench_var.h"
+int
+run_kern(int uid, int ntests, int nloops, int narr, int arr_count, int parm_count, 
+         int wloop) {
+//     int err;
 
-#ifdef __aarch64__
-
-#define TIME_ST uint64_t cy0, cy1;                              \
-                asm volatile(                                   \
-                    "DMB NSH"    "\n\t"                         \
-                    "mrs %0, pmccntr_el0" : "=r" (cy0) : : );
-
-#define TIME_EN asm volatile(                                   \
-                    "DMB NSHST"    "\n\t"                       \
-                    "mrs %0, pmccntr_el0" : "=r" (cy1) : : );   \
-                *cy = cy1 - cy0;
-#else
-
-#define TIME_ST uint64_t hi1, lo1, hi2, lo2;            \
-                asm volatile(                           \
-                    "RDTSCP"        "\n\t"              \
-                    "RDTSC"         "\n\t"              \
-                    "CPUID"         "\n\t"              \
-                    "RDTSCP"        "\n\t"              \
-                    "mov %%rdx, %0" "\n\t"              \
-                    "mov %%rax, %1" "\n\t"              \
-                    :"=r" (hi1), "=r" (lo1)             \
-                    :                                   \
-                    :"%rax", "%rbx", "%rcx", "%rdx");
-
-#define TIME_EN asm volatile ( \
-                    "RDTSC"         "\n\t"              \
-                    "mov %%rdx, %0" "\n\t"              \
-                    "mov %%rax, %1" "\n\t"              \
-                    "CPUID"         "\n\t"              \
-                    :"=r" (hi2), "=r" (lo2)             \
-                    :                                   \
-                    :"%rax", "%rbx", "%rcx", "%rdx");   \
-                *cy = ((hi2 << 32) | lo2) - ((hi1 << 32) | lo1);
-#endif
-
-/*
- * init
- * 1 Store + WA, 0 flops
- */
-void
-init(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        a[i] = s;
-    }
-    TIME_EN;
+//     // Allocate space.
+// #ifdef ALIGN
+//     err = posix_memalign((void **)&a, ALIGN, nbyte);
+//     if(err){
+//         printf("EXIT: Failed on array a allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     err = posix_memalign((void **)&b, ALIGN, nbyte);
+//     if(err){
+//         printf("EXIT: Failed on array b allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     err = posix_memalign((void **)&c, ALIGN, nbyte);
+//     if(err){
+//         printf("EXIT: Failed on array c allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     err = posix_memalign((void **)&d, ALIGN, nbyte);
+//     if(err){
+//         printf("EXIT: Failed on array d allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+// #else
+//     a = (double *)malloc(nbyte);
+//     if(a == NULL){
+//         printf("EXIT: Failed on array a allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     b = (double *)malloc(nbyte);
+//     if(b == NULL){
+//         printf("EXIT: Failed on array b allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     c = (double *)malloc(nbyte);
+//     if(c == NULL){
+//         printf("EXIT: Failed on array c allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+//     d = (double *)malloc(nbyte);
+//     if(d == NULL){
+//         printf("EXIT: Failed on array d allocation. [errno: %d]\n", err);
+//         exit(1);
+//     }
+// #endif
+    
+//     err = 0;
+//     switch(uid) {
+//         case init:
+//             init(a, s, narr, &cy, ntests);
+//             break;
+//         case sum:
+//             sum(a, b, narr, &cy, ntests);
+//             break;
+//         case copy:
+//             copy(a, b, narr, &cy, ntests);
+//             break;
+//         case update:
+//             update(a, s, narr, &cy, ntests);
+//             break;
+//         case triad:
+//             triad();
+//             break;
+//         case daxpy:
+//             daxpy();
+//             break;
+//         case striad:
+//             striad();
+//             break;
+//         case sdaxpy:
+//             sdaxpy();
+//             break;
+//         default:
+//             return 1;
+//     }
+    
+    // return err;
 }
 
-/*
- * sum
- * 1 Load, 1 flops
- */
+// int 
+// run_grp(int gid, int ntests, int narr, int arr_count, int parm_count, int wloop) {
+    // int err;
+// 
+    // err = 0;
+    // switch(gid) {
+        // case io_ins:
+        // case arith_ins:
+        // case g1_kernel:
+        // case g2_kernel:
+        // case g3_kernel:
+        // case user_kernel;
+    // }
+// }
+
 void
-sum(TYPE *a, TYPE *s, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        *s += a[i];
-    }
-    TIME_EN;
+list_kern(){
+    //printf("Supported group and kernels:\n");
+    //printf("Group: io_ins\n");
+    //printf("Group: arith_ins\n");
+    //printf("Group: g1_kernel\n");
+    //printf("Group: g2_kernel\n");
+    //printf("Group: g3_kernel\n");
+    //printf("Group: user_kernel\n");
 }
 
-/*
- * copy
- * 1 Load + 1 Store + WA, 0 flops
- */
-void
-copy(TYPE *a, TYPE *b, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        a[i] = b[i];
-    }
-    TIME_EN;
-}
+int 
+init_kern(char *kernels, char *groups, int *p_kern, int *p_grp, 
+              int cons_flag, int *nkern, int *ngrp) {
+    int st_id, en_id, i, j, id, ret; // tag a name
+    int n_tot_kern, n_tot_grp, dup_flag; // total number, duplication flag
+    char *sch, *ech, *gname; // start char, end char, grp name
 
-/*
- * update
- * 1Load + 1 Store, 1 flops
- */
-void
-update(TYPE *a, TYPE s, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        a[i] = s * a[i];
+    n_tot_grp = grp_end; 
+    n_tot_kern = sizeof(kern_info) / sizeof(Kern_Info_t);
+    sch = groups;
+    ech = sch;
+    
+    st_id = 0;
+    en_id = st_id;
+    *nkern = 0;
+    *ngrp = 0;
+    
+    // match group into *p_grp
+    while(*sch != '\0' && sch != NULL) {
+        
+        ech ++;
+        en_id ++;
+        if(*ech == '\0' || *ech == ','){
+            // splitter matched
+            ret = 1;
+            for(id = 0; id < n_tot_grp; id ++){
+                ret = strncmp(sch, g_names[id], en_id - st_id);
+                if(ret != 0) {
+                    // not match
+                    continue;
+                }
+                // group found
+                dup_flag = 0;
+                for(j = 0 ; j < *ngrp; j ++) {
+                    if(p_grp[j] == id) {
+                        // duplication found
+                        dup_flag = 1;
+                        break;
+                    }
+                }
+                if(dup_flag == 0) {
+                // no dup, append to list
+                    p_grp[*ngrp] = id;
+                    (*ngrp) ++;
+                }
+                break;
+            }
+            if(ret) {
+                // wrong group name
+                return GRP_NOT_MATCH;
+            }
+            if(*ech == '\0') {
+            // already the last one.
+                break;
+            }
+            sch = ech + 1;
+            st_id = en_id + 1;
+            while(*sch == ','){
+                // in case of multiple commas
+                sch ++;
+                ech ++;
+                st_id ++;
+                en_id ++;
+            }
+        }
     }
-    TIME_EN;
-}
+    // match kernel into *p_kern
+    st_id = 0;
+    en_id = st_id;
+    if(kernels == NULL){
+        return 0;
+    }
+    sch = kernels;
+    ech = sch;
+    while(*sch != '\0' && sch != NULL) {
+        ech ++;
+        en_id ++;
+        if(*ech == '\0' || *ech == ','){
+            // splitter matched
+            ret = 1;
+            for(id = 0; id < n_tot_grp; id ++){
+                ret = strncmp(sch, kern_info[id].name, en_id - st_id);
+                if(ret != 0) {
+                    // not match
+                    continue;
+                }
+                // kernel found
+                dup_flag = 0;
+                for(j = 0 ; j <= *nkern; j ++) {
+                    if(p_kern[j] == kern_info[id].uid) {
+                        // duplication found
+                        dup_flag = 1;
+                        break;
+                    }
+                }
+                if(dup_flag == 0) {
+                // no dup, append to list
+                    p_kern[*nkern] = kern_info[id].uid;
+                    (*nkern) ++;
+                }
+                // move to next char
+                sch = ech + 1;
+                st_id = en_id + 1;
+                break;
+            }
+            if(ret) {
+                // wrong group name
+                return KERN_NOT_MATCH;
+            }
+            if(*ech == '\0') {
+            // already the last one.
+                break;
+            }
+            sch = ech + 1;
+            st_id = en_id + 1;
+            while(*sch == ','){
+                // in case of multiple commas
+                sch ++;
+                ech ++;
+                st_id ++;
+                en_id ++;
+            }
+        }
+    }
 
-/*
- * triad
- * 2 Load + 1 Store + WA, 2 flops
- */
-void
-triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        //a[i] = b[i] + s * c[i];
-        b[i] = a[i] + s * c[i];
-    }
-    TIME_EN;
-}
-
-/*
- * daxpy
- * 2 Load + 1 Store, 2 flops
- */
-void
-daxpy(TYPE *a, TYPE *b, TYPE s, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        a[i] = a[i] + b[i] * s;
-    }
-    TIME_EN;
-}
-
-/*
- * striad
- * 3 Load + 1 Store + WA, 2 flops
- */
-void
-striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-       b[i] = a[i] + c[i] * d[i];
-    }
-    TIME_EN;
-}
-
-/*
- * sdaxpy
- * 3Load + 1 Store                                                                                                                                                        flops
- */
-void
-sdaxpy(TYPE *a, TYPE *b, TYPE *c, int narr, uint64_t *cy){
-    TIME_ST;
-    for(int i = 0; i < narr; i ++){
-        a[i] = a[i] + b[i] * c[i];
-    }
-    TIME_EN;
+    return 0;
 }

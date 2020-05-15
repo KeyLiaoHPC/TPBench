@@ -31,59 +31,9 @@ TPBench is a high-precision micro benchmarking suite for basic instruction and c
 * Customizing your own benchmarking tool.
 * ...
 
-TPBench currently supports benchmarks for both specific computing kernel and kernel groups, you can use switch between them using <-k> and <-g>. Supported kernel and groups are listed below.
-
-* Group **io_ins**
-    
-    **AArch64**
-    | Kernels   | Calculation             | IO Ops  | Arith Ops | IO Bytes/Test|      Notes      |
-    | ---       |  ---                    | :---:   | :---:     | :---:        |    :---:        |
-    | ldrx      | ldr Xn, [addr]          | L1S0WA0 | 0         |   8          |                 |
-    | ldrq      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16         |                 |
-    | ldpx      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16         |                 |
-    | ldpq      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32         |                 |
-    | ldnpx     | ldnp Xn1, Xn2, [addr]   | L2S0WA0 | 0         |   16         |                 |
-    | ldnpq     | ldnp Qn1, Qn2, [addr]   | L2S0WA0 | 0         |   32         |                 |
-    | strx      | str Xn, [addr]          | L0S1WA1 | 0         |   16         |                 |
-    | strq      | str Qn, [addr]          | L0S1WA1 | 0         |   32         |                 |
-    | stpx      | stp Xn1, Xn2, [addr]    | L0S2WA2 | 0         |   32         |                 |
-    | stpq      | stp Qn1, Qn2, [addr]    | L0S2WA2 | 0         |   64         |                 |
-    | stnpx     | stnp Xn1, Xn2, [addr]   | L0S2WA0 | 0         |   16         |                 |
-    | stnpq     | stnp Qn1, Qn2, [addr]   | L0S2WA0 | 0         |   32         |                 |
-
-    **X86-64**
-
-* Group **arith_ins**
-
-    **AArch64**
-    | Kernels   | Calculation             | IO Ops  | Arith Ops | Bytes/Test|      Notes      |
-    | ---       |  ---                    | :---:   | :---:     | :---:     |    :---:        |
-    | add| ldr Xn, [addr]          | L1S0WA0 | 0         |   8       |                 |
-    | mul      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16      |                 |
-    | fmla      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16      |                 |
-    | sqrt      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32      |                 |
-
-    **X86-64**
+TPBench currently supports benchmarks for both specific computing kernel and kernel groups, you can use switch between them using <-k> and <-g>. For detailes please refer to 3-Kernels.
 
 
-* Group **level1_kern**
-    | Kernels <-k> | Calculation | IO Ops | Arith Ops|
-    | --- | ---     | ---         | ---             | ---|
-    | Init   |a[i] = s |L0S1WA1 |0 |
-    | Sum    |s += a[i] |L1S1WA0  |1 |
-    | Copy   |a[i] = b[i] |L1S1WA1 | 0 |
-    | Update |b[i] = b[i] *s | L1S1WA0 | 1 |
-    | Triad  |b[i] = a[i] + s* c[i] |L2S1WA1 | 2 |
-    | Daxpy  |a[i] = a[i] + s *b[i] |L2S1WA0 | 2 |
-    | STriad |b[i] = a[i] + c[i]* d[i] |L3S1WA1  |  2 |
-    | SDaxpy |d[i] = d[i] + b[i] * c[i] |L3S1WA0 | 2 |
-
-* Group **level2_kern**
-
-    **TBD**
-* Group **level3_kern**
-
-    **TBD**
 
 TPBench is developed by Key Liao, Dr. James Lin in Center for High-Performance Computing, Shanghai Jiao Tong University. The projects provide cycle-level parallel timer and parallel bandwidth tests for Armv8 processors. The source is provide "AS-IS" and only tested on ThunderX2, KunPeng-920 and BCM2711.
 
@@ -153,9 +103,79 @@ Modifying timer with <code>rdtscp</code> to adjust for x86.
 
 Using virtual timer to sync instead of MPI_Barrier().
 
-## 3 - FAQ
+## 3 - Kernels
 
-## 4 - Changelog
+### 3.1 - Introduction and rules
+
+### 3.2 - Group I-1 io_ins
+
+Measuring throughputs and latency for io assembly instructions.
+
+    
+    **AArch64**
+    | Kernels   | Calculation             | IO Ops  | Arith Ops | IO Bytes/Test|      Notes      |
+    | ---       |  ---                    | :---:   | :---:     | :---:        |    :---:        |
+    | ldrx      | ldr Xn, [addr]          | L1S0WA0 | 0         |   8          |                 |
+    | ldrq      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16         |                 |
+    | ldpx      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16         |                 |
+    | ldpq      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32         |                 |
+    | ldnpx     | ldnp Xn1, Xn2, [addr]   | L2S0WA0 | 0         |   16         |                 |
+    | ldnpq     | ldnp Qn1, Qn2, [addr]   | L2S0WA0 | 0         |   32         |                 |
+    | strx      | str Xn, [addr]          | L0S1WA1 | 0         |   16         |                 |
+    | strq      | str Qn, [addr]          | L0S1WA1 | 0         |   32         |                 |
+    | stpx      | stp Xn1, Xn2, [addr]    | L0S2WA2 | 0         |   32         |                 |
+    | stpq      | stp Qn1, Qn2, [addr]    | L0S2WA2 | 0         |   64         |                 |
+    | stnpx     | stnp Xn1, Xn2, [addr]   | L0S2WA0 | 0         |   16         |                 |
+    | stnpq     | stnp Qn1, Qn2, [addr]   | L0S2WA0 | 0         |   32         |                 |
+
+    **X86-64**
+
+### 3.3 - Group I-2 arith_ins
+
+Measuring throughputs and latency for arithmetic instructions.
+
+
+* Group **arith_ins**
+
+    **AArch64**
+    | Kernels   | Calculation             | IO Ops  | Arith Ops | Bytes/Test|      Notes      |
+    | ---       |  ---                    | :---:   | :---:     | :---:     |    :---:        |
+    | add| ldr Xn, [addr]          | L1S0WA0 | 0         |   8       |                 |
+    | mul      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16      |                 |
+    | fmla      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16      |                 |
+    | sqrt      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32      |                 |
+
+    **X86-64**
+
+### 3.4 - Group S-1 level1_kern
+
+Measuring throughputs for one-line simple kernels.
+
+* Group **g1_kernel**
+    | Kernels <-k> | Calculation | IO Ops | Arith Ops|
+    | --- | ---     | ---         | ---             | ---|
+    | Init   |a[i] = s |L0S1WA1 |0 |
+    | Sum    |s += a[i] |L1S0WA0  |1 |
+    | Copy   |a[i] = b[i] |L1S1WA1 | 0 |
+    | Update |b[i] = b[i] *s | L1S1WA0 | 1 |
+    | Triad  |b[i] = a[i] + s* c[i] |L2S1WA1 | 2 |
+    | Daxpy  |a[i] = a[i] + s *b[i] |L2S1WA0 | 2 |
+    | STriad |b[i] = a[i] + c[i]* d[i] |L3S1WA1  |  2 |
+    | SDaxpy |d[i] = d[i] + b[i] * c[i] |L3S1WA0 | 2 |
+
+* Group **g2_kernel**
+
+    **TBD**
+* Group **g3_kernel**
+
+    **TBD**
+
+
+
+
+## 4 - FAQ
+
+## 5 - Changelog
 
 ### Version 0.3
 

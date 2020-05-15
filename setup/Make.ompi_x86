@@ -1,0 +1,4 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-O3 -fno-builtin -DUSE_MPI 
+
