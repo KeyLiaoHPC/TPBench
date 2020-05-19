@@ -40,6 +40,7 @@
 
 #include "utils.h"
 #include "kernels.h"
+#include "error.h"
 
 
 #ifdef USE_MPI
@@ -47,7 +48,7 @@
 #endif
 
 // =============================================================================
-// START - argp area
+// argp area
 // =============================================================================
 const char *argp_program_version = "TPBench-v0.3, maintaining by Key Liao, "
     "Center for HPC, Shanghai Jiao Tong University";
@@ -120,22 +121,36 @@ parse_opt (int key, char *arg, struct argp_state *state) {
     return 0;
 }
 // =============================================================================
-// END - argp area
+// utilities
 // =============================================================================
 
+// process synchronization
+void
+sync_proc(){
+#ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
+    return;
+}
+
+
+
+// =============================================================================
+// main entry
+// =============================================================================
 int
 main(int argc, char **argv) {
     // process info
     int nrank, myid, err, cpuid;
     // iter variables
-    int i, j, k;
+    int i, j, k, gid, kid;
     struct TP_Args_t tp_args;
     //char fname[1024], dirname[1024]; // Cycle filename.
     //TYPE s, eps[5] = {0,0,0,0,0}; // s
 
     // nkerns: # of standalone kernels.
     // ngrps: # of group only for consecutive run
-    int n_tot_kern, n_tot_grp, nkern, ngrp; 
+    int n_tot_kern, n_tot_grp, nkern, ngrp, ngrp_kern; 
     // benchmark groups and kernels
     int *grps, *kerns;
     // double *a, *b, *c, *d; 
@@ -145,7 +160,8 @@ main(int argc, char **argv) {
 #ifdef USE_MPI
     double **partps; // cpu cys, parallel cys
 #endif
-    uint64_t cy0, cy1, t0, t1;
+    // arr[NRUN][NKERN] - data of kernel at run.
+    uint64_t **grp_ns, **grp_cy, **kern_ns, **kern_cy;
     FILE    *fp;
 
     static struct argp argp = { options, parse_opt, args_doc, doc };
@@ -263,8 +279,8 @@ main(int argc, char **argv) {
     n_tot_grp = grp_end;
     grps = (int *)malloc(n_tot_grp * sizeof(int));
     kerns = (int *)malloc(n_tot_kern * sizeof(int));
+    // allocate space for results
     // Get the array of gid and uid
-    
     err = init_kern(tp_args.kernels, tp_args.groups, 
                     kerns, grps, tp_args.cons_flag, &nkern, &ngrp);
     if(err){
@@ -281,11 +297,7 @@ main(int argc, char **argv) {
             printf("%s, ", g_names[grps[i]]);
         printf("\nKernel list: ");
         for(i = 0; i < nkern; i ++) {
-            for(j = 0; j < n_tot_kern; j ++){
-                if(kern_info[j].uid == kerns[i]) {
-                    printf("%s, ", kern_info[j].name);
-                }
-            }
+            printf("%s, ", k_names[kerns[i]]);
         }
         switch(tp_args.cons_flag){
             case 0:
@@ -305,12 +317,66 @@ main(int argc, char **argv) {
 // =============================================================================
 // STAGE 2 - Benchmarking
 // =============================================================================
-    for(int i = 0; i < ngrp; i ++) {
-
+    // group benchmark
+    // write results of group benchmark for each group
+    // kern1,kern2,kern3,...,kernN,overall
+    // overall is the group time
+    grp_ns = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
+    grp_cy = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
+    for(i = 0; i < ngrp; i ++){
+        gid = grps[i];
+        ngrp_kern = group_info[gid];
+        if(myid == 0){
+            printf("Running group %s: ", g_names[gid]);
+            for(j = 0; j < ngrp_kern; j ++) {
+                if(kern_info[j].gid == gid){
+                    printf("%s, ", kern_info[j].name)
+                }
+            }
+            printf("\n")
+        }
+        sync_proc();
+        
+        for(j = 0; j < ntest; j ++) {
+            grp_ns[j] = (uint64_t *)malloc(sizeof(uint64_t) * ngrp_kern);
+            grp_cy[j] = (uint64_t *)malloc(sizeof(uint64_t) * ngrp_kern);
+        }
+        // run benchmarks
+        run_grp(gid, ntest, nloop, kib_size, grp_ns, grp_cy);
+        write_res(tp_args.data_dir, grp_ns, ntest, ngrp_kern, g_names[gid], "ns");
+        write_res(tp_args.data_dir, grp_cy, ntest, ngrp_kern, g_names[gid], "cy");
+        if(i != ngrp - 1) {
+            for(j = 0; j < ntest; j ++) {
+                grp_ns[j] = (uint64_t *)realloc(grp_ns[j], sizeof(uint64_t) * ngrp_kern);
+                grp_cy[j] = (uint64_t *)realloc(grp_cy[j], sizeof(uint64_t) * ngrp_kern);
+            }
+        }
+        else {
+            for(j = 0; j < ntest; j ++) {
+                free(grp_ns[j]);
+                free(grp_cy[j]);
+            }
+            free(grp_ns);
+            free(grp_cy);
+        }
     }
 
-    for(int i = 0; i < nkern; i ++) {
-
+    // kernel benchmark
+    // write results of kernels for once
+    kern_ns = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
+    kern_cy = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
+    for(j = 0; j < ntest; j ++) {
+        kern_ns[j] = (uint64_t *)malloc(kern_ns[j], sizeof(uint64_t) * nkern);
+        kern_cy[j] = (uint64_t *)malloc(kern_cy[j], sizeof(uint64_t) * nkern);
+    }
+    for(i = 0; i < nkern; i ++){
+        uid = kerns[i];
+        if(myid == 0){
+            printf("Running kernel: %s\n", k_names[uid]);
+        }
+        // run benchmarks
+        sync_proc();
+        run_kern(id, ntest, nloop, kib_size, kern_ns, kern_cy);
     }
 // =============================================================================
 // STAGE 3 - Data process and output.

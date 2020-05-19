@@ -29,7 +29,7 @@
 #include <limits.h>     /* PATH_MAX */
 #include <sys/stat.h>   /* mkdir(2) */
 #include <errno.h>
-#include "utils.h"
+#include "tpbench.h"
 
 
 int
@@ -67,4 +67,39 @@ make_dir(const char *path) {
             return -1; 
     }   
     return 0;
+}
+
+/*
+ * function: write_res
+ * description: write a 2d data result to prefix_r?_c?_pofix.csv
+ * ret: 
+ * int, error code
+ * args:
+ *     char *dir [in]: data directory 
+ *     uint64_t **data [in]: pointer to 2d array
+ *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
+ *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
+ *     char *prefix [in]: prefix of filename. 
+ *     char *posfix [in]: postfix of filename.
+ */ 
+int
+write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers) {
+    int err, i, j;
+    FILE *fp;    
+
+    fp = fopen(path, "w");
+    if(fp == NULL) {
+        return FILE_OPEN_FAIL;
+    }
+    fprinf(fp, "%s\n", headers);
+    for(i = 0; i < ndim1; i ++) {
+        for(j = 0; j < ndim2 - 1; j ++) {
+            fprintf(fp, "%llu,", data[i][j]);
+        }
+        fprintf(fp, "%llu\n", data[i][ndim2-1]);
+    }
+    fflush(fp);
+    fclose(fp);
+
+    return NO_ERROR;
 }

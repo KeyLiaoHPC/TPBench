@@ -26,88 +26,84 @@
 #include <stdio.h>
 #include <string.h>
 #include "kernels.h"
+#include "error.h"
 
 int
-run_kern(int uid, int ntests, int nloops, int narr, int arr_count, int parm_count, 
-         int wloop) {
-//     int err;
+run_grp(int gid, int ntest, int nloops, uint64_t **res_ns, uint64_t **res_cy){
+    int i, j, k, err;
+    int nkern;
 
-//     // Allocate space.
-// #ifdef ALIGN
-//     err = posix_memalign((void **)&a, ALIGN, nbyte);
-//     if(err){
-//         printf("EXIT: Failed on array a allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     err = posix_memalign((void **)&b, ALIGN, nbyte);
-//     if(err){
-//         printf("EXIT: Failed on array b allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     err = posix_memalign((void **)&c, ALIGN, nbyte);
-//     if(err){
-//         printf("EXIT: Failed on array c allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     err = posix_memalign((void **)&d, ALIGN, nbyte);
-//     if(err){
-//         printf("EXIT: Failed on array d allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-// #else
-//     a = (double *)malloc(nbyte);
-//     if(a == NULL){
-//         printf("EXIT: Failed on array a allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     b = (double *)malloc(nbyte);
-//     if(b == NULL){
-//         printf("EXIT: Failed on array b allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     c = (double *)malloc(nbyte);
-//     if(c == NULL){
-//         printf("EXIT: Failed on array c allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-//     d = (double *)malloc(nbyte);
-//     if(d == NULL){
-//         printf("EXIT: Failed on array d allocation. [errno: %d]\n", err);
-//         exit(1);
-//     }
-// #endif
+    err = 0;
+    nkern = 0;
+    n_tot_kern = sizeof(kern_info) / sizeof(Kern_Info_t);
+    for(i = 0; i < n_tot_kern; i ++){
+        if(kern_info[i].gid == grps[gid]) {
+            nkern ++;
+        }
+    }
+    switch(gid){
+        case io_ins:
+            run_io_ins(ntest, nloops, kib, res_ns, res_cy);
+            break;
+        case arith_ins:
+            run_arith_ins(ntest, nloops, kib, res_ns, res_cy);
+            break;
+        case g1_kernel:
+            run_g1_kernel(ntest, nloops, kib, res_ns, res_cy);
+            break;
+        case g2_kernel:
+            run_g2_kernel(ntest, nloops, kib, res_ns, res_cy);
+            break;
+        case g3_kernel:
+            run_g3_kernel(ntest, nloops, kib, res_ns, res_cy);
+            break;
+        case user_kernel:
+            run_user_kernel(ntest, nloops, kib, res_ns, res_cy);
+            break;
+    }
     
-//     err = 0;
-//     switch(uid) {
-//         case init:
-//             init(a, s, narr, &cy, ntests);
-//             break;
-//         case sum:
-//             sum(a, b, narr, &cy, ntests);
-//             break;
-//         case copy:
-//             copy(a, b, narr, &cy, ntests);
-//             break;
-//         case update:
-//             update(a, s, narr, &cy, ntests);
-//             break;
-//         case triad:
-//             triad();
-//             break;
-//         case daxpy:
-//             daxpy();
-//             break;
-//         case striad:
-//             striad();
-//             break;
-//         case sdaxpy:
-//             sdaxpy();
-//             break;
-//         default:
-//             return 1;
-//     }
+    return err;
+}
+int
+run_kern(int uid, int ntests, size_t kib, int nloops, uint64_t *res_ns, uint64_t *res_cy) {
+    int err;
+
+    a = (double *)malloc(nbyte);
+    b = (double *)malloc(nbyte);
+    c = (double *)malloc(nbyte);
+    d = (double *)malloc(nbyte);
     
-    // return err;
+    err = 0;
+    switch(uid) {
+        case init:
+            init(a, s, narr, &cy, ntests);
+            break;
+        case sum:
+            sum(a, b, narr, &cy, ntests);
+            break;
+        case copy:
+            copy(a, b, narr, &cy, ntests);
+            break;
+        case update:
+            update(a, s, narr, &cy, ntests);
+            break;
+        case triad:
+            triad();
+            break;
+        case daxpy:
+            daxpy();
+            break;
+        case striad:
+            striad();
+            break;
+        case sdaxpy:
+            sdaxpy();
+            break;
+        default:
+            return 1;
+    }
+    
+    return err;
 }
 
 // int 

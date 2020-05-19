@@ -16,21 +16,43 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * kernels.h
- * Description: Kernel informations.
+ * tpbench.c
+ * Description: Heraders for TPBench.
  * Author: Key Liao
- * Modified: May. 9th, 2020
- * Email: keyliaohpc@gmail.com
+ * Modified: May. 15th, 2020
+ * Email: keyliao@sjtu.edu.cn
  * =================================================================================
  */
-
 #include <stdint.h>
 
-#define NKERNS 8
-#define NUSERKERNS 0
-#define NG1 8
+// ERROR CODE
+#define NO_ERROR 0
+#define GRP_NOT_MATCH  1
+#define KERN_NOT_MATCH 2
+#define FILE_OPEN_FAIL 3
 
 
+#define DHLINE "================================================================================\n"
+#define HLINE  "--------------------------------------------------------------------------------\n"
+
+
+
+int
+make_dir(const char *path);
+
+/*
+ * function: write_res
+ * description: write a 2d data result to prefix_r?_c?_pofix.csv
+ * ret: 
+ * int, error code
+ * args:
+ *     char *dir [in]: data file
+ *     uint64_t **data [in]: pointer to 2d array
+ *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
+ *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
+ */ 
+int
+write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);
 
 // Kernel Information
 typedef struct {
@@ -47,14 +69,14 @@ typedef struct {
 } Group_Info_t;
 
 static Kern_Info_t kern_info[] = {
-    {"init", 2, 0, 1, 1, 8, 8, 0},
-    {"sum", 2, 1, 1, 1, 8, 0, 1},
-    {"copy", 2, 2, 2, 1, 16, 8, 0},
-    {"update", 2, 3, 1, 1, 16, 0, 1},
-    {"triad", 2, 4, 3, 1, 24, 8, 2},
-    {"daxpy", 2, 5, 2, 1, 24, 0, 2},
-    {"striad", 2, 6, 4, 1, 32, 8, 2},
-    {"sdaxpy", 2, 7, 3, 1, 32, 0, 2}
+    {"init", 2, 2001, 1, 1, 8, 8, 0},
+    {"sum", 2, 2002, 1, 1, 8, 0, 1},
+    {"copy", 2, 2003, 2, 1, 16, 8, 0},
+    {"update", 2, 2004, 1, 1, 16, 0, 1},
+    {"triad", 2, 2005, 3, 1, 24, 8, 2},
+    {"daxpy", 2, 2006, 2, 1, 24, 0, 2},
+    {"striad", 2, 2007, 4, 1, 32, 8, 2},
+    {"sdaxpy", 2, 2008, 3, 1, 32, 0, 2}
 };
 
 static Group_Info_t group_info[] = {
@@ -73,7 +95,8 @@ const static char *k_names[] = {"init", "sum", "copy", "update", "triad", "daxpy
 static enum gnames {io_ins, arith_ins, g1_kernel, g2_kernel, g3_kernel, 
                     user_kernel, grp_end};
 //enum gnames gname;
-enum knames {init, sum, copy, update, triad, daxpy, striad, sdaxpy};
+enum knames {init = 2001, sum = 2002, copy = 2003, update = 2004, triad = 2005, 
+             daxpy = 2006, striad = 2007, sdaxpy = 2008};
 //enum knames kname;
 
 void list_kern();

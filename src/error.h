@@ -16,37 +16,15 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * utils.h
- * Description: Headers for accessory functions.
+ * error.h
+ * Description: Headers for error handling.
  * Author: Key Liao
- * Modified: May. 9th, 2020
+ * Modified: May. 15th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-#include <string.h>
-#include <limits.h> 
-#include <sys/stat.h>   
-#include <errno.h>
-#include <stdint.h>
 
-#define DHLINE "================================================================================\n"
-#define HLINE  "--------------------------------------------------------------------------------\n"
-
-
-
-int
-make_dir(const char *path);
-
-/*
- * function: write_res
- * description: write a 2d data result to prefix_r?_c?_pofix.csv
- * ret: 
- * int, error code
- * args:
- *     char *dir [in]: data file
- *     uint64_t **data [in]: pointer to 2d array
- *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
- *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
- */ 
-int
-write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);
+// ERROR CODE
+#define GRP_NOT_MATCH  1
+#define KERN_NOT_MATCH 2
+#define FILE_OPEN_FAIL 3
