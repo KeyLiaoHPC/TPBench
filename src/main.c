@@ -29,19 +29,13 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdint.h>
 #include <sched.h>
 #include <time.h>
-#include <float.h>
-#include <math.h>
 #include <string.h>
 #include <argp.h>
-
-
-#include "utils.h"
-#include "kernels.h"
-#include "error.h"
-
+#include "tpbench.h"
 
 #ifdef USE_MPI
 #include "mpi.h"
@@ -59,10 +53,11 @@ static char args_doc[] = "";
 
 // Type for arugments.
 struct TP_Args_t{
-    uint64_t ntest, nloop; // [Optional] Number of outer loops and inner looops
+    uint64_t ntest;
+    uint64_t nloop; // [Optional] Number of outer loops and inner looops
     uint64_t kib_size; // [Mandatory] Number of ngrps and nkerns
     char *groups, *kernels, *data_dir; // [Mandatory] group and kernels name
-    int list_flag, cons_flag; // [Optinal] flags for list mode and consecutive run
+    int list_flag; // [Optinal] flags for list mode and consecutive run
 };
 
 static struct argp_option options[] = {
@@ -78,8 +73,6 @@ static struct argp_option options[] = {
         "Kernel list.(e.g. -k init,sum). "},
     {"list", 'L', 0, 0,
         "List all group and kernels then exit." },
-    {"consecutive", 'c', 0, 0,
-        "Set this if you want to run kernels in group consecutively with data dependency."},
     {"data_dir", 'd', "data_dir", OPTION_ARG_OPTIONAL, "Optional. Data directory."},
     { 0 }
 };
@@ -106,8 +99,6 @@ parse_opt (int key, char *arg, struct argp_state *state) {
         case 'L':
             args->list_flag = 1;
             break;
-        case 'c':
-            args->cons_flag = 1;
         case 'o':
             args->data_dir = arg;
         case ARGP_KEY_ARG:
@@ -126,10 +117,20 @@ parse_opt (int key, char *arg, struct argp_state *state) {
 
 // process synchronization
 void
-sync_proc(){
+mpi_sync(){
 #ifdef USE_MPI
     MPI_Barrier(MPI_COMM_WORLD);
 #endif
+    return;
+}
+
+// mpi exit
+void 
+mpi_exit(){
+#ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Finalize();
+#endif   
     return;
 }
 
@@ -141,28 +142,27 @@ sync_proc(){
 int
 main(int argc, char **argv) {
     // process info
-    int nrank, myid, err, cpuid;
+    int nrank, myid, err, mycpu;
     // iter variables
-    int i, j, k, gid, kid;
+    int i, j, k, gid, uid;
     struct TP_Args_t tp_args;
     //char fname[1024], dirname[1024]; // Cycle filename.
     //TYPE s, eps[5] = {0,0,0,0,0}; // s
 
     // nkerns: # of standalone kernels.
     // ngrps: # of group only for consecutive run
-    int n_tot_kern, n_tot_grp, nkern, ngrp, ngrp_kern; 
+    int n_tot_kern, n_tot_grp, nkern, ngrp, ngrp_kern, header_len; 
     // benchmark groups and kernels
     int *grps, *kerns;
+    char header[256], filename[1024], mydir[1024], full_path[1024], hostname[1024]; // headers for csv file
+    char prefix[32], posfix[32];
     // double *a, *b, *c, *d; 
-    // TYPE sa, sb, sc, sd, ss;
-    // uint64_t cys[NTIMES][8];
-    // double tps[NTIMES][8], tp_mean[8], tp_max[8], tp_min[8]; // Throughputs
 #ifdef USE_MPI
     double **partps; // cpu cys, parallel cys
 #endif
     // arr[NRUN][NKERN] - data of kernel at run.
     uint64_t **grp_ns, **grp_cy, **kern_ns, **kern_cy;
-    FILE    *fp;
+    FILE *fp;
 
     static struct argp argp = { options, parse_opt, args_doc, doc };
 // =============================================================================
@@ -190,13 +190,23 @@ main(int argc, char **argv) {
     if(myid == 0){
         printf(DHLINE "TPBench v" VER "\n");
     }
-
+    mycpu = sched_getcpu();
+    gethostname(hostname, 1024);
+    sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
+    if(myid == 0) {
+        err = make_dir(mydir);
+        if(err) {
+            printf("EXIT: Creating data directory failed.\n");
+            mpi_exit();
+            exit(0);
+        }
+    }
+    mpi_sync();
     // Parse args
     tp_args.ntest = 0;
     tp_args.nloop = 24;
     tp_args.kib_size = 0;
     tp_args.list_flag = 0;
-    tp_args.cons_flag = 0;
     tp_args.kernels = NULL;
     tp_args.groups = NULL;
     tp_args.data_dir = NULL;
@@ -207,10 +217,7 @@ main(int argc, char **argv) {
             // TODO: list_kern() is still hard coded.
             list_kern();
         }
-#ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Finalize();
-#endif
+        mpi_exit();
         exit(0);
     }
     // Check mandatory options
@@ -218,30 +225,21 @@ main(int argc, char **argv) {
         if(myid == 0) {
             printf(HLINE "EXIT: Invalid kernel/group list. See tpbench.x --help for help.\n" DHLINE);
         }
-#ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Finalize();
-#endif
+        mpi_exit();
         exit(0);
     }
     if(tp_args.ntest == 0) {
         if(myid == 0) {
             printf(HLINE "EXIT: Invalid number of tests. See tpbench.x --help for help.\n" DHLINE);
         }
-#ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Finalize();
-#endif
+        mpi_exit();
         exit(0);
     }
     if(tp_args.kib_size < 1) {
         if(myid == 0) {
             printf(HLINE "EXIT: Invalid array size. See tpbench.x --help for help.\n" DHLINE);
         }
-#ifdef USE_MPI
-        MPI_Barrier(MPI_COMM_WORLD);
-        MPI_Finalize();
-#endif
+        mpi_exit();
         exit(0);
     }
     // Print arguments
@@ -256,10 +254,7 @@ main(int argc, char **argv) {
             if(myid == 0){
                 printf("EXIT: Failed at setting output data directory.\n" DHLINE);
             }
-#ifdef USE_MPI
-            MPI_Barrier(MPI_COMM_WORLD);
-            MPI_Finalize();
-#endif
+            mpi_exit();
             exit(0);
         }
         
@@ -282,7 +277,7 @@ main(int argc, char **argv) {
     // allocate space for results
     // Get the array of gid and uid
     err = init_kern(tp_args.kernels, tp_args.groups, 
-                    kerns, grps, tp_args.cons_flag, &nkern, &ngrp);
+                    kerns, grps, &nkern, &ngrp);
     if(err){
         printf("%s\n%s\n", tp_args.groups, tp_args.kernels);
         printf("EXIT: Fail at init_kern.[%d]\nTPBench Exit\n" DHLINE, err);
@@ -299,18 +294,6 @@ main(int argc, char **argv) {
         for(i = 0; i < nkern; i ++) {
             printf("%s, ", k_names[kerns[i]]);
         }
-        switch(tp_args.cons_flag){
-            case 0:
-                printf("\nGroup kernels run stand-alone.\n" HLINE);
-                break;
-            case 1:
-                printf("\nGroup kernels run consecutively.\n" HLINE);
-                break;
-            default:
-                printf("EXIT: Error on consecutive flag.\n");
-                exit(0);
-                break;
-        }
         fflush(stdout);
     }
 
@@ -319,40 +302,46 @@ main(int argc, char **argv) {
 // =============================================================================
     // group benchmark
     // write results of group benchmark for each group
-    // kern1,kern2,kern3,...,kernN,overall
-    // overall is the group time
-    grp_ns = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
-    grp_cy = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
+    // kern1,kern2,kern3,...,kernN
+    grp_ns = (uint64_t **)malloc(sizeof(uint64_t *) * tp_args.ntest);
+    grp_cy = (uint64_t **)malloc(sizeof(uint64_t *) * tp_args.ntest);
     for(i = 0; i < ngrp; i ++){
         gid = grps[i];
-        ngrp_kern = group_info[gid];
+        ngrp_kern = group_info[gid].nkern;
+        // info process
         if(myid == 0){
             printf("Running group %s: ", g_names[gid]);
-            for(j = 0; j < ngrp_kern; j ++) {
+            header_len = 0;
+            for(j = 0; j < n_tot_kern; j ++) {
                 if(kern_info[j].gid == gid){
-                    printf("%s, ", kern_info[j].name)
+                    sprintf(&header[header_len], "%s,", kern_info[j].name);
+                    header_len = header_len + strlen(kern_info[j].name) + 1;
                 }
             }
-            printf("\n")
+            header[header_len] = '\0';
+            printf("%s\n", header);
         }
-        sync_proc();
+        mpi_sync();
         
-        for(j = 0; j < ntest; j ++) {
+        for(j = 0; j < tp_args.ntest; j ++) {
             grp_ns[j] = (uint64_t *)malloc(sizeof(uint64_t) * ngrp_kern);
             grp_cy[j] = (uint64_t *)malloc(sizeof(uint64_t) * ngrp_kern);
         }
         // run benchmarks
-        run_grp(gid, ntest, nloop, kib_size, grp_ns, grp_cy);
-        write_res(tp_args.data_dir, grp_ns, ntest, ngrp_kern, g_names[gid], "ns");
-        write_res(tp_args.data_dir, grp_cy, ntest, ngrp_kern, g_names[gid], "cy");
+        run_group(gid, tp_args.ntest, tp_args.nloop, tp_args.kib_size, grp_ns, grp_cy);
+        // write results
+        sprintf(full_path, "%s/%s_r%d_c%d_%s.csv", mydir, g_names[gid], myid, mycpu, "ns");
+        write_csv(full_path, grp_ns, group_info[i].nkern, ngrp_kern, header);
+        sprintf(full_path, "%s/%s_r%d_c%d_%s.csv", mydir, g_names[gid], myid, mycpu, "cy");
+        write_csv(full_path, grp_cy, group_info[i].nkern, ngrp_kern, header);
         if(i != ngrp - 1) {
-            for(j = 0; j < ntest; j ++) {
+            for(j = 0; j < tp_args.ntest; j ++) {
                 grp_ns[j] = (uint64_t *)realloc(grp_ns[j], sizeof(uint64_t) * ngrp_kern);
                 grp_cy[j] = (uint64_t *)realloc(grp_cy[j], sizeof(uint64_t) * ngrp_kern);
             }
         }
         else {
-            for(j = 0; j < ntest; j ++) {
+            for(j = 0; j < tp_args.ntest; j ++) {
                 free(grp_ns[j]);
                 free(grp_cy[j]);
             }
@@ -362,12 +351,12 @@ main(int argc, char **argv) {
     }
 
     // kernel benchmark
-    // write results of kernels for once
-    kern_ns = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
-    kern_cy = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
-    for(j = 0; j < ntest; j ++) {
-        kern_ns[j] = (uint64_t *)malloc(kern_ns[j], sizeof(uint64_t) * nkern);
-        kern_cy[j] = (uint64_t *)malloc(kern_cy[j], sizeof(uint64_t) * nkern);
+    // write all results to single csv file after running all kernels
+    kern_ns = (uint64_t **)malloc(sizeof(uint64_t *) * tp_args.ntest);
+    kern_cy = (uint64_t **)malloc(sizeof(uint64_t *) * tp_args.ntest);
+    for(j = 0; j < tp_args.ntest; j ++) {
+        kern_ns[j] = (uint64_t *)malloc(sizeof(uint64_t) * nkern);
+        kern_cy[j] = (uint64_t *)malloc(sizeof(uint64_t) * nkern);
     }
     for(i = 0; i < nkern; i ++){
         uid = kerns[i];
@@ -375,17 +364,27 @@ main(int argc, char **argv) {
             printf("Running kernel: %s\n", k_names[uid]);
         }
         // run benchmarks
-        sync_proc();
-        run_kern(id, ntest, nloop, kib_size, kern_ns, kern_cy);
+        mpi_sync();
+        run_kernel(uid, i, tp_args.ntest, tp_args.nloop, tp_args.kib_size, kern_ns, kern_cy);
+        // put single result into output array.
+    
     }
+
+    sprintf(full_path, "%s/kerns_r%d_c%d_%s.csv", mydir, myid, mycpu, "ns");
+    write_csv(full_path, kern_ns, tp_args.ntest, ngrp_kern, header);
+    sprintf(full_path, "%s/kerns_r%d_c%d_%s.csv", mydir, myid, mycpu, "cy");
+    write_csv(full_path, kern_cy, tp_args.ntest, ngrp_kern, header);
+    for(i = 0; i < tp_args.ntest; i ++) {
+        free(kern_ns[i]);
+        free(kern_cy[i]);
+    }
+    free(kern_ns);
+    free(kern_cy);
 // =============================================================================
 // STAGE 3 - Data process and output.
 // =============================================================================
 
-#ifdef USE_MPI
-    MPI_Barrier(MPI_COMM_WORLD);
-    MPI_Finalize();
-#endif
-    printf("TPBench done\n" DHLINE);
+    mpi_exit();
+    printf(HLINE "TPBench finished.\n" DHLINE);
     return 0;
 }

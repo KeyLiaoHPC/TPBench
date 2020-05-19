@@ -25,6 +25,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <limits.h>     /* PATH_MAX */
 #include <sys/stat.h>   /* mkdir(2) */
@@ -91,7 +92,7 @@ write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers) {
     if(fp == NULL) {
         return FILE_OPEN_FAIL;
     }
-    fprinf(fp, "%s\n", headers);
+    fprintf(fp, "%s\n", headers);
     for(i = 0; i < ndim1; i ++) {
         for(j = 0; j < ndim2 - 1; j ++) {
             fprintf(fp, "%llu,", data[i][j]);

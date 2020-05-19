@@ -2,12 +2,15 @@
 
 include setup/Make.${SETUP}
 
-VPATH = ./src
+TP_DIR = $(HOME)/proj/TPBench
+VPATH = $(TP_DIR)/src:$(TP_DIR)/src/kernels
+.PHONY: clean test 
 
-.PHONY: clean
-
-tpbench.x: main.c kernels.c utils.c 
-	$(CC) -g $(CFLAGS) $(DEF) $(SIZE) -I. -o $@ $^
+tpbench.x: main.c kernel_wrapper.c utils.c g1_kernel.c
+	$(CC) -g $(CFLAGS) $(DEF) $(SIZE) -I$(TP_DIR)/src -o $@ $^
+test: test.x
+test.x: test.c kernel_wrapper.c g1_kernel.c
+	$(CC) -g $(CFLAGS) -I$(TP_DIR)/src -o $@ $^
 
 clean:
 	-rm -f *.x *.o

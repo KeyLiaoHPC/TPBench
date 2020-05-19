@@ -26,11 +26,12 @@
 #include <stdint.h>
 
 // ERROR CODE
-#define NO_ERROR 0
-#define GRP_NOT_MATCH  1
-#define KERN_NOT_MATCH 2
-#define FILE_OPEN_FAIL 3
-
+#define NO_ERROR        0
+#define GRP_NOT_MATCH   1
+#define KERN_NOT_MATCH  2
+#define FILE_OPEN_FAIL  3
+#define MEM_FAIL        4
+#define TYPE    double
 
 #define DHLINE "================================================================================\n"
 #define HLINE  "--------------------------------------------------------------------------------\n"
@@ -57,7 +58,7 @@ write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);
 // Kernel Information
 typedef struct {
     char *name; // Name of kernel
-    int gid, uid; // group id, kernel id, unify id
+    int gid, uid; // group id, kernel id, unified id
     int narr, nparm; // necessary number of arr and parameters
     unsigned int bytes, wabytes, ops; // wabytes is not included in bytes
 } Kern_Info_t;
@@ -69,37 +70,51 @@ typedef struct {
 } Group_Info_t;
 
 static Kern_Info_t kern_info[] = {
-    {"init", 2, 2001, 1, 1, 8, 8, 0},
-    {"sum", 2, 2002, 1, 1, 8, 0, 1},
-    {"copy", 2, 2003, 2, 1, 16, 8, 0},
-    {"update", 2, 2004, 1, 1, 16, 0, 1},
-    {"triad", 2, 2005, 3, 1, 24, 8, 2},
-    {"daxpy", 2, 2006, 2, 1, 24, 0, 2},
-    {"striad", 2, 2007, 4, 1, 32, 8, 2},
-    {"sdaxpy", 2, 2008, 3, 1, 32, 0, 2}
+    {"init", 2, 0, 1, 1, 8, 8, 0},
+    {"sum", 2, 1, 1, 1, 8, 0, 1},
+    {"copy", 2, 2, 2, 1, 16, 8, 0},
+    {"update", 2, 3, 1, 1, 16, 0, 1},
+    {"triad", 2, 4, 3, 1, 24, 8, 2},
+    {"daxpy", 2, 5, 2, 1, 24, 0, 2},
+    {"striad", 2, 6, 4, 1, 32, 8, 2},
+    {"sdaxpy", 2, 7, 3, 1, 32, 0, 2}
 };
 
 static Group_Info_t group_info[] = {
-    {"io_ins", 0, 0},
-    {"arith_ins", 1, 0},
+    //{"io_ins", 0, 0},
+    //{"arith_ins", 1, 0},
     {"g1_kernel", 2, 8},
-    {"g2_kernel", 3, 0},
-    {"g3_kernel", 4, 0},
-    {"user_kernel", 5, 0},
-}
+    //{"g2_kernel", 3, 0},
+    //{"g3_kernel", 4, 0},
+    //{"user_kernel", 5, 0},
+};
 // Group and kernels information
-const static char *g_names[] = {"io_ins", "arith_ins", "g1_kernel", "g2_kernel", 
-                                "g3_kernel", "user_kernel"};
+//const static char *g_names[] = {"io_ins", "arith_ins", "g1_kernel", "g2_kernel", 
+//                                "g3_kernel", "user_kernel"};
 const static char *k_names[] = {"init", "sum", "copy", "update", "triad", "daxpy",
                                 "striad", "sdaxpy"};
-static enum gnames {io_ins, arith_ins, g1_kernel, g2_kernel, g3_kernel, 
-                    user_kernel, grp_end};
+//static enum gnames {io_ins, arith_ins, g1_kernel, g2_kernel, g3_kernel, 
+//                    user_kernel, grp_end};
+const static char *g_names[] = {"g1_kernel"};
 //enum gnames gname;
-enum knames {init = 2001, sum = 2002, copy = 2003, update = 2004, triad = 2005, 
-             daxpy = 2006, striad = 2007, sdaxpy = 2008};
+static enum gnames {g1_kernel, grp_end};
+static enum gnames gname;
 //enum knames kname;
+static enum knames {init, sum, copy, update, triad, daxpy, striad, sdaxpy};
+static enum knames kname;
 
 void list_kern();
-int init_kern(char *kernels, char *groups, int *p_kern, int *p_grp, int cons_flag, int *nkern, int *ngrp);
-int run_kern(int uid, int ntests, int nloops, size_t kib, uint64_t *res_ns, uint64_t *res_cy);
-int run_grp(int gid, int ntests, int nloops, size_t kib, uint64_t **res_ns, uint64_t **res_cy);
+int init_kern(char *kernels, char *groups, int *p_kern, int *p_grp, int *nkern, int *ngrp);
+int run_kernel(int uid, int kid, int ntests, int nloops, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy);
+int run_group(int gid, int ntests, int nloops, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy);
+
+int run_g1_kernel(int ntests, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy);
+
+void run_init(TYPE *a,  TYPE s, int nsize,   uint64_t *ns,   uint64_t *cy);
+void run_sum(TYPE *a,   TYPE *s, int nsize, uint64_t *ns, uint64_t *cy);
+void run_copy(TYPE *a, TYPE *b, int nsize, uint64_t *ns, uint64_t *cy);
+void run_update(TYPE *a, TYPE s, int nsize, uint64_t *ns, uint64_t *cy);
+void run_triad(TYPE *a, TYPE *b, TYPE *c, TYPE s, int nsize, uint64_t *ns, uint64_t *cy);
+void run_daxpy(TYPE *a, TYPE *b, TYPE s, int nsize, uint64_t *ns, uint64_t *cy);
+void run_striad(TYPE *a, TYPE *b, TYPE *c, TYPE *d, int nsize, uint64_t *ns, uint64_t *cy);
+void run_sdaxpy(TYPE *a, TYPE *b, TYPE *c, int nsize, uint64_t *ns, uint64_t *cy);

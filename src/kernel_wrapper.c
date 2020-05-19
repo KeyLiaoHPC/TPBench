@@ -25,85 +25,151 @@
  */
 #include <stdio.h>
 #include <string.h>
-#include "kernels.h"
-#include "error.h"
+#include <stdlib.h>
+#include <stdint.h>
+#include "tpbench.h"
 
+/*
+ * function: run_group
+ * description: 
+ * ret: 
+ * int, error code
+ * args:
+ *     char *dir [in]: data directory 
+ *     uint64_t **data [in]: pointer to 2d array
+ *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
+ *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
+ *     char *prefix [in]: prefix of filename. 
+ *     char *posfix [in]: postfix of filename.
+ */
 int
-run_grp(int gid, int ntest, int nloops, uint64_t **res_ns, uint64_t **res_cy){
+run_group(int gid, int ntest, int nloops, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy) {
     int i, j, k, err;
-    int nkern;
 
     err = 0;
-    nkern = 0;
-    n_tot_kern = sizeof(kern_info) / sizeof(Kern_Info_t);
-    for(i = 0; i < n_tot_kern; i ++){
-        if(kern_info[i].gid == grps[gid]) {
-            nkern ++;
-        }
-    }
-    switch(gid){
-        case io_ins:
-            run_io_ins(ntest, nloops, kib, res_ns, res_cy);
-            break;
-        case arith_ins:
-            run_arith_ins(ntest, nloops, kib, res_ns, res_cy);
-            break;
+    gname = gid;
+    switch(gname){
         case g1_kernel:
-            run_g1_kernel(ntest, nloops, kib, res_ns, res_cy);
+            run_g1_kernel(ntest, kib, res_ns, res_cy);
             break;
-        case g2_kernel:
-            run_g2_kernel(ntest, nloops, kib, res_ns, res_cy);
-            break;
-        case g3_kernel:
-            run_g3_kernel(ntest, nloops, kib, res_ns, res_cy);
-            break;
-        case user_kernel:
-            run_user_kernel(ntest, nloops, kib, res_ns, res_cy);
-            break;
+        // case io_ins:
+        //     run_io_ins(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        // case arith_ins:
+        //     run_arith_ins(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        // case g1_kernel:
+        //     run_g1_kernel(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        // case g2_kernel:
+        //     run_g2_kernel(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        // case g3_kernel:
+        //     run_g3_kernel(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        // case user_kernel:
+        //     run_user_kernel(ntest, nloops, kib, res_ns, res_cy);
+        //     break;
+        default:
+            return KERN_NOT_MATCH;
     }
     
     return err;
 }
+
+/*
+ * function: run_kernel
+ * description: 
+ * ret: 
+ * int, error code
+ * args:
+ *     char *dir [in]: data directory 
+ *     uint64_t **data [in]: pointer to 2d array
+ *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
+ *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
+ *     char *prefix [in]: prefix of filename. 
+ *     char *posfix [in]: postfix of filename.
+ */
 int
-run_kern(int uid, int ntests, size_t kib, int nloops, uint64_t *res_ns, uint64_t *res_cy) {
-    int err;
+run_kernel(int uid, int kid, int ntest, int nloop, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy) {
+    int i, err;
+    uint64_t nsize, nbyte;
+    TYPE *a, *b, *c, *d;
+    TYPE s;
+
+    nbyte = kib * 1024;
+    nsize = kib * 1024 / 8;
 
     a = (double *)malloc(nbyte);
+    if(a == NULL) {
+        return MEM_FAIL;
+    }
     b = (double *)malloc(nbyte);
+    if(b == NULL) {
+        return MEM_FAIL;
+    }
     c = (double *)malloc(nbyte);
+    if(c == NULL) {
+        return MEM_FAIL;
+    }
     d = (double *)malloc(nbyte);
-    
+    if(d == NULL) {
+        return MEM_FAIL;
+    }
+
     err = 0;
-    switch(uid) {
+    s = 0.05;
+    kname = uid;
+    switch(kname) {
         case init:
-            init(a, s, narr, &cy, ntests);
+            for(i = 0; i < ntest; i ++) {
+                run_init(a, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case sum:
-            sum(a, b, narr, &cy, ntests);
+            for(i = 0; i < ntest; i ++) {
+                run_sum(a, &s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case copy:
-            copy(a, b, narr, &cy, ntests);
+            for(i = 0; i < ntest; i ++) {
+                run_copy(a, b, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            } 
             break;
         case update:
-            update(a, s, narr, &cy, ntests);
+            for(i = 0; i < ntest; i ++) {
+                run_update(a, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case triad:
-            triad();
+            for(i = 0; i < ntest; i ++) {
+                run_triad(a, b, c, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case daxpy:
-            daxpy();
+            for(i = 0; i < ntest; i ++) {
+                run_daxpy(a, b, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case striad:
-            striad();
+            for(i = 0; i < ntest; i ++) {
+                run_striad(a, b, c, d, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         case sdaxpy:
-            sdaxpy();
+            for(i = 0; i < ntest; i ++) {
+                run_sdaxpy(a, b, c, nsize, &res_ns[i][kid], &res_cy[i][kid]);
+            }
             break;
         default:
-            return 1;
+            return KERN_NOT_MATCH;
     }
     
-    return err;
+    free(a);
+    free(b);
+    free(c);
+    free(d);
+    return NO_ERROR;
 }
 
 // int 
@@ -134,7 +200,7 @@ list_kern(){
 
 int 
 init_kern(char *kernels, char *groups, int *p_kern, int *p_grp, 
-              int cons_flag, int *nkern, int *ngrp) {
+          int *nkern, int *ngrp) {
     int st_id, en_id, i, j, id, ret; // tag a name
     int n_tot_kern, n_tot_grp, dup_flag; // total number, duplication flag
     char *sch, *ech, *gname; // start char, end char, grp name
