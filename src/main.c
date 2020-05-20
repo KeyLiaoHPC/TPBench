@@ -155,7 +155,7 @@ main(int argc, char **argv) {
     // benchmark groups and kernels
     int *grps, *kerns;
     char header[256], filename[1024], mydir[1024], full_path[1024], hostname[1024]; // headers for csv file
-    char prefix[32], posfix[32];
+    char prefix[32], posfix[32], gname[32];
     // double *a, *b, *c, *d; 
 #ifdef USE_MPI
     double **partps; // cpu cys, parallel cys
@@ -192,15 +192,7 @@ main(int argc, char **argv) {
     }
     mycpu = sched_getcpu();
     gethostname(hostname, 1024);
-    sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
-    if(myid == 0) {
-        err = make_dir(mydir);
-        if(err) {
-            printf("EXIT: Creating data directory failed.\n");
-            mpi_exit();
-            exit(0);
-        }
-    }
+    
     mpi_sync();
     // Parse args
     tp_args.ntest = 0;
@@ -262,6 +254,15 @@ main(int argc, char **argv) {
     if(myid == 0) {
         printf("All csv files will be saved in %s.\n", tp_args.data_dir);
     }
+    sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
+    if(myid == 0) {
+        err = make_dir(mydir);
+        if(err) {
+            printf("EXIT: Creating data directory failed.\n");
+            mpi_exit();
+            exit(0);
+        }
+    }
 
 // =============================================================================
 // STAGE 1 - Initialization
@@ -307,20 +308,26 @@ main(int argc, char **argv) {
     grp_cy = (uint64_t **)malloc(sizeof(uint64_t *) * tp_args.ntest);
     for(i = 0; i < ngrp; i ++){
         gid = grps[i];
-        ngrp_kern = group_info[gid].nkern;
-        // info process
-        if(myid == 0){
-            printf("Running group %s: ", g_names[gid]);
-            header_len = 0;
-            for(j = 0; j < n_tot_kern; j ++) {
-                if(kern_info[j].gid == gid){
-                    sprintf(&header[header_len], "%s,", kern_info[j].name);
-                    header_len = header_len + strlen(kern_info[j].name) + 1;
+        for(j = 0; j < n_tot_grp; j ++) {
+            if(group_info[j].gid == gid) {
+                ngrp_kern = group_info[j].nkern;
+                sprintf(gname, "%s", group_info[j].name);
+                if(myid == 0) {
+                    printf("Running group %s\n", group_info[j].name);
                 }
+                break;
             }
-            header[header_len] = '\0';
-            printf("%s\n", header);
         }
+        // info process
+        header_len = 0;
+        for(j = 0; j < n_tot_kern; j ++) {
+            if(kern_info[j].gid == gid){
+                sprintf(&header[header_len], "%s,", kern_info[j].name);
+                header_len = header_len + strlen(kern_info[j].name) + 1;
+            }
+        }
+        header[header_len] = '\0';
+        printf("%s\n", header);
         mpi_sync();
         
         for(j = 0; j < tp_args.ntest; j ++) {

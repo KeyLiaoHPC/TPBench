@@ -47,11 +47,7 @@ run_group(int gid, int ntest, int nloops, uint64_t kib, uint64_t **res_ns, uint6
     int i, j, k, err;
 
     err = 0;
-    gname = gid;
-    switch(gname){
-        case g1_kernel:
-            run_g1_kernel(ntest, kib, res_ns, res_cy);
-            break;
+    run_g1_kernel(ntest, kib, res_ns, res_cy);
         // case io_ins:
         //     run_io_ins(ntest, nloops, kib, res_ns, res_cy);
         //     break;
@@ -70,9 +66,6 @@ run_group(int gid, int ntest, int nloops, uint64_t kib, uint64_t **res_ns, uint6
         // case user_kernel:
         //     run_user_kernel(ntest, nloops, kib, res_ns, res_cy);
         //     break;
-        default:
-            return KERN_NOT_MATCH;
-    }
     
     return err;
 }
@@ -223,8 +216,8 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
         if(*ech == '\0' || *ech == ','){
             // splitter matched
             ret = 1;
-            for(id = 0; id < n_tot_grp; id ++){
-                ret = strncmp(sch, g_names[id], en_id - st_id);
+            for(i = 0; i < n_tot_grp; i ++){
+                ret = strncmp(sch, group_info[i].name, strlen(group_info[i].name));
                 if(ret != 0) {
                     // not match
                     continue;
@@ -232,7 +225,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
                 // group found
                 dup_flag = 0;
                 for(j = 0 ; j < *ngrp; j ++) {
-                    if(p_grp[j] == id) {
+                    if(p_grp[j] == group_info[i].gid) {
                         // duplication found
                         dup_flag = 1;
                         break;
@@ -240,7 +233,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
                 }
                 if(dup_flag == 0) {
                 // no dup, append to list
-                    p_grp[*ngrp] = id;
+                    p_grp[*ngrp] = group_info[i].gid;
                     (*ngrp) ++;
                 }
                 break;
@@ -279,7 +272,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
             // splitter matched
             ret = 1;
             for(id = 0; id < n_tot_grp; id ++){
-                ret = strncmp(sch, kern_info[id].name, en_id - st_id);
+                ret = strncmp(sch, kern_info[id].name, strlen(kern_info[id].name));
                 if(ret != 0) {
                     // not match
                     continue;
