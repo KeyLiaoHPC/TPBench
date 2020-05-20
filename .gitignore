@@ -5,6 +5,9 @@
 *.order
 *.mod.c
 *.csv
+./*.sh
 
-data/
-bin/
+./data/
+./bin/
+./lib/
+./include/
