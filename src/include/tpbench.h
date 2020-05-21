@@ -25,15 +25,8 @@
  */
 #include <stdint.h>
 #include "error.h"
-
-#ifndef _KERNELS_H
 #include "kernels.h"
-#endif
-
-#ifndef _GROUPS_H
 #include "groups.h"
-#endif
-
 
 // ERROR COD
 #define DHLINE "================================================================================\n"
@@ -60,5 +53,5 @@ write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);
 
 void list_kern();
 int init_kern(char *kernels, char *groups, int *p_kern, int *p_grp, int *nkern, int *ngrp);
-int run_kernel(int *ulist, int nkern, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib);
+int run_kernel(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib);
 int run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib);

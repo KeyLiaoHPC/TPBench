@@ -35,39 +35,14 @@
  * ret: 
  * int, error code
  * args:
- *     char *dir [in]: data directory 
- *     uint64_t **data [in]: pointer to 2d array
- *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
- *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
- *     char *prefix [in]: prefix of filename. 
- *     char *posfix [in]: postfix of filename.
  */
 int
-run_group(int gid, int ntest, int nloops, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy) {
+run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib) {
     int i, j, k, err;
 
     err = 0;
-    run_g1_kernel(ntest, kib, res_ns, res_cy);
-        // case io_ins:
-        //     run_io_ins(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
-        // case arith_ins:
-        //     run_arith_ins(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
-        // case g1_kernel:
-        //     run_g1_kernel(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
-        // case g2_kernel:
-        //     run_g2_kernel(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
-        // case g3_kernel:
-        //     run_g3_kernel(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
-        // case user_kernel:
-        //     run_user_kernel(ntest, nloops, kib, res_ns, res_cy);
-        //     break;
     
-    return err;
+    return NO_ERROR;
 }
 
 /*
@@ -76,109 +51,35 @@ run_group(int gid, int ntest, int nloops, uint64_t kib, uint64_t **res_ns, uint6
  * ret: 
  * int, error code
  * args:
- *     char *dir [in]: data directory 
- *     uint64_t **data [in]: pointer to 2d array
- *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
- *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
- *     char *prefix [in]: prefix of filename. 
- *     char *posfix [in]: postfix of filename.
  */
 int
-run_kernel(int uid, int kid, int ntest, int nloop, uint64_t kib, uint64_t **res_ns, uint64_t **res_cy) {
-    int i, err;
-    uint64_t nsize, nbyte;
-    TYPE *a, *b, *c, *d;
-    TYPE s;
-
-    nbyte = kib * 1024;
-    nsize = kib * 1024 / 8;
-
-    a = (double *)malloc(nbyte);
-    if(a == NULL) {
-        return MEM_FAIL;
-    }
-    b = (double *)malloc(nbyte);
-    if(b == NULL) {
-        return MEM_FAIL;
-    }
-    c = (double *)malloc(nbyte);
-    if(c == NULL) {
-        return MEM_FAIL;
-    }
-    d = (double *)malloc(nbyte);
-    if(d == NULL) {
-        return MEM_FAIL;
-    }
-
-    err = 0;
-    s = 0.05;
-    kname = uid;
-    switch(kname) {
-        case init:
-            for(i = 0; i < ntest; i ++) {
-                run_init(a, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case sum:
-            for(i = 0; i < ntest; i ++) {
-                run_sum(a, &s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case copy:
-            for(i = 0; i < ntest; i ++) {
-                run_copy(a, b, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            } 
-            break;
-        case update:
-            for(i = 0; i < ntest; i ++) {
-                run_update(a, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case triad:
-            for(i = 0; i < ntest; i ++) {
-                run_triad(a, b, c, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case daxpy:
-            for(i = 0; i < ntest; i ++) {
-                run_daxpy(a, b, s, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case striad:
-            for(i = 0; i < ntest; i ++) {
-                run_striad(a, b, c, d, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        case sdaxpy:
-            for(i = 0; i < ntest; i ++) {
-                run_sdaxpy(a, b, c, nsize, &res_ns[i][kid], &res_cy[i][kid]);
-            }
-            break;
-        default:
-            return KERN_NOT_MATCH;
-    }
+run_kernel(int *ulist, int nkern, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib){
+    int err, n_all_kern;
+    int klist[nkern];
+    uint64_t ns[ntest], cy[ntest];
     
-    free(a);
-    free(b);
-    free(c);
-    free(d);
+    n_all_kern = sizeof(kern_info) / sizeof(Kern_Info_t);
+
+    for(int i = 0; i < nkern; i ++) {
+        for(int j = 0; j < n_all_kern; j ++) {
+            if(kern_info[i] == kern_info[j].uid) {
+                klist[i] = j;
+            }
+        }
+    }
+
+    for(int i = 0; i < nkern; i ++) {
+        err = kern_info[klist[i]].pfun(ntest, ns, cy, kib);
+        if(err) {
+            return err;
+        }
+        for(int t = 0; t < ntest; t ++) {
+            res_ns[t][i] = ns[t];
+            res_cy[t][i] = cy[t];
+        }
+    }
     return NO_ERROR;
 }
-
-// int 
-// run_grp(int gid, int ntests, int narr, int arr_count, int parm_count, int wloop) {
-    // int err;
-// 
-    // err = 0;
-    // switch(gid) {
-        // case io_ins:
-        // case arith_ins:
-        // case g1_kernel:
-        // case g2_kernel:
-        // case g3_kernel:
-        // case user_kernel;
-    // }
-// }
 
 void
 list_kern(){
