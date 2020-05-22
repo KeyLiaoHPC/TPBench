@@ -1,28 +1,28 @@
-/*
- * =================================================================================
- * TPBench - A high-precision throughputs benchmarking tool for scientific computing
- * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- *  terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * 
- * =================================================================================
- * main.c
- * Description: Main entry of TPBench. 
- * Author: Key Liao
- * Modified: May. 9th, 2020
- * Email: keyliaohpc@gmail.com
- * =================================================================================
- */
+/**
+  * =================================================================================
+  * TPBench - A high-precision throughputs benchmarking tool for HPC
+  * 
+  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+  * 
+  * This program is free software: you can redistribute it and/or modify it under the
+  *  terms of the GNU General Public License as published by the Free Software 
+  * Foundation, either version 3 of the License, or (at your option) any later 
+  * version.
+  * 
+  * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
+  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
+  * PARTICULAR PURPOSE. See the GNU General Public License for more details.
+  * You should have received a copy of the GNU General Public License along with 
+  * this program. If not, see https://www.gnu.org/licenses/.
+  * =================================================================================
+  * 
+  * @file main.c
+  * @version 0.3
+  * @brief   main entry for tpbench
+  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
+  * @date 2020-05-22
+  */
+
 
 #define _GNU_SOURCE
 #define VER "0.3"
@@ -36,81 +36,12 @@
 #include <string.h>
 #include <argp.h>
 #include "tpbench.h"
+#include "tpb_parser.h"
 
 #ifdef USE_MPI
 #include "mpi.h"
 #endif
 
-// =============================================================================
-// argp area
-// =============================================================================
-const char *argp_program_version = "TPBench-v0.3, maintaining by Key Liao, "
-    "Center for HPC, Shanghai Jiao Tong University";
-const char *argp_program_bug_address = "keyliao@sjtu.edu.cn";
-static char doc[] = "TPBench - A parallel high-precision throughputs "
-    "benchmarking tool for High-Performance Computing.";
-static char args_doc[] = "";
-
-// Type for arugments.
-struct TP_Args_t{
-    uint64_t ntest;
-    uint64_t nloop; // [Optional] Number of outer loops and inner looops
-    uint64_t kib_size; // [Mandatory] Number of ngrps and nkerns
-    char *groups, *kernels, *data_dir; // [Mandatory] group and kernels name
-    int list_flag; // [Optinal] flags for list mode and consecutive run
-};
-
-static struct argp_option options[] = {
-    {"ntest", 'n', "# of test", 0, 
-        "Overall number of tests."},
-    {"nloop", 'l', "# of loop", OPTION_ARG_OPTIONAL, 
-        "Optional. Number of inner loop. (e.g. instruction benchmark)."},
-    {"size", 's', "kib_size",  0, 
-         "Memory usage for a single test array, in KiB."},
-    {"group", 'g', "group_list", 0, 
-        "Group list. (e.g. -g g1_kernel,g2_kernel)."},
-    {"kernel", 'k', "kernel_list", 0,
-        "Kernel list.(e.g. -k init,sum). "},
-    {"list", 'L', 0, 0,
-        "List all group and kernels then exit." },
-    {"data_dir", 'd', "data_dir", OPTION_ARG_OPTIONAL, "Optional. Data directory."},
-    { 0 }
-};
-
-static error_t
-parse_opt (int key, char *arg, struct argp_state *state) {
-    struct TP_Args_t *args = state->input;
-    switch(key) {
-        case 'n':
-            args->ntest = atoi(arg);
-            break;
-        case 'l':
-            args->nloop = atoi(arg);
-            break;
-        case 's':
-            args->kib_size = atoi(arg);
-            break;
-        case 'g':
-            args->groups = arg;
-            break;
-        case 'k':
-            args->kernels = arg;
-            break;
-        case 'L':
-            args->list_flag = 1;
-            break;
-        case 'o':
-            args->data_dir = arg;
-        case ARGP_KEY_ARG:
-            argp_usage(state);
-            break;
-        case ARGP_KEY_END:
-            break;
-        default:
-          return ARGP_ERR_UNKNOWN;
-    }
-    return 0;
-}
 // =============================================================================
 // utilities
 // =============================================================================
@@ -309,11 +240,11 @@ main(int argc, char **argv) {
     for(i = 0; i < ngrp; i ++){
         gid = grps[i];
         for(j = 0; j < n_tot_grp; j ++) {
-            if(group_info[j].gid == gid) {
-                ngrp_kern = group_info[j].nkern;
-                sprintf(gname, "%s", group_info[j].name);
+            if(grp_info[j].gid == gid) {
+                ngrp_kern = grp_info[j].nkern;
+                sprintf(gname, "%s", grp_info[j].name);
                 if(myid == 0) {
-                    printf("Running group %s\n", group_info[j].name);
+                    printf("Running group %s\n", grp_info[j].name);
                 }
                 break;
             }
@@ -338,9 +269,9 @@ main(int argc, char **argv) {
         run_group(gid, tp_args.ntest, tp_args.nloop, tp_args.kib_size, grp_ns, grp_cy);
         // write results
         sprintf(full_path, "%s/%s_r%d_c%d_%s.csv", mydir, g_names[gid], myid, mycpu, "ns");
-        write_csv(full_path, grp_ns, group_info[i].nkern, ngrp_kern, header);
+        write_csv(full_path, grp_ns, grp_info[i].nkern, ngrp_kern, header);
         sprintf(full_path, "%s/%s_r%d_c%d_%s.csv", mydir, g_names[gid], myid, mycpu, "cy");
-        write_csv(full_path, grp_cy, group_info[i].nkern, ngrp_kern, header);
+        write_csv(full_path, grp_cy, grp_info[i].nkern, ngrp_kern, header);
         if(i != ngrp - 1) {
             for(j = 0; j < tp_args.ntest; j ++) {
                 grp_ns[j] = (uint64_t *)realloc(grp_ns[j], sizeof(uint64_t) * ngrp_kern);

@@ -16,7 +16,7 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * asm_timer.h
+ * tptimer.h
  * Description: Timer
  * Author: Key Liao
  * Modified: May. 21st, 2020

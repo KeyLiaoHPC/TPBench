@@ -16,30 +16,24 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * groups.h
- * Description: Kernel informations.
+ * tperror.h
+ * Description: Headers for error handling.
  * Author: Key Liao
- * Modified: May. 9th, 2020
+ * Modified: May. 15th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-#define _GROUPS_H
-#include <stdint.h>
-#include <stdarg.h>
 
-// Group infor type
-typedef struct {
-    char *name;
-    int gid, nepoch; // group id, # of epochs
-    int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t, ...);//var args for extra args
-} Group_Info_t;
+// ERROR CODE
+#define NO_ERROR        0
+#define GRP_ARG_ERROR   1
+#define KERN_ARG_ERROR  2
+#define KERN_NE         3
+#define GRP_NE          4
+#define SYNTAX_ERROR    5
+#define FILE_OPEN_FAIL  6
+#define MALLOC_FAIL     7
 
-// Group declaration
-int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib, ...);
-
-// Group info list
-static Group_Info_t group_info[] = {
-    {   "stream",      0,  4,
-        d_stream}
-};
-
+// WARNING
+#define VERIFY_FAIL     100
+#define OVER_OPTMIZE    101

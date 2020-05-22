@@ -28,8 +28,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "asm_timer.h"
-#include "error.h"
+#include "tptimer.h"
+#include "tperror.h"
 
 #define MALLOC(_A, _NSIZE)  (_A) = (double *)malloc(sizeof(double) * _NSIZE);   \
                             if((_A) == NULL) {                                  \

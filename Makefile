@@ -14,7 +14,7 @@ tpbench.x: main.c kernel_wrapper.c utils.c g1_kernel.c
 	$(CC) -g $(CFLAGS) $(DEF) $(SIZE) -I$(TP_DIR)/src -o $@ $^
 test: test.x
 test.x: test.c init.c staxpy.c striad.c sum.c triad.c update.c \
-		axpy.c copy.c scale.c
+		axpy.c copy.c scale.c cli_parser.c
 	$(CC) -g $(CFLAGS) -I$(INC) -o $@ $^
 
 clean:

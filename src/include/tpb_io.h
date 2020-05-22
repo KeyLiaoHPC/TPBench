@@ -1,6 +1,6 @@
-/*
+/**
  * =================================================================================
- * TPBench - A high-precision throughputs benchmarking tool for scientific computing
+ * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
  * 
@@ -14,20 +14,44 @@
  * PARTICULAR PURPOSE. See the GNU General Public License for more details.
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
- * 
  * =================================================================================
- * tpbench.c
- * Description: Heraders for TPBench.
- * Author: Key Liao
- * Modified: May. 15th, 2020
- * Email: keyliao@sjtu.edu.cn
- * =================================================================================
+ * @file tpb_io.h
+ * @version 0.3
+ * @brief Header for handling input/output of tpbench.
+ * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
+ * @date 2020-05-22
  */
-#include <stdint.h>
-#include "tpb_core.h"
-#include "cli_parser.h"
-#include "tpb_io.h"
 
-// ERROR COD
-#define DHLINE "================================================================================\n"
-#define HLINE  "--------------------------------------------------------------------------------\n"
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdarg.h>
+
+/**
+ * @brief 
+ * @param dirpath 
+ * @return int 
+ */
+int tpb_mkdir(char *dirpath);
+
+/**
+ * @brief 
+ * @param err 
+ * @param msg 
+ * @param ... 
+ */
+void tpb_wrstd(int err, char **msg, ...);
+
+/**
+ * @brief 
+ * @param path 
+ * @param data 
+ * @param ndim1 
+ * @param ndim2 
+ * @param headers 
+ * @return int 
+ */
+int tpb_wrcsv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);

@@ -16,21 +16,34 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * error.h
- * Description: Headers for error handling.
+ * groups.h
+ * Description: Kernel informations.
  * Author: Key Liao
- * Modified: May. 15th, 2020
+ * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
+#ifndef _TPGROUPS_H
+#define _TPGROUPS_H
+#include <stdint.h>
+#include <stdarg.h>
 
-// ERROR CODE
-#define NO_ERROR        0
-#define GRP_NOT_MATCH   1
-#define KERN_NOT_MATCH  2
-#define FILE_OPEN_FAIL  3
-#define MALLOC_FAIL     4
+// Group infor type
+typedef struct {
+    char *gname;
+    char *rname;
+    int gid, nepoch; // group id, # of epochs
+    int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t, ...);//var args for extra args
+} Group_Info_t;
 
-// WARNING
-#define VERIFY_FAIL     100
-#define OVER_OPTMIZE    101
+static int n_all_grp = 1;
+
+// Group declaration
+int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib, ...);
+
+// Group info list
+static Group_Info_t grp_info[] = {
+    {"stream",       "d_stream",      0,  4,     d_stream}
+};
+
+#endif // #ifndef _TPGROUPS_H

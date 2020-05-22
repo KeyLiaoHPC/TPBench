@@ -118,7 +118,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
             // splitter matched
             ret = 1;
             for(i = 0; i < n_tot_grp; i ++){
-                ret = strncmp(sch, group_info[i].name, strlen(group_info[i].name));
+                ret = strncmp(sch, grp_info[i].name, strlen(grp_info[i].name));
                 if(ret != 0) {
                     // not match
                     continue;
@@ -126,7 +126,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
                 // group found
                 dup_flag = 0;
                 for(j = 0 ; j < *ngrp; j ++) {
-                    if(p_grp[j] == group_info[i].gid) {
+                    if(p_grp[j] == grp_info[i].gid) {
                         // duplication found
                         dup_flag = 1;
                         break;
@@ -134,7 +134,7 @@ init_kern(char *kernels, char *groups, int *p_kern, int *p_grp,
                 }
                 if(dup_flag == 0) {
                 // no dup, append to list
-                    p_grp[*ngrp] = group_info[i].gid;
+                    p_grp[*ngrp] = grp_info[i].gid;
                     (*ngrp) ++;
                 }
                 break;

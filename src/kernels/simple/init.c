@@ -27,8 +27,8 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "asm_timer.h"
-#include "error.h"
+#include "tptimer.h"
+#include "tperror.h"
 
 int
 d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
@@ -82,6 +82,7 @@ s_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     return 0;
 }
 
+#ifdef __aarch64__
 int
 h_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     int nsize, err;
@@ -106,6 +107,7 @@ h_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     free((void *)a);
     return 0;
 }
+#endif //#ifdef __aarch64__
 
 int
 i_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {

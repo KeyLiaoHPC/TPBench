@@ -16,25 +16,32 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * kernels.h
+ * tpkernels.h
  * Description: Kernel informations.
  * Author: Key Liao
  * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-#define _KERNELS_H
+#ifndef _TPKERNELS_H
+#define _TPKERNELS_H
+
 #include <stdint.h>
 #include <stdarg.h>
 
 // Kernel info type
 typedef struct {
-    char *name; // Name of kernel
-    int uid; // kernel unique id
+    char *kname; // Name of kernel
+    char *rname; // Name of routine
+    int kid; // kernel unique id
     uint64_t nbyte; // bytes through core per iteration
     uint64_t nop; // Arithmetic (FL)OPs per iteration.
     int (*pfun)(int, uint64_t *, uint64_t *, uint64_t, ...); //var args for extra args
+    char *note;
 } Kern_Info_t;
+
+static int n_all_kern = 9;
+static int n_all_rout = 9;
 
 // Kernel declaration
 // id 0
@@ -55,13 +62,15 @@ int d_scale(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
 // s_: fp32, single
 // m_: mix
 static Kern_Info_t kern_info[] = {
-    {"d_init",      0,  8,  0,  d_init},
-    {"d_sum",       1,  8,  1,  d_sum},
-    {"d_copy",      2,  16, 0,  d_copy},
-    {"d_update",    3,  16, 1,  d_update},
-    {"d_triad",     4,  24, 2,  d_triad},
-    {"d_axpy",      5,  24, 2,  d_axpy},
-    {"d_striad",    6,  32, 2,  d_striad},
-    {"d_sdaxpy",    7,  32, 2,  d_staxpy},
-    {"d_scale",     8,  16, 1,  d_scale}
+    {"init",        "d_init",       0,  8,  0,  d_init},
+    {"sum",         "d_sum",        1,  8,  1,  d_sum},
+    {"copy",        "d_copy",       2,  16, 0,  d_copy},
+    {"update",      "d_update",     3,  16, 1,  d_update},
+    {"triad",       "d_triad",      4,  24, 2,  d_triad},
+    {"axpy",        "d_axpy",       5,  24, 2,  d_axpy},
+    {"striad",      "d_striad",     6,  32, 2,  d_striad},
+    {"staxpy",      "d_sdaxpy",     7,  32, 2,  d_staxpy},
+    {"scale",       "d_scale",      8,  16, 1,  d_scale}
 };
+
+#endif // #ifndef _TPKERNELS_H

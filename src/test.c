@@ -61,6 +61,41 @@
 //     return err;
 // }
 
+void
+test_parse_args(int argc, char **argv) {
+    //int argc;
+    //char **argv;
+    __tp_args_t tp_args;
+    //argc = 11;
+    //argv = (char **)malloc(sizeof(char *) * 11);
+
+    //argv[0] = "./tpbench.x";
+    //argv[1] = "-n";
+    //argv[2] = "100";
+    //argv[3] = "-s";
+    //argv[4] = "4096";
+    //argv[5] = "-g";
+    //argv[6] = "stream";
+    //argv[7] = "-k";
+    //argv[8] = "d_copy,d_scale";
+    //argv[9] = "-d";
+    //argv[10] = "./data";
+    if(parse_args(argc, argv, &tp_args)){
+        printf("FAILED.\n");
+    } 
+    else {
+        printf("%llu, %llu\n%s\n", tp_args.ntest, tp_args.nkib, tp_args.data_dir);
+        for(int i = 0; i < tp_args.nkern; i ++) {
+            printf("%d: %s\n", tp_args.klist[i], kern_info[i].rname);
+        }
+        for(int i = 0; i < tp_args.ngrp; i ++) {
+            printf("%d: %s\n", tp_args.glist[i], grp_info[i].rname);
+        }
+    }
+    
+    //free(argv);
+}
+
 int
 test_run_kernel(int kid) {
     int i, j, k;
@@ -72,7 +107,7 @@ test_run_kernel(int kid) {
 
     nkernel = sizeof(kern_info) / sizeof(Kern_Info_t);
     for(i = 0; i < nkernel; i ++) {
-        printf("TEST: %s ------ ", kern_info[i].name);
+        printf("TEST: %s ------ ", kern_info[i].rname);
         min_cy = 4096 * 1024 / 8;
         kern_info[i].pfun(20, ns, cy, 4096);
         for(j = 1; j < 20; j ++) {
@@ -95,13 +130,15 @@ test_run_kernel(int kid) {
 }
 
 int
-main(void) {
+main(int argc, char **argv) {
     int err;
     // printf("TEST run_group\n");
     
     // if(err = test_run_group()) {
     //     printf("FAIL run_group [%d]\n", err);
     // }
+    printf("TEST parse_args\n");
+    test_parse_args(argc, argv);
     printf("TEST run_kernel\n");
     test_run_kernel(0);
 
