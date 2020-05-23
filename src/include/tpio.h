@@ -23,12 +23,8 @@
  */
 
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdarg.h>
+
+#include <stdint.h>
 
 /**
  * @brief 
@@ -43,15 +39,16 @@ int tpb_mkdir(char *dirpath);
  * @param msg 
  * @param ... 
  */
-void tpb_wrstd(int err, char **msg, ...);
+int tpb_printf(int err, int ts, int tag, char *msg, ...);
 
 /**
  * @brief 
+ * 
  * @param path 
  * @param data 
- * @param ndim1 
- * @param ndim2 
- * @param headers 
+ * @param nrow 
+ * @param ncol 
+ * @param header 
  * @return int 
  */
-int tpb_wrcsv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers);
+int tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header);

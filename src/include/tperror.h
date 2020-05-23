@@ -41,5 +41,8 @@
 #define MPI_INIT_FAIL   51
 
 // WARNING
-#define VERIFY_FAIL     100
-#define OVER_OPTMIZE    101
+#define VERIFY_FAIL     101
+#define OVER_OPTMIZE    102
+
+#define DHLINE "================================================================================\n"
+#define HLINE  "--------------------------------------------------------------------------------\n"

@@ -27,7 +27,6 @@
 #define _GNU_SOURCE
 #define VER "0.3"
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
@@ -98,45 +97,53 @@ main(int argc, char **argv) {
     nrank = 1;
     myrank = 0;
     mycpu = sched_getcpu();
+    tpb_printf(0, 0, 0, DHLINE);
+    tpb_printf(0, 0, 0, "TPBench v" VER "\n");
     // init mpi rank info
+
 #ifdef USE_MPI
+    if(myrank == 0) {
+        tpb_printf(0, 1, 1, "Initializing MPI.");
+    }
     err = MPI_Init(NULL, NULL);
     if(err != MPI_SUCCESS) {
-       printf("EXIT: MPI Initialization failed. [errno: %d]\n", err);
-       exit(1);
+        if(myrank == 0)
+            tpb_printf(err, "MPI Initialization failed.");
+        exit(1);
     }
     MPI_Comm_size(MPI_COMM_WORLD, &nrank);
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 #endif //#ifdef USE_MPI
 
-    if(myrank == 0){
-        printf(DHLINE "TPBench v" VER "\n");
-    }
+    
     gethostname(hostname, 128);
 
     // finished getting process info
     // init kernel, init tpbench arguments
-
-    err = tpb_init();
     if(myrank == 0) {
-        printf("nkrout = %d, ngrout = %d\n", nkrout, ngrout);
+        tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
     }
+    err = tpb_init();
+    if(err) {
+        err = tpb_printf(err, 1, 1, "");
+        if(err) exit(1);
+    }
+    tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = parse_args(argc, argv, &tp_args);
     if(err) {
-        printf("ERROR: %d", err);
-        exit(0);
+        err = tpb_printf(err, 1, 1, "ERROR: %d\n" DHLINE, err);
+        if(err) exit(1);
     }
 
     // print args for debugging
     if(myrank == 0) {
-        printf("ntest = %d, nkib = %d\n # of kern = %d, # of ngrp = %d\n",
+        tpb_printf(0, 1, 1, "ntest = %d, nkib = %d\n # of kern = %d, # of ngrp = %d\n",
                tp_args.ntest, tp_args.nkib, tp_args.nkern, tp_args.ngrp);
         for(int i = 0; i < tp_args.nkern; i ++) {
-            printf("%d, ", tp_args.klist[i]);
+            tpb_printf(0, 1, 1, "%d, ", tp_args.klist[i]);
         }
-        printf("\n");
         for(int i = 0; i < tp_args.ngrp; i ++) {
-            printf("%d, ", tp_args.glist[i]);
+            tpb_printf(0, 1, 1, "%d, ", tp_args.glist[i]);
         }
     }
     // end args debugging

@@ -26,8 +26,5 @@
 #include <stdint.h>
 #include "tpb_core.h"
 #include "cli_parser.h"
-#include "tpb_io.h"
+#include "tpio.h"
 
-// ERROR COD
-#define DHLINE "================================================================================\n"
-#define HLINE  "--------------------------------------------------------------------------------\n"

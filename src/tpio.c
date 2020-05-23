@@ -16,24 +16,29 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * utils.c
+ * tpio.c
  * Description: some accessory functions. 
  * Author: Key Liao
  * Modified: May. 9th, 2020
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 #include <string.h>
-#include <limits.h>     /* PATH_MAX */
-#include <sys/stat.h>   /* mkdir(2) */
-#include "tperror.h"
-
+#include <stdint.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include "tpb_core.h"
 
 int
-make_dir(const char *path) {
+tpb_mkdir(char *path) {
+
+
     int err;
     const size_t len = strlen(path);
     char _path[PATH_MAX];
@@ -70,21 +75,18 @@ make_dir(const char *path) {
     return 0;
 }
 
-/*
- * function: write_res
- * description: write a 2d data result to prefix_r?_c?_pofix.csv
- * ret: 
- * int, error code
- * args:
- *     char *dir [in]: data directory 
- *     uint64_t **data [in]: pointer to 2d array
- *     int ndim1 [in]: number of dim1 elements. (data[dim1][dim2])
- *     int ndim2 [in]: number of dim2 elements. (data[dim1][dim2])
- *     char *prefix [in]: prefix of filename. 
- *     char *posfix [in]: postfix of filename.
- */ 
+/**
+ * @brief 
+ * 
+ * @param path 
+ * @param data 
+ * @param nrow 
+ * @param ncol 
+ * @param header 
+ * @return int 
+ */
 int
-write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers) {
+tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header) {
     int err, i, j;
     FILE *fp;    
 
@@ -92,15 +94,73 @@ write_csv(char *path, uint64_t **data, int ndim1, int ndim2, char *headers) {
     if(fp == NULL) {
         return FILE_OPEN_FAIL;
     }
-    fprintf(fp, "%s\n", headers);
-    for(i = 0; i < ndim1; i ++) {
-        for(j = 0; j < ndim2 - 1; j ++) {
+    fprintf(fp, "%s\n", header);
+    for(i = 0; i < nrow; i ++) {
+        for(j = 0; j < ncol - 1; j ++) {
             fprintf(fp, "%llu,", data[i][j]);
         }
-        fprintf(fp, "%llu\n", data[i][ndim2-1]);
+        fprintf(fp, "%llu\n", data[i][ncol-1]);
     }
     fflush(fp);
     fclose(fp);
 
     return NO_ERROR;
+}
+
+int
+tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
+    
+    int err_op = 0;
+    time_t t = time(0);
+    struct tm* lt = localtime(&t);
+    char tag[5];
+    
+    if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
+        if(myrank) {
+            return err_op;
+        }
+        printf("%s", fmt);
+        return err_op;
+    }
+    if(err == 0) {
+        err_op = 0;
+        if(myrank) {
+            return err_op;
+        }
+        sprintf(tag, "NOTE");
+    }
+    else if(err > 100) {
+        err_op = 0;
+        if(myrank) {
+            return err_op;
+        }
+        sprintf(tag, "WARN");
+    } 
+    else {
+        err_op = 1;
+        if(myrank) {
+            return err_op;
+        }
+        sprintf(tag, "FAIL");
+    }
+    if(ts_flag) {
+        printf("\n%04d-%02d-%02d %02d:%02d:%02d ", 
+               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
+               lt->tm_hour, lt->tm_min, lt->tm_sec);
+    }
+    if(tag_flag) {
+        if(ts_flag) {
+            printf("[%s] ", tag); 
+        }
+        else {
+            printf("\n[%s] ", tag);
+        }
+        
+    }
+
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+    return err_op;
 }
