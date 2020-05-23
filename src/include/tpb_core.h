@@ -30,21 +30,24 @@
 #include "tptimer.h"
 
 /**
- * @brief 
+ * Basic information of tpbench benchmarking sets, init by tpb_init().
  */
-void tpb_list_kernel();
+// # of kernels, kernel routines, groups and group routines
+int nkern, nkrout, ngrp, ngrout;
+// granularity and tick of timer.
+uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
+int nrank, myrank, mycpu;
 
 /**
  * @brief 
- * @param kernels 
- * @param groups 
- * @param p_kern 
- * @param p_grp 
- * @param nkern 
- * @param ngrp 
+ */
+void tpb_list();
+
+/**
+ * @brief 
  * @return int 
  */
-int tpb_init_kernel(char *kernels, char *groups, int *p_kern, int *p_grp, int *nkern, int *ngrp);
+int tpb_init();
 
 /**
  * @brief 

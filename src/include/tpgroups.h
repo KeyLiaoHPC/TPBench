@@ -32,17 +32,16 @@
 typedef struct {
     char *gname;
     char *rname;
-    int gid, nepoch; // group id, # of epochs
+    int rid, nepoch; // group routine id, # of epochs
     int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t, ...);//var args for extra args
-} Group_Info_t;
+} __grp_info_t;
 
-static int n_all_grp = 1;
 
 // Group declaration
 int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib, ...);
 
 // Group info list
-static Group_Info_t grp_info[] = {
+static __grp_info_t grp_info[] = {
     {"stream",       "d_stream",      0,  4,     d_stream}
 };
 

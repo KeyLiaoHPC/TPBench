@@ -76,21 +76,23 @@ check_syntax(int *n, char *strarg) {
     ch = strarg;
     // don't start with comma(',')
     if(*ch == ',' || !isalnum(*ch)) {
+        // not start with alphanumeric
         return SYNTAX_ERROR;
     }
-    ch ++;
     // don't use character other than alphanumeric or comma.
     // don't use two concessive cooma.
     // ending with comma is allowed.
     while(*ch != '\0') {
-        if(!isalnum(*ch) && *ch != ',') {
+        if(!isalnum(*ch) && *ch != ',' && *ch != '_') {
+            // not alphanumeric, underscore or comma
             return SYNTAX_ERROR;
         }
         if(*ch == ',' && *(ch+1) == ',') {
+            // two consecutive comma
             return SYNTAX_ERROR;
         }
         if(*ch == ',') {
-            *n ++;
+            (*n) += 1;
         }
         ch ++;
     }
@@ -105,20 +107,22 @@ parse_klist(__tp_args_t *tp_args) {
     ch = tp_args->kstr;
     for(int seg = 0; seg < tp_args->nkern; seg ++) {
         matched = 0;
-        for(int rid = 0; rid < n_all_kern; rid ++) {
+        // route id
+        for(int rid = 0; rid < nkrout; rid ++) {
             cmplen = strlen(kern_info[rid].rname);
             if(strncmp(ch, kern_info[rid].rname, cmplen) == 0) {
                 tp_args->klist[seg] = rid;
-                ch += cmplen;
                 matched = 1;
                 break;
             }
-            if(matched == 0) {
-                return KERN_NE;
-            }
         }
+        if(matched == 0) {
+            return KERN_NE;
+        }
+        // move to next segment
+        ch = ch + cmplen + 1;
     }
-
+    return NO_ERROR;
 }
 
 int
@@ -129,20 +133,21 @@ parse_glist(__tp_args_t *tp_args) {
     ch = tp_args->gstr;
     for(int seg = 0; seg < tp_args->ngrp; seg ++) {
         matched = 0;
-        for(int rid = 0; rid < n_all_grp; rid ++) {
+        for(int rid = 0; rid < ngrout; rid ++) {
             cmplen = strlen(grp_info[rid].rname);
             if(strncmp(ch, grp_info[rid].rname, cmplen) == 0) {
-                tp_args->klist[seg] = rid;
-                ch += cmplen;
+                // matched, append index
+                tp_args->glist[seg] = rid;
                 matched = 1;
                 break;
             }
-            if(matched == 0) {
-                return GRP_NE;
-            }
         }
+        if(matched == 0) {
+            return GRP_NE;
+        }
+        ch = ch + cmplen + 1;
     }
-
+    return NO_ERROR;
 }
 
 // extract tpbench arguments from string
@@ -244,9 +249,12 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     // parse by argp
     argp_parse(&argp, argc, argv, 0, 0, tp_args);
 
-    // gen kid and gid list
-    if(err = init_list(tp_args)) {
-        return err;
+    // argument integrity check
+    if(tp_args->ntest == 0 || tp_args->nkib == 0) {
+        return ARGS_MISS;
     }
+    // gen kid and gid list
+    err = init_list(tp_args);
+
     return err;
 }

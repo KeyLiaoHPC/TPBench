@@ -29,8 +29,7 @@
 #include <string.h>
 #include <limits.h>     /* PATH_MAX */
 #include <sys/stat.h>   /* mkdir(2) */
-#include <errno.h>
-#include "tpbench.h"
+#include "tperror.h"
 
 
 int

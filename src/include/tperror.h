@@ -25,7 +25,9 @@
  */
 
 // ERROR CODE
+
 #define NO_ERROR        0
+// 1 - 50, tpbench general error
 #define GRP_ARG_ERROR   1
 #define KERN_ARG_ERROR  2
 #define KERN_NE         3
@@ -33,6 +35,10 @@
 #define SYNTAX_ERROR    5
 #define FILE_OPEN_FAIL  6
 #define MALLOC_FAIL     7
+#define ARGS_MISS         8
+
+// 51-100, MPI error
+#define MPI_INIT_FAIL   51
 
 // WARNING
 #define VERIFY_FAIL     100

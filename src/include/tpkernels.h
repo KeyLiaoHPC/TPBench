@@ -33,15 +33,12 @@
 typedef struct {
     char *kname; // Name of kernel
     char *rname; // Name of routine
-    int kid; // kernel unique id
+    int rid; // kernel routine id
     uint64_t nbyte; // bytes through core per iteration
     uint64_t nop; // Arithmetic (FL)OPs per iteration.
     int (*pfun)(int, uint64_t *, uint64_t *, uint64_t, ...); //var args for extra args
     char *note;
-} Kern_Info_t;
-
-static int n_all_kern = 9;
-static int n_all_rout = 9;
+} __kern_info_t;
 
 // Kernel declaration
 // id 0
@@ -61,7 +58,7 @@ int d_scale(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
 // d_: fp64, double
 // s_: fp32, single
 // m_: mix
-static Kern_Info_t kern_info[] = {
+static __kern_info_t kern_info[] = {
     {"init",        "d_init",       0,  8,  0,  d_init},
     {"sum",         "d_sum",        1,  8,  1,  d_sum},
     {"copy",        "d_copy",       2,  16, 0,  d_copy},
