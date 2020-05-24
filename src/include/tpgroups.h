@@ -34,6 +34,7 @@ typedef struct {
     char *rname;
     int rid, nepoch; // group routine id, # of epochs
     int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t, ...);//var args for extra args
+    char *note;
 } __grp_info_t;
 
 
@@ -42,7 +43,8 @@ int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib, 
 
 // Group info list
 static __grp_info_t grp_info[] = {
-    {"stream",       "d_stream",      0,  4,     d_stream}
+    {"stream",       "d_stream",      0,  4,     d_stream,
+     "FP64 STREAM Bemchmark."}
 };
 
 #endif // #ifndef _TPGROUPS_H

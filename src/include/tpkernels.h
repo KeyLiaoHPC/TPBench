@@ -59,15 +59,24 @@ int d_scale(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
 // s_: fp32, single
 // m_: mix
 static __kern_info_t kern_info[] = {
-    {"init",        "d_init",       0,  8,  0,  d_init},
-    {"sum",         "d_sum",        1,  8,  1,  d_sum},
-    {"copy",        "d_copy",       2,  16, 0,  d_copy},
-    {"update",      "d_update",     3,  16, 1,  d_update},
-    {"triad",       "d_triad",      4,  24, 2,  d_triad},
-    {"axpy",        "d_axpy",       5,  24, 2,  d_axpy},
-    {"striad",      "d_striad",     6,  32, 2,  d_striad},
-    {"staxpy",      "d_sdaxpy",     7,  32, 2,  d_staxpy},
-    {"scale",       "d_scale",      8,  16, 1,  d_scale}
+    {"init",        "d_init",       0,  8,  0,  d_init,
+      "FP64 init."},
+    {"sum",         "d_sum",        1,  8,  1,  d_sum,
+      "FP64 sum."},
+    {"copy",        "d_copy",       2,  16, 0,  d_copy,
+      "FP64 copy."},
+    {"update",      "d_update",     3,  16, 1,  d_update,
+      "FP64 update."},
+    {"triad",       "d_triad",      4,  24, 2,  d_triad,
+      "FP64 STREAM Triad."},
+    {"axpy",        "d_axpy",       5,  24, 2,  d_axpy,
+      "FP64 AXPY."},
+    {"striad",      "d_striad",     6,  32, 2,  d_striad,
+      "FP64 Stanza Triad."},
+    {"staxpy",      "d_sdaxpy",     7,  32, 2,  d_staxpy,
+      "FP64 Stanza AXPY"},
+    {"scale",       "d_scale",      8,  16, 1,  d_scale,
+      "FP64 STREAM scale."},
 };
 
 #endif // #ifndef _TPKERNELS_H

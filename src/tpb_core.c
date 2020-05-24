@@ -93,14 +93,3 @@ int tpb_init() {
 //     return NO_ERROR;
 // }
 
-void
-list_kern(){
-    //printf("Supported group and kernels:\n");
-    //printf("Group: io_ins\n");
-    //printf("Group: arith_ins\n");
-    //printf("Group: g1_kernel\n");
-    //printf("Group: g2_kernel\n");
-    //printf("Group: g3_kernel\n");
-    //printf("Group: user_kernel\n");
-}
-

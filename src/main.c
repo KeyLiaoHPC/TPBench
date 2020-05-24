@@ -137,7 +137,7 @@ main(int argc, char **argv) {
 
     // print args for debugging
     if(myrank == 0) {
-        tpb_printf(0, 1, 1, "ntest = %d, nkib = %d\n # of kern = %d, # of ngrp = %d\n",
+        tpb_printf(0, 1, 1, "ntest = %d, nkib = %d",
                tp_args.ntest, tp_args.nkib, tp_args.nkern, tp_args.ngrp);
         for(int i = 0; i < tp_args.nkern; i ++) {
             tpb_printf(0, 1, 1, "%d, ", tp_args.klist[i]);
@@ -147,15 +147,12 @@ main(int argc, char **argv) {
         }
     }
     // end args debugging
-//     // List only.
-//     if(tp_args.list_only_flag){
-//         if(myid == 0){
-//             // TODO: list_kern() is still hard coded.
-//             tpb_list();
-//         }
-//         mpi_exit();
-//         exit(0);
-//     }
+    // List only.
+    if(tp_args.list_only_flag){
+        tpb_list();
+        mpi_exit();
+        exit(0);
+    }
 //     // Check mandatory options
 //     if(tp_args.kernels == NULL  && tp_args.groups == NULL) {
 //         if(myid == 0) {

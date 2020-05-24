@@ -164,3 +164,24 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     va_end(args);
     return err_op;
 }
+
+void
+tpb_list(){
+    tpb_printf(0, 1, 1, "Listing supported kernel and groups.\n");
+    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(0, 0, 0, "Kernel          Routine         NOTE\n");
+    tpb_printf(0, 0, 0, HLINE);
+    for(int i = 0 ; i < nkrout; i ++) {
+        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n", 
+                   kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
+    }
+    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(0, 0, 0, "GROUP           Routine         NOTE\n");
+    tpb_printf(0, 0, 0, HLINE);
+    for(int i = 0 ; i < ngrout; i ++) {
+        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n",
+                   grp_info[i].gname, grp_info[i].rname, grp_info[i].note);
+    }
+    tpb_printf(0, 0, 0, DHLINE);
+}
+

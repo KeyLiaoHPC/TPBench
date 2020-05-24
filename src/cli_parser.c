@@ -249,6 +249,11 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     // parse by argp
     argp_parse(&argp, argc, argv, 0, 0, tp_args);
 
+    // list only
+    if(tp_args->list_only_flag) {
+        return NO_ERROR;
+    }
+
     // argument integrity check
     if(tp_args->ntest == 0 || tp_args->nkib == 0) {
         return ARGS_MISS;
