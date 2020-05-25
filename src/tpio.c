@@ -75,18 +75,9 @@ tpb_mkdir(char *path) {
     return 0;
 }
 
-/**
- * @brief 
- * 
- * @param path 
- * @param data 
- * @param nrow 
- * @param ncol 
- * @param header 
- * @return int 
- */
+
 int
-tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header) {
+tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag) {
     int err, i, j;
     FILE *fp;    
 
@@ -95,11 +86,24 @@ tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header) {
         return FILE_OPEN_FAIL;
     }
     fprintf(fp, "%s\n", header);
-    for(i = 0; i < nrow; i ++) {
-        for(j = 0; j < ncol - 1; j ++) {
-            fprintf(fp, "%llu,", data[j][i]);
+
+    // data[col][row], for kernel benchmark
+    if(tran_flag) {
+        for(i = 0; i < nrow; i ++) {
+            for(j = 0; j < ncol - 1; j ++) {
+                fprintf(fp, "%llu,", data[j][i]);
+            }
+            fprintf(fp, "%llu\n", data[ncol-1][i]);
         }
-        fprintf(fp, "%llu\n", data[ncol-1][i]);
+    }
+    // data[row][col], for group benchmark
+    else {
+        for(i = 0; i < nrow; i ++) {
+            for(j = 0; j < ncol - 1; j ++) {
+                fprintf(fp, "%llu,", data[i][j]);
+            }
+            fprintf(fp, "%llu\n", data[i][ncol-1]);
+        }
     }
     fflush(fp);
     fclose(fp);

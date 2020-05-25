@@ -64,13 +64,13 @@ int tpb_mkdir(char *dirpath);
 int tpb_printf(int err, int ts, int tag, char *msg, ...);
 
 /**
- * @brief 
- * 
+ * @brief write 2d data with header into a csv file.
  * @param path 
  * @param data 
  * @param nrow 
  * @param ncol 
  * @param header 
- * @return int 
+ * @param tran_flag 
+ * @return int 0 or 1, set 1 when writing order is different from [row][col]
  */
-int tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header);
+int tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag);

@@ -216,9 +216,9 @@ main(int argc, char **argv) {
         }
 
         // Write to csv files.
-        err = tpb_writecsv(kern_ns.fpath, kern_ns.data, tp_args.ntest, tp_args.nkern, kern_ns.header);
+        err = tpb_writecsv(kern_ns.fpath, kern_ns.data, tp_args.ntest, tp_args.nkern, kern_ns.header, 1);
         __error_fun(err, "Writing ns csv failed.");
-        err = tpb_writecsv(kern_cy.fpath, kern_cy.data, tp_args.ntest, tp_args.nkern, kern_cy.header);
+        err = tpb_writecsv(kern_cy.fpath, kern_cy.data, tp_args.ntest, tp_args.nkern, kern_cy.header, 1);
         __error_fun(err, "Writing cycle csv failed.");
     }
     
@@ -253,9 +253,9 @@ main(int argc, char **argv) {
         tpb_printf(err, 1, 1, "Finished.");
         
         // Write to csv files.
-        err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, tp_args.ngrp, grp_ns.header);
+        err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, tp_args.ngrp, grp_ns.header, 1);
         __error_fun(err, "Writing ns csv failed.");
-        err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, tp_args.ngrp, grp_cy.header);
+        err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, tp_args.ngrp, grp_cy.header, 1);
         __error_fun(err, "Writing ns cy failed.");
 
         for(int i = 0; i < tp_args.ntest; i ++) {
