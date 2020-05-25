@@ -41,6 +41,11 @@
                                         }
 
 #define __error_exit(evar) if((evar)) {exit(1);}
+
+#define __error_fun(err, msg)   if((err)) { \
+                                    err = tpb_printf(err, 1, 1, msg);   \
+                                    __error_exit(err);                  \
+                                }
 // ERROR CODE
 
 #define NO_ERROR        0

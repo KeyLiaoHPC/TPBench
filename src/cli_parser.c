@@ -45,7 +45,7 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state);
  * @param strarg 
  * @return int 
  */
-int check_syntax(int *n, char *strarg);
+int check_count(int *n, char *strarg);
 
 /**
  * @brief 
@@ -71,13 +71,22 @@ int init_list(__tp_args_t *tp_args);
 
 
 int
-check_syntax(int *n, char *strarg) {
+check_count(int *n, char *strarg) {
+    int len;
     char *ch;
-
+    
+    if(strarg[0] == '\0') {
+        *n = 0;
+        return NO_ERROR;
+    }
+    len = strlen(strarg);
+    if(strarg[len-1] == ',') {
+        strarg[len-1] = '\0';
+    }
     *n = 1;
     ch = strarg;
     // don't start with comma(',')
-    if(*ch == ',' || !isalnum(*ch)) {
+    if(!isalnum(*ch)) {
         // not start with alphanumeric
         return SYNTAX_ERROR;
     }
@@ -157,10 +166,10 @@ int
 init_list(__tp_args_t *tp_args) {
     int err;
     // syntax check
-    if(err = check_syntax(&(tp_args->nkern), tp_args->kstr)) {
+    if(err = check_count(&(tp_args->nkern), tp_args->kstr)) {
         return err;
     }
-    if(err = check_syntax(&(tp_args->ngrp), tp_args->gstr)) {
+    if(err = check_count(&(tp_args->ngrp), tp_args->gstr)) {
         return err;
     }
     tp_args->klist = (int *)malloc(sizeof(int) * tp_args->nkern);
@@ -195,16 +204,25 @@ parse_opt(int key, char *arg, struct argp_state *state) {
             args->nkib = atoi(arg);
             break;
         case 'g':
-            args->gstr = arg;
+            if(strlen(arg) > 1023) {
+                return SYNTAX_ERROR;
+            }
+            sprintf(args->gstr, "%s", arg);
             break;
         case 'k':
-            args->kstr = arg;
+            if(strlen(arg) > 1023) {
+                return SYNTAX_ERROR;
+            }
+            sprintf(args->kstr, "%s", arg);
             break;
         case 'L':
             args->list_only_flag = 1;
             break;
         case 'o':
-            args->data_dir = arg;
+            if(strlen(arg) > 1023) {
+                return SYNTAX_ERROR;
+            }
+            sprintf(args->data_dir, "%s", arg);
         case ARGP_KEY_ARG:
             argp_usage(state);
             break;
@@ -234,6 +252,7 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
 
     err = 0;
     if(argc <= 1) {
+        printf("argc = %d\n", argc);
         return SYNTAX_ERROR;
     }
     // set default value
@@ -242,11 +261,9 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     tp_args->nkern = 0;
     tp_args->ngrp = 0;
     tp_args->list_only_flag = 0;
-    tp_args->kstr = NULL;
-    tp_args->gstr = NULL;
     tp_args->klist = NULL;
     tp_args->glist = NULL;
-    tp_args->data_dir = NULL;
+    tp_args->data_dir[0] = '\0';
 
     // parse by argp
     argp_parse(&argp, argc, argv, 0, 0, tp_args);
@@ -262,10 +279,9 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     }
 
     // Default data path, ./data
-    if(tp_args->data_dir == NULL) {
-        tp_args->data_dir = (char *)malloc(PATH_MAX * sizeof(char));
+    if(strlen(tp_args->data_dir) == 0) {
         sprintf(tp_args->data_dir, "./data");
-        return DEFAULT_DIR;
+        err = DEFAULT_DIR;
     }
     // gen kid and gid list
     err = init_list(tp_args);

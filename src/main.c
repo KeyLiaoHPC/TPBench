@@ -75,12 +75,12 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     res->header[0] = '\0';
     if(strcmp(prefix, "kernels")) {
         for(int i = 0; i < args->nkern; i ++){
-            err = sprintf(res->header, "%s", strcat(res->header, kern_info[i].rname));
+            err = sprintf(res->header, "%s", strcat(res->header, grp_info[i].rname));
             __error_lt(err, 0, RES_INIT_FAIL);
         }
     } else{
         for(int i = 0; i < args->nkern; i ++){
-            err = sprintf(res->header, "%s", strcat(res->header, grp_info[i].rname));
+            err = sprintf(res->header, "%s", strcat(res->header, kern_info[i].rname));
             __error_lt(err, 0, RES_INIT_FAIL);
         }
     }
@@ -93,18 +93,7 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     // print fpath
     err = sprintf(res->fpath, "%s/%s", res->fdir, res->fname);
     __error_lt(err, 0, RES_INIT_FAIL);
-    // allocate space for data
-    res->data = (uint64_t **)malloc(args->nkern * sizeof(uint64_t *));
-    if(res->data == NULL) {
-            return MALLOC_FAIL;
-        }
-    for(int i = 0; i < args->ntest; i ++) {
-        res->data[i] = (uint64_t *)malloc(args->ngrp* sizeof(uint64_t));
-        if(res->data[i] == NULL) {
-            return MALLOC_FAIL;
-        }
-    }
-
+    
     return NO_ERROR;
 }
 
@@ -145,7 +134,6 @@ main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
 #endif //#ifdef USE_MPI
 
-    // finished getting process info
     // init kernel, init tpbench arguments
     tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
     err = tpb_init();
@@ -153,124 +141,133 @@ main(int argc, char **argv) {
         err = tpb_printf(err, 1, 1, "");
         if(err) exit(1);
     }
-    tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
+    
+    // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = parse_args(argc, argv, &tp_args);
     if(err) {
-        err = tpb_printf(err, 1, 1, "ERROR: %d\n" DHLINE, err);
-        if(err) exit(1);
+        err = tpb_printf(err, 1, 1, "In arg parsing.", err);
+        __error_exit(err);
     }
 
-    // print args for debugging
-    tpb_printf(0, 1, 1, "ntest = %d, nkib = %d", tp_args.ntest, tp_args.nkib);
-    for(int i = 0; i < tp_args.nkern; i ++) {
-        tpb_printf(0, 1, 1, "%d, ", tp_args.klist[i]);
-    }
-    for(int i = 0; i < tp_args.ngrp; i ++) {
-        tpb_printf(0, 1, 1, "%d, ", tp_args.glist[i]);
-    }
-    
-    // end args debugging
     // List only.
     if(tp_args.list_only_flag){
         tpb_list();
         mpi_exit();
         exit(0);
     }
+
+    // print kernel list
+    if(tp_args.nkern) {
+        tpb_printf(0, 1, 1, "Kernel routine: ");
+        for(int i = 0; i < tp_args.nkern; i ++) {
+            tpb_printf(0, 0, 0, "%s, ", kern_info[tp_args.klist[i]].rname);
+        }
+    }
+    // print group list
+    if(tp_args.ngrp) {
+        tpb_printf(0, 1, 1, "Group routine: ");
+        for(int i = 0; i < tp_args.ngrp; i ++) {
+            tpb_printf(0, 0, 0, "%s, ", kern_info[tp_args.glist[i]].rname);
+        }
+    }
+    tpb_printf(0, 1, 1, "Each routine will be tested %d times.", tp_args.ntest);
+    
+    
 // =============================================================================
 // Benchmarking 
 // =============================================================================
     // headers, output csv name, host data dir, full path for csvs, hostname
     char filename[1024], mydir[PATH_MAX], full_path[PATH_MAX], hostname[128]; 
     __res_t grp_ns, grp_cy, kern_ns, kern_cy;
+
     // create host dir
     gethostname(hostname, 128);
     sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
     err = tpb_mkdir(mydir);
-    err = tpb_printf(err, 1, 1, "Host dir %s", mydir);
-    if(err) {
-        exit(1);
-    }
+    __error_fun(err, "Cannot create data directory.");
+    tpb_printf(err, 1, 1, "Host dir %s", mydir);
+
     // kernel benchmark
-    if(nkern) {
+    if(tp_args.nkern) {
         // Struct initialization
         err = init_res("kernels", "ns", hostname, &tp_args, &kern_ns);
-        if(err) {
-            err = tpb_printf(err, 1, 1, "In kernel nanosec space init.");
-            __error_exit(err);
-        }
+        __error_fun(err, "Kernel data space init failed.");
         err = init_res("kernels", "cy", hostname, &tp_args, &kern_cy);
-        if(err) {
-            err = tpb_printf(err, 1, 1, "In kernel cycle space init.");
-            __error_exit(err);
+        __error_fun(err, "Kernel data space init failed.");
+
+        // allocate space for data
+        kern_ns.data = (uint64_t **)malloc(tp_args.nkern * sizeof(uint64_t *));
+        kern_cy.data = (uint64_t **)malloc(tp_args.nkern * sizeof(uint64_t *));
+        for(int i = 0; i < tp_args.nkern; i ++) {
+            kern_ns.data[i] = (uint64_t *)malloc(tp_args.ntest * sizeof(uint64_t));
+            kern_cy.data[i] = (uint64_t *)malloc(tp_args.ntest * sizeof(uint64_t));
         }
+        
         // Run kernels.
         for(int i = 0; i < tp_args.nkern; i ++) {
+            tpb_printf(err, 1, 1, "Kernel routine %s started.", kern_info[tp_args.klist[i]].rname);
             err = tpb_run_kernel(tp_args.klist[i], 
                                  tp_args.ntest, 
                                  kern_ns.data[i], 
                                  kern_cy.data[i], 
                                  tp_args.nkern);
-            if(err) {
-               err = tpb_printf(err, 1, 1, "In kernel benchmarking.");
-               __error_exit(err);
-            }
-            else {
-                tpb_printf(err, 1, 1, "Finish kernel routine %s.", kern_info[tp_args.klist[i]].rname);
-            }
+            __error_fun(err, "Benchmark failed.");
+            tpb_printf(err, 1, 1, "Finished.");
         }
+
         // Write to csv files.
         err = tpb_writecsv(kern_ns.fpath, kern_ns.data, tp_args.ntest, tp_args.nkern, kern_ns.header);
-        if(err) {
-            err = tpb_printf(err, 1, 1, "In kernel nanosec writing.");
-            __error_exit(err);
-        }
+        __error_fun(err, "Writing ns csv failed.");
         err = tpb_writecsv(kern_cy.fpath, kern_cy.data, tp_args.ntest, tp_args.nkern, kern_cy.header);
-        if(err) {
-            err = tpb_printf(err, 1, 1, "In kernel nanosec writing.");
-            __error_exit(err);
-        }
+        __error_fun(err, "Writing cycle csv failed.");
     }
+    
     // group benchmark
-    if(ngrp) {
-        for(int i = 0; i < tp_args.ngrp; i ++) {
-            // Struct initialization
-            err = init_res(grp_info[tp_args.glist[i]].rname, "ns", hostname, &tp_args, &grp_ns);
-            if(err) {
-                err = tpb_printf(err, 1, 1, "In group nanosec init.");
-                __error_exit(err);
-            }
-            err = init_res(grp_info[tp_args.glist[i]].rname, "cy", hostname, &tp_args, &grp_cy);   
-            if(err) {
-                err = tpb_printf(err, 1, 1, "In group cycle init.");
-                __error_exit(err);
-            }
-            err = tpb_run_group(tp_args.glist[i],
-                                tp_args.ntest,
-                                grp_ns.data,
-                                grp_cy.data,
-                                tp_args.nkib);
-            if(err) {
-                err = tpb_printf(err, 1, 1, "In group benchmarking.");
-                __error_exit(err);
-            }
-            else {
-                tpb_printf(err, 1, 1, "Finish group routine %s.", grp_info[tp_args.glist[i]].rname);
-            }
-            // Write to csv files.
-            err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, tp_args.ngrp, grp_ns.header);
-            if(err) {
-                err = tpb_printf(err, 1, 1, "In group nanosec writing.");
-                __error_exit(err);
-            }
-            err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, tp_args.ngrp, grp_cy.header);
-            if(err) {
-                err = tpb_printf(err, 1, 1, "In group nanosec writing.");
-                __error_exit(err);
-            }
+    for(int i = 0; i < tp_args.ngrp; i ++) {
+        int nepoch = grp_info[tp_args.glist[i]].nepoch;
+        tpb_printf(0, 1, 1, "Group routine %s started.", grp_info[tp_args.glist[i]].rname);
+        // Struct initialization
+        err = init_res(grp_info[tp_args.glist[i]].rname, "ns", hostname, &tp_args, &grp_ns);
+        __error_fun(err, "Data space init failed.");
+        err = init_res(grp_info[tp_args.glist[i]].rname, "cy", hostname, &tp_args, &grp_cy);   
+        __error_fun(err, "Data space init failed.");
+
+
+        // allocate space for data
+        // data dimension in group test is reverse against to the kernel test since group test will
+        // execute its epochs consecutively
+        grp_ns.data = (uint64_t **)malloc(tp_args.ntest * sizeof(uint64_t *));
+        kern_cy.data = (uint64_t **)malloc(tp_args.ntest * sizeof(uint64_t *));
+        for(int i = 0; i < tp_args.ntest; i ++) {
+            kern_ns.data[i] = (uint64_t *)malloc(nepoch * sizeof(uint64_t));
+            kern_cy.data[i] = (uint64_t *)malloc(nepoch * sizeof(uint64_t));
         }
+        
+        // Run group
+        err = tpb_run_group(tp_args.glist[i],
+                            tp_args.ntest,
+                            grp_ns.data,
+                            grp_cy.data,
+                            tp_args.nkib);
+        __error_fun(err, "Banchmark failed.");
+        tpb_printf(err, 1, 1, "Finished.");
+        
+        // Write to csv files.
+        err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, tp_args.ngrp, grp_ns.header);
+        __error_fun(err, "Writing ns csv failed.");
+        err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, tp_args.ngrp, grp_cy.header);
+        __error_fun(err, "Writing ns cy failed.");
+
+        for(int i = 0; i < tp_args.ntest; i ++) {
+            free(kern_ns.data[i]);
+            free(kern_cy.data[i]);
+        }
+        free(grp_ns.data);
+        free(kern_cy.data);
     }
 
     mpi_exit();
-    tpb_printf(0, 1, 1, HLINE "TPBench finished.\n" DHLINE);
+    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(0, 1, 1, "TPBench finished.\n" DHLINE);
     return 0;
 }

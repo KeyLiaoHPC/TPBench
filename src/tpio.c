@@ -113,15 +113,18 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     int err_op = 0;
     time_t t = time(0);
     struct tm* lt = localtime(&t);
-    char tag[5];
+    char tag[5], err_msg[32];
     
+    // print splitter directly.
     if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
         if(myrank) {
             return err_op;
         }
-        printf("%s", fmt);
+        printf("\n%s", fmt);
         return err_op;
     }
+    
+    // no error
     if(err == 0) {
         err_op = 0;
         if(myrank) {
@@ -129,6 +132,8 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
         }
         sprintf(tag, "NOTE");
     }
+    
+    // warning
     else if(err > 100) {
         err_op = 0;
         if(myrank) {
@@ -136,6 +141,8 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
         }
         sprintf(tag, "WARN");
     } 
+
+    // error
     else {
         err_op = 1;
         if(myrank) {
@@ -158,10 +165,21 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
         
     }
 
+    // transport va_arg list to vprintf
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
+
+    // on error exit, print error message.
+    if(err != 0 &&  err < 100) {
+        printf("\n%04d-%02d-%02d %02d:%02d:%02d [EXIT] ", 
+               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
+               lt->tm_hour, lt->tm_min, lt->tm_sec);
+        printf("TPBench exit with error %s.\n" DHLINE, tpb_geterr(err, err_msg));
+    }
+    fflush(stdout);
+
     return err_op;
 }
 
@@ -183,4 +201,57 @@ tpb_list(){
                    grp_info[i].gname, grp_info[i].rname, grp_info[i].note);
     }
     tpb_printf(0, 0, 0, DHLINE);
+}
+
+char *tpb_geterr(const int err, char *buf) {
+    switch (err) {
+        case NO_ERROR:
+            sprintf(buf, "NO_ERROR");
+            break;
+        case GRP_ARG_ERROR:
+            sprintf(buf, "GRP_ARG_ERROR");
+            break;
+        case KERN_ARG_ERROR:
+            sprintf(buf, "KERN_ARG_ERROR");
+            break;
+        case KERN_NE:
+            sprintf(buf, "KERN_NE");
+            break;
+        case GRP_NE:
+            sprintf(buf, "GRP_NE");
+            break;
+        case SYNTAX_ERROR:
+            sprintf(buf, "SYNTAX_ERROR");
+            break;
+        case FILE_OPEN_FAIL:
+            sprintf(buf, "FILE_OPEN_FAIL");
+            break;
+        case MALLOC_FAIL:
+            sprintf(buf, "MALLOC_FAIL");
+            break;
+        case ARGS_MISS:
+            sprintf(buf, "ARGS_MISS");
+            break;
+        case MKDIR_ERROR:
+            sprintf(buf, "MKDIR_ERROR");
+            break;
+        case RES_INIT_FAIL:
+            sprintf(buf, "RES_INIT_FAIL");
+            break;
+        case MPI_INIT_FAIL:
+            sprintf(buf, "MPI_INIT_FAIL");
+            break;
+        case VERIFY_FAIL:
+            sprintf(buf, "VERIFY_FAIL");
+            break;
+        case OVER_OPTMIZE:
+            sprintf(buf, "OVER_OPTIMIZE");
+            break;
+        case DEFAULT_DIR:
+            sprintf(buf, "DEFAULT_DIR");
+            break;
+        default:
+            break;
+    }
+    return buf;
 }

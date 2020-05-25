@@ -35,7 +35,7 @@
 typedef struct {
     uint64_t ntest; // [Mandatory] Number of tests per job.
     uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
-    char *kstr, *gstr, *data_dir; // [Mandatory] group and kernels name
+    char kstr[1024], gstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
     int *klist, *glist; 
     int nkern, ngrp;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
