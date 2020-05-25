@@ -36,21 +36,21 @@ typedef struct {
     int rid; // kernel routine id
     uint64_t nbyte; // bytes through core per iteration
     uint64_t nop; // Arithmetic (FL)OPs per iteration.
-    int (*pfun)(int, uint64_t *, uint64_t *, uint64_t, ...); //var args for extra args
+    int (*pfun)(int, uint64_t *, uint64_t *, uint64_t); //var args for extra args
     char *note;
 } __kern_info_t;
 
 // Kernel declaration
 // id 0
-int d_init(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_sum(int ntest,    uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_copy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_triad(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_axpy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_staxpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
-int d_scale(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib, ...);
+int d_init(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_sum(int ntest,    uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_copy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_triad(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_axpy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_staxpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
+int d_scale(int ntest,  uint64_t *ns, uint64_t *cy, uint64_t kib);
 
 // name, id, nbyte, nop, pfun
 // i_: integer

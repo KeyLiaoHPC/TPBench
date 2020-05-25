@@ -97,9 +97,9 @@ tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header) {
     fprintf(fp, "%s\n", header);
     for(i = 0; i < nrow; i ++) {
         for(j = 0; j < ncol - 1; j ++) {
-            fprintf(fp, "%llu,", data[i][j]);
+            fprintf(fp, "%llu,", data[j][i]);
         }
-        fprintf(fp, "%llu\n", data[i][ncol-1]);
+        fprintf(fp, "%llu\n", data[ncol-1][i]);
     }
     fflush(fp);
     fclose(fp);
@@ -184,4 +184,3 @@ tpb_list(){
     }
     tpb_printf(0, 0, 0, DHLINE);
 }
-

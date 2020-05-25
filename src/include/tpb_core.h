@@ -38,10 +38,6 @@ int nkern, nkrout, ngrp, ngrout;
 uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
 int nrank, myrank, mycpu;
 
-/**
- * @brief 
- */
-void tpb_list();
 
 /**
  * @brief 
@@ -58,7 +54,7 @@ int tpb_init();
  * @param kib 
  * @return int 
  */
-int tpb_run_kernel(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib);
+int tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t nkib);
 
 /**
  * @brief 
@@ -69,4 +65,4 @@ int tpb_run_kernel(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint
  * @param kib 
  * @return int 
  */
-int tpb_run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t kib);
+int tpb_run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib);

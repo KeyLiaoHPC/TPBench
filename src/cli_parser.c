@@ -25,6 +25,8 @@
 #define _GNU_SOURCE
 
 #include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
 #include "cli_parser.h"
 #include "tperror.h"
 #include "tpb_core.h"
@@ -257,6 +259,13 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     // argument integrity check
     if(tp_args->ntest == 0 || tp_args->nkib == 0) {
         return ARGS_MISS;
+    }
+
+    // Default data path, ./data
+    if(tp_args->data_dir == NULL) {
+        tp_args->data_dir = (char *)malloc(PATH_MAX * sizeof(char));
+        sprintf(tp_args->data_dir, "./data");
+        return DEFAULT_DIR;
     }
     // gen kid and gid list
     err = init_list(tp_args);

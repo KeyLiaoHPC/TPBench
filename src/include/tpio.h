@@ -1,5 +1,4 @@
 /**
- * =================================================================================
  * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
@@ -28,16 +27,39 @@
 
 /**
  * @brief 
+ */
+typedef struct __result {
+    char header[1024];
+    char fname[1024];
+    char fdir[PATH_MAX];
+    char fpath[PATH_MAX];
+    uint64_t **data; //data[col][row], row for run id, col for different tests.
+} __res_t;
+
+
+
+/**
+ * @brief 
+ */
+void tpb_list();
+
+/**
+ * @brief 
  * @param dirpath 
  * @return int 
  */
 int tpb_mkdir(char *dirpath);
 
 /**
- * @brief 
- * @param err 
- * @param msg 
- * @param ... 
+ * @brief TPBench format stdout module. Return error level according to error number. 
+ *        Print message if myrank == 0. Output syntax:
+ *        YYYY-mm-dd HH:MM:SS [TAG ] *msg
+ * @param err   Error number described in tperror.h
+ * @param ts    Set to 0 to ignore timestamp.
+ * @param tag   Set to 0 to ignore error tag.
+ * @param msg   char *msg, same syntax as printf.
+ * @param ...   varlist, same syntax as printf.
+ * @return int  return 0 if error is NOTE or WARN, 1 if critical error.
  */
 int tpb_printf(int err, int ts, int tag, char *msg, ...);
 

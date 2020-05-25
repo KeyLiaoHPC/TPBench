@@ -29,7 +29,12 @@
 #include <stdint.h>
 #include "tpb_core.h"
 
-int tpb_init() {
+/**
+ * @brief set number of kernels, groups, kernel routines, and grou routines.
+ * @return int 
+ */
+int
+tpb_init() {
     // count # of routines.
     nkrout = sizeof(kern_info) / sizeof(__kern_info_t);
     ngrout = sizeof(grp_info) / sizeof(__grp_info_t);
@@ -39,6 +44,16 @@ int tpb_init() {
     ngrp = ngrout;
 
     return 0;
+}
+
+int
+tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t nkib){
+    return kern_info[id].pfun(ntest, res_ns, res_cy, nkib);
+}
+
+int
+tpb_run_group(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib){
+    return grp_info[id].pfun(ntest, grp_info[id].nepoch, res_ns, res_cy, nkib);
 }
 
 /*

@@ -16,7 +16,7 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * groups.h
+ * tpgroups.h
  * Description: Kernel informations.
  * Author: Key Liao
  * Modified: May. 9th, 2020
@@ -33,13 +33,13 @@ typedef struct {
     char *gname;
     char *rname;
     int rid, nepoch; // group routine id, # of epochs
-    int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t, ...);//var args for extra args
+    int (*pfun)(int, int, uint64_t **, uint64_t **, uint64_t);//var args for extra args
     char *note;
 } __grp_info_t;
 
 
 // Group declaration
-int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib, ...);
+int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib);
 
 // Group info list
 static __grp_info_t grp_info[] = {
