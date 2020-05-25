@@ -53,17 +53,18 @@ d_staxpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib) {
     l = 8;
     jump = stride + l;
 
-    GETTIME_INIT;
+    __getcy_init;
+    __getns_init;
     for(int i = 0; i < ntest; i ++){
-        GETTIME_ST(i);
-        CYCLE_ST(i);
+        __getns_1d_st(i);
+        __getcy_1d_st(i);
         for(int j = 0; j < nsize; j += jump) {
             for(int k = j; k < stride; k ++) {
                 a[k] = a[k] + s * b[k];
             }
         }
-        CYCLE_EN(i);
-        GETTIME_EN(i);
+        __getcy_1d_en(i);
+        __getns_1d_en(i);
     }
 
     free((void *)a);

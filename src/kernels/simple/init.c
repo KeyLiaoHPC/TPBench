@@ -41,15 +41,16 @@ d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     if(a == NULL) {
         return MALLOC_FAIL;
     }
-    GETTIME_INIT;
+    __getcy_init;
+    __getns_init;
     for(int i = 0; i < ntest; i ++){
-        GETTIME_ST(i);
-        CYCLE_ST(i);
+        __getns_1d_st(i);
+        __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
-        CYCLE_EN(i);
-        GETTIME_EN(i);
+        __getcy_1d_en(i);
+        __getns_1d_en(i);
     }
 
     free((void *)a);
@@ -67,15 +68,16 @@ s_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     if(a == NULL) {
         return MALLOC_FAIL;
     }
-    GETTIME_INIT;
+    __getcy_init;
+    __getns_init;
     for(int i = 0; i < ntest; i ++){
-        GETTIME_ST(i);
-        CYCLE_ST(i);
+        __getns_1d_st(i);
+        __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
-        CYCLE_EN(i);
-        GETTIME_EN(i);
+        __getcy_1d_en(i);
+        __getns_1d_en(i);
     }
 
     free((void *)a);
@@ -94,15 +96,16 @@ h_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     if(a == NULL) {
         return MALLOC_FAIL;
     }
-    GETTIME_INIT;
+    __getcy_init;
+    __getns_init;
     for(int i = 0; i < ntest; i ++){
-        GETTIME_ST(i);
-        CYCLE_ST(i);
+        __getns_1d_st(i);
+        __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
-        CYCLE_EN(i);
-        GETTIME_EN(i);
+        __getcy_1d_en(i);
+        __getns_1d_en(i);
     }
     free((void *)a);
     return 0;
@@ -120,15 +123,16 @@ i_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     if(a == NULL) {
         return MALLOC_FAIL;
     }
-    GETTIME_INIT;
+    __getcy_init;
+    __getns_init;
     for(int i = 0; i < ntest; i ++){
-        GETTIME_ST(i);
-        CYCLE_ST(i);
+        __getns_1d_st(i);
+        __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
-        CYCLE_EN(i);
-        GETTIME_EN(i);
+        __getcy_1d_en(i);
+        __getns_1d_en(i);
     }
     free((void *)a);
     return 0;

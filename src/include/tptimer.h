@@ -30,52 +30,81 @@
 #include <unistd.h>
 #ifdef __aarch64__
 
-#define CYCLE_ST(ID)    uint64_t cy_t;                          \
-                        asm volatile(                           \
-                            "mov x28, %0"           "\n\t"      \
-                            "mrs x29, pmccntr_el0"              \
-                            :                                   \
-                            : "r" (&cy[ID])                     \
-                            : "x28", "x29", "x30", "memory");
+#define __getcy_init        uint64_t cy_t;
+#define __getcy_1d_st(rid)  asm volatile(                           \
+                                "mov x28, %0"           "\n\t"      \
+                                "mrs x29, pmccntr_el0"              \
+                                :                                   \
+                                : "r" (&cy[(rid)])                    \
+                                : "x28", "x29", "x30", "memory");
 
-#define CYCLE_EN(ID)    asm volatile(                           \
+#define __getcy_2d_st(rid, eid) asm volatile(                           \
+                                    "mov x28, %0"           "\n\t"      \
+                                    "mrs x29, pmccntr_el0"              \
+                                    :                                   \
+                                    : "r" (&cy[(rid)][(eid)])               \
+                                    : "x28", "x29", "x30", "memory");
+
+
+#define __getcy_en_t    asm volatile(                           \
                             "mrs x30, pmccntr_el0"  "\n\t"      \
                             "sub x30, x30, x29"     "\n\t"      \
                             "str x30, [x28]"                    \
                             :                                   \
                             :                                   \
                             : "x28", "x29", "x30","memory" );   
+
+#define __getcy_1d_en(rid)  __getcy_en_t
+#define __getcy_2d_en(rid, eid)   __getcy_en_t
                     
 #else
 
-#define CYCLE_ST(ID)    uint64_t hi1, lo1, hi2, lo2;            \
-                        asm volatile(                           \
-                            "RDTSCP"        "\n\t"              \
-                            "RDTSC"         "\n\t"              \
-                            "CPUID"         "\n\t"              \
-                            "RDTSCP"        "\n\t"              \
-                            "mov %%rdx, %0" "\n\t"              \
-                            "mov %%rax, %1" "\n\t"              \
-                            :"=r" (hi1), "=r" (lo1)             \
-                            :                                   \
-                            :"%rax", "%rbx", "%rcx", "%rdx");
+#define __getcy_init        uint64_t hi1, lo1, hi2, lo2;
+#define __getcy_st_t        asm volatile(                           \
+                                "RDTSCP"        "\n\t"              \
+                                "RDTSC"         "\n\t"              \
+                                "CPUID"         "\n\t"              \
+                                "RDTSCP"        "\n\t"              \
+                                "mov %%rdx, %0" "\n\t"              \
+                                "mov %%rax, %1" "\n\t"              \
+                                :"=r" (hi1), "=r" (lo1)             \
+                                :                                   \
+                                :"%rax", "%rbx", "%rcx", "%rdx");
+#define __getcy_1d_st(rid)  __getcy_st_t;
 
-#define CYCLE_EN(ID)    asm volatile (                         \
-                            "RDTSC"         "\n\t"              \
-                            "mov %%rdx, %0" "\n\t"              \
-                            "mov %%rax, %1" "\n\t"              \
-                            "CPUID"         "\n\t"              \
-                            :"=r" (hi2), "=r" (lo2)             \
-                            :                                   \
-                            :"%rax", "%rbx", "%rcx", "%rdx");   \
-                        cy[ID] = ((hi2 << 32) | lo2) - ((hi1 << 32) | lo1);
+#define __getcy_1d_en(rid)  asm volatile (                          \
+                                "RDTSC"         "\n\t"              \
+                                "mov %%rdx, %0" "\n\t"              \
+                                "mov %%rax, %1" "\n\t"              \
+                                "CPUID"         "\n\t"              \
+                                :"=r" (hi2), "=r" (lo2)             \
+                                :                                   \
+                                :"%rax", "%rbx", "%rcx", "%rdx");   \
+                                cy[(rid)] = ((hi2 << 32) | lo2) - ((hi1 << 32) | lo1);
+
+#define __getcy_2d_st(rid, eid)     __getcy_st_t
+
+#define __getcy_2d_en(rid, eid)     asm volatile (                         \
+                                        "RDTSC"         "\n\t"              \
+                                        "mov %%rdx, %0" "\n\t"              \
+                                        "mov %%rax, %1" "\n\t"              \
+                                        "CPUID"         "\n\t"              \
+                                        :"=r" (hi2), "=r" (lo2)             \
+                                        :                                   \
+                                        :"%rax", "%rbx", "%rcx", "%rdx");   \
+                                    cy[(rid)][(eid)] = ((hi2 << 32) | lo2) - ((hi1 << 32) | lo1);
 #endif
 
-#define GETTIME_INIT    struct timespec ts1, ts2;               \
+#define __getns_init  struct timespec ts1, ts2;               \
                         clock_gettime(CLOCK_MONOTONIC, &ts1);   \
                         clock_gettime(CLOCK_MONOTONIC, &ts2); 
 
-#define GETTIME_ST(ID)  clock_gettime(CLOCK_MONOTONIC, &ts1);   
+#define __getns_st_t              clock_gettime(CLOCK_MONOTONIC, &ts1);   
+#define __getns_1d_st(rid)        __getns_st_t
+#define __getns_2d_st(rid, eid)   __getns_st_t
 
-#define GETTIME_EN(ID)  clock_gettime(CLOCK_MONOTONIC, &ts2);   \
-                        ns[ID] = ts2.tv_sec * 1e9 + ts2.tv_nsec - ts1.tv_sec * 1e9 - ts1.tv_nsec;
+#define __getns_1d_en(rid)   clock_gettime(CLOCK_MONOTONIC, &ts2);   \
+                                    ns[(rid)] = ts2.tv_sec * 1e9 + ts2.tv_nsec - ts1.tv_sec * 1e9 - ts1.tv_nsec;
+#define __getns_2d_en(rid, eid)   clock_gettime(CLOCK_MONOTONIC, &ts2);   \
+                                    ns[(rid)][(eid)] = ts2.tv_sec * 1e9 + ts2.tv_nsec - ts1.tv_sec * 1e9 - ts1.tv_nsec;
+
