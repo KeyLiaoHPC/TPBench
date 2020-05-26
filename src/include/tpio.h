@@ -36,6 +36,9 @@ typedef struct __result {
     uint64_t **data; //data[col][row], row for run id, col for different tests.
 } __res_t;
 
+typedef struct __stat_result {
+    double mintp, maxtp, meantp, tp25, tp50, tp75;
+} __ovl_t;
 
 
 /**
@@ -61,7 +64,7 @@ int tpb_mkdir(char *dirpath);
  * @param ...   varlist, same syntax as printf.
  * @return int  return 0 if error is NOTE or WARN, 1 if critical error.
  */
-int tpb_printf(int err, int ts, int tag, char *msg, ...);
+int tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...);
 
 /**
  * @brief write 2d data with header into a csv file.
