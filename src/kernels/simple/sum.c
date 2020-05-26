@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include "tptimer.h"
 #include "tperror.h"
+#include "tpdata.h"
 
 #define MALLOC(_A, _NSIZE)  (_A) = (double *)malloc(sizeof(double) * _NSIZE);   \
                             if((_A) == NULL) {                                  \
@@ -61,6 +62,28 @@ d_sum(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         s = s / a[nsize-1] / nsize;
     }
 
+    // overall result
+    int nskip = 10, freq=1;
+    __ovl_t res;
+    printf(OVL_QUANT_HEADER);
+    // MB/s
+    calc_rate_quant(&ns[nskip], ntest - nskip, nsize * 24, 1e-3, &res);
+    printf("MB/s    %-8.3f%-8.3f%-8.3f%-8.3f%-8.3f%-8.3f\n", 
+           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+    // Byte/cy
+    calc_rate_quant(&cy[nskip], ntest - nskip, nsize * 24, 1, &res);
+    printf("B/c     %-8.3f%-8.3f%-8.3f%-8.3f%-8.3f%-8.3f\n", 
+           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+    if(freq) {
+        double *freqs =  (double *)malloc(sizeof(double) * nsize);
+        for(int i = nskip; i < nsize; i ++) {
+            freqs[i] = cy[i] / ns[i];
+        }
+        calc_quant(&freqs[nskip], ntest - nskip, &res);
+        printf("GHz     %-8.3f%-8.3f%-8.3f%-8.3f%-8.3f%-8.3f\n", 
+               res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+        free(freqs);
+    }
     free((void *)a);
     return 0;
 }

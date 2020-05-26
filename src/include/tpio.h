@@ -36,9 +36,7 @@ typedef struct __result {
     uint64_t **data; //data[col][row], row for run id, col for different tests.
 } __res_t;
 
-typedef struct __stat_result {
-    double mintp, maxtp, meantp, tp25, tp50, tp75;
-} __ovl_t;
+
 
 
 /**

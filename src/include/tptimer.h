@@ -143,9 +143,9 @@
 
 #define __getns_st_t            clock_gettime(CLOCK_MONOTONIC, &ts1);   
 #define __getns_1d_st(rid)      __getns_st_t; \
-                                ns[(rid)] = ts1.tv_sec * 1e9 - ts1.tv_nsec;
+                                ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec;
 #define __getns_2d_st(rid, eid) __getns_st_t; \
-                                ns[(rid)][(eid)] = ts1.tv_sec * 1e9 - ts1.tv_nsec;
+                                ns[(rid)][(eid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec;
 
 #define __getns_1d_en(rid)      clock_gettime(CLOCK_MONOTONIC, &ts1);   \
                                 ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)];

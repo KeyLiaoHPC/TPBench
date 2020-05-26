@@ -73,7 +73,7 @@ static __kern_info_t kern_info[] = {
       "FP64 AXPY."},
     {"striad",      "d_striad",     6,  32, 2,  d_striad,
       "FP64 Stanza Triad."},
-    {"staxpy",      "d_sdaxpy",     7,  32, 2,  d_staxpy,
+    {"staxpy",      "d_staxpy",     7,  32, 2,  d_staxpy,
       "FP64 Stanza AXPY"},
     {"scale",       "d_scale",      8,  16, 1,  d_scale,
       "FP64 STREAM scale."},

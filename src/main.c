@@ -40,19 +40,15 @@
 #include "mpi.h"
 #endif
 
-int qsort_ascend(const void *a, const void *b);
 void mpi_sync();
 void mpi_exit();
 int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, __res_t *res);
-int cal_quant(uint64_t * raw, int nitem, double tpt, double zs, __ovl_t *res);
 
 // =============================================================================
 // utilities
 // =============================================================================
 
-int qsort_ascend(const void * a, const void * b) {
-   return ( *(double *)a - *(double *)b );
-}
+
 
 // process synchronization
 void
@@ -83,10 +79,11 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
         for(int i = 0; i < args->nkern - 1; i ++){
-            err = sprintf(res->header, "%s,", strcat(res->header, kern_info[i].rname));
+            err = sprintf(res->header, "%s,", strcat(res->header, kern_info[args->klist[i]].rname));
             __error_lt(err, 0, RES_INIT_FAIL);
         }
-        err = sprintf(res->header, "%s", strcat(res->header, kern_info[args->nkern-1].rname));
+        int i = args->nkern - 1;
+        err = sprintf(res->header, "%s", strcat(res->header, kern_info[args->klist[i]].rname));
         __error_lt(err, 0, RES_INIT_FAIL);
     }
     // print fname
@@ -102,45 +99,6 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     return NO_ERROR;
 }
 
-int
-dpipe(uint64_t **raw2d, int eid, int ntest, uint64_t tpi, int nskip, double s, __ovl_t *res) {
-    int nitem;
-    double tpt;
-    uint64_t raw1d[ntest];
-
-    nitem = ntest - nskip;
-    tpt = tpi * ntest;
-    cal_quant(&raw2d[eid][nskip], nitem, tpt, s, res);
-    tpb_printf(0, 0, 0, "%f, %f, %f, %f, %f, %f\n", res->mintp, res->tp25, res->tp50, 
-               res->tp75, res->maxtp, res->meantp);
-
-    return 0;
-}
-
-// calculate mean, min, max, quantile in a n-item 1d fp64 array
-int
-cal_quant(uint64_t *raw, int nitem, double tpt, double s, __ovl_t *res) {
-    int i25, i50, i75;
-    size_t ndata;
-    double sum;
-    double tp[nitem];
-    double ovl_byte, mind, maxd, meand, d25, d50, d75;
-
-    for(int i = 0; i < nitem; i ++) {
-        tp[i] = (double)raw[i] * s / tpt;
-        sum += tp[i];
-    }
-    qsort(tp, nitem, sizeof(uint64_t), qsort_ascend);
-    i25 = 0.25 * nitem;
-    i50 = 0.50 * nitem;
-    i75 = 0.75 * nitem;
-    res->mintp = tp[0];
-    res->maxtp = tp[nitem-1];
-    res->meantp = sum / nitem;
-    res->tp25 = tp[i25];
-    res->tp50 = tp[i50];
-    res->tp75 = tp[i75];
-}
 
 /**
  * @brief main entry of tpbench.x
@@ -223,7 +181,6 @@ main(int argc, char **argv) {
     // headers, output csv name, host data dir, full path for csvs, hostname
     char filename[1024], mydir[PATH_MAX], full_path[PATH_MAX], hostname[128]; 
     __res_t grp_ns, grp_cy, kern_ns, kern_cy;
-    __ovl_t stat_res;
 
     // create host dir
     gethostname(hostname, 128);
@@ -250,7 +207,7 @@ main(int argc, char **argv) {
         
         // Run kernels.
         for(int i = 0; i < tp_args.nkern; i ++) {
-            tpb_printf(err, 1, 1, "Kernel routine %s started.", kern_info[tp_args.klist[i]].rname);
+            tpb_printf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tp_args.klist[i]].rname);
             err = tpb_run_kernel(tp_args.klist[i], 
                                  tp_args.ntest, 
                                  kern_ns.data[i], 
@@ -273,11 +230,6 @@ main(int argc, char **argv) {
         // data reduce for mpi version
 
 #endif
-        for(int i = 0; i < tp_args.nkern; i ++) {
-            dpipe(kern_ns.data, i, tp_args.ntest, 1, 10, 1e-9, &stat_res);
-            dpipe(kern_cy.data, i, tp_args.ntest, kern_info[tp_args.klist[i]].nbyte, 10, 1, &stat_res);
-        }
-
         // Clean up
         for(int i = 0; i < tp_args.nkern; i ++) {
             free(kern_ns.data[i]);

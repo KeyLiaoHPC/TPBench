@@ -17,11 +17,22 @@
  * =================================================================================
  * @file tpdata.h
  * @version 0.3
- * @brief Header for tpb-core library 
+ * @brief Header for tpbench data processor 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2020-05-26
  */
 
+#define  OVL_QUANT_HEADER "        MEAN    MIN     1/4     1/2     3/4     MAX\n"
+
 #include <stdint.h>
 
-typedef
+typedef struct __stat_result {
+    double mintp, maxtp, meantp, tp25, tp50, tp75;
+} __ovl_t;
+
+
+int calc_rate_quant(uint64_t * raw, int nitem, double tpt, double s, __ovl_t *res);
+
+int calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res);
+
+int calc_quant(double *data, int nitem, __ovl_t *res);
