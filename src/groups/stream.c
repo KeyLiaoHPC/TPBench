@@ -26,6 +26,7 @@
 #define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdio.h>
 #include "tperror.h"
 #include "tptimer.h"
 
@@ -53,26 +54,32 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         b[n] = 2.0;
         c[n] = 3.0;
     }
-    __getcy_init;
+
     __getns_init;
+    __getcy_init;
+    __getcy_grp_init;
+
     for(int n = 0; n < ntest; n++) {
         __getns_2d_st(n, 0);
-        __getcy_2d_st(n, 0);
-		    // kernel 1: Copy
+        __getcy_grp_st(n);
+
+        // kernel 1: Copy
         __getns_2d_st(n, 1);
         __getcy_2d_st(n, 1);
 #pragma omp parallel for
-		    for (i = 0; i < narr; i ++)
-		    	  c[i] = a[i];
+		for (i = 0; i < narr; i ++) {
+	        c[i] = a[i];
+        }
         __getcy_2d_en(n, 1);
         __getns_2d_en(n, 1);
 
-		    // kernel 2: Scale
+        // kernel 2: Scale
         __getns_2d_st(n, 2);
         __getcy_2d_st(n, 2);
 #pragma omp parallel for
-		    for (i = 0; i < narr; i ++)
+		for (i = 0; i < narr; i ++) {
             b[i] = s * c[i];
+        }
         __getcy_2d_en(n, 2);
         __getns_2d_en(n, 2);
 
@@ -80,8 +87,9 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         __getns_2d_st(n, 3);
         __getcy_2d_st(n, 3);
 #pragma omp parallel for
-		    for (i = 0; i < narr; i ++)
+        for (i = 0; i < narr; i ++) {
             c[i] = a[i] + b[i];
+        }
         __getcy_2d_en(n, 3);
         __getns_2d_en(n, 3);
 
@@ -89,14 +97,17 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         __getns_2d_st(n, 4);
         __getcy_2d_st(n, 4);
 #pragma omp parallel for
-		    for (i = 0; i < narr; i ++)
+	    for (i = 0; i < narr; i ++) {
             a[i] = b[i] + s * c[i];
+        }
         __getcy_2d_en(n, 4);
         __getns_2d_en(n, 4);
-        __getcy_2d_en(n, 0);
-        __getns_2d_en(n, 0);
-    }
 
+        // overall timing end.
+        __getcy_grp_en(n);
+        __getns_2d_en(n, 0);
+        printf("%llu, %llu, %llu, %llu, %llu\n", cy[n][0],  cy[n][1], cy[n][2], cy[n][3], cy[n][4]);
+    }
 
     free((void *)a);
     free((void *)b);

@@ -73,12 +73,9 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     int err;
     // print headers
     res->header[0] = '\0';
-    if(strcmp(prefix, "kernels")) {
-        for(int i = 0; i < args->nkern; i ++){
-            err = sprintf(res->header, "%s", strcat(res->header, grp_info[i].rname));
-            __error_lt(err, 0, RES_INIT_FAIL);
-        }
-    } else{
+
+    if(strcmp(prefix, "kernels") != 0) {
+        // matched, header for kernel benchmark
         for(int i = 0; i < args->nkern; i ++){
             err = sprintf(res->header, "%s", strcat(res->header, kern_info[i].rname));
             __error_lt(err, 0, RES_INIT_FAIL);
@@ -225,45 +222,53 @@ main(int argc, char **argv) {
     // group benchmark
     for(int i = 0; i < tp_args.ngrp; i ++) {
         int nepoch = grp_info[tp_args.glist[i]].nepoch;
-        tpb_printf(0, 1, 1, "Group routine %s started.", grp_info[tp_args.glist[i]].rname);
+        tpb_printf(0, 1, 1, "Group routine %s initializing.", grp_info[tp_args.glist[i]].rname);
         // Struct initialization
         err = init_res(grp_info[tp_args.glist[i]].rname, "ns", hostname, &tp_args, &grp_ns);
         __error_fun(err, "Data space init failed.");
         err = init_res(grp_info[tp_args.glist[i]].rname, "cy", hostname, &tp_args, &grp_cy);   
         __error_fun(err, "Data space init failed.");
-
+        // prepare header for output. [group routine name],[epoch1],[epoch2],...
+        sprintf(grp_ns.header, "%s,%s", grp_info[i].rname, grp_info[i].header);
+        sprintf(grp_cy.header, "%s,%s", grp_info[i].rname, grp_info[i].header);
 
         // allocate space for data
         // data dimension in group test is reverse against to the kernel test since group test will
         // execute its epochs consecutively
         grp_ns.data = (uint64_t **)malloc(tp_args.ntest * sizeof(uint64_t *));
-        kern_cy.data = (uint64_t **)malloc(tp_args.ntest * sizeof(uint64_t *));
+        grp_cy.data = (uint64_t **)malloc(tp_args.ntest * sizeof(uint64_t *));
+        if(grp_ns.data == NULL || grp_cy.data == NULL) {
+            err = MALLOC_FAIL;
+        }
+        __error_fun(err, "Data space init failed.");
         for(int i = 0; i < tp_args.ntest; i ++) {
-            kern_ns.data[i] = (uint64_t *)malloc(nepoch * sizeof(uint64_t));
-            kern_cy.data[i] = (uint64_t *)malloc(nepoch * sizeof(uint64_t));
+            // one more slot for overall time
+            grp_ns.data[i] = (uint64_t *)malloc((nepoch + 1) * sizeof(uint64_t));
+            grp_cy.data[i] = (uint64_t *)malloc((nepoch + 1) * sizeof(uint64_t));
         }
         
         // Run group
+        tpb_printf(0, 1, 1, "Start running.", grp_info[tp_args.glist[i]].rname);
         err = tpb_run_group(tp_args.glist[i],
                             tp_args.ntest,
                             grp_ns.data,
                             grp_cy.data,
                             tp_args.nkib);
         __error_fun(err, "Banchmark failed.");
-        tpb_printf(err, 1, 1, "Finished.");
+        tpb_printf(err, 1, 1, "Finish running.");
         
         // Write to csv files.
-        err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, tp_args.ngrp, grp_ns.header, 1);
+        err = tpb_writecsv(grp_ns.fpath, grp_ns.data, tp_args.ntest, grp_info[i].nepoch+1, grp_ns.header, 0);
         __error_fun(err, "Writing ns csv failed.");
-        err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, tp_args.ngrp, grp_cy.header, 1);
+        err = tpb_writecsv(grp_cy.fpath, grp_cy.data, tp_args.ntest, grp_info[i].nepoch+1, grp_cy.header, 0);
         __error_fun(err, "Writing ns cy failed.");
 
         for(int i = 0; i < tp_args.ntest; i ++) {
-            free(kern_ns.data[i]);
-            free(kern_cy.data[i]);
+            free(grp_ns.data[i]);
+            free(grp_cy.data[i]);
         }
         free(grp_ns.data);
-        free(kern_cy.data);
+        free(grp_cy.data);
     }
 
     mpi_exit();

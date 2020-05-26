@@ -53,5 +53,5 @@ tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t n
 
 int
 tpb_run_group(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib){
-    return grp_info[id].pfun(ntest, grp_info[id].nepoch, res_ns, res_cy, nkib);
+    return grp_info[id].pfun(ntest, grp_info[id].nepoch+1, res_ns, res_cy, nkib);
 }
