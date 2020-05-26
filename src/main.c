@@ -43,6 +43,7 @@
 void mpi_sync();
 void mpi_exit();
 int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, __res_t *res);
+int printf_res();
 
 // =============================================================================
 // utilities
@@ -74,12 +75,14 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     // print headers
     res->header[0] = '\0';
 
-    if(strcmp(prefix, "kernels") != 0) {
+    if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
-        for(int i = 0; i < args->nkern; i ++){
-            err = sprintf(res->header, "%s", strcat(res->header, kern_info[i].rname));
+        for(int i = 0; i < args->nkern - 1; i ++){
+            err = sprintf(res->header, "%s,", strcat(res->header, kern_info[i].rname));
             __error_lt(err, 0, RES_INIT_FAIL);
         }
+        err = sprintf(res->header, "%s", strcat(res->header, kern_info[args->nkern-1].rname));
+        __error_lt(err, 0, RES_INIT_FAIL);
     }
     // print fname
     err = sprintf(res->fname, "%s-r%d_c%d-%s.csv", prefix, myrank, mycpu, posfix);
@@ -94,6 +97,10 @@ init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, __res_t 
     return NO_ERROR;
 }
 
+int
+print_res() {
+    
+}
 
 /**
  * @brief main entry of tpbench.x
@@ -217,6 +224,14 @@ main(int argc, char **argv) {
         __error_fun(err, "Writing ns csv failed.");
         err = tpb_writecsv(kern_cy.fpath, kern_cy.data, tp_args.ntest, tp_args.nkern, kern_cy.header, 1);
         __error_fun(err, "Writing cycle csv failed.");
+        
+        // Clean up
+        for(int i = 0; i < tp_args.nkern; i ++) {
+            free(kern_ns.data[i]);
+            free(kern_cy.data[i]);
+        }
+        free(kern_ns.data);
+        free(kern_cy.data);
     }
     
     // group benchmark
@@ -271,6 +286,7 @@ main(int argc, char **argv) {
         free(grp_cy.data);
     }
 
+    // end of benchmark
     mpi_exit();
     tpb_printf(0, 0, 0, HLINE);
     tpb_printf(0, 1, 1, "TPBench finished.\n" DHLINE);

@@ -106,7 +106,6 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         // overall timing end.
         __getcy_grp_en(n);
         __getns_2d_en(n, 0);
-        printf("%llu, %llu, %llu, %llu, %llu\n", cy[n][0],  cy[n][1], cy[n][2], cy[n][3], cy[n][4]);
     }
 
     free((void *)a);
