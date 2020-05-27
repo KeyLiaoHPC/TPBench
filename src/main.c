@@ -212,7 +212,7 @@ main(int argc, char **argv) {
                                  tp_args.ntest, 
                                  kern_ns.data[i], 
                                  kern_cy.data[i], 
-                                 tp_args.nkern);
+                                 tp_args.nkib);
             __error_fun(err, "Benchmark failed.");
             tpb_printf(err, 1, 1, "Finished.");
         }

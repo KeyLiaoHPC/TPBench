@@ -51,6 +51,7 @@ d_axpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     }
     __getcy_init;
     __getns_init;
+    printf("%d, %d, %llu\n", ntest, nsize, kib);
     for(int i = 0; i < ntest; i ++){
         __getns_1d_st(i);
         __getcy_1d_st(i);
@@ -59,7 +60,9 @@ d_axpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         }
         __getcy_1d_en(i);
         __getns_1d_en(i);
+        
     }
+    
     // overall result
     int nskip = 10, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, 24, nsize);
