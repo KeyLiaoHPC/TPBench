@@ -223,13 +223,6 @@ main(int argc, char **argv) {
         err = tpb_writecsv(kern_cy.fpath, kern_cy.data, tp_args.ntest, tp_args.nkern, kern_cy.header, 1);
         __error_fun(err, "Writing cycle csv failed.");
 
-        // send data into data factory
-        tpb_printf(0, 1, 1, "Processing raw data.\n" HLINE);
-        // default data pipe: dpipe_k0
-#ifdef USE_MPI
-        // data reduce for mpi version
-
-#endif
         // Clean up
         for(int i = 0; i < tp_args.nkern; i ++) {
             free(kern_ns.data[i]);

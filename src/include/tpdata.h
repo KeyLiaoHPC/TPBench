@@ -22,7 +22,7 @@
  * @date 2020-05-26
  */
 
-#define  OVL_QUANT_HEADER "        MEAN    MIN     1/4     1/2     3/4     MAX\n"
+#define  OVL_QUANT_HEADER "        MEAN        MIN         1/4         1/2         3/4         MAX\n"
 
 #include <stdint.h>
 
@@ -36,3 +36,6 @@ int calc_rate_quant(uint64_t * raw, int nitem, double tpt, double s, __ovl_t *re
 int calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res);
 
 int calc_quant(double *data, int nitem, __ovl_t *res);
+
+
+int dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t nsize);

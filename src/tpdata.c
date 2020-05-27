@@ -23,6 +23,9 @@
  */
 #include <stdlib.h>
 #include "tpdata.h"
+#include "tperror.h"
+#include "tpio.h"
+#include "stdio.h"
 
 int qsort_ascend(const void * a, const void * b) {
    return ( *(double *)a - *(double *)b );
@@ -39,6 +42,7 @@ calc_quant(double *data, int nitem, __ovl_t *res) {
 
     for(int i = 0; i < nitem; i ++) {
         sum += data[i];
+        // printf("%f\n", data[i]);
     }
     qsort(data, nitem, sizeof(uint64_t), qsort_ascend);
     i25 = 0.25 * nitem;
@@ -79,6 +83,34 @@ calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *re
     }
 
     calc_quant(period, nitem, res);
+
+    return 0;
+}
+
+int
+dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t nsize) {
+    __ovl_t res;
+
+    printf(OVL_QUANT_HEADER);
+    // MB/s
+    calc_rate_quant(&ns[nskip], ntest - nskip, nsize * bpi, 1e3, &res);
+    printf("MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
+           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+    // Byte/cy
+    calc_rate_quant(&cy[nskip], ntest - nskip, nsize * bpi, 1, &res);
+    printf("B/c     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
+           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+    if(freq) {
+        double *freqs =  (double *)malloc(sizeof(double) * ntest);
+        for(int i = nskip; i < ntest; i ++) {
+            freqs[i] = (double)cy[i] / (double)ns[i];
+            // printf("%d, %f", i, freqs[i]);
+        }
+        calc_quant(&freqs[nskip], ntest - nskip, &res);
+        printf("GHz     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
+               res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+        free(freqs);
+    }
 
     return 0;
 }

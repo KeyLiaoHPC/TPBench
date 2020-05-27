@@ -24,6 +24,7 @@
 #define _GNU_SOURCE
 
 #include <stdint.h>
+#include <limits.h>
 
 /**
  * @brief 
