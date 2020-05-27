@@ -261,7 +261,7 @@ main(int argc, char **argv) {
         }
         
         // Run group
-        tpb_printf(0, 1, 1, "Start running.", grp_info[tp_args.glist[i]].rname);
+        tpb_printf(0, 1, 1, "Start running.\n", grp_info[tp_args.glist[i]].rname);
         err = tpb_run_group(tp_args.glist[i],
                             tp_args.ntest,
                             grp_ns.data,

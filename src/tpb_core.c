@@ -48,6 +48,10 @@ tpb_init() {
 
 int
 tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t nkib){
+    printf("Running Kernel %s - %s\n", kern_info[id].kname, kern_info[id].rname);
+    printf("Number of tests: %d\n", ntest);
+    printf("# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
+
     return kern_info[id].pfun(ntest, res_ns, res_cy, nkib);
 }
 

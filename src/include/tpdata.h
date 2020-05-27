@@ -39,3 +39,5 @@ int calc_quant(double *data, int nitem, __ovl_t *res);
 
 
 int dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t nsize);
+
+int dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t nsize);

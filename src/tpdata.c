@@ -114,3 +114,16 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
 
     return 0;
 }
+
+int
+dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t nsize) {
+    uint64_t kern_ns[ntest], kern_cy[ntest];
+    for(int i = 0; i < ntest; i ++) {
+        kern_ns[i] = ns[i][eid];
+        kern_cy[i] = cy[i][eid];
+    }
+
+    dpipe_k0(kern_ns, kern_cy, nskip, ntest, freq, bpi, nsize);
+
+    return 0;
+}

@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include "tperror.h"
 #include "tptimer.h"
+#include "tpdata.h"
 
 
 int
@@ -39,6 +40,10 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
     volatile double *a, *b, *c;
     register double s = 0.42;
 
+    printf("Running STREAM Benchmark\n");
+    printf("Number of tests: %d\n", ntest);
+    printf("Estimated memory allocation: %llu Kib\n", nkib * 3);
+    printf("# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
 
     narr = nkib * 1024 / sizeof(double);
     a = (double *)malloc(narr * sizeof(double));
@@ -107,6 +112,24 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         __getcy_grp_en(n);
         __getns_2d_en(n, 0);
     }
+
+    printf("STREAM Benchmark done, processing data.\n");
+
+    int nskip = 10, freq=1;
+    printf("STREAM Overall performance\n");
+    dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
+    
+    printf("STREAM-Copy performance\n");
+    dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
+    
+    printf("STREAM-Scale performance\n");
+    dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
+    
+    printf("STREAM-Add performance\n");
+    dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
+    
+    printf("STREAM-Triad performance\n");
+    dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
 
     free((void *)a);
     free((void *)b);
