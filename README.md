@@ -1,177 +1,73 @@
-# TPBench - A High-Precision Throughputs Benchmark Tool
+# TPBench - A Comprehensive HPC Benchmark Tool and Framework
 
 ## 1 - Introduction
 
-### 1.1 - License
+TPBench is a benchmarking tool for scientific computing and HPC. It enables users to evaluate and observe the performance characteristics of HPC hardware system and computing application in one application. In addition to existed benchmark kernels, TPBench provides fundamental facilaties for benchmarking including high-precision timer, data factory, statistical analyzer, etc. TPBench aims at enabling you to integrate your own scientific kernel and bridging the performance gaps from micro architecture benchmark to top-level parallel application.
 
-TPBench - A High-Precision Throughputs Benchmark Tool (v0.3-beta)
-
-Copyright (C) 2020 Key Liao (Liao Qiucheng)
-
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-### 1.2 - Introduction
-
-TPBench is a high-precision micro benchmarking suite for basic instruction and computing kernels on HPC system. It aims at enabling the ability for users to measure the low-level performance in software stack from single-core to exascale comuting system. It's well documented, easy to use and customize. Use cases are included but not limited to:
-
-* Measuring actual instruction latency and throughputs.
-* Measuring hierarchical bandwidth and latency of storage subsystem.
-* Micro benchmarking of basic scientific computing kernels.
+With TPBench, you're able to:
+* Efficiently evaluating hardware performance of a computing system.
+* Using consistent criterion for benchmarking in ASM, mini kernel, mini applications and real applications.
 * Customizing your own benchmarking tool.
+
 * ...
 
-TPBench currently supports benchmarks for both specific computing kernel and kernel groups, you can use switch between them using <-k> and <-g>. For detailes please refer to 3-Kernels.
-
-
-
-TPBench is developed by Key Liao, Dr. James Lin in Center for High-Performance Computing, Shanghai Jiao Tong University. The projects provide cycle-level parallel timer and parallel bandwidth tests for Armv8 processors. The source is provide "AS-IS" and only tested on ThunderX2, KunPeng-920 and BCM2711.
-
-### 1.4 - Acknowledgement
-
-- This project was *initially* inspired by John McClpin's **STREAM Benchmark** and RRZE's **TheBandwidthBenchmark**.
-- This project is currently developed and tested using computing facility in the Center of High-Performance Computing, Shanghai Jiao Tong University.
-- Any kinds of support are welcome.
-
-**(Tested on Xeon 6148, Thunder X2 and KP920, CentOS 7.4, GCC-9.2.0, OpenMPI-4.0.1)**
-
-
+TPBench is developed by Key Liao in Center for High-Performance Computing, Shanghai Jiao Tong University. 
+TPBench is now in developing and early tests, and it's proviede AS-IS without any guarantee or warranty. Contacting Key Liao (keyliao@sjtu.edu.cn) if you have further question or advices.
 
 ## 2 - Build and Run
 
 ### 2.1 - Quickstart
+An quick example on running a double-precision STREAM benchmark with TPBench.
 
+On X86-64 platform (e.g. Xeon 6148, Xeon 6248):
+<!-- <code> -->
+$ git clone https://github.com/KeyLiaoHPC/TPBench
+$ cd TPBench<br>
+$ make SETUP=gcc_x86 tpbench.x <br>
+$ cd bin/\${HOSTNAME} <br>
+$ ./tpbench.x -L <br>
+$ ./tpbench -n 50 -s 65536 -g d_stream
+
+</code>
+
+On Armv8-a (aarch64) platform (e.g. Marvel ThunderX2): 
 <!-- <code> -->
 $ tar xf TPBench.tar.gz <br>
 $ cd pmu && make && sudo insmod enable_pmu.ko && cd - <br>
 $ make SETUP=GCC
 </code>
 
-### 2.2 - Specifications
-
-- Using both cycle- and nanosecond-level timer.
-- Adopting memory fence to guarantee executing order around timing instructions.
-- At least 1-sec warming up.
-- Tested on ThunderX2 and Hisilicon KunPeng 920.
-- Manual time sync to mitigate synchronization overhead.(TBD)
-- Using double MPI_Barrier to decrease overhead and variations at barrier. (If manual time sync is not available.)
-- Detailed and overall data in ./data is more useful than standard outputs.
-
-### 2.3 - Build and run
-
-  **Prequisites:**
+### 2.2 - Build
+**Prerequisites**
+- C Compiler
+- MPI Library
+- `sudo` permission (only used once for enabling userspace Arm PMU)
   
-  Tested with
+**Makefile**
 
-- An MPI Library.(e.g. OpenMPI-4.0.1)
-- GCC-9.2.0
-- Root permission for loading cycle-level timer on AArch64.
+Use Make.<Arch> in setup/ directory for achitecture-specific options. 
 
- **Preparing**
+**PMU kmod**
 
- Loading kernel module to enable Armv8's PMU.
+For Armv8 architecture, TPBench provide a simple PMU kernel module to let you activate the user-level access to Armv8's Performance Monitor Units. Use it by simply enter the pmu/ directory and make using system-default compiler (tested by gcc-4.8.5).
 
- <code>
- cd ./pmu <br/>
- make <br/>
- sudo insmod ./enable_pmu.ko <br/>
- </code>
+**Command Line**
 
- **Example serial run:**
 
- make clean && make -f Make.gcc && numactl -C 22 ./bench.x
+  -d, --data_dir[=PATH]      Optional. Data directory. <br>
+  -g, --group=group_list     Group list. (e.g. -g d_stream). <br>
+  -k, --kernel=kernel_list   Kernel list.(e.g. -k d_init,d_sum). <br>
+  -L, --list                 List all group and kernels then exit. <br>
+  -n, --ntest=# of test      Overall number of tests. <br>
+  -s, --nkib=kib_size        Memory usage for a single test array, in KiB. <br>
+  -?, --help                 Give this help list <br>
+      --usage                Give a short usage message <br>
+  -V, --version              Print program version <br>
 
- **Example parallel run:**
-
- make clean && make -f Make.mpi && mpirun --bind-to cpulist:ordered -np 8 ./bench_mpi.x
-
-### 2.4 - Customization
-
-Modifying timer with <code>rdtscp</code> to adjust for x86.
-
-### 2.5 - TODO
-
-Using virtual timer to sync instead of MPI_Barrier().
 
 ## 3 - Kernels
 
-### 3.1 - Introduction and rules
-
-### 3.2 - Group I-1 io_ins
-
-Measuring throughputs and latency for io assembly instructions.
-
-    
-    **AArch64**
-    | Kernels   | Calculation             | IO Ops  | Arith Ops | IO Bytes/Test|      Notes      |
-    | ---       |  ---                    | :---:   | :---:     | :---:        |    :---:        |
-    | ldrx      | ldr Xn, [addr]          | L1S0WA0 | 0         |   8          |                 |
-    | ldrq      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16         |                 |
-    | ldpx      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16         |                 |
-    | ldpq      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32         |                 |
-    | ldnpx     | ldnp Xn1, Xn2, [addr]   | L2S0WA0 | 0         |   16         |                 |
-    | ldnpq     | ldnp Qn1, Qn2, [addr]   | L2S0WA0 | 0         |   32         |                 |
-    | strx      | str Xn, [addr]          | L0S1WA1 | 0         |   16         |                 |
-    | strq      | str Qn, [addr]          | L0S1WA1 | 0         |   32         |                 |
-    | stpx      | stp Xn1, Xn2, [addr]    | L0S2WA2 | 0         |   32         |                 |
-    | stpq      | stp Qn1, Qn2, [addr]    | L0S2WA2 | 0         |   64         |                 |
-    | stnpx     | stnp Xn1, Xn2, [addr]   | L0S2WA0 | 0         |   16         |                 |
-    | stnpq     | stnp Qn1, Qn2, [addr]   | L0S2WA0 | 0         |   32         |                 |
-
-    **X86-64**
-
-### 3.3 - Group I-2 arith_ins
-
-Measuring throughputs and latency for arithmetic instructions.
-
-
-* Group **arith_ins**
-
-    **AArch64**
-    | Kernels   | Calculation             | IO Ops  | Arith Ops | Bytes/Test|      Notes      |
-    | ---       |  ---                    | :---:   | :---:     | :---:     |    :---:        |
-    | add| ldr Xn, [addr]          | L1S0WA0 | 0         |   8       |                 |
-    | mul      | ldr Qn, [addr]          | L1S0WA0 | 0         |   16      |                 |
-    | fmla      | ldp Xn1, Xn2, [addr]    | L2S0WA0 | 0         |   16      |                 |
-    | sqrt      | ldp Qn1, Qn2, [addr]    | L2S0WA0 | 0         |   32      |                 |
-
-    **X86-64**
-
-### 3.4 - Group S-1 level1_kern
-
-Measuring throughputs for one-line simple kernels.
-
-* Group **g1_kernel**
-    | Kernels <-k> | Calculation | IO Ops | Arith Ops|
-    | --- | ---     | ---         | ---             | ---|
-    | Init   |a[i] = s |L0S1WA1 |0 |
-    | Sum    |s += a[i] |L1S0WA0  |1 |
-    | Copy   |a[i] = b[i] |L1S1WA1 | 0 |
-    | Update |b[i] = b[i] *s | L1S1WA0 | 1 |
-    | Triad  |b[i] = a[i] + s* c[i] |L2S1WA1 | 2 |
-    | Daxpy  |a[i] = a[i] + s *b[i] |L2S1WA0 | 2 |
-    | STriad |b[i] = a[i] + c[i]* d[i] |L3S1WA1  |  2 |
-    | SDaxpy |d[i] = d[i] + b[i] * c[i] |L3S1WA0 | 2 |
-
-* Group **g2_kernel**
-
-    **TBD**
-* Group **g3_kernel**
-
-    **TBD**
-
-
-
+For now, please use tpbench.x -L to check support benchmark kernels.
 
 ## 4 - FAQ
 
@@ -179,12 +75,7 @@ Measuring throughputs for one-line simple kernels.
 
 ### Version 0.3
 
-- Refactor whole project, reorganize source tree.
-- Update README.md, add detail description and quickstart samples.
-- Reorganize kernels into groups.
-- Remove data dependencies between successive kernels.
-- Add benchmark kernels for store, load and arithmetic instructions.
-- Optimize timer.
+TBD
 
 ### Version 0.21
 
@@ -204,4 +95,24 @@ Measuring throughputs for one-line simple kernels.
 
 ## 5 - Make contributions
 
-Putting issues with resonable advices or reproducible problems.
+Put issues with resonable advices or reproducible problems.
+
+## License
+
+TPBench - A High-Precision Throughputs Benchmark Tool (v0.3-beta)
+
+Copyright (C) 2020 Key Liao (Liao Qiucheng)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
