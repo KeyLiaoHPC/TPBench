@@ -50,15 +50,31 @@ d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     MALLOC(c, nsize);
     for(int i = 0; i < nsize; i ++) {
         a[i] = s;
-        b[i] = s + i;
-        c[i] = s * i;
+        b[i] = i;
+        c[i] = s;
     }
     stride = 8;
     l = 8;
     jump = stride + l;
 
+    // kernel warm
+    struct timespec wts;
+    uint64_t wns0, wns1;
+    __getns(wts, wns1);
+    wns0 = wns1 + 1e9;
+    while(wns1 < wns0) {
+        for(int j = 0; j < nsize; j += jump) {
+            for(int k = j; k < stride; k ++) {
+                a[k] = b[k] + s * c[k];
+            }
+        }
+        __getns(wts, wns1);
+    }
+
     __getcy_init;
     __getns_init;
+
+    // kernel start
     for(int i = 0; i < ntest; i ++){
         __getns_1d_st(i);
         __getcy_1d_st(i);
@@ -70,6 +86,7 @@ d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         __getcy_1d_en(i);
         __getns_1d_en(i);
     }
+    // kernel end
 
     // overall result
     int nskip = 10, freq=1;

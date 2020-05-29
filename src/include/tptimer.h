@@ -141,6 +141,9 @@
 #define __getns_init  struct timespec ts1;               \
                       clock_gettime(CLOCK_MONOTONIC, &ts1);
 
+#define __getns(_ts, _ns)   clock_gettime(CLOCK_MONOTONIC, &(_ts));     \
+                            (_ns) = (_ts).tv_sec * 1e9, (_ts).tv_nsec;
+
 #define __getns_st_t            clock_gettime(CLOCK_MONOTONIC, &ts1);   
 #define __getns_1d_st(rid)      __getns_st_t; \
                                 ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec;
@@ -151,4 +154,3 @@
                                 ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)];
 #define __getns_2d_en(rid, eid) clock_gettime(CLOCK_MONOTONIC, &ts1);   \
                                 ns[(rid)][(eid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)][(eid)];
-

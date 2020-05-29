@@ -60,10 +60,26 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         c[n] = 3.0;
     }
 
+    // kernel warm
+    struct timespec wts;
+    uint64_t wns0, wns1;
+    __getns(wts, wns1);
+    wns0 = wns1 + 1e9;
+    while(wns1 < wns0) {
+        for(int j = 0; j < narr; j ++){
+            a[j] = a[j] + s * b[j];
+        }
+        __getns(wts, wns1);
+    }
+    for(int i = 0; i < narr; i ++) {
+        a[i] = 1.0;
+    }
+
     __getns_init;
     __getcy_init;
     __getcy_grp_init;
 
+    // stream start
     for(int n = 0; n < ntest; n++) {
         __getns_2d_st(n, 0);
         __getcy_grp_st(n);

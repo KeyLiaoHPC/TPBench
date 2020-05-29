@@ -47,10 +47,25 @@ d_axpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     MALLOC(b, nsize);
     for(int i = 0; i < nsize; i ++) {
         a[i] = s;
-        b[i] = s + i;
+        b[i] = s;
     }
+
+    // kernel warm
+    struct timespec wts;
+    uint64_t wns0, wns1;
+    __getns(wts, wns1);
+    wns0 = wns1 + 1e9;
+    while(wns1 < wns0) {
+        for(int j = 0; j < nsize; j ++){
+            a[j] = a[j] + s * b[j];
+        }
+        __getns(wts, wns1);
+    }
+
     __getcy_init;
     __getns_init;
+
+    // kernel start
     for(int i = 0; i < ntest; i ++){
         __getns_1d_st(i);
         __getcy_1d_st(i);
@@ -61,6 +76,7 @@ d_axpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         __getns_1d_en(i);
         
     }
+    // kernel end
     
     // overall result
     int nskip = 10, freq=1;
