@@ -23,7 +23,7 @@
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
-// ERROR MACRO
+// Error macro for translating error messages into tpbench error
 #define __error_lt(evar, eno, err_name) if((evar) < (eno)) {    \
                                             return (err_name);  \
                                         }
@@ -43,7 +43,7 @@
 #define __error_exit(evar) if((evar)) {exit(1);}
 
 #define __error_fun(err, msg)   if((err)) { \
-                                    err = tpb_printf(err, 1, 1, msg);   \
+                                    err = tpprintf(err, 1, 1, msg);   \
                                     __error_exit(err);                  \
                                 }
 // ERROR CODE
@@ -68,6 +68,7 @@
 #define VERIFY_FAIL     101
 #define OVER_OPTMIZE    102
 #define DEFAULT_DIR     103
+#define CORE_NOT_BIND   104
 
 #define DHLINE "================================================================================\n"
 #define HLINE  "--------------------------------------------------------------------------------\n"

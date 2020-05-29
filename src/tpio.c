@@ -28,11 +28,10 @@
 #include <time.h>
 #include <unistd.h>
 #include <string.h>
-#include <stdint.h>
-#include <limits.h>
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include "tpio.h"
 #include "tpb_core.h"
 
 int
@@ -111,8 +110,9 @@ tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int 
     return NO_ERROR;
 }
 
+// tpbench printf wrapper. 
 int
-tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
+tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     
     int err_op = 0;
     time_t t = time(0);
@@ -121,7 +121,8 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     
     // print splitter directly.
     if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
-        if(myrank) {
+        // only allow rank 0 to print
+        if(tpmpi_info.myrank) {
             return err_op;
         }
         printf("\n%s", fmt);
@@ -131,7 +132,7 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     if(err == 0) {
         // no error
         err_op = 0;
-        if(myrank) {
+        if(tpmpi_info.myrank) {
             return err_op;
         }
         sprintf(tag, "NOTE");
@@ -139,7 +140,7 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     else if(err > 100) {
         // warning
         err_op = 0;
-        if(myrank) {
+        if(tpmpi_info.myrank) {
             return err_op;
         }
         sprintf(tag, "WARN");
@@ -147,7 +148,7 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     else {
         // error
         err_op = 1;
-        if(myrank) {
+        if(tpmpi_info.myrank) {
             return err_op;
         }
         sprintf(tag, "FAIL");
@@ -187,22 +188,22 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
 
 void
 tpb_list(){
-    tpb_printf(0, 1, 1, "Listing supported kernel and groups.\n");
-    tpb_printf(0, 0, 0, HLINE);
-    tpb_printf(0, 0, 0, "Kernel          Routine         NOTE\n");
-    tpb_printf(0, 0, 0, HLINE);
+    tpprintf(0, 1, 1, "Listing supported kernel and groups.\n");
+    tpprintf(0, 0, 0, HLINE);
+    tpprintf(0, 0, 0, "Kernel          Routine         NOTE\n");
+    tpprintf(0, 0, 0, HLINE);
     for(int i = 0 ; i < nkrout; i ++) {
-        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n", 
+        tpprintf(0, 0, 0, "%-12s    %-12s    %s\n", 
                    kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
     }
-    tpb_printf(0, 0, 0, HLINE);
-    tpb_printf(0, 0, 0, "GROUP           Routine         NOTE\n");
-    tpb_printf(0, 0, 0, HLINE);
+    tpprintf(0, 0, 0, HLINE);
+    tpprintf(0, 0, 0, "GROUP           Routine         NOTE\n");
+    tpprintf(0, 0, 0, HLINE);
     for(int i = 0 ; i < ngrout; i ++) {
-        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n",
+        tpprintf(0, 0, 0, "%-12s    %-12s    %s\n",
                    grp_info[i].gname, grp_info[i].rname, grp_info[i].note);
     }
-    tpb_printf(0, 0, 0, DHLINE);
+    tpprintf(0, 0, 0, DHLINE);
 }
 
 char *tpb_geterr(const int err, char *buf) {

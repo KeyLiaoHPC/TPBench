@@ -25,6 +25,7 @@
 
 #include <stdint.h>
 #include <limits.h>
+#include "tpmpi.h"
 
 /**
  * @brief 
@@ -54,7 +55,7 @@ int tpb_mkdir(char *dirpath);
 
 /**
  * @brief TPBench format stdout module. Return error level according to error number. 
- *        Print message if myrank == 0. Output syntax:
+ *        Print message if tpmpi_info.myrank == 0. Output syntax:
  *        YYYY-mm-dd HH:MM:SS [TAG ] *msg
  * @param err   Error number described in tperror.h
  * @param ts    Set to 0 to ignore timestamp.
@@ -63,7 +64,7 @@ int tpb_mkdir(char *dirpath);
  * @param ...   varlist, same syntax as printf.
  * @return int  return 0 if error is NOTE or WARN, 1 if critical error.
  */
-int tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...);
+int tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...);
 
 /**
  * @brief write 2d data with header into a csv file.

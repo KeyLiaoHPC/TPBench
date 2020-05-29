@@ -11,7 +11,7 @@ VPATH = $(SRC):$(KERNELS):$(KERNELS)/asm:$(KERNELS)/blas1:$(KERNELS)/simple:$(GR
 
 .PHONY: clean test 
 
-tpbench.x:	main.c tpb_core.c cli_parser.c tpio.c tpdata.c init.c staxpy.c striad.c sum.c triad.c \
+tpbench.x:	main.c tpmpi.c tpb_core.c cli_parser.c tpio.c tpdata.c init.c staxpy.c striad.c sum.c triad.c \
 			update.c axpy.c copy.c scale.c cli_parser.c stream.c 
 			$(CC) $(CFLAGS) -I$(INC) -o $@ $^
 

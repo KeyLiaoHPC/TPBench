@@ -36,7 +36,6 @@
 int nkern, nkrout, ngrp, ngrout;
 // granularity and tick of timer.
 uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
-int nrank, myrank, mycpu;
 
 
 /**

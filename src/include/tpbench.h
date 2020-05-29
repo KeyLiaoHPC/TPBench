@@ -27,4 +27,5 @@
 #include "tpb_core.h"
 #include "cli_parser.h"
 #include "tpio.h"
+#include "tpmpi.h"
 

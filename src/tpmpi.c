@@ -15,41 +15,60 @@
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
- * @file tpmpi.h
+ * @file tpmpi.c
  * @version 0.3
- * @brief Header for tpbench data processor 
+ * @brief Warpping mpi communication operations.
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2020-05-29
  */
 
-// ====
+#include <sched.h>
+#include "tpmpi.h"
+#include "tperror.h"
+
+int64_t
+tpmpi_init() {
+    // init mpi rank info
+    #ifdef USE_MPI
+        err = MPI_Init(NULL, NULL);
+        __error_ne(err, NO_ERROR, MPI_INIT_FAIL);
+        MPI_Comm_size(MPI_COMM_WORLD, &tpmpi_info.nrank);
+        MPI_Comm_rank(MPI_COMM_WORLD, &tpmpi_info.myrank);
+    #else
+        tpmpi_info.nrank = 1;
+        tpmpi_info.myrank = 0;
+    #endif //#ifdef USE_MPI
+    tpmpi_info.pcpu = sched_getcpu();
+    tpmpi_info.tcpu;
+
+    return NO_ERROR;
+}
+
+// process synchronization
+void
+tpmpi_barrier() {
 #ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
+    return;
+}
 
-#include <mpi.h>
+// double mpi_barrier
+void
+tpmpi_dbarrier() {
+#ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
+#endif
+    return;
+}
 
-#endif // #ifdef USE_MPI
-
-#include <stdint.h>
-
-// ====
-#ifndef __PROC_VAR_H
-
-#define __PROC_VAR_H
-struct {
-    // # of process, proc id, process core, thread core.
-    // TODO: malicious naming space for parent process and spawned thread
-    int64_t nrank, myrank, pcpu, tcpu;
-    // thread info
-    int64_t nthread, mythread;
-} tpmpi_info;
-
-#endif //#ifndef __PROC_VAR_H
-
-// ====
-int64_t tpmpi_init();
-
-void tpmpi_barrier();
-
-void tpmpi_dbarrier();
-
-void tpmpi_exit();
+// mpi exit
+void 
+tpmpi_exit() {
+#ifdef USE_MPI
+    MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Finalize();
+#endif   
+    return;
+}
