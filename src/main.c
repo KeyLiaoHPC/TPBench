@@ -40,17 +40,11 @@
 #include "mpi.h"
 #endif
 
-void mpi_sync();
-void mpi_exit();
 int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, __res_t *res);
 
 // =============================================================================
 // utilities
 // =============================================================================
-
-
-
-
 
 // init result data structure
 int
@@ -121,7 +115,7 @@ main(int argc, char **argv) {
     // List only.
     if(tp_args.list_only_flag){
         tpb_list();
-        mpi_exit();
+        tpmpi_exit();
         exit(0);
     }
 

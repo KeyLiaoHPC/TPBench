@@ -73,7 +73,7 @@ d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     // overall result
     int nskip = 10, freq=1;
-    dpipe_k0(ns, cy, nskip, ntest, freq, 32, nsize);
+    dpipe_k0(ns, cy, nskip, ntest, freq, 12, nsize);
 
     free((void *)a);
     free((void *)b);

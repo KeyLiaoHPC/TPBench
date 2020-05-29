@@ -22,6 +22,8 @@
  * @date 2020-05-29
  */
 
+#define _GNU_SOURCE
+
 #include <sched.h>
 #include "tpmpi.h"
 #include "tperror.h"

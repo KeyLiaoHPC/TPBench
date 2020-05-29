@@ -59,7 +59,7 @@ d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
-            a[j] = b[j] + s * c[i];
+            a[j] = b[j] + s * c[j];
         }
         __getcy_1d_en(i);
         __getns_1d_en(i);

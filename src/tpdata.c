@@ -28,7 +28,10 @@
 #include "stdio.h"
 
 int qsort_ascend(const void * a, const void * b) {
-   return ( *(double *)a - *(double *)b );
+    if( *(double *)a < *(double *)b ) {
+        return -1;
+    }
+    return  *(double *)a > *(double *)b;
 }
 
 
@@ -44,7 +47,8 @@ calc_quant(double *data, int nitem, __ovl_t *res) {
         sum += data[i];
         // printf("%f\n", data[i]);
     }
-    qsort(data, nitem, sizeof(uint64_t), qsort_ascend);
+    qsort((void *)data, nitem, sizeof(double), qsort_ascend);
+
     i25 = 0.25 * nitem;
     i50 = 0.50 * nitem;
     i75 = 0.75 * nitem;
