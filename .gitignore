@@ -6,7 +6,7 @@
 *.mod.c
 *.csv
 ./*.sh
-
+./.vscode/
 ./data/
 ./bin/
 ./lib/

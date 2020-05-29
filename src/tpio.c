@@ -128,26 +128,24 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
         return err_op;
     }
     
-    // no error
     if(err == 0) {
+        // no error
         err_op = 0;
         if(myrank) {
             return err_op;
         }
         sprintf(tag, "NOTE");
     }
-    
-    // warning
     else if(err > 100) {
+        // warning
         err_op = 0;
         if(myrank) {
             return err_op;
         }
         sprintf(tag, "WARN");
     } 
-
-    // error
     else {
+        // error
         err_op = 1;
         if(myrank) {
             return err_op;
