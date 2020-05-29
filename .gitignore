@@ -5,9 +5,10 @@
 *.order
 *.mod.c
 *.csv
+.vscode
 ./*.sh
-./.vscode/
-./data/
-./bin/
-./lib/
-./include/
+.vscode/
+data/
+bin/
+lib/
+include/
