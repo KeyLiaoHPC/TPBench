@@ -125,6 +125,7 @@ dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, 
     for(int i = 0; i < ntest; i ++) {
         kern_ns[i] = ns[i][eid];
         kern_cy[i] = cy[i][eid];
+        // printf("%llu, %llu\n", kern_ns[i], kern_cy[i]);
     }
 
     dpipe_k0(kern_ns, kern_cy, nskip, ntest, freq, bpi, nsize);

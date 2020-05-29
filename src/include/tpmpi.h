@@ -38,15 +38,15 @@
 struct {
     // # of process, proc id, process core, thread core.
     // TODO: malicious naming space for parent process and spawned thread
-    int64_t nrank, myrank, pcpu, tcpu;
+    int32_t nrank, myrank, pcpu, tcpu;
     // thread info
-    int64_t nthread, mythread;
+    int32_t nthread, mythread;
 } tpmpi_info;
 
 #endif //#ifndef __PROC_VAR_H
 
 // ====
-int64_t tpmpi_init();
+int tpmpi_init();
 
 void tpmpi_barrier();
 

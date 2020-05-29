@@ -91,12 +91,13 @@ main(int argc, char **argv) {
 // Initialization
 // =============================================================================
     // Init process info
+    tpmpi_init();
     tpprintf(0, 0, 0, DHLINE);
-    tpprintf(0, 0, 0, "TPBench v" VER "\n");
 #ifdef USE_MPI
     tpprintf(0, 0, 0, "TPBench-MPI v" VER "\n");
+#else
+    tpprintf(0, 0, 0, "TPBench v" VER "\n");
 #endif
-    tpmpi_init();
     // init kernel, init tpbench arguments
     tpprintf(0, 1, 1, "Initializing TPBench kernels.");
     err = tpb_init();

@@ -63,7 +63,6 @@ int
 tpb_run_group(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib){
     int err;
     tpprintf(0, 0, 0, "Running Group %s - %s\n", grp_info[id].gname, grp_info[id].rname);
-    tpprintf(0, 0, 0, "Number of tests: %d\n", ntest);
     err = grp_info[id].pfun(ntest, grp_info[id].nepoch+1, res_ns, res_cy, nkib);
     tpprintf(0, 0, 0, HLINE);
     return err;

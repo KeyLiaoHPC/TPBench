@@ -40,7 +40,7 @@ int
 d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     int nsize, err;
     volatile double *a, *b, *c;
-    register double s = 0.11;
+    register double s = 0.42;
 
     nsize = kib * 1024 / sizeof(double);
     MALLOC(a, nsize);
@@ -48,9 +48,9 @@ d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     MALLOC(c, nsize);
 
     for(int i = 0; i < nsize; i ++) {
-        a[i] = s;
-        b[i] = s + i;
-        c[i] = i;
+        a[i] = 1.0;//s;
+        b[i] = 2.0;//s;// + i;
+        c[i] = 3.0;//s;//i;
     }
 
     // kernel warm

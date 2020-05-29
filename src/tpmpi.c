@@ -28,8 +28,9 @@
 #include "tpmpi.h"
 #include "tperror.h"
 
-int64_t
+int
 tpmpi_init() {
+    int err;
     // init mpi rank info
     #ifdef USE_MPI
         err = MPI_Init(NULL, NULL);

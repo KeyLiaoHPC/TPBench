@@ -45,11 +45,16 @@ typedef struct {
 // Group declaration
 int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib);
 
+int d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib);
+
 // Group info list
 static __grp_info_t grp_info[] = {
     {"stream",       "d_stream",      0,  4,     d_stream,
      "FP64 STREAM Bemchmark.",
-     "copy,scale,add,triad"}
+     "copy,scale,add,triad"},
+    {"stream_verbose",  "d_stream_verbose", 1,  4,     d_stream_verbose,
+     "FP64 Verbose STREAM Bemchmark.",
+     "copy,scale,add,triad"},
 };
 
 #endif // #ifndef _TPGROUPS_H
