@@ -31,9 +31,22 @@
 
 #ifdef __aarch64__
 
-#define __getcy_init        asm volatile("mrs x22, pmcr_el0" "\n\t"   \
-                                         "m":::);
-#define __getcy_grp_init        asm volatile("NOP" "\n\t":::);
+#define PMCR_E      (1 << 0)
+#define PMCR_P      (1 << 1)
+#define PMCR_C      (1 << 2)
+
+#define __getcy_init        uint64_t _pmu_val0 = 0;             \
+                            _pmu_val0 = _pmu_val0 | (1 << 31);  \
+                            asm volatile(                       \
+                                "mrs x22, pmcr_el0" "\n\t"      \
+                                "orr x22, x22, #0x7"    "\n\t"  \
+                                "msr pmcr_el0, x22"     "\n\t"  \
+                                "msr pmcntenset_el0, %0" "\n\t" \
+                                :                               \
+                                : "r" (_pmu_val0)               \
+                                : "x22"                         \
+                            );
+#define __getcy_grp_init    asm volatile("NOP" "\n\t":::);
 
 #define __getcy_1d_st(rid)  asm volatile(                           \
                                 "mov x22, %0"           "\n\t"      \

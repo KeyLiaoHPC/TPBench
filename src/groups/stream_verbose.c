@@ -82,6 +82,7 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
 
     __getns_init;
     __getcy_init;
+    __getcy_grp_init;
 
     // stream start
     for(int n = 0; n < ntest; n++) {
