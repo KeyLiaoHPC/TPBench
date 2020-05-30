@@ -20,7 +20,7 @@
   * @version 0.3
   * @brief   A STREAM benchmark to collect performance of each core.
   * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
-  * @date 2020-05-22
+  * @date 2020-05-30
   */
 
 #define _GNU_SOURCE

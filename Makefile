@@ -2,7 +2,7 @@
 
 include setup/Make.${SETUP}
 
-TP_DIR = $(HOME)/proj/TPBench
+TP_DIR = $(PWD)
 SRC = $(TP_DIR)/src
 KERNELS = $(SRC)/kernels
 GROUPS = $(SRC)/groups

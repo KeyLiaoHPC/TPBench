@@ -16,13 +16,14 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * tperror.h
- * Description: Headers for error handling.
- * Author: Key Liao
- * Modified: May. 15th, 2020
- * Email: keyliaohpc@gmail.com
+ * @file tperror.h
+ * @version 0.3
+ * @brief Header for tpbench error handling
+ * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
+ * @date 2020-05-26
  * =================================================================================
  */
+
 // Error macro for translating error messages into tpbench error
 #define __error_lt(evar, eno, err_name) if((evar) < (eno)) {    \
                                             return (err_name);  \

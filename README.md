@@ -64,18 +64,27 @@ For Armv8 architecture, TPBench provide a simple PMU kernel module to let you ac
       --usage                Give a short usage message <br>
   -V, --version              Print program version <br>
 
+### 2.3 - Data and timer
+All tests include cycle-level timer and nanosecond-level timer. For now, every test include a 1-second warmup. 
+After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpdata.h.
+If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
+The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
 
 ## 3 - Kernels
 
-For now, please use tpbench.x -L to check support benchmark kernels.
+TPBench provides two different timing area to classify your benchmarking target, groups and kernels. The **group** targets are programs including multiple loop epoch which you want to measure. And the **kernel** target is those simple comupting kernel which you only want to measure the overall time. 
+
+9 kernels and 2 groups are now officially supoort by TPBench.
+Customizing benchmarking is not fully supported yet, but it's not complicated to add your own benchmarking target into TPBench by refering existing target code. I'm still working on customization stuffs.
 
 ## 4 - FAQ
 
 ## 5 - Changelog
 
 ### Version 0.3
-
-TBD
+- Break all benchmarking target into group and kernels.
+- A easy-to-use command line interface.
+- Reset Armv8 cycler counter to avoid overflow.
 
 ### Version 0.21
 
