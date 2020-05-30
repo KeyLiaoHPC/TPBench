@@ -22,7 +22,6 @@
  * @date 2020-05-26
  */
 
-#define  OVL_QUANT_HEADER "        MEAN        MIN         1/4         1/2         3/4         MAX\n"
 
 #include <stdint.h>
 

@@ -30,6 +30,7 @@
 #include "tptimer.h"
 #include "tperror.h"
 #include "tpdata.h"
+#include "tpmpi.h"
 
 #define MALLOC(_A, _NSIZE)  (_A) = (double *)malloc(sizeof(double) * _NSIZE);   \
                             if((_A) == NULL) {                                  \
@@ -65,6 +66,7 @@ d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     // kernel start
     for(int i = 0; i < ntest; i ++){
+        tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){

@@ -30,6 +30,7 @@
 #include "tptimer.h"
 #include "tperror.h"
 #include "tpdata.h"
+#include "tpmpi.h"
 
 int
 d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
@@ -60,6 +61,7 @@ d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     // kernel start
     for(int i = 0; i < ntest; i ++){
+        tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
@@ -103,6 +105,7 @@ s_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     __getcy_init;
     __getns_init;
     for(int i = 0; i < ntest; i ++){
+        tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
@@ -146,6 +149,7 @@ h_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     __getcy_init;
     __getns_init;
     for(int i = 0; i < ntest; i ++){
+        tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
@@ -193,6 +197,7 @@ i_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     // kernel start
     for(int i = 0; i < ntest; i ++){
+        tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
         for(int j = 0; j < nsize; j ++){
