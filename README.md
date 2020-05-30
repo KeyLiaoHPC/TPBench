@@ -1,7 +1,115 @@
-# TPBench - A Cycle-Level Throughputs Benchmark Tool
+# TPBench - A Comprehensive HPC Benchmark Tool and Framework
+
 ## 1 - Introduction
-### 1.1 - License
-TPBench - A Cycle-Level Throuputs Benchmark Tool (v0.1-beta)
+
+TPBench is a benchmarking tool for scientific computing and HPC. It enables users to evaluate and observe the performance characteristics of HPC hardware system and computing application in one application. In addition to existed benchmark kernels, TPBench provides fundamental facilaties for benchmarking including high-precision timer, data factory, statistical analyzer, etc. TPBench aims at enabling you to integrate your own scientific kernel and bridging the performance gaps from micro architecture benchmark to top-level parallel application.
+
+With TPBench, you're able to:
+* Efficiently evaluating hardware performance of a computing system.
+* Using consistent criterion for benchmarking in ASM, mini kernel, mini applications and real applications.
+* Customizing your own benchmarking tool.
+
+* ...
+
+TPBench is developed by Key Liao in Center for High-Performance Computing, Shanghai Jiao Tong University. 
+TPBench is now in developing and early tests, and it's proviede AS-IS without any guarantee or warranty. Contacting Key Liao (keyliao@sjtu.edu.cn) if you have further question or advices.
+
+## 2 - Build and Run
+
+### 2.1 - Quickstart
+An quick example on running a double-precision STREAM benchmark with TPBench.
+
+On X86-64 platform (e.g. Xeon 6148, Xeon 6248):
+<!-- <code> -->
+$ git clone https://github.com/KeyLiaoHPC/TPBench
+$ cd TPBench<br>
+$ make SETUP=gcc_x86 tpbench.x <br>
+$ cd bin/\${HOSTNAME} <br>
+$ ./tpbench.x -L <br>
+$ ./tpbench -n 50 -s 65536 -g d_stream
+
+</code>
+
+On Armv8-a (aarch64) platform (e.g. Marvel ThunderX2): 
+<!-- <code> -->
+$ tar xf TPBench.tar.gz <br>
+$ cd pmu && make && sudo insmod enable_pmu.ko && cd - <br>
+$ make SETUP=GCC
+</code>
+
+### 2.2 - Build
+**Prerequisites**
+- C Compiler
+- MPI Library
+- `sudo` permission (only used once for enabling userspace Arm PMU)
+  
+**Makefile**
+
+Use Make.<Arch> in setup/ directory for achitecture-specific options. 
+
+**PMU kmod**
+
+For Armv8 architecture, TPBench provide a simple PMU kernel module to let you activate the user-level access to Armv8's Performance Monitor Units. Use it by simply enter the pmu/ directory and make using system-default compiler (tested by gcc-4.8.5).
+
+**Command Line**
+
+
+  -d, --data_dir[=PATH]      Optional. Data directory. <br>
+  -g, --group=group_list     Group list. (e.g. -g d_stream). <br>
+  -k, --kernel=kernel_list   Kernel list.(e.g. -k d_init,d_sum). <br>
+  -L, --list                 List all group and kernels then exit. <br>
+  -n, --ntest=# of test      Overall number of tests. <br>
+  -s, --nkib=kib_size        Memory usage for a single test array, in KiB. <br>
+  -?, --help                 Give this help list <br>
+      --usage                Give a short usage message <br>
+  -V, --version              Print program version <br>
+
+### 2.3 - Data and timer
+All tests include cycle-level timer and nanosecond-level timer. For now, every test include a 1-second warmup. 
+After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpdata.h.
+If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
+The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
+
+## 3 - Benchmarking Methodology
+
+TPBench provides two different timing area to classify your benchmarking target, groups and kernels. The **group** targets are programs including multiple loop epoch which you want to measure. And the **kernel** target is those simple comupting kernel which you only want to measure the overall time. 
+
+9 kernels and 2 groups are now officially supoort by TPBench.
+Customizing benchmarking is not fully supported yet, but it's not complicated to add your own benchmarking target into TPBench by refering existing target code. I'm still working on customization stuffs. If you want to evaluate some simple kernel like BLAS1-rot, stencil, etc, just simple wrap up
+your code with timer in tptimer.h, and put your interface definition and information into tpgroups.h or tpkernels.h
+
+## 4 - FAQ
+
+## 5 - Changelog
+
+### Version 0.3
+- Break all benchmarking target into group and kernels.
+- A easy-to-use command line interface.
+- Reset Armv8 cycler counter to avoid overflow.
+
+### Version 0.21
+
+- Decrease C to avoid overflow when N is huge.
+
+### Version 0.2
+
+- Enable x86 cycle timer.
+- Automatic print final log into overall.
+- All detail timing results are placed in ./data/${KIB_SIZE}.
+- Bug fixes.
+
+### Version 0.1
+
+- Initial beta version.
+- Enable AArch64 cycle timer.
+
+## 5 - Make contributions
+
+Put issues with resonable advices or reproducible problems.
+
+## License
+
+TPBench - A High-Precision Throughputs Benchmark Tool (v0.3-beta)
 
 Copyright (C) 2020 Key Liao (Liao Qiucheng)
 
@@ -17,73 +125,4 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
-### 1.2 - Introduction
-TPBench is developed by Key Liao, Dr. James Lin in Center for High-Performance Computing, Shanghai Jiao Tong University. The projects provide cycle-level parallel timer and parallel bandwidth tests for Armv8 processors. The source is provide "AS-IS" and only tested on ThunderX2, KunPeng-920 and BCM2711.
-
-
-| Kernels | Calculation | Data Operations | Ops|
-| ---     | ---         | ---             | ---| 
-| Init   |a[i] = s |1 Load, WA |0 |
-| Sum    |s += a[i] |1 Load + 1 Store  |1 |
-| Copy   |a[i] = b[i] |1 Load + 1 Store + WA | 0 |
-| Update |b[i] = b[i] * s |1Load + 1 Store | 1 |
-| Triad  |b[i] = a[i] + s * c[i] |2 Load + 1 Store + WA | 2 |
-| Daxpy  |a[i] = a[i] + c[i] * d[i] |2 Load + 1 Store | 2 |
-| STriad |b[i] = a[i] + c[i] * d[i] |3 Load + 1 Store + WA  |  2 |
-| SDaxpy |d[i] = d[i] + b[i] * c[i] |3 Load + 1 Store | 2 |
-
-### 1.3 - Acknowledgement
- - This project is highly inspired by John McClpin's **STREAM Benchmark** and RRZE's **TheBandwidthBenchmark**.
- - This project is developed with computing facility in the Center of High-Performance Computing, Shanghai Jiao Tong University.
-## 2 - Build and Run
-### 2.1 - Specifications
- - Tested on ThunderX2 and Hisilicon KunPeng 920. 
- - Detailed data in ./data is more useful than screen outputs.
-### 2.2 - Build and run
-  **Prequisites:**
-  
-  Tested with
- - An MPI Library.(e.g. OpenMPI-4.0.1)
- - GCC-9.2.0
- - Root Autority(for loading PMU kernel module)
- 
- **Preparing**
- 
- Loading kernel module to enable Armv8's PMU.
- 
- <code>
- cd ./pmu <br/>
- make <br/>
- sudo insmod ./enable_pmu.ko <br/>
- </code> 
-
- **Example serial run:**
-
- make clean && make -f Make.gcc && numactl -C 22 ./bench.x
- 
- **Example parallel run:**
-
- make clean && make -f Make.mpi && mpirun --bind-to cpulist:ordered -np 8 ./bench_mpi.x
-### 2.3 - Customization
-Modifying timer with <code>rdtscp</code> to adjust for x86.
-### 2.4 - TODO
-Using virtual timer to sync instead of MPI_Barrier().
-## 3 - FAQ
-
-## 4 - Changelog
-
-### Version 0.2
- - Enable x86 cycle timer.
- - Automatic print final log into overall.csv
- - All detail timing results are placed in ./data/${KIB_SIZE}.
- - Bug fixes.
-
-### Version 0.1
- - Initial beta version.
- - Enable AArch64 cycle timer.
-
-
-
-## 5 - Make contributions
-Putting issues with resonable advices or reproducible problems.
 
