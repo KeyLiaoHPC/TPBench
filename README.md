@@ -19,22 +19,25 @@ TPBench is now in developing and early tests, and it's proviede AS-IS without an
 ### 2.1 - Quickstart
 An quick example on running a double-precision STREAM benchmark with TPBench.
 
+Selecting serial or mpi version using -DUSE_MPI. Selecting appropriate config using make SETUP=\<config>
+
 On X86-64 platform (e.g. Xeon 6148, Xeon 6248):
 <!-- <code> -->
-$ git clone https://github.com/KeyLiaoHPC/TPBench
+$ git clone https://github.com/KeyLiaoHPC/TPBench <br>
 $ cd TPBench<br>
 $ make SETUP=gcc_x86 tpbench.x <br>
-$ cd bin/\${HOSTNAME} <br>
 $ ./tpbench.x -L <br>
-$ ./tpbench -n 50 -s 65536 -g d_stream
+$ ./tpbench.x -n 50 -s 65536 -g d_stream
 
 </code>
 
 On Armv8-a (aarch64) platform (e.g. Marvel ThunderX2): 
 <!-- <code> -->
 $ tar xf TPBench.tar.gz <br>
+$ cd TPBench <br>
 $ cd pmu && make && sudo insmod enable_pmu.ko && cd - <br>
-$ make SETUP=GCC
+$ make SETUP=tx2
+$ ./tpbench.x -n 50 -s 65536 -k d_axpy
 </code>
 
 ### 2.2 - Build
