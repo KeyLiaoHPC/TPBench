@@ -70,12 +70,13 @@ After warming up, the first 10 results will be skipped, you can change the numbe
 If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
 The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
 
-## 3 - Kernels
+## 3 - Benchmarking Methodology
 
 TPBench provides two different timing area to classify your benchmarking target, groups and kernels. The **group** targets are programs including multiple loop epoch which you want to measure. And the **kernel** target is those simple comupting kernel which you only want to measure the overall time. 
 
 9 kernels and 2 groups are now officially supoort by TPBench.
-Customizing benchmarking is not fully supported yet, but it's not complicated to add your own benchmarking target into TPBench by refering existing target code. I'm still working on customization stuffs.
+Customizing benchmarking is not fully supported yet, but it's not complicated to add your own benchmarking target into TPBench by refering existing target code. I'm still working on customization stuffs. If you want to evaluate some simple kernel like BLAS1-rot, stencil, etc, just simple wrap up
+your code with timer in tptimer.h, and put your interface definition and information into tpgroups.h or tpkernels.h
 
 ## 4 - FAQ
 
