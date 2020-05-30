@@ -31,32 +31,33 @@
 
 #ifdef __aarch64__
 
-#define __getcy_init        asm volatile("NOP" "\n\t":::);
+#define __getcy_init        asm volatile("mrs x22, pmcr_el0" "\n\t"   \
+                                         "m":::);
 #define __getcy_grp_init        asm volatile("NOP" "\n\t":::);
 
 #define __getcy_1d_st(rid)  asm volatile(                           \
-                                "mov x28, %0"           "\n\t"      \
-                                "mrs x29, pmccntr_el0"              \
+                                "mov x22, %0"           "\n\t"      \
+                                "mrs x23, pmccntr_el0"              \
                                 :                                   \
                                 : "r" (&cy[(rid)])                  \
-                                : "x28", "x29", "x30", "memory");
+                                : "x22", "x23", "x24", "memory");
 
 #define __getcy_2d_st(rid, eid) asm volatile(                           \
-                                    "mov x28, %0"           "\n\t"      \
-                                    "mrs x29, pmccntr_el0"              \
+                                    "mov x22, %0"           "\n\t"      \
+                                    "mrs x23, pmccntr_el0"              \
                                     :                                   \
                                     : "r" (&cy[(rid)][(eid)])           \
-                                    : "x28", "x29", "x30", "memory");
+                                    : "x22", "x23", "x24", "memory");
 
 
 
 #define __getcy_en_t    asm volatile(                           \
-                            "mrs x30, pmccntr_el0"  "\n\t"      \
-                            "sub x30, x30, x29"     "\n\t"      \
-                            "str x30, [x28]"                    \
+                            "mrs x24, pmccntr_el0"  "\n\t"      \
+                            "sub x24, x24, x23"     "\n\t"      \
+                            "str x24, [x22]"                    \
                             :                                   \
                             :                                   \
-                            : "x28", "x29", "x30","memory" );   
+                            : "x22", "x23", "x24","memory" );   
 
 #define __getcy_1d_en(rid)  __getcy_en_t
 #define __getcy_2d_en(rid, eid)   __getcy_en_t
