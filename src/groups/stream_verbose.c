@@ -173,7 +173,8 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
             }
             // process data.
             tpprintf(0, 0, 0, "Epoch %d: \n", eid);
-            dpipe_k0(all_ns, all_cy, nskip, ntest, freq, bpi[eid] * tpmpi_info.nrank, narr);
+            // process overall data
+            dpipe_k0(all_ns, all_cy, 0, nitem, freq, bpi[eid], narr);
         }
         free(all_ns);
         free(all_cy);
@@ -181,9 +182,9 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     else {
         uint64_t epoch_ns[snitem], epoch_cy[snitem];
         for(int eid = 0; eid < 5; eid ++) {
-            for(int i = nskip; i < ntest; i ++) {
-                epoch_ns[i] = ns[i][eid];
-                epoch_cy[i] = cy[i][eid];
+            for(int i = 0; i < snitem; i ++) {
+                epoch_ns[i] = ns[i+nskip][eid];
+                epoch_cy[i] = cy[i+nskip][eid];
             }
             tpmpi_barrier();
             MPI_Send(epoch_ns, snitem, MPI_UINT64_T, 0, 101, MPI_COMM_WORLD);

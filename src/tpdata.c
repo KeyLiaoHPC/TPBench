@@ -71,9 +71,7 @@ calc_rate_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res)
 
     for(int i = 0; i < nitem; i ++) {
         rate[i] = s * volume / (double)raw[i]; // scale_factor * volumne / total_time
-        // printf("%d, %llu,%f\n",i, raw[i], rate[i]);
     }
-
     calc_quant(rate, nitem, res);
 
     return 0;
@@ -94,16 +92,16 @@ calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *re
 }
 
 int
-dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t nsize) {
+dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
     __ovl_t res;
 
     tpprintf(0, 0, 0, OVL_QUANT_HEADER);
     // MB/s
-    calc_rate_quant(&ns[nskip], ntest - nskip, nsize * bpi, 1e3, &res);
+    calc_rate_quant(&ns[nskip], ntest - nskip, niter * bpi, 1e3, &res);
     tpprintf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
     // Byte/cy
-    calc_rate_quant(&cy[nskip], ntest - nskip, nsize * bpi, 1, &res);
+    calc_rate_quant(&cy[nskip], ntest - nskip, niter * bpi, 1, &res);
     tpprintf(0, 0, 0, "B/c     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
     if(freq) {
