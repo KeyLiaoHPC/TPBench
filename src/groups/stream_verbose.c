@@ -142,7 +142,7 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     free((void *)a);
     free((void *)b);
     free((void *)c);
-    printf("Verbose STREAM Benchmark done, processing data.\n");
+    tpprintf(0, 0, 0, "Verbose STREAM Benchmark done, processing data.\n");
 
     // skip some tests in the front 
     int nskip = 10, freq=1;
@@ -191,20 +191,20 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
         }
     }
     
-    printf("STREAM Overall performance\n");
-    dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
-    
-    printf("STREAM-Copy performance\n");
-    dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
-    
-    printf("STREAM-Scale performance\n");
-    dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
-    
-    printf("STREAM-Add performance\n");
-    dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
-    
-    printf("STREAM-Triad performance\n");
-    dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
+    // printf("STREAM Overall performance\n");
+    // dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
+    // 
+    // printf("STREAM-Copy performance\n");
+    // dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
+    // 
+    // printf("STREAM-Scale performance\n");
+    // dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
+    // 
+    // printf("STREAM-Add performance\n");
+    // dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
+    // 
+    // printf("STREAM-Triad performance\n");
+    // dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
 
 
     return 0;

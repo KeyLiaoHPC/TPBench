@@ -1,5 +1,5 @@
 #!/bin/sh
 CC=mpicc
-CFLAGS=-O3 -fno-builtin -march=armv8-a+simd -mtune=native
+CFLAGS=-O3 -DUSE_MPI -fno-builtin -march=armv8-a+simd -mtune=native
 DEF=-DNTIMES=1000 -DUSE_MPI
 SIZE=-DKIB_SIZE=4096
