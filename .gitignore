@@ -5,6 +5,7 @@
 *.order
 *.mod.c
 *.csv
+*.swp
 .vscode
 ./*.sh
 .vscode/

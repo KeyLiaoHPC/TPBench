@@ -50,8 +50,6 @@ int check_count(int *n, char *strarg);
 /**
  * @brief 
  * @param tp_args 
- * @return int 
- */
 int parse_klist(__tp_args_t *tp_args);
 
 /**
@@ -113,15 +111,27 @@ check_count(int *n, char *strarg) {
 int
 parse_klist(__tp_args_t *tp_args) {
     int cmplen, matched;
-    char *ch;
+    char *ch, *che;
 
     ch = tp_args->kstr;
     for(int seg = 0; seg < tp_args->nkern; seg ++) {
         matched = 0;
+        che = ch;
+        // set segment
+        while (1) {
+            if(*che == ',') {
+                *che = '\0';
+                break;
+            }
+            if(*che == '\0') {
+                break;
+            }
+            che ++;
+            // printf("%s\n", che);
+        }
         // route id
         for(int rid = 0; rid < nkrout; rid ++) {
-            cmplen = strlen(kern_info[rid].rname);
-            if(strncmp(ch, kern_info[rid].rname, cmplen) == 0) {
+            if(strcmp(ch, kern_info[rid].rname) == 0) {
                 tp_args->klist[seg] = rid;
                 matched = 1;
                 break;
@@ -131,7 +141,7 @@ parse_klist(__tp_args_t *tp_args) {
             return KERN_NE;
         }
         // move to next segment
-        ch = ch + cmplen + 1;
+        ch = che + 1;
     }
     return NO_ERROR;
 }
@@ -139,14 +149,25 @@ parse_klist(__tp_args_t *tp_args) {
 int
 parse_glist(__tp_args_t *tp_args) {
     int cmplen, matched;
-    char *ch;
+    char *ch, *che;
 
     ch = tp_args->gstr;
     for(int seg = 0; seg < tp_args->ngrp; seg ++) {
         matched = 0;
+        che = ch;
+        while (1) {
+            if(*che == ',') {
+                *che = '\0';
+                break;
+            }
+            if(*che == '\0') {
+                break;
+            }
+            che ++;
+            // printf("%s\n", che);
+        }
         for(int rid = 0; rid < ngrout; rid ++) {
-            cmplen = strlen(grp_info[rid].rname);
-            if(strncmp(ch, grp_info[rid].rname, cmplen) == 0) {
+            if(strcmp(ch, grp_info[rid].rname) == 0) {
                 // matched, append index
                 tp_args->glist[seg] = rid;
                 matched = 1;
@@ -156,7 +177,7 @@ parse_glist(__tp_args_t *tp_args) {
         if(matched == 0) {
             return GRP_NE;
         }
-        ch = ch + cmplen + 1;
+        ch = che + 1;
     }
     return NO_ERROR;
 }

@@ -142,7 +142,7 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     free((void *)a);
     free((void *)b);
     free((void *)c);
-    printf("Verbose STREAM Benchmark done, processing data.\n");
+    tpprintf(0, 0, 0, "Verbose STREAM Benchmark done, processing data.\n");
 
     // skip some tests in the front 
     int nskip = 10, freq=1;
@@ -173,7 +173,8 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
             }
             // process data.
             tpprintf(0, 0, 0, "Epoch %d: \n", eid);
-            dpipe_k0(all_ns, all_cy, nskip, ntest, freq, bpi[eid] * tpmpi_info.nrank, narr);
+            // process overall data
+            dpipe_k0(all_ns, all_cy, 0, nitem, freq, bpi[eid], narr);
         }
         free(all_ns);
         free(all_cy);
@@ -181,9 +182,9 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     else {
         uint64_t epoch_ns[snitem], epoch_cy[snitem];
         for(int eid = 0; eid < 5; eid ++) {
-            for(int i = nskip; i < ntest; i ++) {
-                epoch_ns[i] = ns[i][eid];
-                epoch_cy[i] = cy[i][eid];
+            for(int i = 0; i < snitem; i ++) {
+                epoch_ns[i] = ns[i+nskip][eid];
+                epoch_cy[i] = cy[i+nskip][eid];
             }
             tpmpi_barrier();
             MPI_Send(epoch_ns, snitem, MPI_UINT64_T, 0, 101, MPI_COMM_WORLD);
@@ -191,20 +192,20 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
         }
     }
     
-    printf("STREAM Overall performance\n");
-    dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
-    
-    printf("STREAM-Copy performance\n");
-    dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
-    
-    printf("STREAM-Scale performance\n");
-    dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
-    
-    printf("STREAM-Add performance\n");
-    dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
-    
-    printf("STREAM-Triad performance\n");
-    dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
+    // printf("STREAM Overall performance\n");
+    // dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
+    // 
+    // printf("STREAM-Copy performance\n");
+    // dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
+    // 
+    // printf("STREAM-Scale performance\n");
+    // dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
+    // 
+    // printf("STREAM-Add performance\n");
+    // dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
+    // 
+    // printf("STREAM-Triad performance\n");
+    // dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
 
 
     return 0;
