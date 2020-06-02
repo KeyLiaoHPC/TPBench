@@ -156,7 +156,7 @@
                       clock_gettime(CLOCK_MONOTONIC, &ts1);
 
 #define __getns(_ts, _ns)   clock_gettime(CLOCK_MONOTONIC, &(_ts));     \
-                            (_ns) = (_ts).tv_sec * 1e9, (_ts).tv_nsec;
+                            (_ns) = (_ts).tv_sec * 1e9 + (_ts).tv_nsec;
 
 #define __getns_st_t            clock_gettime(CLOCK_MONOTONIC, &ts1);   
 #define __getns_1d_st(rid)      __getns_st_t; \
