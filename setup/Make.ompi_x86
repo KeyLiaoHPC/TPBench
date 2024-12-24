@@ -1,3 +1,4 @@
 #!/bin/sh
 CC=mpicc
-CFLAGS=-DUSE_MPI -O3 -fno-builtin -march=skylake
+CFLAGS=-DUSE_MPI -O3 -fno-builtin -march=native -Wno-discarded-qualifiers -Wno-incompatible-pointer-types
+

@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * @version 0.3
  * @brief Header for tpb-core library 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2020-05-22
+ * @date 2024-01-22
  */
 
 #define _GNU_SOURCE
@@ -33,9 +33,9 @@
  * Basic information of tpbench benchmarking sets, init by tpb_init().
  */
 // # of kernels, kernel routines, groups and group routines
-int nkern, nkrout, ngrp, ngrout;
+extern int nkern, nkrout, ngrp, ngrout;
 // granularity and tick of timer.
-uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
+// uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
 
 
 /**

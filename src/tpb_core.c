@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * kernels.c
  * Description: Main entry of benchmarking kernels.
  * Author: Key Liao
- * Modified: May. 9th, 2020
+ * Modified: Mar. 9th, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
@@ -29,6 +29,13 @@
 #include <stdint.h>
 #include "tpb_core.h"
 #include "tpio.h"
+
+
+/**
+ * Basic information of tpbench benchmarking sets, init by tpb_init().
+ */
+// # of kernels, kernel routines, groups and group routines
+int nkern, nkrout, ngrp, ngrout;
 
 /**
  * @brief set number of kernels, groups, kernel routines, and grou routines.

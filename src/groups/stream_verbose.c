@@ -2,7 +2,7 @@
   * =================================================================================
   * TPBench - A high-precision throughputs benchmarking tool for HPC
   * 
-  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+  * Copyright (C) 2024 Key Liao (Liao Qiucheng)
   * 
   * This program is free software: you can redistribute it and/or modify it under the
   *  terms of the GNU General Public License as published by the Free Software 
@@ -20,7 +20,7 @@
   * @version 0.3
   * @brief   A STREAM benchmark to collect performance of each core.
   * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
-  * @date 2020-05-30
+  * @date 2024-01-30
   */
 
 #define _GNU_SOURCE
@@ -147,11 +147,12 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     // skip some tests in the front 
     int nskip = 10, freq=1;
     uint64_t nitem, snitem;
-    MPI_Status stat;
     snitem = ntest - nskip;
     if(ntest <= 10) {
         nskip = 0;
     }
+#ifdef USE_MPI
+    MPI_Status stat;
     if(tpmpi_info.myrank == 0) {
         uint64_t *all_ns, *all_cy;
         size_t bpi[] = {80, 16, 16, 24, 24};
@@ -191,21 +192,15 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
             MPI_Send(epoch_cy, snitem, MPI_UINT64_T, 0, 102, MPI_COMM_WORLD);
         }
     }
+#else
+    size_t bpi[] = {80, 16, 16, 24, 24};
+    for (int eid = 0; eid < 5; eid ++) {
+        dpipe_g0(ns, cy, eid, nskip, ntest, freq, bpi[eid], narr);
+    }
+
+#endif
     
-    // printf("STREAM Overall performance\n");
-    // dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
-    // 
-    // printf("STREAM-Copy performance\n");
-    // dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
-    // 
-    // printf("STREAM-Scale performance\n");
-    // dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
-    // 
-    // printf("STREAM-Add performance\n");
-    // dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
-    // 
-    // printf("STREAM-Triad performance\n");
-    // dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
+
 
 
     return 0;

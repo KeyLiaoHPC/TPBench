@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * @version 0.3
  * @brief factory of benchmarking data
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2020-05-27
+ * @date 2024-01-27
  */
 #include <stdlib.h>
 #include "tpdata.h"
@@ -27,7 +27,6 @@
 #include "tpio.h"
 #include "stdio.h"
 
-#define  OVL_QUANT_HEADER "        MEAN        MIN         1/4         1/2         3/4         MAX\n"
 
 int qsort_ascend(const void * a, const void * b) {
     if( *(double *)a < *(double *)b ) {
@@ -40,7 +39,7 @@ int qsort_ascend(const void * a, const void * b) {
 // calculate mean, min, max, quantile in a n-item 1d fp64 array
 int
 calc_quant(double *data, int nitem, __ovl_t *res) {
-    int i25, i50, i75;
+    int i05, i25, i50, i75, i95;
     size_t ndata;
     double sum = 0;
     double ovl_byte, mind, maxd, meand, d25, d50, d75;
@@ -51,15 +50,19 @@ calc_quant(double *data, int nitem, __ovl_t *res) {
     }
     qsort((void *)data, nitem, sizeof(double), qsort_ascend);
 
+    i05 = 0.05 * nitem;
     i25 = 0.25 * nitem;
-    i50 = 0.50 * nitem;
+    i50 = 0.5 * nitem;
     i75 = 0.75 * nitem;
-    res->mintp = data[0];
-    res->maxtp = data[nitem-1];
+    i95 = 0.95 * nitem;
     res->meantp = sum / nitem;
+    res->min = data[0];
+    res->tp05 = data[i05];
     res->tp25 = data[i25];
     res->tp50 = data[i50];
     res->tp75 = data[i75];
+    res->tp95 = data[i95];
+    res->max = data[nitem - 1];
 
     return 0;
 }
@@ -99,11 +102,11 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
     // MB/s
     calc_rate_quant(&ns[nskip], ntest - nskip, niter * bpi, 1e3, &res);
     tpprintf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+           res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
     // Byte/cy
     calc_rate_quant(&cy[nskip], ntest - nskip, niter * bpi, 1, &res);
     tpprintf(0, 0, 0, "B/c     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-           res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+           res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
     if(freq) {
         double *freqs =  (double *)malloc(sizeof(double) * ntest);
         for(int i = nskip; i < ntest; i ++) {
@@ -112,7 +115,7 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
         }
         calc_quant(&freqs[nskip], ntest - nskip, &res);
         tpprintf(0, 0, 0, "GHz     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-               res.meantp, res.mintp, res.tp25, res.tp50, res.tp75, res.maxtp);
+               res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
         free(freqs);
     }
 
@@ -120,7 +123,7 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
 }
 
 int
-dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t nsize) {
+dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
     uint64_t kern_ns[ntest], kern_cy[ntest];
     for(int i = 0; i < ntest; i ++) {
         kern_ns[i] = ns[i][eid];
@@ -128,7 +131,7 @@ dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, 
         // printf("%llu, %llu\n", kern_ns[i], kern_cy[i]);
     }
 
-    dpipe_k0(kern_ns, kern_cy, nskip, ntest, freq, bpi, nsize);
+    dpipe_k0(kern_ns, kern_cy, nskip, ntest, freq, bpi, niter);
 
     return 0;
 }

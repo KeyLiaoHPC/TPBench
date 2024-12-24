@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * @version 0.3
  * @brief Header for tpbench command line parser 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2020-05-22
+ * @date 2024-01-22
  */
 
 #define _GNU_SOURCE
@@ -51,7 +51,7 @@ static struct argp_option options[] = {
     {"group",       'g',    "group_list",   0, 
         "Group list. (e.g. -g g1_kernel,g2_kernel)."},
     {"kernel",      'k',    "kernel_list",  0,
-        "Kernel list.(e.g. -k init,sum). "},
+        "Kernel list.(e.g. -k d_init,d_sum). "},
     {"list",        'L',    0,              0,
         "List all group and kernels then exit." },
     {"data_dir",    'd',    "PATH",         OPTION_ARG_OPTIONAL,

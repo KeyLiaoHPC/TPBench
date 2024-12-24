@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * init.c
  * Description: init
  * Author: Key Liao
- * Modified: May. 21st, 2020
+ * Modified: Mar. 21, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
@@ -32,14 +32,33 @@
 #include "tpdata.h"
 #include "tpmpi.h"
 
+#ifdef KP_SVE
+#include "arm_sve.h"
+#endif
+
+#if defined(AVX512) || defined(AVX2)
+#include <immintrin.h>
+#endif
+
 int
 d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     int nsize, err;
     volatile double *a;
     register double s = 0.99;
 
+#ifdef KP_SVE
+    svfloat64_t tmp;
+    uint64_t vec_len = svlen_f64(tmp);
+#endif 
+
     nsize = kib * 1024 / sizeof(double);
-    a = (double *)malloc(sizeof(double) * nsize);
+#ifdef AVX512
+    nsize = ((nsize + 7) / 8) * 8;
+#elif defined(AVX2)
+    nsize = ((nsize + 3) / 4) * 4;
+#endif
+
+    a = (double *)aligned_alloc(64, sizeof(double) * nsize);
     if(a == NULL) {
         return MALLOC_FAIL;
     }
@@ -50,9 +69,31 @@ d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     __getns(wts, wns1);
     wns0 = wns1 + 1e9;
     while(wns1 < wns0) {
+#ifdef KP_SVE
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+            svfloat64_t vec = svdup_f64(s);
+            svst1_f64(predicate, a + j, vec);
+        }
+#elif defined(AVX512)
+        __m512d v_s = _mm512_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 8) {
+            _mm512_store_pd(a + j, v_s);
+        }
+#elif defined(AVX2)
+        __m256d v_s = _mm256_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 4) {
+            _mm256_store_pd(a + j, v_s);
+        }
+#else
+        #pragma omp parallel for shared(a,s,nsize)
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
+#endif
         __getns(wts, wns1);
     }
 
@@ -64,9 +105,31 @@ d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
+#ifdef KP_SVE
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+            svfloat64_t vec = svdup_f64(s);
+            svst1_f64(predicate, a + j, vec);
+        }
+#elif defined(AVX512)
+        __m512d v_s = _mm512_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 8) {
+            _mm512_store_pd(a + j, v_s);
+        }
+#elif defined(AVX2)
+        __m256d v_s = _mm256_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 4) {
+            _mm256_store_pd(a + j, v_s);
+        }
+#else
+        #pragma omp parallel for shared(a,s,nsize)
         for(int j = 0; j < nsize; j ++){
             a[j] = s;
         }
+#endif
         __getcy_1d_en(i);
         __getns_1d_en(i);
     }

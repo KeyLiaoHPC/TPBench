@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A throughputs benchmarking tool for high-performance computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,15 +19,18 @@
  * @version 0.3
  * @brief Header for tpbench data processor 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2020-05-26
+ * @date 2024-01-26
  */
 
 
 #include <stdint.h>
 
 typedef struct __stat_result {
-    double mintp, maxtp, meantp, tp25, tp50, tp75;
+    double meantp, min, tp05, tp25, tp50, tp75, tp95, max;
 } __ovl_t;
+
+#define  OVL_QUANT_HEADER "        MEAN        MIN        0.05        0.25         0.50         0.75         0.95        MAX\n"
+#define  MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /**
  * @brief 
@@ -85,4 +88,4 @@ int dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t 
  * @param nsize 
  * @return int 
  */
-int dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t nsize);
+int dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter);
