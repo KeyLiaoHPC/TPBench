@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * tpgroups.h
  * Description: Kernel informations.
  * Author: Key Liao
- * Modified: May. 9th, 2020
+ * Modified: Mar. 9th, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
@@ -44,8 +44,10 @@ typedef struct {
 
 // Group declaration
 int d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib);
-
 int d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t kib);
+int d_gemm_bcast(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t matrix_size);
+int d_gemm_allreduce(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t matrix_size);
+int d_jacobi2d5p_sendrecv(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t matrix_size);
 
 // Group info list
 static __grp_info_t grp_info[] = {
@@ -55,6 +57,18 @@ static __grp_info_t grp_info[] = {
     {"stream_verbose",  "d_stream_verbose", 1,  4,     d_stream_verbose,
      "FP64 Verbose STREAM Bemchmark.",
      "copy,scale,add,triad"},
+     {"gemm_bcast", "d_gemm_bcast", 2, 2, d_gemm_bcast,
+     "DGEMM+Bcast Benchmark",
+     "DGEMM,Bcast",
+     },
+    {"gemm_allreduce", "d_gemm_allreduce", 3, 2, d_gemm_allreduce,
+     "DGEMM+Allreduce Benchmark",
+     "DGEMM,Allreduce",
+     },
+    {"jacobi2d5p_sendrecv", "d_jacobi2d5p_sendrecv", 4, 2, d_jacobi2d5p_sendrecv,
+     "jacobi2d5p+Sendrecv Benchmark",
+     "jacobi2d5p,Sendrecv",
+     }
 };
 
 #endif // #ifndef _TPGROUPS_H

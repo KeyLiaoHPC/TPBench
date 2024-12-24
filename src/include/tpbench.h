@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * tpbench.c
  * Description: Heraders for TPBench.
  * Author: Key Liao
- * Modified: May. 29th, 2020
+ * Modified: Mar. 19, 2024
  * Email: keyliao@sjtu.edu.cn
  * =================================================================================
  */

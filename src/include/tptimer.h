@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * tptimer.h
  * Description: Timer
  * Author: Key Liao
- * Modified: May. 21st, 2020
+ * Modified: Mar. 21, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  *
@@ -158,7 +158,7 @@
 #define __getns(_ts, _ns)   clock_gettime(CLOCK_MONOTONIC, &(_ts));     \
                             (_ns) = (_ts).tv_sec * 1e9 + (_ts).tv_nsec;
 
-#define __getns_st_t            clock_gettime(CLOCK_MONOTONIC, &ts1);   
+#define __getns_st_t            clock_gettime(CLOCK_MONOTONIC, &ts1);  
 #define __getns_1d_st(rid)      __getns_st_t; \
                                 ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec;
 #define __getns_2d_st(rid, eid) __getns_st_t; \

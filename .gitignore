@@ -7,9 +7,14 @@
 *.csv
 *.swp
 .vscode
+.DS_Store
+*.o.cmd
+*.mod
 ./*.sh
 .vscode/
 data/
 bin/
 lib/
 include/
+pmu/*.cmd
+pmu/.tmp_versions

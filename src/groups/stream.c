@@ -2,7 +2,7 @@
   * =================================================================================
   * TPBench - A high-precision throughputs benchmarking tool for HPC
   * 
-  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+  * Copyright (C) 2024 Key Liao (Liao Qiucheng)
   * 
   * This program is free software: you can redistribute it and/or modify it under the
   *  terms of the GNU General Public License as published by the Free Software 
@@ -20,7 +20,7 @@
   * @version 0.3
   * @brief   A TPBench-port John McCalpin's STREAM benchmark (mpi version v1.8). 
   * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
-  * @date 2020-05-30
+  * @date 2024-01-30
   */
 
 #define _GNU_SOURCE

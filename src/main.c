@@ -2,7 +2,7 @@
   * =================================================================================
   * TPBench - A high-precision throughputs benchmarking tool for HPC
   * 
-  * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+  * Copyright (C) 2024 Key Liao (Liao Qiucheng)
   * 
   * This program is free software: you can redistribute it and/or modify it under the
   *  terms of the GNU General Public License as published by the Free Software 
@@ -20,12 +20,12 @@
   * @version 0.3
   * @brief   main entry for tpbench
   * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
-  * @date 2020-05-22
+  * @date 2024-01-22
   */
 
 
 #define _GNU_SOURCE
-#define VER "0.3"
+#define VER "0.61"
 
 #include <stdlib.h>
 #include <unistd.h>
@@ -39,6 +39,8 @@
 #ifdef USE_MPI
 #include "mpi.h"
 #endif
+
+struct tpmpi_info_t tpmpi_info;
 
 int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, __res_t *res);
 

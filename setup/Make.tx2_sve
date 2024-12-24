@@ -1,0 +1,3 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-O3 -DUSE_MPI -fno-builtin -march=armv8-a+sve -mtune=native -DKP_SVE -Wno-discarded-qualifiers -Wno-incompatible-pointer-types

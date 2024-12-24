@@ -2,7 +2,7 @@
  * =================================================================================
  * TPBench - A high-precision throughputs benchmarking tool for scientific computing
  * 
- * Copyright (C) 2020 Key Liao (Liao Qiucheng)
+ * Copyright (C) 2024 Key Liao (Liao Qiucheng)
  * 
  * This program is free software: you can redistribute it and/or modify it under the
  *  terms of the GNU General Public License as published by the Free Software 
@@ -19,7 +19,7 @@
  * update.c
  * Description: a[i] = s * a[i];
  * Author: Key Liao
- * Modified: May. 21st, 2020
+ * Modified: Mar. 21, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
@@ -32,7 +32,15 @@
 #include "tpdata.h"
 #include "tpmpi.h"
 
-#define MALLOC(_A, _NSIZE)  (_A) = (double *)malloc(sizeof(double) * _NSIZE);   \
+#ifdef KP_SVE
+#include "arm_sve.h"
+#endif
+
+#if defined(AVX512) || defined(AVX2)
+#include <immintrin.h>
+#endif
+
+#define MALLOC(_A, _NSIZE)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NSIZE);   \
                             if((_A) == NULL) {                                  \
                                 return  MALLOC_FAIL;                            \
                             }
@@ -43,11 +51,22 @@ d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     volatile double *a, *b;
     register double s = 0.9999;
 
+#ifdef KP_SVE
+    svfloat64_t tmp;
+    uint64_t vec_len = svlen_f64(tmp);
+#endif 
+
     nsize = kib * 1024 / sizeof(double);
     MALLOC(a, nsize);
     for(int i = 0; i < nsize; i ++) {
         a[i] = s;
     }
+
+#ifdef AVX512
+    nsize = ((nsize + 7) / 8) * 8;
+#elif defined(AVX2)
+    nsize = ((nsize + 3) / 4) * 4;
+#endif
 
     // kernel warm
     struct timespec wts;
@@ -55,9 +74,36 @@ d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     __getns(wts, wns1);
     wns0 = wns1 + 1e9;
     while(wns1 < wns0) {
+#ifdef KP_SVE
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+            svfloat64_t vec_a = svld1_f64(predicate, a + j);
+            vec_a = svmul_n_f64_z(predicate, vec_a, s);
+            svst1_f64(predicate, a + j, vec_a);
+        }
+#elif defined(AVX512)
+        __m512d v_s = _mm512_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 8) {
+            __m512d v_a = _mm512_load_pd(a + j);
+            v_a = _mm512_mul_pd(v_a, v_s);
+            _mm512_store_pd(a + j, v_a);
+        }
+#elif defined(AVX2)
+        __m256d v_s = _mm256_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 4) {
+            __m256d v_a = _mm256_load_pd(a + j);
+            v_a = _mm256_mul_pd(v_a, v_s);
+            _mm256_store_pd(a + j, v_a);
+        }
+#else
+        #pragma omp parallel for shared(a, s, nsize)
         for(int j = 0; j < nsize; j ++){
             a[j] = s * a[j];
         }
+#endif
         __getns(wts, wns1);
     }
 
@@ -69,9 +115,36 @@ d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         tpmpi_dbarrier();
         __getns_1d_st(i);
         __getcy_1d_st(i);
+#ifdef KP_SVE
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+            svfloat64_t vec_a = svld1_f64(predicate, a + j);
+            vec_a = svmul_n_f64_z(predicate, vec_a, s);
+            svst1_f64(predicate, a + j, vec_a);
+        }
+#elif defined(AVX512)
+        __m512d v_s = _mm512_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 8) {
+            __m512d v_a = _mm512_load_pd(a + j);
+            v_a = _mm512_mul_pd(v_a, v_s);
+            _mm512_store_pd(a + j, v_a);
+        }
+#elif defined(AVX2)
+        __m256d v_s = _mm256_set1_pd(s);
+        #pragma omp parallel for shared(a, s, nsize)
+        for (int j = 0; j < nsize; j += 4) {
+            __m256d v_a = _mm256_load_pd(a + j);
+            v_a = _mm256_mul_pd(v_a, v_s);
+            _mm256_store_pd(a + j, v_a);
+        }
+#else
+        #pragma omp parallel for shared(a, s, nsize)
         for(int j = 0; j < nsize; j ++){
             a[j] = s * a[j];
         }
+#endif
         __getcy_1d_en(i);
         __getns_1d_en(i);
     }

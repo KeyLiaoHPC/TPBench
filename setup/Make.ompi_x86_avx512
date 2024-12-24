@@ -1,0 +1,3 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-DUSE_MPI -O3 -fno-builtin -march=native -DAVX512 -Wno-discarded-qualifiers -Wno-incompatible-pointer-types
