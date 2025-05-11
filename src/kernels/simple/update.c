@@ -19,7 +19,7 @@
  * update.c
  * Description: a[i] = s * a[i];
  * Author: Key Liao
- * Modified: Mar. 21, 2024
+ * Modified: May. 21st, 2024
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */

@@ -17,7 +17,7 @@
   * =================================================================================
   * 
   * @file main.c
-  * @version 0.3
+  * @version 0.71
   * @brief   main entry for tpbench
   * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
   * @date 2024-01-22
@@ -25,7 +25,7 @@
 
 
 #define _GNU_SOURCE
-#define VER "0.61"
+#define VER "0.71"
 
 #include <stdlib.h>
 #include <unistd.h>

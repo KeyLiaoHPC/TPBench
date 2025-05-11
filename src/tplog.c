@@ -57,7 +57,7 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
     int offset = 0;
     offset += sprintf(&buf[offset], HLINE);
     offset += sprintf(&buf[offset], "rank %3d ", tpmpi_info.myrank);
-    offset += sprintf(&buf[offset], OVL_QUANT_HEADER);
+    offset += sprintf(&buf[offset], OVL_QUANT_HEADER_EXT);
 
     if (!skip_comp) {
         calc_rate_quant(&nst[0 * ntest + nskip], ntest - nskip, 2.0*N*N*N, 1, &res);

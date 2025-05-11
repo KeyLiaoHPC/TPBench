@@ -29,7 +29,9 @@ typedef struct __stat_result {
     double meantp, min, tp05, tp25, tp50, tp75, tp95, max;
 } __ovl_t;
 
-#define  OVL_QUANT_HEADER "        MEAN        MIN        0.05        0.25         0.50         0.75         0.95        MAX\n"
+#define  OVL_QUANT_HEADER_EXT "        MEAN        MIN        0.05        0.25         0.50         0.75         0.95        MAX\n"
+#define  OVL_QUANT_HEADER "        MEAN        0.05        0.25         0.50         0.75         0.95\n"
+
 #define  MIN(a, b) ((a) < (b) ? (a) : (b))
 
 /**

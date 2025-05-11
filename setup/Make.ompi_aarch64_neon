@@ -1,0 +1,3 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-DUSE_MPI -O3 -march=armv8-a+simd -fno-builtin -mtune=native

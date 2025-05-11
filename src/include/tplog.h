@@ -16,16 +16,16 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * 
  * =================================================================================
- * tpbench.c
- * Description: Heraders for TPBench.
+ * tpgroups.h
+ * Description: Kernel informations.
  * Author: Key Liao
- * Modified: May. 29th, 2024
- * Email: keyliao@sjtu.edu.cn
+ * Modified: May. 9th, 2024
+ * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
 #include <stdint.h>
-#include "tpb_core.h"
-#include "cli_parser.h"
-#include "tpio.h"
-#include "tpmpi.h"
+#include <stdarg.h>
 
+
+int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, int nskip, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);
+void log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);

@@ -30,11 +30,17 @@
 #include "tpio.h"
 
 #ifdef __aarch64__
-#include <arm_sve.h>
+
+#ifdef KP_SVE
+#include "arm_sve.h"
+#else
+#include "arm_neon.h"
 #endif
 
-#ifdef __x86_64__
+#elif defined __x86_64__
+
 #include <immintrin.h>
+
 #endif
 
 #define DUP_2(x) x x
@@ -74,7 +80,8 @@ static void free_kernel_data() {
 
 #ifdef __aarch64__
 #ifdef KP_SVE
-const char *SIMD_NAME = "SVE-512";
+int simd_width = 1;
+const char *SIMD_NAME = "SVE";
 #define INIT_REGISTERS  \
     z1 = svdup_f64(1.23); \
     z2 = svdup_f64(1.23); \
@@ -95,36 +102,36 @@ const char *SIMD_NAME = "SVE-512";
 
 
 #if defined(FL_RATIO_F1L4)
-static const double operation_intensity=0.25 / 4;
-static const size_t flops_per_cache_line=16 / 4;
+static const double operation_intensity=0.25 / 4; // 2 * simd_width / (4 * simd_width * 8)
+static const size_t flops_per_cache_line=16 / 4;  // 2 * simd_width / (4 * simd_width / 8)
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 128) {
+        for (int i = 0; i < nsize; i += 16 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
-            z1 = svld1_f64(predicate, &a[i + 8]);
-            z2 = svld1_f64(predicate, &a[i + 16]);
-            z3 = svld1_f64(predicate, &a[i + 24]);
+            z1 = svld1_f64(predicate, &a[i + simd_width]);
+            z2 = svld1_f64(predicate, &a[i + 2 * simd_width]);
+            z3 = svld1_f64(predicate, &a[i + 3 * simd_width]);
             z4 = svmad_f64_x(predicate, z4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 32]);
-            z5 = svld1_f64(predicate, &a[i + 40]);
-            z6 = svld1_f64(predicate, &a[i + 48]);
-            z7 = svld1_f64(predicate, &a[i + 56]);
+            z0 = svld1_f64(predicate, &a[i + 4 * simd_width]);
+            z5 = svld1_f64(predicate, &a[i + 5 * simd_width]);
+            z6 = svld1_f64(predicate, &a[i + 6 * simd_width]);
+            z7 = svld1_f64(predicate, &a[i + 7 * simd_width]);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 64]);
-            w1 = svld1_f64(predicate, &a[i + 72]);
-            w2 = svld1_f64(predicate, &a[i + 80]);
-            w3 = svld1_f64(predicate, &a[i + 8 * 11]);
+            z0 = svld1_f64(predicate, &a[i + 8 * simd_width]);
+            w1 = svld1_f64(predicate, &a[i + 9 * simd_width]);
+            w2 = svld1_f64(predicate, &a[i + 10 * simd_width]);
+            w3 = svld1_f64(predicate, &a[i + 11 * simd_width]);
             w4 = svmad_f64_x(predicate, w4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 12]);
-            w5 = svld1_f64(predicate, &a[i + 8 * 13]);
-            w6 = svld1_f64(predicate, &a[i + 8 * 14]);
-            w7 = svld1_f64(predicate, &a[i + 8 * 15]);
+            z0 = svld1_f64(predicate, &a[i + 12 * simd_width]);
+            w5 = svld1_f64(predicate, &a[i + 13 * simd_width]);
+            w6 = svld1_f64(predicate, &a[i + 14 * simd_width]);
+            w7 = svld1_f64(predicate, &a[i + 15 * simd_width]);
             w8 = svmad_f64_x(predicate, w8, z0, z0);
             asm volatile (
                 "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
@@ -139,37 +146,37 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.25 / 2;
 static const size_t flops_per_cache_line=16 / 2;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 128) {
+        for (int i = 0; i < nsize; i += 16 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
-            z1 = svld1_f64(predicate, &a[i + 8]);
+            z1 = svld1_f64(predicate, &a[i + 1 * simd_width]);
             z2 = svmad_f64_x(predicate, z2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 16]);
-            z3 = svld1_f64(predicate, &a[i + 24]);
+            z0 = svld1_f64(predicate, &a[i + 2 * simd_width]);
+            z3 = svld1_f64(predicate, &a[i + 3 * simd_width]);
             z4 = svmad_f64_x(predicate, z4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 32]);
-            z5 = svld1_f64(predicate, &a[i + 40]);
+            z0 = svld1_f64(predicate, &a[i + 4 * simd_width]);
+            z5 = svld1_f64(predicate, &a[i + 5 * simd_width]);
             z6 = svmad_f64_x(predicate, z6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 48]);
-            z7 = svld1_f64(predicate, &a[i + 56]);
+            z0 = svld1_f64(predicate, &a[i + 6 * simd_width]);
+            z7 = svld1_f64(predicate, &a[i + 7 * simd_width]);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 64]);
-            w1 = svld1_f64(predicate, &a[i + 72]);
+            z0 = svld1_f64(predicate, &a[i + 8 * simd_width]);
+            w1 = svld1_f64(predicate, &a[i + 9 * simd_width]);
             w2 = svmad_f64_x(predicate, w2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 80]);
-            w3 = svld1_f64(predicate, &a[i + 8 * 11]);
+            z0 = svld1_f64(predicate, &a[i + 10 * simd_width]);
+            w3 = svld1_f64(predicate, &a[i + 11 * simd_width]);
             w4 = svmad_f64_x(predicate, w4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 12]);
-            w5 = svld1_f64(predicate, &a[i + 8 * 13]);
+            z0 = svld1_f64(predicate, &a[i + 12 * simd_width]);
+            w5 = svld1_f64(predicate, &a[i + 13 * simd_width]);
             w6 = svmad_f64_x(predicate, w6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 14]);
-            w7 = svld1_f64(predicate, &a[i + 8 * 15]);
+            z0 = svld1_f64(predicate, &a[i + 14 * simd_width]);
+            w7 = svld1_f64(predicate, &a[i + 15 * simd_width]);
             w8 = svmad_f64_x(predicate, w8, z0, z0);
             asm volatile (
                 "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
@@ -184,45 +191,45 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.25;
 static const size_t flops_per_cache_line=16;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 128) {
+        for (int i = 0; i < nsize; i += 16 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
             z1 = svmad_f64_x(predicate, z1, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8]);
+            z0 = svld1_f64(predicate, &a[i + simd_width]);
             z2 = svmad_f64_x(predicate, z2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 16]);
+            z0 = svld1_f64(predicate, &a[i + 2 * simd_width]);
             z3 = svmad_f64_x(predicate, z3, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 24]);
+            z0 = svld1_f64(predicate, &a[i + 3 * simd_width]);
             z4 = svmad_f64_x(predicate, z4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 32]);
+            z0 = svld1_f64(predicate, &a[i + 4 * simd_width]);
             z5 = svmad_f64_x(predicate, z5, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 40]);
+            z0 = svld1_f64(predicate, &a[i + 5 * simd_width]);
             z6 = svmad_f64_x(predicate, z6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 48]);
+            z0 = svld1_f64(predicate, &a[i + 6 * simd_width]);
             z7 = svmad_f64_x(predicate, z7, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 56]);
+            z0 = svld1_f64(predicate, &a[i + 7 * simd_width]);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 64]);
+            z0 = svld1_f64(predicate, &a[i + 8 * simd_width]);
             w1 = svmad_f64_x(predicate, w1, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 72]);
+            z0 = svld1_f64(predicate, &a[i + 9 * simd_width]);
             w2 = svmad_f64_x(predicate, w2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 80]);
+            z0 = svld1_f64(predicate, &a[i + 10 * simd_width]);
             w3 = svmad_f64_x(predicate, w3, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 11]);
+            z0 = svld1_f64(predicate, &a[i + 11 * simd_width]);
             w4 = svmad_f64_x(predicate, w4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 12]);
+            z0 = svld1_f64(predicate, &a[i + 12 * simd_width]);
             w5 = svmad_f64_x(predicate, w5, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 13]);
+            z0 = svld1_f64(predicate, &a[i + 13  * simd_width]);
             w6 = svmad_f64_x(predicate, w6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 14]);
+            z0 = svld1_f64(predicate, &a[i + 14  * simd_width]);
             w7 = svmad_f64_x(predicate, w7, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8 * 15]);
+            z0 = svld1_f64(predicate, &a[i + 15  * simd_width]);
             w8 = svmad_f64_x(predicate, w8, z0, z0);
             asm volatile (
                 "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
@@ -237,36 +244,36 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.5;
 static const size_t flops_per_cache_line=32;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 64) {
+        for (int i = 0; i < nsize; i += 8 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
             z1 = svmad_f64_x(predicate, z1, z0, z0);
             z2 = svmad_f64_x(predicate, z2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8]);
+            z0 = svld1_f64(predicate, &a[i + simd_width]);
             z3 = svmad_f64_x(predicate, z3, z0, z0);
             z4 = svmad_f64_x(predicate, z4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 16]);
+            z0 = svld1_f64(predicate, &a[i + 2 * simd_width]);
             z5 = svmad_f64_x(predicate, z5, z0, z0);
             z6 = svmad_f64_x(predicate, z6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 24]);
+            z0 = svld1_f64(predicate, &a[i + 3 * simd_width]);
             z7 = svmad_f64_x(predicate, z7, z0, z0);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 32]);
+            z0 = svld1_f64(predicate, &a[i + 4 * simd_width]);
             w1 = svmad_f64_x(predicate, w1, z0, z0);
             w2 = svmad_f64_x(predicate, w2, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 40]);
+            z0 = svld1_f64(predicate, &a[i + 5 * simd_width]);
             w3 = svmad_f64_x(predicate, w3, z0, z0);
             w4 = svmad_f64_x(predicate, w4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 48]);
+            z0 = svld1_f64(predicate, &a[i + 6 * simd_width]);
             w5 = svmad_f64_x(predicate, w5, z0, z0);
             w6 = svmad_f64_x(predicate, w6, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 56]);
+            z0 = svld1_f64(predicate, &a[i + 7 * simd_width]);
             w7 = svmad_f64_x(predicate, w7, z0, z0);
             w8 = svmad_f64_x(predicate, w8, z0, z0);
             asm volatile (
@@ -282,30 +289,30 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=1;
 static const size_t flops_per_cache_line=64;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 32) {
+        for (int i = 0; i < nsize; i += 4 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
             z1 = svmad_f64_x(predicate, z1, z0, z0);
             z2 = svmad_f64_x(predicate, z2, z0, z0);
             z3 = svmad_f64_x(predicate, z3, z0, z0);
             z4 = svmad_f64_x(predicate, z4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8]);
+            z0 = svld1_f64(predicate, &a[i + simd_width]);
             z5 = svmad_f64_x(predicate, z5, z0, z0);
             z6 = svmad_f64_x(predicate, z6, z0, z0);
             z7 = svmad_f64_x(predicate, z7, z0, z0);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 16]);
+            z0 = svld1_f64(predicate, &a[i + 2 * simd_width]);
             w1 = svmad_f64_x(predicate, w1, z0, z0);
             w2 = svmad_f64_x(predicate, w2, z0, z0);
             w3 = svmad_f64_x(predicate, w3, z0, z0);
             w4 = svmad_f64_x(predicate, w4, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 24]);
+            z0 = svld1_f64(predicate, &a[i + 3 * simd_width]);
             w5 = svmad_f64_x(predicate, w5, z0, z0);
             w6 = svmad_f64_x(predicate, w6, z0, z0);
             w7 = svmad_f64_x(predicate, w7, z0, z0);
@@ -323,14 +330,14 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=2;
 static const size_t flops_per_cache_line=128;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     svfloat64_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
                 w1, w2, w3, w4, w5, w6, w7, w8;
 
     INIT_REGISTERS
     
     for (int r = 0; r < repeat; r++) {
-        for (int i = 0; i < nsize; i += 16) {
+        for (int i = 0; i < nsize; i += 2 * simd_width) {
             z0 = svld1_f64(predicate, &a[i]);
             z1 = svmad_f64_x(predicate, z1, z0, z0);
             z2 = svmad_f64_x(predicate, z2, z0, z0);
@@ -340,7 +347,7 @@ static void run_kernel_once(int nsize) {
             z6 = svmad_f64_x(predicate, z6, z0, z0);
             z7 = svmad_f64_x(predicate, z7, z0, z0);
             z8 = svmad_f64_x(predicate, z8, z0, z0);
-            z0 = svld1_f64(predicate, &a[i + 8]);
+            z0 = svld1_f64(predicate, &a[i + simd_width]);
             w1 = svmad_f64_x(predicate, w1, z0, z0);
             w2 = svmad_f64_x(predicate, w2, z0, z0);
             w3 = svmad_f64_x(predicate, w3, z0, z0);
@@ -360,12 +367,316 @@ static void run_kernel_once(int nsize) {
 }
 #endif
 #else // #ifdef KP_SVE
-const char *SIMD_NAME = "Invaild";
-static const double operation_intensity=0;
-static const size_t flops_per_cache_line=0;
+const char *SIMD_NAME = "NEON";
+#define INIT_REGISTERS  \
+    z1 = vdupq_n_f64(1.23); \
+    z2 = vdupq_n_f64(1.23); \
+    z3 = vdupq_n_f64(1.23); \
+    z4 = vdupq_n_f64(1.23); \
+    z5 = vdupq_n_f64(1.23); \
+    z6 = vdupq_n_f64(1.23); \
+    z7 = vdupq_n_f64(1.23); \
+    z8 = vdupq_n_f64(1.23); \
+    w1 = vdupq_n_f64(1.23); \
+    w2 = vdupq_n_f64(1.23); \
+    w3 = vdupq_n_f64(1.23); \
+    w4 = vdupq_n_f64(1.23); \
+    w5 = vdupq_n_f64(1.23); \
+    w6 = vdupq_n_f64(1.23); \
+    w7 = vdupq_n_f64(1.23); \
+    w8 = vdupq_n_f64(1.23);
+
+#if defined(FL_RATIO_F1L4)
+static const double operation_intensity=0.25 / 4;
+static const size_t flops_per_cache_line=16 / 4;
 static void run_kernel_once(int nsize) {
-    tpprintf(0, 0, 0, "The fmaldr kernel on ARMv8 without SVE is not implemented.\n");
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
+                w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+    
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 32) { // 处理4x8=32个double元素
+            z0 = vld1q_f64(&a[i]);
+            z1 = vld1q_f64(&a[i + 2]);
+            z2 = vld1q_f64(&a[i + 4]);
+            z3 = vld1q_f64(&a[i + 6]);
+            z4 = vfmaq_f64(z4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 8]);
+            z5 = vld1q_f64(&a[i + 10]);
+            z6 = vld1q_f64(&a[i + 12]);
+            z7 = vld1q_f64(&a[i + 14]);
+            z8 = vfmaq_f64(z8, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 16]);
+            w1 = vld1q_f64(&a[i + 18]);
+            w2 = vld1q_f64(&a[i + 20]);
+            w3 = vld1q_f64(&a[i + 22]);
+            w4 = vfmaq_f64(w4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 24]);
+            w5 = vld1q_f64(&a[i + 26]);
+            w6 = vld1q_f64(&a[i + 28]);
+            w7 = vld1q_f64(&a[i + 30]);
+            w8 = vfmaq_f64(w8, z0, z0);
+
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4),
+                        "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                        "w" (w1), "w" (w2), "w" (w3), "w" (w4),
+                        "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
+} 
+#elif defined(FL_RATIO_F1L2)
+static const double operation_intensity=0.25 / 2;
+static const size_t flops_per_cache_line=16 / 2;
+static void run_kernel_once(int nsize) {
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
+                w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+    
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 32) {
+            z0 = vld1q_f64(&a[i]);
+            z1 = vld1q_f64(&a[i + 2]);
+            z2 = vfmaq_f64(z2, z0, z0);
+            z0 = vld1q_f64(&a[i + 4]);
+            z3 = vld1q_f64(&a[i + 6]);
+            z4 = vfmaq_f64(z4, z0, z0);
+            z0 = vld1q_f64(&a[i + 8]);
+            z5 = vld1q_f64(&a[i + 10]);
+            z6 = vfmaq_f64(z6, z0, z0);
+            z0 = vld1q_f64(&a[i + 12]);
+            z7 = vld1q_f64(&a[i + 14]);
+            z8 = vfmaq_f64(z8, z0, z0);
+
+            z0 = vld1q_f64(&a[i + 16]);
+            w1 = vld1q_f64(&a[i + 18]);
+            w2 = vfmaq_f64(w2, z0, z0);
+            z0 = vld1q_f64(&a[i + 20]);
+            w3 = vld1q_f64(&a[i + 22]);
+            w4 = vfmaq_f64(w4, z0, z0);
+            z0 = vld1q_f64(&a[i + 24]);
+            w5 = vld1q_f64(&a[i + 26]);
+            w6 = vfmaq_f64(w6, z0, z0);
+            z0 = vld1q_f64(&a[i + 28]);
+            w7 = vld1q_f64(&a[i + 30]);
+            w8 = vfmaq_f64(w8, z0, z0);
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
+                         "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                         "w" (w1), "w" (w2), "w" (w3), "w" (w4), 
+                         "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
+} 
+#elif defined(FL_RATIO_F1L1)
+static const double operation_intensity=0.25;
+static const size_t flops_per_cache_line=16;
+static void run_kernel_once(int nsize) {
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8,
+            w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 32) { // NEON每次处理2个double
+            z0 = vld1q_f64(&a[i]);
+            z1 = vfmaq_f64(z1, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 2]);
+            z2 = vfmaq_f64(z2, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 4]);
+            z3 = vfmaq_f64(z3, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 6]);
+            z4 = vfmaq_f64(z4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 8]);
+            z5 = vfmaq_f64(z5, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 10]);
+            z6 = vfmaq_f64(z6, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 12]);
+            z7 = vfmaq_f64(z7, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 14]);
+            z8 = vfmaq_f64(z8, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 16]);
+            w1 = vfmaq_f64(w1, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 18]);
+            w2 = vfmaq_f64(w2, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 20]);
+            w3 = vfmaq_f64(w3, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 22]);
+            w4 = vfmaq_f64(w4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 24]);
+            w5 = vfmaq_f64(w5, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 26]);
+            w6 = vfmaq_f64(w6, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 28]);
+            w7 = vfmaq_f64(w7, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 30]);
+            w8 = vfmaq_f64(w8, z0, z0);
+
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4),
+                        "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                        "w" (w1), "w" (w2), "w" (w3), "w" (w4),
+                        "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
+} 
+#elif defined(FL_RATIO_F2L1)
+static const double operation_intensity=0.5;
+static const size_t flops_per_cache_line=32;
+static void run_kernel_once(int nsize) {
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
+                w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+    
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 16) {
+            z0 = vld1q_f64(&a[i]);
+            z1 = vfmaq_f64(z1, z0, z0);
+            z2 = vfmaq_f64(z2, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 2]);
+            z3 = vfmaq_f64(z3, z0, z0);
+            z4 = vfmaq_f64(z4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 4]);
+            z5 = vfmaq_f64(z5, z0, z0);
+            z6 = vfmaq_f64(z6, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 6]);
+            z7 = vfmaq_f64(z7, z0, z0);
+            z8 = vfmaq_f64(z8, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 8]);
+            w1 = vfmaq_f64(w1, z0, z0);
+            w2 = vfmaq_f64(w2, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 10]);
+            w3 = vfmaq_f64(w3, z0, z0);
+            w4 = vfmaq_f64(w4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 12]);
+            w5 = vfmaq_f64(w5, z0, z0);
+            w6 = vfmaq_f64(w6, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 14]);
+            w7 = vfmaq_f64(w7, z0, z0);
+            w8 = vfmaq_f64(w8, z0, z0);
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
+                         "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                         "w" (w1), "w" (w2), "w" (w3), "w" (w4), 
+                         "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
 }
+#elif defined(FL_RATIO_F4L1)
+static const double operation_intensity=1;
+static const size_t flops_per_cache_line=64;
+static void run_kernel_once(int nsize) {
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
+                w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+    
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 8) {
+            z0 = vld1q_f64(&a[i]);
+            z1 = vfmaq_f64(z1, z0, z0);
+            z2 = vfmaq_f64(z2, z0, z0);
+            z3 = vfmaq_f64(z3, z0, z0);
+            z4 = vfmaq_f64(z4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 2]);
+            z5 = vfmaq_f64(z5, z0, z0);
+            z6 = vfmaq_f64(z6, z0, z0);
+            z7 = vfmaq_f64(z7, z0, z0);
+            z8 = vfmaq_f64(z8, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 4]);
+            w1 = vfmaq_f64(w1, z0, z0);
+            w2 = vfmaq_f64(w2, z0, z0);
+            w3 = vfmaq_f64(w3, z0, z0);
+            w4 = vfmaq_f64(w4, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 6]);
+            w5 = vfmaq_f64(w5, z0, z0);
+            w6 = vfmaq_f64(w6, z0, z0);
+            w7 = vfmaq_f64(w7, z0, z0);
+            w8 = vfmaq_f64(w8, z0, z0);
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
+                         "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                         "w" (w1), "w" (w2), "w" (w3), "w" (w4), 
+                         "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
+}
+#elif defined(FL_RATIO_F8L1)
+static const double operation_intensity=2;
+static const size_t flops_per_cache_line=128;
+static void run_kernel_once(int nsize) {
+    float64x2_t z0, z1, z2, z3, z4, z5, z6, z7, z8, 
+                w1, w2, w3, w4, w5, w6, w7, w8;
+
+    INIT_REGISTERS
+    
+    for (int r = 0; r < repeat; r++) {
+        for (int i = 0; i < nsize; i += 4) {
+            z0 = vld1q_f64(&a[i]);
+            z1 = vfmaq_f64(z1, z0, z0);
+            z2 = vfmaq_f64(z2, z0, z0);
+            z3 = vfmaq_f64(z3, z0, z0);
+            z4 = vfmaq_f64(z4, z0, z0);
+            z5 = vfmaq_f64(z5, z0, z0);
+            z6 = vfmaq_f64(z6, z0, z0);
+            z7 = vfmaq_f64(z7, z0, z0);
+            z8 = vfmaq_f64(z8, z0, z0);
+            
+            z0 = vld1q_f64(&a[i + 2]);
+            w1 = vfmaq_f64(w1, z0, z0);
+            w2 = vfmaq_f64(w2, z0, z0);
+            w3 = vfmaq_f64(w3, z0, z0);
+            w4 = vfmaq_f64(w4, z0, z0);
+            w5 = vfmaq_f64(w5, z0, z0);
+            w6 = vfmaq_f64(w6, z0, z0);
+            w7 = vfmaq_f64(w7, z0, z0);
+            w8 = vfmaq_f64(w8, z0, z0);
+            asm volatile (
+                "\n\t":: "w" (z0), "w" (z1), "w" (z2), "w" (z3), "w" (z4), 
+                         "w" (z5), "w" (z6), "w" (z7), "w" (z8),
+                         "w" (w1), "w" (w2), "w" (w3), "w" (w4), 
+                         "w" (w5), "w" (w6), "w" (w7), "w" (w8):
+            );
+        }
+    }
+}
+#endif
 #endif // #ifdef KP_SVE
 #endif // #ifdef __aarch64__
 
@@ -763,6 +1074,12 @@ d_fmaldr(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     kib = nsize * sizeof(double) / 1024;
     repeat = ((size_t) 1e8) / (nsize / 8) / MAX(1, (operation_intensity / 0.125));
     repeat = MAX(repeat, 1);
+
+#ifdef __aarch64__
+#ifdef KP_SVE
+    simd_width = svcntd();
+#endif
+#endif
 
     tpprintf(0, 0, 0, "SIMD Instr: %s\n", SIMD_NAME);
     tpprintf(0, 0, 0, "Working set size: %dKB.\n", kib);

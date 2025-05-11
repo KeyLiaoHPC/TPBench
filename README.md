@@ -85,6 +85,12 @@ your code with timer in tptimer.h, and put your interface definition and informa
 
 ## 5 - Changelog
 
+### Version 0.71
+- Add support for Arm SVE with any width in kernel `d_fmaldr` and `d_mulldr`
+
+### Version 0.7
+- Add support to Armv8 NEON in kernel `d_fmaldr`
+
 ### Version 0.61
 - Fix the method of timing the total wall time of the GEMM kernels in groups' test.
 

@@ -73,7 +73,8 @@ static void free_kernel_data() {
 
 #ifdef __aarch64__
 #ifdef KP_SVE
-// const char *SIMD_NAME = "SVE-512";
+extern int simd_width;
+// extern const char *SIMD_NAME;
 #if defined(FL_RATIO_F1L4)
 static const double operation_intensity=0.125 / 4;
 static const size_t flops_per_cache_line=8 / 4;
@@ -81,11 +82,11 @@ static void run_kernel_once(int nsize) {
     svbool_t predicate = svwhilelt_b64_s32(0, 8);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 16
-        for (int i = 0; i < nsize; i += 32) {
+        for (int i = 0; i < nsize; i += 4*simd_width) {
             svfloat64_t reg0 = svld1_f64(predicate, &a[i]);
-            svfloat64_t reg1 = svld1_f64(predicate, &a[i + 8]);
-            svfloat64_t reg2 = svld1_f64(predicate, &a[i + 16]);
-            svfloat64_t reg3 = svld1_f64(predicate, &a[i + 32]);
+            svfloat64_t reg1 = svld1_f64(predicate, &a[i + simd_width]);
+            svfloat64_t reg2 = svld1_f64(predicate, &a[i + 2*simd_width]);
+            svfloat64_t reg3 = svld1_f64(predicate, &a[i + 4*simd_width]);
             asm volatile (
                 "fmul z1.d, %[reg0].d, %[reg0].d\n\t"
                 :: [reg0] "w" (reg0), [reg1] "w" (reg1), [reg2] "w" (reg2), [reg3] "w" (reg3)
@@ -101,9 +102,9 @@ static void run_kernel_once(int nsize) {
     svbool_t predicate = svwhilelt_b64_s32(0, 8);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 16) {
+        for (int i = 0; i < nsize; i += 2*simd_width) {
             svfloat64_t reg0 = svld1_f64(predicate, &a[i]);
-            svfloat64_t reg1 = svld1_f64(predicate, &a[i + 8]);
+            svfloat64_t reg1 = svld1_f64(predicate, &a[i + simd_width]);
             asm volatile (
                 "fmul z1.d, %[reg0].d, %[reg1].d\n\t"
                 :: [reg0] "w" (reg0), [reg1] "w" (reg1)
@@ -116,10 +117,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.125;
 static const size_t flops_per_cache_line=8;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 "fmul z1.d, %[reg].d, %[reg].d\n\t"
@@ -133,10 +134,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.25;
 static const size_t flops_per_cache_line=16;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 "fmul z1.d, %[reg].d, %[reg].d\n\t"
@@ -151,10 +152,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=0.5;
 static const size_t flops_per_cache_line=32;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 "fmul z1.d, %[reg].d, %[reg].d\n\t"
@@ -171,10 +172,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=1;
 static const size_t flops_per_cache_line=64;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 DUP_8("fmul z1.d, %[reg].d, %[reg].d\n\t")
@@ -188,10 +189,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=2;
 static const size_t flops_per_cache_line=128;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 DUP_16("fmul z1.d, %[reg].d, %[reg].d\n\t")
@@ -205,10 +206,10 @@ static void run_kernel_once(int nsize) {
 static const double operation_intensity=4;
 static const size_t flops_per_cache_line=256;
 static void run_kernel_once(int nsize) {
-    svbool_t predicate = svwhilelt_b64_s32(0, 8);
+    svbool_t predicate = svwhilelt_b64_s32(0, simd_width);
     for (int r = 0; r < repeat; r++) {
         #pragma GCC unroll 32
-        for (int i = 0; i < nsize; i += 8) {
+        for (int i = 0; i < nsize; i += simd_width) {
             svfloat64_t reg = svld1_f64(predicate, &a[i]);
             asm volatile (
                 DUP_32("fmul z1.d, %[reg].d, %[reg].d\n\t")
@@ -730,6 +731,12 @@ d_mulldr(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     tpprintf(0, 0, 0, "Working set size: %dKB.\n", kib);
     tpprintf(0, 0, 0, "repeat times: %lu.\n", repeat);
     tpprintf(0, 0, 0, "Operation intensity: %f.\n", operation_intensity);
+
+    #ifdef __aarch64__
+    #ifdef KP_SVE
+        simd_width = svcntd();
+    #endif
+    #endif
 
     init_kernel_data(nsize);
 
