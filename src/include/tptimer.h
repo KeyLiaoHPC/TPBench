@@ -19,8 +19,12 @@
  * tptimer.h
  * Description: Timer
  * Author: Key Liao
- * Modified: May. 21st, 2024
+ * Modified: May. 23rd, 2025
  * Email: keyliaohpc@gmail.com
+ * Features in developing and issues to be solved:
+ * 1. Current RDTSC/RDTSCP is not real physical cycle, especially for x86 CPUs which
+ *    have a volatile frequency.
+ * 2. RDTSC/RDTSCP should be considered as getns in high resolution, not getcy.
  * =================================================================================
  *
  */
@@ -29,7 +33,18 @@
 #include <time.h>
 #include <unistd.h>
 
-#ifdef __aarch64__
+#ifdef TPM_NO_CYCLE
+#define __getcy_init
+#define __getcy_grp_init
+#define __getcy_1d_st(rid)
+#define __getcy_2d_st(rid, eid)
+#define __getcy_en_t
+#define __getcy_1d_en(rid)
+#define __getcy_2d_en(rid, eid)
+#define __getcy_grp_st(rid)
+#define __getcy_grp_en(rid)
+
+#elif defined(__aarch64__)
 
 #define PMCR_E      (1 << 0)
 #define PMCR_P      (1 << 1)
@@ -152,6 +167,15 @@
                             cy[(rid)][0] = ((hi2_g << 32) | lo2_g) - ((hi1_g << 32) | lo1_g);
 #endif
 
+#ifdef TPM_NO_NS
+#define __getns_init
+#define __getns_st_t
+#define __getns_1d_st(rid)
+#define __getns_2d_st(rid, eid)
+#define __getns_1d_en(rid)
+#define __getns_2d_en(rid, eid)
+#else
+
 #define __getns_init  struct timespec ts1;               \
                       clock_gettime(CLOCK_MONOTONIC, &ts1);
 
@@ -168,3 +192,4 @@
                                 ns[(rid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)];
 #define __getns_2d_en(rid, eid) clock_gettime(CLOCK_MONOTONIC, &ts1);   \
                                 ns[(rid)][(eid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)][(eid)];
+#endif

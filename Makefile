@@ -14,7 +14,7 @@ VPATH = $(SRC):$(KERNELS):$(KERNELS)/asm:$(KERNELS)/blas1:$(KERNELS)/simple:${KE
 tpbench.x:	main.c tpmpi.c tpb_core.c cli_parser.c tpio.c tpdata.c tplog.c init.c staxpy.c striad.c sum.c triad.c \
 			update.c axpy.c copy.c scale.c cli_parser.c stream.c stream_verbose.c tl_cgw.c jacobi5p.c mulldr.c \
 			fmaldr.c rtriad.c gemm_bcast.c gemm_allreduce.c jacobi2d5p_sendrecv.c
-			$(CC) $(CFLAGS) -I$(INC) -o $@ $^
+			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
 
 test: test.x
 test.x: test.c init.c staxpy.c striad.c sum.c triad.c update.c \

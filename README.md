@@ -31,7 +31,7 @@ $ ./tpbench.x -n 50 -s 65536 -g d_stream
 
 </code>
 
-On Armv8-a (aarch64) platform (e.g. Marvel ThunderX2): 
+On Armv8-a (aarch64) platform: 
 <!-- <code> -->
 $ tar xf TPBench.tar.gz <br>
 $ cd TPBench <br>

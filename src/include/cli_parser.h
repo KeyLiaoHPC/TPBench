@@ -33,6 +33,7 @@
  * @brief tpbench argument struct
  */
 typedef struct {
+    int mode; // [Optional] The flag for socre benchmarking.
     uint64_t ntest; // [Mandatory] Number of tests per job.
     uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
     char kstr[1024], gstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
@@ -56,6 +57,9 @@ static struct argp_option options[] = {
         "List all group and kernels then exit." },
     {"data_dir",    'd',    "PATH",         OPTION_ARG_OPTIONAL,
         "Optional. Data directory."},
+    {"mode",        'm',    "MODE",         0,
+        "Run mode: Supported modes: Manual(Default), BenchScore, BenchCompute, "
+        "BenchMemory, BenchNetwork, BenchIO."},
     { 0 }
 };
 

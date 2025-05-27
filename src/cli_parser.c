@@ -186,29 +186,47 @@ parse_glist(__tp_args_t *tp_args) {
 int
 init_list(__tp_args_t *tp_args) {
     int err;
-    // syntax check
-    if(err = check_count(&(tp_args->nkern), tp_args->kstr)) {
-        return err;
+    // If mode is set, use mode-specific kernel and/or group list.
+    // Otherwise, read kernel and group list from command line.
+    if(tp_args->mode == 1) {
+        // BenchScore mode: including compute/memory/network.
+        // Compute subsystem: fmaldr, mulldr.
+        // Memory subsystem: init, copy, scale, striad.
+        // Network subsystem: MPI_Send/Recv, MPI_Allreduce.
+        
+    } else if(tp_args->mode == 2) {
+        // BenchCompute mode
+    } else if(tp_args->mode == 3) {
+        // BenchMemory mode
+    } else if(tp_args->mode == 4) {
+        // BenchNetwork mode
+    } else if(tp_args->mode == 5) {
+        // BenchIO mode
+    } else {
+        // syntax check
+        if(err = check_count(&(tp_args->nkern), tp_args->kstr)) {
+            return err;
+        }
+        if(err = check_count(&(tp_args->ngrp), tp_args->gstr)) {
+            return err;
+        }
+        tp_args->klist = (int *)malloc(sizeof(int) * tp_args->nkern);
+        tp_args->glist = (int *)malloc(sizeof(int) * tp_args->ngrp);
+        if(tp_args->klist == NULL || tp_args->glist == NULL) {
+            return MALLOC_FAIL;
+        }
+        // parse kstr
+        err = parse_klist(tp_args);
+        if(tp_args->nkern && err) {
+            return err;
+        }
+        // parse gstr
+        err = parse_glist(tp_args);
+        if(tp_args->ngrp && err) {
+            return err;
+        }
+        return NO_ERROR;
     }
-    if(err = check_count(&(tp_args->ngrp), tp_args->gstr)) {
-        return err;
-    }
-    tp_args->klist = (int *)malloc(sizeof(int) * tp_args->nkern);
-    tp_args->glist = (int *)malloc(sizeof(int) * tp_args->ngrp);
-    if(tp_args->klist == NULL || tp_args->glist == NULL) {
-        return MALLOC_FAIL;
-    }
-    // parse kstr
-    err = parse_klist(tp_args);
-    if(tp_args->nkern && err) {
-        return err;
-    }
-    // parse gstr
-    err = parse_glist(tp_args);
-    if(tp_args->ngrp && err) {
-        return err;
-    }
-    return NO_ERROR;
 }
 
 // ============================================================================
@@ -244,6 +262,22 @@ parse_opt(int key, char *arg, struct argp_state *state) {
                 return SYNTAX_ERROR;
             }
             sprintf(args->data_dir, "%s", arg);
+            break;
+        case 'm':
+            if (strcmp(arg, "BenchScore") == 0) {
+                args->mode = 1;
+            } else if (strcmp(arg, "BenchCompute") == 0) {
+                args->mode = 2;
+            } else if (strcmp(arg, "BenchMemory") == 0) {
+                args->mode = 3;
+            } else if (strcmp(arg, "BenchNetwork") == 0) {
+                args->mode = 4;
+            } else if (strcmp(arg, "BenchIO") == 0) {
+                args->mode = 5;
+            } else {
+                return SYNTAX_ERROR;
+            }
+            break;
         case ARGP_KEY_ARG:
             argp_usage(state);
             break;
@@ -277,6 +311,7 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
         return SYNTAX_ERROR;
     }
     // set default value
+    tp_args->mode = 0;
     tp_args->ntest = 0;
     tp_args->nkib = 0;
     tp_args->nkern = 0;

@@ -8,6 +8,7 @@
 *.png
 *.svg
 *.swp
+Make.dev
 .vscode
 ./*.sh
 .vscode/

@@ -99,14 +99,21 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
     __ovl_t res;
 
     tpprintf(0, 0, 0, OVL_QUANT_HEADER);
+#ifndef TPM_NO_NS
     // MB/s
     calc_rate_quant(&ns[nskip], ntest - nskip, niter * bpi, 1e3, &res);
     tpprintf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
+#endif
+
+#ifndef TPM_NO_CYCLE
     // Byte/cy
     calc_rate_quant(&cy[nskip], ntest - nskip, niter * bpi, 1, &res);
     tpprintf(0, 0, 0, "B/c     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
+#endif
+
+#if !defined(TPM_NO_NS) && !defined(TPM_NO_CYCLE)
     if(freq) {
         double *freqs =  (double *)malloc(sizeof(double) * ntest);
         for(int i = nskip; i < ntest; i ++) {
@@ -118,16 +125,23 @@ dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi,
                res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
         free(freqs);
     }
+#endif
 
     return 0;
 }
 
 int
 dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
-    uint64_t kern_ns[ntest], kern_cy[ntest];
+    uint64_t kern_ns[ntest];
+    uint64_t kern_cy[ntest];
+
     for(int i = 0; i < ntest; i ++) {
+#ifndef TPM_NO_NS
         kern_ns[i] = ns[i][eid];
+#endif
+#ifndef TPM_NO_CYCLE
         kern_cy[i] = cy[i][eid];
+#endif
         // printf("%llu, %llu\n", kern_ns[i], kern_cy[i]);
     }
 

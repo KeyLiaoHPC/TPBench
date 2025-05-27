@@ -77,6 +77,9 @@ tpb_mkdir(char *path) {
 
 int
 tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag) {
+#ifdef TPM_NO_RAW_DATA
+    return NO_ERROR;
+#else
     int err, i, j;
     FILE *fp;    
 
@@ -110,6 +113,7 @@ tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int 
     fclose(fp);
 
     return NO_ERROR;
+#endif
 }
 
 // tpbench printf wrapper. 
