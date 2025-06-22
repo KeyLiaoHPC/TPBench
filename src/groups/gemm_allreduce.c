@@ -234,7 +234,8 @@ int d_gemm_allreduce(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64
     }
 
     // kernel warm. the #warmups need to be the same among ranks because of the MPI_Bcast
-    int nwarmups = MAX(1e9 / N / N / N, 1);
+    // int nwarmups = MAX(1e9 / N / N / N, 1);
+    int nwarmups = 1;
     for (int i = 0; i < nwarmups; i++) {
         gemm(N);
         allreduce(N, Nr);
@@ -270,6 +271,8 @@ int d_gemm_allreduce(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64
 
         __getcy_2d_en(i, 1);
         __getns_2d_en(i, 1);
+        printf("%d\n", i);
+        fflush(stdout);
     }
     // kernel end
 

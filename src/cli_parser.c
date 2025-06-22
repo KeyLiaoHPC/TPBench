@@ -26,7 +26,6 @@
 
 #include <stdlib.h>
 #include <limits.h>
-#include <errno.h>
 #include "cli_parser.h"
 #include "tperror.h"
 #include "tpb_core.h"
@@ -50,6 +49,8 @@ int check_count(int *n, char *strarg);
 /**
  * @brief 
  * @param tp_args 
+ * @return int 
+ */
 int parse_klist(__tp_args_t *tp_args);
 
 /**
@@ -204,10 +205,10 @@ init_list(__tp_args_t *tp_args) {
         // BenchIO mode
     } else {
         // syntax check
-        if(err = check_count(&(tp_args->nkern), tp_args->kstr)) {
+        if ((err = check_count(&(tp_args->nkern), tp_args->kstr))) {
             return err;
         }
-        if(err = check_count(&(tp_args->ngrp), tp_args->gstr)) {
+        if ((err = check_count(&(tp_args->ngrp), tp_args->gstr))) {
             return err;
         }
         tp_args->klist = (int *)malloc(sizeof(int) * tp_args->nkern);
@@ -227,6 +228,7 @@ init_list(__tp_args_t *tp_args) {
         }
         return NO_ERROR;
     }
+    return NO_ERROR;
 }
 
 // ============================================================================

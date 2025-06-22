@@ -10,6 +10,7 @@
 *.swp
 Make.dev
 .vscode
+.clangd
 ./*.sh
 .vscode/
 data/

@@ -1,0 +1,95 @@
+# The name of benchmarking/config using TPBench BenchScore mode
+ConfigName: default
+
+# Settings of memory layers.
+# Format:
+#   name: the name of the memory layer.
+#   size: the size of the memory layer in KiB.
+#   sharedby: the number of cores that share this memory layer.
+MemoryLayer:
+  - name: L1
+    size: 32
+    sharedby: 1
+  - name: L2
+    size: 256
+    sharedby: 1
+  - name: L3
+    size: 12288
+    sharedby: 1
+
+DependencyConfig:
+  base_cc:
+    command: gcc
+    cflags: ['-O3', '-fno-builtin', '-march=native', '-mtune=native']
+  mpi:
+    command: mpicc
+    path: /usr
+    cflags: ['-O3', '-fno-builtin', '-march=native', '-mtune=native']
+    ldflags: ['-lmpi']
+
+# Run-time configuration.
+RuntimeConfig:
+  parallel_config:
+    # Choose a backend for parallel benchmarks, default: serial.
+    # Available backends:
+    # - serial: serial backend
+    # - mpi: MPI standard, following MPI-3.1 by default.
+    backend: serial 
+    # The number of nodes.
+    num_node: 1
+    # The number of processes per node.
+    num_proc: 1
+    # The number of threads per process.
+    num_thread: 1
+  timer:
+    # The wall timer to use. default: clock_gettime.
+    # Available timers:
+    # - off: Turn OFF wall clock timer.
+    # - clock_gettime: clock_gettime
+    # - rdtsc: X86 rdtsc instruction. This timer reads the TSC register. If use tsc, please note that
+    #   TSC register often stays at a constant value even when the actual frequency is changing.
+    # - cntvct: Armv8 CNTVCT instruction. This timer reads the CNTVCT register.
+    wall_timer: clock_gettime
+    # The time per tick of the wall timer in nanoseconds.
+    # Only used when wall_timer is rdtsc.
+    wall_div_ns: 1
+    # The cycle timer to use. default: rdtsc.
+    # Available timers:
+    # - off: Turn OFF cycle timer.
+    # - auto: Auto-detect the cycle timer. If set, all settings related to cycle timer will be
+    #   ignored.
+    # - CPU_CLK_UNHALTED: X86 CPU_CLK_UNHALTED.CORE or CPU_CLK_UNHALTED.THREAD counter. This timer
+    #   counts the actual physical frequency of the CPU, but requires the permission of user-
+    #   level event access.
+    # - pmccntr: Armv8 PMCCNTR instruction. This timer reads the PMCCNTR event. User-level event access
+    #   is required.
+    cycle_timer: auto
+    # The number of cycles per second. default: 0.
+    # If set to value other than 0, TPBench will use this value instead of auto-detecting it.
+    cycle_per_sec: 0
+  benchmark_config:
+    default_num_loop: 10
+    # Warm-up time for each kernel in seconds.
+    default_warmup: 1
+    # The number of warm-up iterations. default: 1.
+    default_num_thread: 1
+    batches:
+      - name: default
+        # Kernels to run in this group. Format:
+        # - name: the name of the kernel.
+        # - size: Arraythe size of the initial data in KiB.
+        # - args: the arguments of the kernel.
+        kernels:
+          - name: d_fmaldr
+            size: [2048, '0.5L3']
+            args: []
+          - name: d_mulldr
+            size: [2048, 'L3']
+            args: []
+          - name: d_init
+            size: [2048, 'L3']
+            args: []
+          - name: d_triad
+            size: [2048, 'L3']
+            args: []
+        
