@@ -16,7 +16,7 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
  * @file tpb_parser.c
- * @version 0.3
+ * @version 0.71
  * @brief tpbench command line parser 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-22
@@ -309,7 +309,7 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
 
     err = 0;
     if(argc <= 1) {
-        printf("argc = %d\n", argc);
+        printf("argc = %d, argv = %s\n", argc, argv[0]);
         return SYNTAX_ERROR;
     }
     // set default value
