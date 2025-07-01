@@ -372,84 +372,15 @@ static void **build_chain(size_t bytes)
 }
 
 /* ------------------------- S3 single‑core measurement ------------------------- */
-static double measure_latency(void **chain)
-{
-    struct timespec t0, t1;
-    void **p = chain;
-    volatile uint64_t fake_ns;
 
-    // Use a fake calculation between t and p to avoid compiler optimization
-    // let fake_ns = 0
-    clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
-    fake_ns = t0.tv_nsec >= 0? 0: 1;
-    p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
-    REPEAT_POINTER_CHASE_10K(p);
-    clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
-    fake_ns = t1.tv_nsec >= 0? 0: 1;
-    p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
-#ifdef DEBUG
-    printf("t0: %ld%09ld t1: %ld%09ld ns: %lu\n", 
-           t0.tv_sec, t0.tv_nsec, t1.tv_sec, t1.tv_nsec, 
-           nsec_diff(t0, t1));
-#endif
-    uint64_t ns = nsec_diff(t0, t1);
-    return (double)ns / 100000;
-}
-
-static double run_single_core(size_t bytes)
-{
-    void **chain = build_chain(bytes);
-    if (!chain)
-        return -1.0;
-
-    /* warmup */
-    for (volatile int i = 0; i < 10000; ++i)
-        chain = *(void **)chain;
-
-    double lat = measure_latency(chain);
-    munmap(chain, bytes);
-    return lat;
-}
-
-/* ------------------------- S4 multi‑core measurement ------------------------- */
-
-typedef struct {
-    size_t bytes;
-    double lat_ns;
-} thread_arg_t;
-
-static void *thread_worker(void *arg)
-{
-    thread_arg_t *a = (thread_arg_t *)arg;
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    long tid = (long)a->lat_ns; /* abuse field to carry cpu id for pinning */
-    CPU_SET(tid, &set);
-    sched_setaffinity(0, sizeof(set), &set);
-
-    void **chain = build_chain(a->bytes);
-    fflush(stdout);
-    if (!chain)
-        pthread_exit(NULL);
-    for (volatile int i = 0; i < 10000; ++i)
-        chain = *(void **)chain;
-    a->lat_ns = measure_latency(chain);
-    munmap(chain, a->bytes);
-    return NULL;
-}
-
-static double run_all_cores(size_t bytes)
+/* Helper function to get number of cores per socket */
+static int get_cores_per_socket(void)
 {
     /* Get number of CPU sockets by reading unique physical IDs */
-    DIR *dir = opendir("/sys/devices/system/cpu/cpu0/topology");
-    if (!dir)
-        return -1.0;
-    closedir(dir);
-
     int nsockets = 0;
     int *physical_ids = calloc(MAX_THREADS, sizeof(int));
     if (!physical_ids)
-        return -1.0;
+        return 1; /* fallback to 1 */
 
     /* Read physical package ID for each logical CPU */
     for (int i = 0; i < MAX_THREADS; i++) {
@@ -477,7 +408,105 @@ static double run_all_cores(size_t bytes)
 
     /* Calculate cores per socket */
     int total_cpus = sysconf(_SC_NPROCESSORS_ONLN);
-    int nthreads = total_cpus / (nsockets > 0 ? nsockets : 1);
+    int cores_per_socket = total_cpus / (nsockets > 0 ? nsockets : 1);
+    
+    return cores_per_socket;
+}
+
+static double measure_latency(void **chain, int ntest, int nwarm)
+{
+    struct timespec t0, t1;
+    void **p = chain;
+    volatile uint64_t fake_ns;
+    uint64_t total_ns = 0;
+    int total_measurements = ntest + nwarm;
+
+    // Run ntest + nwarm measurements
+    for (int m = 0; m < total_measurements; ++m) {
+        // printf("Before chase: p = %p, next = %p\n", p, *(void **)p);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
+        // printf("t0: %ld.%09ld\n", t0.tv_sec, t0.tv_nsec);
+        fake_ns = t0.tv_nsec >= 0? 0: 1;
+        p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
+        
+        REPEAT_POINTER_CHASE_10K(p);
+        
+        // printf("After chase: p = %p, next = %p\n", p, *(void **)p);
+        t1.tv_nsec = (uint64_t)p > fake_ns ? t1.tv_nsec : 0;
+        clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
+        // printf("t1: %ld.%09ld\n", t1.tv_sec, t1.tv_nsec);
+        fake_ns = t1.tv_nsec >= 0? 0: 1;
+        p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
+        
+        uint64_t ns = nsec_diff(t0, t1);
+#ifdef DEBUG
+        if (m >= nwarm) {
+            printf("ns: %zu\n", ns);
+        }
+#endif
+        
+        // Only accumulate the last ntest measurements
+        if (m >= nwarm) {
+            total_ns += ns;
+        }
+    }
+
+    return (double)total_ns / (ntest * 10000);
+}
+
+static double run_single_core(size_t bytes)
+{
+    /* Pin to second core of CPU0 if socket has more than 1 core */
+    int cores_per_socket = get_cores_per_socket();
+    if (cores_per_socket > 1) {
+        cpu_set_t set;
+        CPU_ZERO(&set);
+        CPU_SET(1, &set); /* Pin to CPU 1 (second core of CPU0) */
+        if (sched_setaffinity(0, sizeof(set), &set) != 0) {
+            perror("sched_setaffinity");
+        }
+    }
+
+    void **chain = build_chain(bytes);
+    if (!chain)
+        return -1.0;
+
+    double lat = measure_latency(chain, 10, 2);
+    munmap(chain, bytes);
+    return lat;
+}
+
+/* ------------------------- S4 multi‑core measurement ------------------------- */
+
+typedef struct {
+    size_t bytes;
+    double lat_ns;
+} thread_arg_t;
+
+static void *thread_worker(void *arg)
+{
+    thread_arg_t *a = (thread_arg_t *)arg;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    long tid = (long)a->lat_ns; /* abuse field to carry cpu id for pinning */
+    CPU_SET(tid, &set);
+    sched_setaffinity(0, sizeof(set), &set);
+
+    void **chain = build_chain(a->bytes);
+    fflush(stdout);
+    if (!chain)
+        pthread_exit(NULL);
+    a->lat_ns = measure_latency(chain, 10, 2);
+    munmap(chain, a->bytes);
+    return NULL;
+}
+
+static double run_all_cores(size_t bytes)
+{
+    /* Get number of cores per socket using the helper function */
+    int cores_per_socket = get_cores_per_socket();
+    int total_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    int nthreads = cores_per_socket;
     if (nthreads > MAX_THREADS)
         nthreads = MAX_THREADS;
 
