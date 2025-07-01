@@ -16,38 +16,96 @@
 #define MAX_SIZES 256
 #define MAX_THREADS 256
 
+/* Macro expansion to avoid compiler optimizations */
+#define LOOP1(x) x
+#define LOOP2(x) x x
+#define LOOP3(x) x x x
+#define LOOP4(x) x x x x
+#define LOOP5(x) x x x x x
+#define LOOP10(x) LOOP5(x) LOOP5(x)
+#define LOOP100(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x) LOOP10(x)
+
+#define LOOP1000(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x) LOOP100(x)
+
+#define LOOP10000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x) LOOP1000(x)
+
+#define LOOP100000(x) LOOP50000(x) LOOP50000(x)
+
+/* Macro to repeat pointer chasing for better timing accuracy */
+#define REPEAT_POINTER_CHASE_10K(p) LOOP10000(p = *(void **)p;)
+
 /* ------------------------- data structures ------------------------- */
 
 typedef struct {
     size_t size_bytes;   /* total reported size of this cache index */
-    int    shared_cnt;   /* how many logical CPUs share it */
+    int shared_cnt;   /* how many logical CPUs share it */
+    char shared_cpu_list[128];  /* raw CPU list string */
 } cache_info_t;
 
 typedef struct {
-    size_t   *seq;       /* array of sizes to test */
-    size_t    count;     /* number of elements */
+    size_t *seq;       /* array of sizes to test */
+    size_t count;     /* number of elements */
 } size_seq_t;
 
 typedef struct {
-    size_t  test_size;   /* bytes */
-    double  lat_sc_ns;   /* single‑core avg latency */
-    double  lat_ac_ns;   /* all‑core avg latency */
+    size_seq_t single_core;  /* sizes for single-core tests */
+    size_seq_t multi_core;   /* sizes for multi-core tests */
+} test_sizes_t;
+
+typedef struct {
+    size_t test_size;   /* bytes */
+    double lat_sc_ns;   /* single‑core avg latency */
+    double lat_ac_ns;   /* all‑core avg latency */
 } result_t;
 
 /* ------------------------- helpers ------------------------- */
 
-static uint64_t nsec_diff(struct timespec a, struct timespec b) {
-    return (b.tv_sec - a.tv_sec) * 1e9 + (b.tv_nsec - a.tv_nsec);
+static uint64_t nsec_diff(struct timespec a, struct timespec b)
+{
+    return (uint64_t)(b.tv_sec - a.tv_sec) * 1000000000ULL + (b.tv_nsec - a.tv_nsec);
 }
 
 /* read a numeric value from a sysfs file */
-static long read_long(const char *path) {
+static long read_long(const char *path)
+{
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     long v = -1;
-    if (fscanf(f, "%ld", &v) != 1) v = -1;
+    if (fscanf(f, "%ld", &v) != 1)
+        v = -1;
     fclose(f);
     return v;
+}
+
+/* read cache size with proper unit handling (K, M, G suffixes) */
+static size_t read_cache_size(const char *path)
+{
+    FILE *f = fopen(path, "r");
+    if (!f)
+        return 0;
+    
+    char buf[64];
+    if (!fgets(buf, sizeof(buf), f)) {
+        fclose(f);
+        return 0;
+    }
+    fclose(f);
+    
+    /* Remove newline */
+    buf[strcspn(buf, "\n")] = 0;
+    
+    size_t size = 0;
+    char unit = 0;
+    if (sscanf(buf, "%zu%c", &size, &unit) >= 1) {
+        switch (unit) {
+            case 'K': size *= 1024; break;
+            case 'M': size *= 1024 * 1024; break;
+            case 'G': size *= 1024 * 1024 * 1024; break;
+            default: break; /* assume bytes if no unit */
+        }
+    }
+    return size;
 }
 
 /* ------------------------- S0 / cache descriptor ------------------------- */
@@ -57,17 +115,19 @@ static long read_long(const char *path) {
  * /sys/devices/system/cpu/cpu0/cache/indexX/{size,shared_cpu_list}.
  * returns number of cache levels discovered.
  */
-static int detect_cache_hierarchy(cache_info_t *caches) {
+static int detect_cache_hierarchy(cache_info_t *caches)
+{
     char path[256];
     int levels = 0;
 
     for (int idx = 0; idx < MAX_LEVELS; ++idx) {
         snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu0/cache/index%d/level", idx);
-        if (access(path, R_OK) != 0) break; /* no more indices */
+        if (access(path, R_OK) != 0)
+            break; /* no more indices */
 
         long lv = read_long(path);
         snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu0/cache/index%d/size", idx);
-        long bytes = read_long(path);
+        size_t bytes = read_cache_size(path);
 
         snprintf(path, sizeof(path), "/sys/devices/system/cpu/cpu0/cache/index%d/shared_cpu_list", idx);
         FILE *f = fopen(path, "r");
@@ -76,6 +136,11 @@ static int detect_cache_hierarchy(cache_info_t *caches) {
             /* parse list like "0‑7,16‑23" → count logical CPUs */
             char buf[128];
             if (fgets(buf, sizeof(buf), f)) {
+                /* Remove newline if present */
+                buf[strcspn(buf, "\n")] = 0;
+                strncpy(caches[lv - 1].shared_cpu_list, buf, sizeof(caches[lv - 1].shared_cpu_list) - 1);
+                caches[lv - 1].shared_cpu_list[sizeof(caches[lv - 1].shared_cpu_list) - 1] = '\0';
+                
                 shared = 0;
                 char *tok = strtok(buf, ",");
                 while (tok) {
@@ -88,12 +153,16 @@ static int detect_cache_hierarchy(cache_info_t *caches) {
                 }
             }
             fclose(f);
+        } else {
+            caches[lv - 1].shared_cpu_list[0] = '\0';
         }
-        size_t sz = (size_t)bytes;
-        if (sz == 0) continue;
-        caches[lv - 1].size_bytes = sz;
+        
+        if (bytes == 0)
+            continue;
+        caches[lv - 1].size_bytes = bytes;
         caches[lv - 1].shared_cnt = shared;
-        if (lv > levels) levels = lv;
+        if (lv > levels)
+            levels = lv;
     }
     return levels;
 }
@@ -103,11 +172,13 @@ typedef struct {
     size_t min_kb, max_kb, step_kb;
 } cli_opts_t;
 
-static void usage(const char *prog) {
+static void usage(const char *prog)
+{
     fprintf(stderr, "Usage: %s [--min KB] [--max KB] [--step KB]\n", prog);
 }
 
-static void parse_args(int argc, char **argv, cli_opts_t *opt) {
+static void parse_args(int argc, char **argv, cli_opts_t *opt)
+{
     opt->min_kb = opt->max_kb = opt->step_kb = 0;
     for (int i = 1; i < argc; ++i) {
         if (!strcmp(argv[i], "--min") && i + 1 < argc) {
@@ -123,43 +194,147 @@ static void parse_args(int argc, char **argv, cli_opts_t *opt) {
     }
 }
 
-/* ------------------------- S1B2 generate defaults ------------------------- */
-static void derive_defaults(const cache_info_t *caches, int levels, cli_opts_t *opt) {
-    if (opt->min_kb == 0 && levels > 0) {
-        /* half of L1D per‑core */
-        size_t l1 = caches[0].size_bytes / caches[0].shared_cnt / 2;
-        opt->min_kb = l1 >> 10;
+/* Helper function to remove duplicates and sort a size sequence */
+static void deduplicate_and_sort(size_seq_t *seq)
+{
+    if (seq->count <= 1)
+        return;
+    
+    /* Simple bubble sort and deduplication */
+    for (size_t i = 0; i < seq->count - 1; ++i) {
+        for (size_t j = 0; j < seq->count - i - 1; ++j) {
+            if (seq->seq[j] > seq->seq[j + 1]) {
+                size_t temp = seq->seq[j];
+                seq->seq[j] = seq->seq[j + 1];
+                seq->seq[j + 1] = temp;
+            }
+        }
     }
-    if (opt->max_kb == 0 && levels > 0) {
-        /* largest cache (LLC) total */
-        size_t llc = caches[levels - 1].size_bytes;
-        opt->max_kb = llc >> 10;
+    
+    /* Remove duplicates */
+    size_t write_idx = 0;
+    for (size_t read_idx = 1; read_idx < seq->count; ++read_idx) {
+        if (seq->seq[read_idx] != seq->seq[write_idx]) {
+            write_idx++;
+            seq->seq[write_idx] = seq->seq[read_idx];
+        }
     }
-    if (opt->step_kb == 0) {
-        size_t l1 = caches[0].size_bytes / caches[0].shared_cnt;
-        opt->step_kb = l1 >> 10;
-    }
+    seq->count = write_idx + 1;
 }
 
-/* ------------------------- S2 build size sequence ------------------------- */
-static void build_sequence(const cli_opts_t *opt, size_seq_t *seq) {
-    seq->seq   = calloc(MAX_SIZES, sizeof(size_t));
-    seq->count = 0;
-    size_t min = opt->min_kb << 10;
-    size_t max = opt->max_kb << 10;
-    size_t step = opt->step_kb << 10;
-    for (size_t s = min; s <= max && seq->count < MAX_SIZES; s += step) {
-        seq->seq[seq->count++] = s;
-        if (min == max) break; /* user requested single size */
+/* ------------------------- S2 build size sequences ------------------------- */
+static void build_test_sizes(const cache_info_t *caches, int levels, const cli_opts_t *opt, test_sizes_t *sizes, bool is_single_core)
+{
+    /* Initialize sequences */
+    if (is_single_core) {
+        sizes->single_core.seq = calloc(MAX_SIZES, sizeof(size_t));
+        sizes->single_core.count = 0;
+    } else {
+        sizes->multi_core.seq = calloc(MAX_SIZES, sizeof(size_t));
+        sizes->multi_core.count = 0;
+    }
+
+    /* If all three parameters are specified, use linear approach */
+    if (opt->min_kb != 0 && opt->max_kb != 0 && opt->step_kb != 0) {
+        size_t min = opt->min_kb << 10;
+        size_t max = opt->max_kb << 10;
+        size_t step = opt->step_kb << 10;
+        
+        for (size_t s = min; s <= max && 
+             ((is_single_core && sizes->single_core.count < MAX_SIZES) || 
+              (!is_single_core && sizes->multi_core.count < MAX_SIZES)); s += step) {
+            if (is_single_core) {
+                sizes->single_core.seq[sizes->single_core.count++] = s;
+            } else {
+                sizes->multi_core.seq[sizes->multi_core.count++] = s;
+            }
+            if (min == max)
+                break;
+        }
+        return;
+    }
+
+    /* Auto-detect rule-based approach */
+    for (int level = 0; level < levels; ++level) {
+        size_t detected_size = caches[level].size_bytes;
+        size_t per_core_size = detected_size / caches[level].shared_cnt;
+        
+        if (is_single_core) {
+            /* Single-core sizes */
+            if (level == levels - 1) {  /* L3 */
+                size_t l3_sizes[] = {
+                    per_core_size / 2,      /* 0.5 * per_core_size */
+                    per_core_size,          /* per_core_size */
+                    detected_size,
+                    detected_size * 2,  /* per_core_size * shared_core_count */
+                    detected_size * 3,      /* 3 * detected_size */
+                    detected_size * 4       /* 4 * detected_size */
+                };
+                
+                for (size_t i = 0; i < sizeof(l3_sizes)/sizeof(l3_sizes[0]) && 
+                     sizes->single_core.count < MAX_SIZES; ++i) {
+                    sizes->single_core.seq[sizes->single_core.count++] = l3_sizes[i];
+                }
+            } else {  /* L1 & L2 */
+                size_t l12_sizes[] = {
+                    per_core_size / 2,      /* 0.5 * per_core_size */
+                    per_core_size,          /* per_core_size */
+                    per_core_size * caches[level].shared_cnt   /* per_core_size * shared_core_count */
+                };
+                
+                for (size_t i = 0; i < sizeof(l12_sizes)/sizeof(l12_sizes[0]) && 
+                     sizes->single_core.count < MAX_SIZES; ++i) {
+                    if (l12_sizes[i] <= detected_size) {
+                        sizes->single_core.seq[sizes->single_core.count++] = l12_sizes[i];
+                    }
+                }
+            }
+        } else {
+            /* Multi-core sizes */
+            if (level == levels - 1) {  /* L3 */
+                size_t l3_sizes[] = {
+                    per_core_size / 2,      /* 0.5 * per_core_size */
+                    per_core_size,          /* per_core_size */
+                    per_core_size * 2,      /* 2 * detected_size */
+                    per_core_size * 3,      /* 3 * detected_size */
+                    per_core_size * 4       /* 4 * detected_size */
+                };
+                
+                for (size_t i = 0; i < sizeof(l3_sizes)/sizeof(l3_sizes[0]) && 
+                     sizes->multi_core.count < MAX_SIZES; ++i) {
+                    sizes->multi_core.seq[sizes->multi_core.count++] = l3_sizes[i];
+                }
+            } else {  /* L1 & L2 */
+                size_t l12_sizes[] = {
+                    per_core_size / 2,      /* 0.5 * per_core_size */
+                    per_core_size           /* per_core_size */
+                };
+                
+                for (size_t i = 0; i < sizeof(l12_sizes)/sizeof(l12_sizes[0]) && 
+                     sizes->multi_core.count < MAX_SIZES; ++i) {
+                    if (l12_sizes[i] <= detected_size) {
+                        sizes->multi_core.seq[sizes->multi_core.count++] = l12_sizes[i];
+                    }
+                }
+            }
+        }
+    }
+    
+    /* Remove duplicates and sort */
+    if (is_single_core) {
+        deduplicate_and_sort(&sizes->single_core);
+    } else {
+        deduplicate_and_sort(&sizes->multi_core);
     }
 }
 
 /* ------------------------- pointer‑chasing buffer ------------------------- */
 
-/* allocate and shuffle an array of ptr sized entries to form a self‑referential ring */
-static void **build_ring(size_t bytes) {
+/* allocate and shuffle an array of ptr sized entries to form a random chain */
+static void **build_chain(size_t bytes)
+{
     /* align to cache line and huge pages if possible */
-    size_t elems = bytes / sizeof(void*);
+    size_t elems = bytes / sizeof(void *);
     size_t alloc_bytes = ((bytes + (1 << 21) - 1) / (1 << 21)) * (1 << 21); /* round 2M */
 
     void **buf = mmap(NULL, alloc_bytes, PROT_READ | PROT_WRITE,
@@ -171,45 +346,68 @@ static void **build_ring(size_t bytes) {
 
     /* simple Fisher‑Yates shuffle of indices */
     size_t *idx = malloc(elems * sizeof(size_t));
-    if (!idx) { munmap(buf, alloc_bytes); return NULL; }
-    for (size_t i = 0; i < elems; ++i) idx[i] = i;
+    if (!idx) {
+        munmap(buf, alloc_bytes);
+        return NULL;
+    }
+    for (size_t i = 0; i < elems; ++i)
+        idx[i] = i;
 
     for (size_t i = elems - 1; i > 0; --i) {
         size_t j = rand() % (i + 1);
-        size_t tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
+        size_t tmp = idx[i];
+        idx[i] = idx[j];
+        idx[j] = tmp;
     }
 
-    for (size_t i = 0; i < elems; ++i) {
-        buf[idx[i]] = &buf[idx[(i + 1) % elems]];
+    /* Build random chain instead of ring */
+    for (size_t i = 0; i < elems - 1; ++i) {
+        buf[idx[i]] = &buf[idx[i + 1]];
     }
+    /* Last element points to a random location to break predictability */
+    buf[idx[elems - 1]] = &buf[idx[rand() % elems]];
+    
     free(idx);
     return buf;
 }
 
 /* ------------------------- S3 single‑core measurement ------------------------- */
-static double measure_latency(void **ring, size_t iters) {
+static double measure_latency(void **chain)
+{
     struct timespec t0, t1;
-    void **p = ring;
+    void **p = chain;
+    volatile uint64_t fake_ns;
 
+    // Use a fake calculation between t and p to avoid compiler optimization
+    // let fake_ns = 0
     clock_gettime(CLOCK_MONOTONIC_RAW, &t0);
-    for (size_t i = 0; i < iters; ++i) {
-        p = *p;
-    }
+    fake_ns = t0.tv_nsec >= 0? 0: 1;
+    p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
+    REPEAT_POINTER_CHASE_10K(p);
     clock_gettime(CLOCK_MONOTONIC_RAW, &t1);
-
+    fake_ns = t1.tv_nsec >= 0? 0: 1;
+    p = (uint64_t)p > fake_ns ? p : (void **)fake_ns;
+#ifdef DEBUG
+    printf("t0: %ld%09ld t1: %ld%09ld ns: %lu\n", 
+           t0.tv_sec, t0.tv_nsec, t1.tv_sec, t1.tv_nsec, 
+           nsec_diff(t0, t1));
+#endif
     uint64_t ns = nsec_diff(t0, t1);
-    return (double)ns / iters;
+    return (double)ns / 100000;
 }
 
-static double run_single_core(size_t bytes) {
-    void **ring = build_ring(bytes);
-    if (!ring) return -1.0;
+static double run_single_core(size_t bytes)
+{
+    void **chain = build_chain(bytes);
+    if (!chain)
+        return -1.0;
 
     /* warmup */
-    for (volatile int i = 0; i < 10000; ++i) ring = *ring;
+    for (volatile int i = 0; i < 10000; ++i)
+        chain = *(void **)chain;
 
-    double lat = measure_latency(ring, 2 * 1024 * 1024);
-    munmap(ring, bytes);
+    double lat = measure_latency(chain);
+    munmap(chain, bytes);
     return lat;
 }
 
@@ -220,24 +418,68 @@ typedef struct {
     double lat_ns;
 } thread_arg_t;
 
-static void *thread_worker(void *arg) {
+static void *thread_worker(void *arg)
+{
     thread_arg_t *a = (thread_arg_t *)arg;
-    cpu_set_t set; CPU_ZERO(&set);
+    cpu_set_t set;
+    CPU_ZERO(&set);
     long tid = (long)a->lat_ns; /* abuse field to carry cpu id for pinning */
     CPU_SET(tid, &set);
     sched_setaffinity(0, sizeof(set), &set);
 
-    void **ring = build_ring(a->bytes);
-    if (!ring) pthread_exit(NULL);
-    for (volatile int i = 0; i < 10000; ++i) ring = *ring;
-    a->lat_ns = measure_latency(ring, 512 * 1024);
-    munmap(ring, a->bytes);
+    void **chain = build_chain(a->bytes);
+    fflush(stdout);
+    if (!chain)
+        pthread_exit(NULL);
+    for (volatile int i = 0; i < 10000; ++i)
+        chain = *(void **)chain;
+    a->lat_ns = measure_latency(chain);
+    munmap(chain, a->bytes);
     return NULL;
 }
 
-static double run_all_cores(size_t bytes) {
-    int nthreads = sysconf(_SC_NPROCESSORS_ONLN);
-    if (nthreads > MAX_THREADS) nthreads = MAX_THREADS;
+static double run_all_cores(size_t bytes)
+{
+    /* Get number of CPU sockets by reading unique physical IDs */
+    DIR *dir = opendir("/sys/devices/system/cpu/cpu0/topology");
+    if (!dir)
+        return -1.0;
+    closedir(dir);
+
+    int nsockets = 0;
+    int *physical_ids = calloc(MAX_THREADS, sizeof(int));
+    if (!physical_ids)
+        return -1.0;
+
+    /* Read physical package ID for each logical CPU */
+    for (int i = 0; i < MAX_THREADS; i++) {
+        char path[256];
+        snprintf(path, sizeof(path), 
+                "/sys/devices/system/cpu/cpu%d/topology/physical_package_id", i);
+        if (access(path, R_OK) != 0)
+            break;
+        
+        int phys_id = read_long(path);
+        if (phys_id >= 0) {
+            /* Check if we've seen this physical ID before */
+            bool found = false;
+            for (int j = 0; j < nsockets; j++) {
+                if (physical_ids[j] == phys_id) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                physical_ids[nsockets++] = phys_id;
+        }
+    }
+    free(physical_ids);
+
+    /* Calculate cores per socket */
+    int total_cpus = sysconf(_SC_NPROCESSORS_ONLN);
+    int nthreads = total_cpus / (nsockets > 0 ? nsockets : 1);
+    if (nthreads > MAX_THREADS)
+        nthreads = MAX_THREADS;
 
     pthread_t th[MAX_THREADS];
     thread_arg_t args[MAX_THREADS];
@@ -256,33 +498,145 @@ static double run_all_cores(size_t bytes) {
 }
 
 /* ------------------------- main orchestrator ------------------------- */
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     srand(time(NULL));
 
     cache_info_t caches[MAX_LEVELS] = {0};
     int levels = detect_cache_hierarchy(caches);
+    printf("Cache hierarchy: %d levels\n", levels);
+    for (int i = 0; i < levels; ++i) {
+        printf("L%d: %zu KB, shared by %d CPUs (%s)\n", 
+               i + 1, 
+               caches[i].size_bytes >> 10, 
+               caches[i].shared_cnt,
+               caches[i].shared_cpu_list);
+    }
+    fflush(stdout);
 
     cli_opts_t opt = {0};
     parse_args(argc, argv, &opt);
-    derive_defaults(caches, levels, &opt);
 
-    size_seq_t seq; build_sequence(&opt, &seq);
+    test_sizes_t sizes = {0};
+    
+    /* Check if auto-detect mode (not all three parameters specified) */
+    bool auto_detect = (opt.min_kb == 0 || opt.max_kb == 0 || opt.step_kb == 0);
+    
+    if (auto_detect) {
+        /* Auto-detect mode: build sizes separately for each phase */
+        printf("Auto-detect mode: building test sizes dynamically\n");
+    } else {
+        /* Manual mode: build both sequences at once */
+        build_test_sizes(caches, levels, &opt, &sizes, true);
+        build_test_sizes(caches, levels, &opt, &sizes, false);
+    }
 
     printf("=== Cache & Memory Latency Profiler ===\n");
     printf("SMT active: %s | logical CPUs: %ld\n",
            access("/sys/devices/system/cpu/smt/active", R_OK) ? "?" : (read_long("/sys/devices/system/cpu/smt/active") ? "on" : "off"),
            sysconf(_SC_NPROCESSORS_ONLN));
-    printf("Test sizes: %zu entries, %zu KB .. %zu KB\n\n", seq.count, opt.min_kb, opt.max_kb);
 
-    result_t *res = calloc(seq.count, sizeof(result_t));
-    for (size_t i = 0; i < seq.count; ++i) {
-        res[i].test_size = seq.seq[i];
-        res[i].lat_sc_ns = run_single_core(seq.seq[i]);
-        res[i].lat_ac_ns = run_all_cores(seq.seq[i]);
-        printf("%8zu KB  %.2f ns  %.2f ns\n", seq.seq[i] >> 10, res[i].lat_sc_ns, res[i].lat_ac_ns);
+    if (!auto_detect) {
+        /* Print test sizes for both scenarios in manual mode */
+        printf("\n=== Test Sizes ===\n");
+        printf("Single-core sizes (%zu entries):\n", sizes.single_core.count);
+        for (size_t i = 0; i < sizes.single_core.count; ++i) {
+            printf("  %zu KB", sizes.single_core.seq[i] >> 10);
+            if ((i + 1) % 8 == 0 || i == sizes.single_core.count - 1)
+                printf("\n");
+            else
+                printf(", ");
+        }
+        
+        printf("Multi-core sizes (%zu entries):\n", sizes.multi_core.count);
+        for (size_t i = 0; i < sizes.multi_core.count; ++i) {
+            printf("  %zu KB", sizes.multi_core.seq[i] >> 10);
+            if ((i + 1) % 8 == 0 || i == sizes.multi_core.count - 1)
+                printf("\n");
+            else
+                printf(", ");
+        }
+        printf("\n");
     }
 
-    free(seq.seq);
-    free(res);
+    /* Phase 1: Run all single-core tests */
+    printf("=== Phase 1: Single-Core Tests ===\n");
+    if (auto_detect) {
+        /* Build single-core sizes dynamically */
+        build_test_sizes(caches, levels, &opt, &sizes, true);
+        printf("Single-core sizes (%zu entries):\n", sizes.single_core.count);
+        for (size_t i = 0; i < sizes.single_core.count; ++i) {
+            printf("  %zu KB", sizes.single_core.seq[i] >> 10);
+            if ((i + 1) % 8 == 0 || i == sizes.single_core.count - 1)
+                printf("\n");
+            else
+                printf(", ");
+        }
+        printf("\n");
+    }
+    
+    result_t *res_sc = calloc(sizes.single_core.count, sizeof(result_t));
+    for (size_t i = 0; i < sizes.single_core.count; ++i) {
+        res_sc[i].test_size = sizes.single_core.seq[i];
+    }
+    
+    for (size_t i = 0; i < sizes.single_core.count; ++i) {
+        res_sc[i].lat_sc_ns = run_single_core(sizes.single_core.seq[i]);
+        printf("%8zu KB  %.2f ns\n", sizes.single_core.seq[i] >> 10, res_sc[i].lat_sc_ns);
+    }
+
+    /* Phase 2: Run all multi-core tests */
+    printf("\n=== Phase 2: Multi-Core Tests ===\n");
+    if (auto_detect) {
+        /* Build multi-core sizes dynamically */
+        build_test_sizes(caches, levels, &opt, &sizes, false);
+        printf("Multi-core sizes (%zu entries):\n", sizes.multi_core.count);
+        for (size_t i = 0; i < sizes.multi_core.count; ++i) {
+            printf("  %zu KB", sizes.multi_core.seq[i] >> 10);
+            if ((i + 1) % 8 == 0 || i == sizes.multi_core.count - 1)
+                printf("\n");
+            else
+                printf(", ");
+        }
+        printf("\n");
+    }
+    
+    result_t *res_mc = calloc(sizes.multi_core.count, sizeof(result_t));
+    for (size_t i = 0; i < sizes.multi_core.count; ++i) {
+        res_mc[i].test_size = sizes.multi_core.seq[i];
+    }
+    
+    for (size_t i = 0; i < sizes.multi_core.count; ++i) {
+#ifdef DEBUG
+        printf("Current size: %zu KiB\n", sizes.multi_core.seq[i] >> 10);
+        fflush(stdout);
+#endif
+        res_mc[i].lat_ac_ns = run_all_cores(sizes.multi_core.seq[i]);
+        printf("%8zu KB  %.2f ns\n", sizes.multi_core.seq[i] >> 10, res_mc[i].lat_ac_ns);
+    }
+
+    /* Final summary */
+    printf("\n=== Final Results ===\n");
+    printf("Single-Core Results:\n");
+    printf("%8s  %12s\n", "Size(KB)", "Latency(ns)");
+    printf("%8s  %12s\n", "--------", "-----------");
+    for (size_t i = 0; i < sizes.single_core.count; ++i) {
+        printf("%8zu KB  %12.2f ns\n", 
+               sizes.single_core.seq[i] >> 10, res_sc[i].lat_sc_ns);
+    }
+    
+    printf("\nMulti-Core Results:\n");
+    printf("%8s  %12s\n", "Size(KB)", "Latency(ns)");
+    printf("%8s  %12s\n", "--------", "-----------");
+    for (size_t i = 0; i < sizes.multi_core.count; ++i) {
+        printf("%8zu KB  %12.2f ns\n", 
+               sizes.multi_core.seq[i] >> 10, res_mc[i].lat_ac_ns);
+    }
+
+    /* Cleanup */
+    if (sizes.single_core.seq) free(sizes.single_core.seq);
+    if (sizes.multi_core.seq) free(sizes.multi_core.seq);
+    free(res_sc);
+    free(res_mc);
     return 0;
 }
