@@ -5,9 +5,9 @@
 #   nq: number of quantiles (100, 1000, ...)
 #   qmax: only calculate W up to this quantile (99 for 100, 995 for 1000, ...)
 #   qdiv: The division of RL (1th to qdivth) and RH (qdiv+1th to qmaxth).
-#   freq_1: CPU freq for the first distribution
+#   freq_1: CPU freq in GHz for the first distribution
 #   log_dir_1: data directory for the first distribution
-#   freq_2: CPU freq for the second distribution
+#   freq_2: CPU freq in GHz for the second distribution
 #   log_dir_2: data directory for the second distribution
 # t_ovh = min(U) - min(V)
 # t_min = min(U, V)
