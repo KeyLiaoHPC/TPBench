@@ -33,6 +33,14 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifndef TPM_NS_PER_TICK
+#define TPM_NS_PER_TICK 1
+#endif
+
+#ifndef TPM_CY_PER_TICK
+#define TPM_CY_PER_TICK 1
+#endif
+
 #ifdef TPM_NO_CYCLE
 #define __getcy_init
 #define __getcy_grp_init
