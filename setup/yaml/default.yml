@@ -1,35 +1,41 @@
 # The name of benchmarking/config using TPBench BenchScore mode
-ConfigName: default
+ConfigAttributes: 
+  name: default
+  description: Default configuration for TPBench.
+  version: 1.0.0
+  date: 2025-07-11
 
 # Settings of memory layers.
 # Format:
 #   name: the name of the memory layer.
 #   size: the size of the memory layer in KiB.
 #   sharedby: the number of cores that share this memory layer.
-MemoryLayer:
-  - name: L1
-    size: 32
-    sharedby: 1
-  - name: L2
-    size: 256
-    sharedby: 1
-  - name: L3
-    size: 12288
-    sharedby: 1
+Hardware:
+  memory_layers:
+    - name: L1
+      size: 32
+      sharedby: 1
+    - name: L2
+      size: 256
+      sharedby: 1
+    - name: L3
+      size: 12288
+      sharedby: 1
 
-DependencyConfig:
+Dependency:
   base_cc:
     command: gcc
+    path: /usr
     cflags: ['-O3', '-fno-builtin', '-march=native', '-mtune=native']
-  mpi:
+  mpi_cc:
     command: mpicc
     path: /usr
     cflags: ['-O3', '-fno-builtin', '-march=native', '-mtune=native']
     ldflags: ['-lmpi']
 
 # Run-time configuration.
-RuntimeConfig:
-  parallel_config:
+Runtime:
+  parallel:
     # Choose a backend for parallel benchmarks, default: serial.
     # Available backends:
     # - serial: serial backend
@@ -45,11 +51,11 @@ RuntimeConfig:
     # The wall timer to use. default: clock_gettime.
     # Available timers:
     # - off: Turn OFF wall clock timer.
-    # - clock_gettime: clock_gettime
+    # - cgt: clock_gettime
     # - rdtsc: X86 rdtsc instruction. This timer reads the TSC register. If use tsc, please note that
     #   TSC register often stays at a constant value even when the actual frequency is changing.
     # - cntvct: Armv8 CNTVCT instruction. This timer reads the CNTVCT register.
-    wall_timer: clock_gettime
+    wall_timer: cgt
     # The time per tick of the wall timer in nanoseconds.
     # Only used when wall_timer is rdtsc.
     wall_div_ns: 1
@@ -67,7 +73,7 @@ RuntimeConfig:
     # The number of cycles per second. default: 0.
     # If set to value other than 0, TPBench will use this value instead of auto-detecting it.
     cycle_per_sec: 0
-  benchmark_config:
+  benchmark:
     default_num_loop: 10
     # Warm-up time for each kernel in seconds.
     default_warmup: 1
@@ -77,19 +83,15 @@ RuntimeConfig:
       - name: default
         # Kernels to run in this group. Format:
         # - name: the name of the kernel.
-        # - size: Arraythe size of the initial data in KiB.
+        # - size: Array of the size of the initial data in KiB.
         # - args: the arguments of the kernel.
         kernels:
           - name: d_fmaldr
-            size: [2048, '0.5L3']
-            args: []
-          - name: d_mulldr
-            size: [2048, 'L3']
-            args: []
-          - name: d_init
-            size: [2048, 'L3']
-            args: []
+            args: 
+              - size: [32, 64, 1024]
+              - dtype: ['uint64', 'fp64']
+              - arith_intensity: [0.25, 0.5, 0.75, 1.0, 2.0, 4.0, 8.0]
           - name: d_triad
-            size: [2048, 'L3']
-            args: []
-        
+            args: 
+              - size: [32, 64, 1024]
+              - dtype: ['uint64', 'fp64']
