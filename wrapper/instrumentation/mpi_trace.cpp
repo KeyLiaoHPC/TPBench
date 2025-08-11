@@ -1,0 +1,287 @@
+// mpi_profiler.cpp
+#include <iostream>
+#include <fstream>
+#include <filesystem>
+#include <string>
+#include <memory>
+#include <unistd.h>
+
+#include <mpi.h>
+
+// Include TPBench headers for additional functionality
+extern "C" {
+#include "tpbench.h"
+}
+
+// Optional RDMA-based sync hooks
+#include "sync/sync.h"
+
+namespace fs = std::filesystem;
+
+#ifndef LOG_PATH_PREFIX
+#define LOG_PATH_PREFIX "."
+#endif
+
+/* Global variables for logging */
+// log files' directory should use this pattern: 
+// {LOG_PATH_PREFIX}/logs/{timestamp}/{node_name}/mpi_profile_rank_{rank}.log
+static std::string log_file_dir;    
+static std::unique_ptr<std::ofstream> log_file;
+static int profiler_rank = -1;
+
+// tools: 
+const char* get_type_name(MPI_Datatype type) {
+    if (type == MPI_CHAR) return "MPI_CHAR";
+    if (type == MPI_INT) return "MPI_INT";
+    if (type == MPI_FLOAT) return "MPI_FLOAT";
+    if (type == MPI_DOUBLE) return "MPI_DOUBLE";
+    // Add more types as needed
+    return "UNKNOWN_TYPE";
+}
+
+// C linkage for MPI functions
+extern "C" {
+/*
+ * =============================================================================
+ * Initialization and Finalization Functions
+ * =============================================================================
+ */
+
+int MPI_Init(int *argc, char ***argv) {
+    // 1. Call the actual MPI_Init
+    int ret = PMPI_Init(argc, argv);
+
+    // 2. Get the process rank
+    PMPI_Comm_rank(MPI_COMM_WORLD, &profiler_rank);
+
+     // Initialize optional RDMA sync (no-op if disabled)
+    rdmasync::init_if_needed(profiler_rank);
+
+    // 3. Create a separate log file for each process
+    char time_buf[32];
+    if (profiler_rank == 0) {
+        time_t now = time(nullptr);
+        strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", localtime(&now));
+    }
+    PMPI_Bcast(&time_buf, sizeof(time_buf), MPI_CHAR, 0, MPI_COMM_WORLD);
+
+    char hostname[256];
+    gethostname(hostname, sizeof(hostname));
+    hostname[sizeof(hostname) - 1] = '\0'; // Ensure null-termination
+    std::string node_name = hostname;
+
+    log_file_dir = std::string(LOG_PATH_PREFIX) + "/logs/" + time_buf + "/" + node_name;
+    fs::path log_path(log_file_dir);
+    // Create the directory for log files
+    try {
+        if (!fs::exists(log_path)) {
+            fs::create_directories(log_path);
+        }
+    } catch (const fs::filesystem_error& e) {
+        std::cerr << "Error creating log directory: " << e.what() << std::endl;
+        return ret; // Return an error code
+    }
+
+    std::string filename = log_file_dir + "/mpi_profile_rank_" + std::to_string(profiler_rank) + ".log";
+    log_file = std::make_unique<std::ofstream>(filename);
+
+    if (log_file && log_file->is_open()) {
+        double start_time = PMPI_Wtime();
+        *log_file << "=========================================================\n";
+        *log_file << " MPI Profiler Initialized for Rank " << profiler_rank << "\n";
+        *log_file << "=========================================================\n";
+        *log_file << "[ " << start_time << " ] MPI_Init()\n";
+    }
+
+    return ret;
+}
+
+int MPI_Finalize() {
+    double start_time, end_time, elapsed;
+
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Finalize()\n";
+    }
+
+    // Finalize optional RDMA sync first (safe even if not enabled)
+    rdmasync::finalize();
+
+    // Call the actual MPI_Finalize
+    int ret = PMPI_Finalize();
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+        *log_file << "=========================================================\n";
+        *log_file << " MPI Profiler Finished for Rank " << profiler_rank << "\n";
+        *log_file << "=========================================================\n";
+        log_file->close();
+    }
+    return ret;
+}
+
+
+/*
+ * =============================================================================
+ * Point-to-point Communication Functions
+ * =============================================================================
+ */
+int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Send(count=" << count 
+                  << ", type=" << get_type_name(datatype) 
+                  << ", dest=" << dest 
+                  << ", tag=" << tag << ")\n";
+        *log_file << "    >> Path: " << profiler_rank << " -> " << dest << "\n";
+    }
+    
+    int ret = PMPI_Send(buf, count, datatype, dest, tag, comm);
+    
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Recv(count=" << count 
+                  << ", type=" << get_type_name(datatype) 
+                  << ", source=" << source 
+                  << ", tag=" << tag << ")\n";
+    }
+
+    int ret = PMPI_Recv(buf, count, datatype, source, tag, comm, status);
+    
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        int actual_source = (status != MPI_STATUS_IGNORE) ? status->MPI_SOURCE : source;
+        *log_file << "    >> Path: " << actual_source << " -> " << profiler_rank << "\n";
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+/*
+ * =============================================================================
+ * Collective Communication Functions
+ * =============================================================================
+ */
+
+int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Bcast(count=" << count
+                  << ", type=" << get_type_name(datatype)
+                  << ", root=" << root << ")\n";
+        *log_file << "    >> Path: " << root << " -> all\n";
+    }
+
+    int ret = PMPI_Bcast(buffer, count, datatype, root, comm);
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Reduce(count=" << count
+                  << ", type=" << get_type_name(datatype)
+                  << ", root=" << root << ")\n";
+        *log_file << "    >> Path: all -> " << root << "\n";
+    }
+
+    int ret = PMPI_Reduce(sendbuf, recvbuf, count, datatype, op, root, comm);
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Alltoall(sendcount=" << sendcount
+                  << ", sendtype=" << get_type_name(sendtype) << ", recvcount=" << recvcount
+                  << ", recvtype=" << get_type_name(recvtype) << ")\n";
+        *log_file << "    >> Path: all <-> all\n";
+    }
+
+    int ret = PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm);
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+
+int MPI_Barrier(MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Barrier()\n";
+    }
+
+    int ret = PMPI_Barrier(comm);
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    return ret;
+}
+
+} // extern "C"
