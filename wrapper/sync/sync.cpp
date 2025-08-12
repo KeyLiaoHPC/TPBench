@@ -5,6 +5,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include <rdma/rdma_cma.h>
 #include <infiniband/verbs.h>
@@ -16,6 +17,21 @@
 #include <unistd.h>
 
 namespace {
+
+enum class SYNC_ERROR {
+    OK = 0,    
+};
+
+
+#define DBGPRINT(info, var, debug) \
+    if (debug) { \
+        std::cout << "[TPSYNC] " << info << ": " << var << std::endl; \
+    } \
+
+#define ERRORPRINT(info, var, debug) \
+    if (debug) { \
+        std::cerr << "[TPSYNC ERROR] " << info << ": " << var << std::endl; \
+    } \
 
 // --------- tools ----------
 static inline void cpu_relax() {
@@ -71,39 +87,66 @@ public:
         const char* en = std::getenv("RDMASYNC_ENABLE");
         if (!en || std::strcmp(en, "1") != 0) { enabled_ = false; inited_ = true; return; }
 
-        if (strcmp(std::getenv("RDMASYNC_ROLE"), "AUTO") == 0) {
+        const char* dbg = std::getenv("RDMASYNC_DEBUG");
+        if (dbg && std::strcmp(dbg, "1") == 0) {
+            debug_ = true;
+        }
+
+        const char* role_env = std::getenv("RDMASYNC_ROLE");
+        std::string auto_role = role_env ? role_env : "";
+        if (auto_role == "AUTO") {
             if (mpi_rank != 0) {
-                setenv("RDMASYNC_ROLE", "participant", 1);
+                auto_role = "participant";
             } else {
-                setenv("RDMASYNC_ROLE", "coordinator", 1);
+                auto_role = "coordinator";
             }
         }
-        const char* role = std::getenv("RDMASYNC_ROLE");
-        if (!role) { enabled_ = false; inited_ = true; return; }
-        role_ = role;
+        if (auto_role.empty()) { enabled_ = false; inited_ = true; return; }
+        role_ = auto_role;
 
         const char* port = std::getenv("RDMASYNC_PORT");
-        port_ = port ? port : "7471";
+        port_ = port ? port : "2673";
 
         const char* spin = std::getenv("RDMASYNC_SPIN_US");
         spin_us_ = spin ? std::max(0, std::atoi(spin)) : 200;
 
         if (role_ == "coordinator") {
-            const char* bind = std::getenv("RDMASYNC_BIND_IP");
-            bind_ip_ = bind ? bind : "0.0.0.0";
+            // const char* bind = std::getenv("RDMASYNC_BIND_IP");
+            bind_ip_ = "0.0.0.0";
             const char* exp  = std::getenv("RDMASYNC_EXPECTED");
             expected_ = exp ? std::atoi(exp) : 0;
             if (expected_ <= 0) { enabled_ = false; inited_ = true; return; }
-            setup_coordinator();
+            if ( setup_coordinator() == false ) {
+                enabled_ = false;
+                inited_ = true;
+                ERRORPRINT("Coordinator setup failed", bind_ip_, debug_);
+                return;
+            }
         } else if (role_ == "participant") {
             const char* server = std::getenv("RDMASYNC_SERVER_IP");
-            if (!server) { enabled_ = false; inited_ = true; return; }
+            if (!server) { 
+                if (role_env && std::strcmp(role_env, "AUTO") == 0) {
+                    ERRORPRINT("AUTO mode requires RDMASYNC_SERVER_IP to be set to coordinator's IP (not 127.0.0.1)", "missing", debug_);
+                } else {
+                    ERRORPRINT("RDMASYNC_SERVER_IP not set", "missing", debug_);
+                }
+                enabled_ = false; 
+                inited_ = true; 
+                return; 
+            }
             server_ip_ = server;
-            setup_participant();
+            if (setup_participant() == false) {
+                enabled_ = false;
+                inited_ = true;
+                ERRORPRINT("Participant setup failed", server_ip_, debug_);
+                return;
+            }
         } else {
             enabled_ = false;
         }
         inited_ = true;
+
+        DBGPRINT("RDMASync initialized: ", role_, debug_);
     }
 
     void finalize() {
@@ -121,6 +164,7 @@ public:
             }
             if (ec_) rdma_destroy_event_channel(ec_);
             if (flag_mem_) free(flag_mem_);
+            if (ctrl_mem_) free(ctrl_mem_);
         } else if (role_ == "coordinator") {
             for (auto& c : conns_) {
                 rdma_disconnect(c.id);
@@ -195,128 +239,267 @@ public:
 
 private:
     // Participant initialization
-    void setup_participant() {
-        ec_ = rdma_create_event_channel();                  if (!ec_) return;
-        if (rdma_create_id(ec_, &id_p_, nullptr, RDMA_PS_TCP)) return;
+    bool setup_participant() {
+        // In AUTO mode, add small delay to let coordinator start first
+        const char* role_env = std::getenv("RDMASYNC_ROLE");
+        if (role_env && std::strcmp(role_env, "AUTO") == 0) {
+            usleep(200000); // 200ms delay
+        }
+        
+        DBGPRINT("Setting up participant", server_ip_, debug_);
+        ec_ = rdma_create_event_channel();                  
+        if (!ec_) return false;
+        if (rdma_create_id(ec_, &id_p_, nullptr, RDMA_PS_TCP)){
+            ERRORPRINT("Failed to create RDMA ID", server_ip_, debug_);
+            return false;
+        }
 
-        // Resolve address and connect
+        // Resolve address and connect (with retry for AUTO mode)
         addrinfo hints{}, *res = nullptr;
         hints.ai_family = AF_INET; hints.ai_socktype = SOCK_STREAM;
-        if (getaddrinfo(server_ip_.c_str(), port_.c_str(), &hints, &res)) return;
-        if (rdma_resolve_addr(id_p_, nullptr, res->ai_addr, 2000)) { freeaddrinfo(res); return; }
+        if (getaddrinfo(server_ip_.c_str(), port_.c_str(), &hints, &res)) {
+            ERRORPRINT("Failed to resolve address", server_ip_, debug_);
+            return false;
+        }
+        
+        int resolve_retries = 5;
+        while (resolve_retries > 0) {
+            if (rdma_resolve_addr(id_p_, nullptr, res->ai_addr, 2000) == 0) {
+                break;
+            }
+            DBGPRINT("Address resolve retry", resolve_retries, debug_);
+            usleep(100000); // 100ms
+            resolve_retries--;
+        }
+        if (resolve_retries == 0) {
+            ERRORPRINT("Failed to resolve RDMA address after retries", server_ip_, debug_);
+            freeaddrinfo(res);
+            return false;
+        }
         freeaddrinfo(res);
 
         rdma_cm_event* ev=nullptr;
-        if (rdma_get_cm_event(ec_, &ev)) return;
-        if (ev->event != RDMA_CM_EVENT_ADDR_RESOLVED) { rdma_ack_cm_event(ev); return; }
+        if (rdma_get_cm_event(ec_, &ev)) return false;
+        if (ev->event != RDMA_CM_EVENT_ADDR_RESOLVED) { rdma_ack_cm_event(ev); return false; }
         rdma_ack_cm_event(ev);
 
-        if (rdma_resolve_route(id_p_, 2000)) return;
-        if (rdma_get_cm_event(ec_, &ev)) return;
-        if (ev->event != RDMA_CM_EVENT_ROUTE_RESOLVED) { rdma_ack_cm_event(ev); return; }
+        if (rdma_resolve_route(id_p_, 2000)) return false;
+        if (rdma_get_cm_event(ec_, &ev)) return false;
+        if (ev->event != RDMA_CM_EVENT_ROUTE_RESOLVED) { rdma_ack_cm_event(ev); return false; }
         rdma_ack_cm_event(ev);
 
-        pd_ = ibv_alloc_pd(id_p_->verbs);                   if (!pd_) return;
-        cq_ = ibv_create_cq(id_p_->verbs, 32, nullptr, nullptr, 0); if (!cq_) return;
+        pd_ = ibv_alloc_pd(id_p_->verbs);                   
+        if (!pd_) {
+            ERRORPRINT("Failed to allocate PD", "", debug_);
+            return false;
+        }
+        cq_ = ibv_create_cq(id_p_->verbs, 32, nullptr, nullptr, 0); 
+        if (!cq_) {
+            ERRORPRINT("Failed to create CQ", "", debug_);
+            return false;
+        }
 
         ibv_qp_init_attr qpia{};
         qpia.qp_type = IBV_QPT_RC;
-        qpia.send_cq = cq_; qpia.recv_cq = cq_;
-        qpia.cap.max_send_wr = 32; qpia.cap.max_recv_wr = 32;
-        qpia.cap.max_send_sge = 1;  qpia.cap.max_recv_sge = 1;
-        if (rdma_create_qp(id_p_, pd_, &qpia)) return;
+        qpia.send_cq = cq_; 
+        qpia.recv_cq = cq_;
+        qpia.cap.max_send_wr = 32; 
+        qpia.cap.max_recv_wr = 32;
+        qpia.cap.max_send_sge = 1;  
+        qpia.cap.max_recv_sge = 1;
+        if (rdma_create_qp(id_p_, pd_, &qpia)) {
+            ERRORPRINT("Failed to create QP", "", debug_);
+            return false;
+        }
 
-        // Control-buffer MR (only to obtain an lkey for SEND WQEs)
-        MsgPart2C dummy{};
-        mr_ctrl_send_ = ibv_reg_mr(pd_, &dummy, sizeof(dummy), IBV_ACCESS_LOCAL_WRITE);
-        mr_ctrl_recv_ = ibv_reg_mr(pd_, &dummy, sizeof(dummy), IBV_ACCESS_LOCAL_WRITE);
+        // Control-buffer MR (allocate memory for control messages)
+        void* ctrl_mem = nullptr; 
+        posix_memalign(&ctrl_mem, 64, sizeof(MsgPart2C));
+        ctrl_mem_ = ctrl_mem;
+        mr_ctrl_send_ = ibv_reg_mr(pd_, ctrl_mem_, sizeof(MsgPart2C), IBV_ACCESS_LOCAL_WRITE);
+        if (!mr_ctrl_send_) {
+            ERRORPRINT("Failed to register control send MR", "", debug_);
+            return false;
+        }
+        
+        mr_ctrl_recv_ = ibv_reg_mr(pd_, ctrl_mem_, sizeof(MsgPart2C), IBV_ACCESS_LOCAL_WRITE);
+        if (!mr_ctrl_recv_) {
+            ERRORPRINT("Failed to register control recv MR", "", debug_);
+            return false;
+        }
 
         // Flag buffer (64B-aligned)
-        void* mem=nullptr; posix_memalign(&mem, 64, 64);
-        flag_mem_ = mem; *(uint64_t*)flag_mem_ = 0;
+        void* mem=nullptr; 
+        if (posix_memalign(&mem, 64, 64) != 0) {
+            ERRORPRINT("Failed to allocate flag memory", "", debug_);
+            return false;
+        }
+        flag_mem_ = mem; 
+        *(uint64_t*)flag_mem_ = 0;
         mr_flag_ = ibv_reg_mr(pd_, flag_mem_, 64, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE);
+        if (!mr_flag_) {
+            ERRORPRINT("Failed to register flag MR", "", debug_);
+            return false;
+        }
 
-        // Establish connection
+        // Establish connection (with retry)
         rdma_conn_param cp{}; cp.initiator_depth=1; cp.responder_resources=1; cp.rnr_retry_count=7;
-        if (rdma_connect(id_p_, &cp)) return;
-        if (rdma_get_cm_event(ec_, &ev)) return;
-        if (ev->event != RDMA_CM_EVENT_ESTABLISHED) { rdma_ack_cm_event(ev); return; }
+        
+        int connect_retries = 5;
+        while (connect_retries > 0) {
+            if (rdma_connect(id_p_, &cp) == 0) {
+                break;
+            }
+            DBGPRINT("Connection retry", connect_retries, debug_);
+            usleep(10000); // 10ms
+            connect_retries--;
+        }
+        if (connect_retries == 0) {
+            ERRORPRINT("Failed to connect after retries", "", debug_);
+            return false;
+        }
+        
+        connect_retries = 5;
+        while (connect_retries > 0) {
+            if (rdma_get_cm_event(ec_, &ev) == 0) {
+                if (ev->event == RDMA_CM_EVENT_ESTABLISHED) {
+                    break;
+                } else if (connect_retries == 1) {
+                    ERRORPRINT("Failed to establish connection", ev->event, debug_);
+                    rdma_ack_cm_event(ev);
+                    return false;
+                }
+                rdma_ack_cm_event(ev);
+            } else {
+                ERRORPRINT("Failed to get connect event", "", debug_);
+                return false;   
+            }
+            DBGPRINT("Connection event retry", 5 - connect_retries + 1, debug_);
+            usleep(50000); // 50ms
+            connect_retries--;
+        }
+
         rdma_ack_cm_event(ev);
 
         // Send own flag {addr, rkey} to the coordinator
-        MsgPart2C info{ (uint64_t)(uintptr_t)flag_mem_, mr_flag_->rkey, 0 };
-        ibv_sge sge{ .addr=(uintptr_t)&info, .length=(uint32_t)sizeof(info), .lkey=mr_ctrl_send_->lkey };
+        MsgPart2C* info = (MsgPart2C*)ctrl_mem_;
+        info->flag_addr = (uint64_t)(uintptr_t)flag_mem_;
+        info->flag_rkey = mr_flag_->rkey;
+        info->pad = 0;
+        
+        ibv_sge sge{ .addr=(uintptr_t)info, .length=(uint32_t)sizeof(*info), .lkey=mr_ctrl_send_->lkey };
         ibv_send_wr swr{}, *bad=nullptr;
         swr.opcode = IBV_WR_SEND; swr.send_flags = IBV_SEND_SIGNALED;
         swr.sg_list = &sge; swr.num_sge = 1;
         ibv_post_send(id_p_->qp, &swr, &bad);
         poll_cq_one(cq_);
+        DBGPRINT("Participant setup complete", server_ip_, debug_);
+        return true;
     }
 
     // Coordinator initialization
-    void setup_coordinator() {
-        ec_ = rdma_create_event_channel();                       if (!ec_) return;
-        if (rdma_create_id(ec_, &listen_id_, nullptr, RDMA_PS_TCP)) return;
+    bool setup_coordinator() {
+        DBGPRINT("Setting up coordinator", bind_ip_, debug_);
+        ec_ = rdma_create_event_channel();                       
+        if (!ec_) return false;
+        if (rdma_create_id(ec_, &listen_id_, nullptr, RDMA_PS_TCP)) return false;
 
-        sockaddr_in sin{}; sin.sin_family = AF_INET;
+        sockaddr_in sin{}; 
+        sin.sin_family = AF_INET;
         sin.sin_port = htons((uint16_t)std::atoi(port_.c_str()));
         if (!bind_ip_.empty()) inet_pton(AF_INET, bind_ip_.c_str(), &sin.sin_addr);
         else sin.sin_addr.s_addr = INADDR_ANY;
 
-        if (rdma_bind_addr(listen_id_, (sockaddr*)&sin)) return;
-        if (rdma_listen(listen_id_, expected_)) return;
+        if (rdma_bind_addr(listen_id_, (sockaddr*)&sin)) return false;
+        if (rdma_listen(listen_id_, expected_)) return false;
 
-        // Accept `expected_` connections
-        conns_.reserve(expected_);
-        for (int i=0;i<expected_;++i) {
-            rdma_cm_event* ev=nullptr;
-            if (rdma_get_cm_event(ec_, &ev)) return;
-            if (ev->event != RDMA_CM_EVENT_CONNECT_REQUEST) { rdma_ack_cm_event(ev); return; }
-            rdma_cm_id* id = ev->id; rdma_ack_cm_event(ev);
-
-            if (!pd_) {
-                pd_ = ibv_alloc_pd(id->verbs);
-                cq_ = ibv_create_cq(id->verbs, 1024, nullptr, nullptr, 0);
-                // Reserve a "ready" counter (unused in current impl; future extension)
-                void* mem=nullptr; posix_memalign(&mem, 64, 64);
-                ready_mem_ = mem; *(uint64_t*)ready_mem_ = 0;
-                mr_ready_ = ibv_reg_mr(pd_, ready_mem_, 64, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC);
+        // Step 1: Accept all connections first
+        std::vector<rdma_cm_id*> pending_ids;
+        for (int i = 0; i < expected_; ++i) {
+            rdma_cm_event* ev = nullptr;
+            if (rdma_get_cm_event(ec_, &ev)) return false;
+            if (ev->event != RDMA_CM_EVENT_CONNECT_REQUEST) { 
+                rdma_ack_cm_event(ev); 
+                return false; 
             }
+            rdma_cm_id* id = ev->id; 
+            rdma_ack_cm_event(ev);
+            pending_ids.push_back(id);
+        }
 
+        // Step 2: Initialize PD and CQ once
+        if (!pending_ids.empty()) {
+            pd_ = ibv_alloc_pd(pending_ids[0]->verbs);
+            cq_ = ibv_create_cq(pending_ids[0]->verbs, 1024, nullptr, nullptr, 0);
+            
+            // Reserve a "ready" counter
+            void* mem = nullptr; 
+            posix_memalign(&mem, 64, 64);
+            ready_mem_ = mem; 
+            *(uint64_t*)ready_mem_ = 0;
+            mr_ready_ = ibv_reg_mr(pd_, ready_mem_, 64, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_ATOMIC);
+        }
+
+        // Step 3: Create QPs and establish connections
+        conns_.reserve(expected_);
+        for (rdma_cm_id* id : pending_ids) {
             ibv_qp_init_attr qpia{};
             qpia.qp_type = IBV_QPT_RC;
             qpia.send_cq = cq_; qpia.recv_cq = cq_;
             qpia.cap.max_send_wr = 128; qpia.cap.max_recv_wr = 128;
             qpia.cap.max_send_sge = 1;  qpia.cap.max_recv_sge = 1;
-            if (rdma_create_qp(id, pd_, &qpia)) return;
+            if (rdma_create_qp(id, pd_, &qpia)) return false;
 
-            Conn c; c.id = id;
+            Conn c; 
+            c.id = id;
 
-            // First, post a RECV for the participant's flag info
+            // Post RECV for participant's flag info
             c.mr_ctrl_recv = ibv_reg_mr(pd_, &c.part_info, sizeof(c.part_info), IBV_ACCESS_LOCAL_WRITE);
-            ibv_sge rsge{ .addr=(uintptr_t)&c.part_info, .length=(uint32_t)sizeof(c.part_info), .lkey=c.mr_ctrl_recv->lkey };
-            ibv_recv_wr rwr{}, *rbad=nullptr;
-            rwr.sg_list = &rsge; rwr.num_sge = 1;
+            ibv_sge rsge{ 
+                .addr = (uintptr_t)&c.part_info, 
+                .length = (uint32_t)sizeof(c.part_info), 
+                .lkey = c.mr_ctrl_recv->lkey 
+            };
+            ibv_recv_wr rwr{}, *rbad = nullptr;
+            rwr.sg_list = &rsge; 
+            rwr.num_sge = 1;
             ibv_post_recv(id->qp, &rwr, &rbad);
 
-            rdma_conn_param cp{}; cp.initiator_depth=1; cp.responder_resources=1; cp.rnr_retry_count=7;
-            if (rdma_accept(id, &cp)) return;
+            rdma_conn_param cp{}; 
+            cp.initiator_depth = 1; 
+            cp.responder_resources = 1; 
+            cp.rnr_retry_count = 7;
+            if (rdma_accept(id, &cp)) return false;
 
-            // Wait for ESTABLISHED
-            rdma_cm_event* ev2=nullptr;
-            if (rdma_get_cm_event(ec_, &ev2)) return;
-            if (ev2->event != RDMA_CM_EVENT_ESTABLISHED) { rdma_ack_cm_event(ev2); return; }
-            rdma_ack_cm_event(ev2);
-
-            // Wait for the RECV completion (flag info is now available)
-            poll_cq_one(cq_);
-
-            // Spare control-send MR
-            c.mr_ctrl_send = ibv_reg_mr(pd_, &c.part_info, sizeof(c.part_info), IBV_ACCESS_LOCAL_WRITE);
             conns_.push_back(c);
         }
+
+        // Step 4: Wait for all ESTABLISHED events
+        for (int i = 0; i < expected_; ++i) {
+            rdma_cm_event* ev = nullptr;
+            if (rdma_get_cm_event(ec_, &ev)) return false;
+            if (ev->event != RDMA_CM_EVENT_ESTABLISHED) { 
+                rdma_ack_cm_event(ev); 
+                return false; 
+            }
+            rdma_ack_cm_event(ev);
+        }
+
+        // Step 5: Wait for all participant flag info (RECV completions)
+        for (int i = 0; i < expected_; ++i) {
+            poll_cq_one(cq_);
+        }
+
+        // Step 6: Setup control send MRs for all connections
+        for (auto& c : conns_) {
+            c.mr_ctrl_send = ibv_reg_mr(pd_, &c.part_info, sizeof(c.part_info), IBV_ACCESS_LOCAL_WRITE);
+        }
+
         // Pre-post RECVs for the first hook round
         ensure_posted_recvs(expected_);
+
+        DBGPRINT("Coordinator setup complete with", expected_, debug_);
+        return true;
     }
 
     void ensure_posted_recvs(int need) {
@@ -338,6 +521,7 @@ private:
 private:
     // State
     bool enabled_ = false, inited_ = false;
+    bool debug_ = false;                     // Debug mode (print extra info)
     std::string role_;
     std::string port_ = "7471";
     int spin_us_ = 200;                         // Reserved (current impl uses busy-wait; no sleep)
@@ -352,6 +536,7 @@ private:
     ibv_mr*  mr_ctrl_send_ = nullptr;
     ibv_mr*  mr_ctrl_recv_ = nullptr;
     ibv_mr*  mr_flag_ = nullptr;
+    void*    ctrl_mem_ = nullptr;
     void*    flag_mem_ = nullptr;
     std::string server_ip_;
 
@@ -368,8 +553,8 @@ private:
     std::string bind_ip_;
     // Reuse pd_/cq_ as coordinator resource handles
 };
-
 } // anonymous namespace
+
 
 // --------- Public API implementation ---------
 namespace rdmasync {
@@ -379,7 +564,7 @@ void hook(const char* name) { (void)name; RDMASyncImpl::inst().hook(name); }
 } // namespace rdmasync
 
 extern "C" {
-void rdmasync_init_if_needed() { rdmasync::init_if_needed(); }
+void rdmasync_init_if_needed(uint32_t mpi_rank) { rdmasync::init_if_needed(mpi_rank); }
 void rdmasync_finalize()       { rdmasync::finalize(); }
 void rdmasync_hook(const char* name) { rdmasync::hook(name); }
 }

@@ -10,7 +10,7 @@
 
 // Include TPBench headers for additional functionality
 extern "C" {
-#include "tpbench.h"
+// #include "tpbench.h"
 }
 
 // Optional RDMA-based sync hooks
@@ -96,31 +96,31 @@ int MPI_Init(int *argc, char ***argv) {
     return ret;
 }
 
-int MPI_Finalize() {
-    double start_time, end_time, elapsed;
+// int MPI_Finalize() {
+//     // double start_time, end_time, elapsed;
 
-    if (log_file && log_file->is_open()) {
-        start_time = PMPI_Wtime();
-        *log_file << "[ " << start_time << " ] MPI_Finalize()\n";
-    }
+//     // if (log_file && log_file->is_open()) {
+//     //     start_time = PMPI_Wtime();
+//     //     *log_file << "[ " << start_time << " ] MPI_Finalize()\n";
+//     // }
 
-    // Finalize optional RDMA sync first (safe even if not enabled)
-    rdmasync::finalize();
+//     // Finalize optional RDMA sync first (safe even if not enabled)
+//     rdmasync::finalize();
 
-    // Call the actual MPI_Finalize
-    int ret = PMPI_Finalize();
+//     // Call the actual MPI_Finalize
+//     int ret = PMPI_Finalize();
 
-    if (log_file && log_file->is_open()) {
-        end_time = PMPI_Wtime();
-        elapsed = end_time - start_time;
-        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
-        *log_file << "=========================================================\n";
-        *log_file << " MPI Profiler Finished for Rank " << profiler_rank << "\n";
-        *log_file << "=========================================================\n";
-        log_file->close();
-    }
-    return ret;
-}
+//     // if (log_file && log_file->is_open()) {
+//     //     end_time = PMPI_Wtime();
+//     //     elapsed = end_time - start_time;
+//     //     *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+//     //     *log_file << "=========================================================\n";
+//     //     *log_file << " MPI Profiler Finished for Rank " << profiler_rank << "\n";
+//     //     *log_file << "=========================================================\n";
+//     //     log_file->close();
+//     // }
+//     return ret;
+// }
 
 
 /*
@@ -129,7 +129,6 @@ int MPI_Finalize() {
  * =============================================================================
  */
 int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
-    // Optional sync hook
     rdmasync::hook(__func__);
 
     double start_time, end_time, elapsed;

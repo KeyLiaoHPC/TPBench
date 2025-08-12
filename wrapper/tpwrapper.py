@@ -87,7 +87,7 @@ def ensure_trace_env(env: Dict[str, str], enable_trace: bool):
         env['LD_PRELOAD'] = f"{lib} {prev}".strip()
 
 
-def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_total: int) -> List[Dict[str, str]]:
+def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_total: int, verbose: bool) -> List[Dict[str, str]]:
     envs: List[Dict[str, str]] = []
     if not groups:
         return envs
@@ -96,6 +96,8 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_
     for gi, _ in enumerate(groups):
         e = dict(base_env)
         e['RDMASYNC_ENABLE'] = '1'
+        if (verbose):
+            e['RDMASYNC_DEBUG'] = '1'
         if gi == 0:
             e['RDMASYNC_ROLE'] = 'AUTO'
             e['RDMASYNC_BIND_IP'] = coord_ip
@@ -115,7 +117,7 @@ def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Pat
         penv = os.environ.copy()
         penv.update(env)
         dbg(f"Launching [{i}]: {' '.join(cmd)}", verbose)
-        # procs.append(subprocess.Popen(cmd, cwd=str(cwd), env=penv))
+        procs.append(subprocess.Popen(cmd, cwd=str(cwd), env=penv))
     rc = 0
     for i, p in enumerate(procs):
         r = p.wait()
@@ -123,19 +125,77 @@ def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Pat
         rc = rc or r
     return rc
 
+def detect_mpi_impl(mpirun_exe: str) -> str:
+    """
+    Detect MPI implementation for the given mpirun/mpiexec executable.
+    Returns one of: 'openmpi', 'oneapi', 'mpich', or 'unknown'.
+    Strategy:
+      1) Try `mpirun -V` or `mpirun --version` and parse output.
+      2) Fall back to environment variables.
+    """
+    # Try version flags first (they should return quickly and not launch jobs)
+    for flag in ('-V', '--version'):
+        try:
+            out = subprocess.check_output([mpirun_exe, flag], stderr=subprocess.STDOUT, timeout=2)
+            txt = out.decode(errors='ignore').lower()
+            if 'open mpi' in txt or 'ompi' in txt:
+                return 'openmpi'
+            if 'intel(r) mpi' in txt or 'oneapi' in txt or 'intel mpi' in txt:
+                return 'oneapi'
+            if 'mpich' in txt or 'hydra' in txt:
+                return 'mpich'
+        except Exception:
+            pass
+
+    # Fall back to well-known environment hints
+    env = os.environ
+    if any(k in env for k in ('I_MPI_ROOT', 'I_MPI_SUBSTITUTE_HOSTS', 'FI_PROVIDER_PATH')):
+        return 'oneapi'
+    if any(k in env for k in ('OMPI_VERSION', 'OMPI_COMM_WORLD_SIZE', 'OMPI_MCA_orte_base_help_aggregate')):
+        return 'openmpi'
+    if any(k in env for k in ('MPICH_VERSION', 'HYDRA_VERSION', 'PMI_RANK')):
+        return 'mpich'
+
+    return 'unknown'
+
 
 def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], export_env: List[Dict[str, str]], verbose: bool) -> List[List[str]]:
+    # Detect implementation from the first segment's launcher (assume same mpirun across segments)
+    mpirun_exe = base_cmd_tokens[0] if base_cmd_tokens else 'mpirun'
+    mpi_impl = detect_mpi_impl(mpirun_exe)
+
     cmds: List[List[str]] = []
     for i, hosts in enumerate(groups):
-        print(hosts)
+        dbg(f"Hosts group {i}: {hosts}", verbose)
         hosts_csv = ','.join(hosts)
         tokens = substitute_tphosts(base_cmd_tokens, hosts_csv)
         tokens_ext = list(tokens)
-        for k, v in export_env[i].items():
-            if k.startswith('RDMASYNC_') or k == 'LD_PRELOAD':
-                tokens_ext.insert(0, f'{k}={v}')
+
+        # Determine where to insert flags: right after 'mpirun/mpiexec'
+        insert_idx = 1 if tokens_ext and (tokens_ext[0].endswith('mpirun') or tokens_ext[0].endswith('mpiexec')) else 0
+
+        # Build implementation-specific env propagation flags
+        env_items = [(k, str(v)) for k, v in export_env[i].items() if (k.startswith('RDMASYNC_') or k == 'LD_PRELOAD' or k.startswith('OMP'))]
+        env_flags: List[str] = []
+        if mpi_impl == 'openmpi':
+            # Use: -x VAR=VALUE
+            for k, v in env_items:
+                env_flags += ['-x', f'{k}={v}']
+        elif mpi_impl in ('oneapi', 'mpich'):
+            # Hydra: -genv VAR VALUE
+            for k, v in env_items:
+                env_flags += ['-genv', k, v]
+        else:
+            # Fallback to Open MPI style if unknown
+            for k, v in env_items:
+                env_flags += ['-x', f'{k}={v}']
+
+        # Insert flags right after the launcher token
+        tokens_ext[insert_idx:insert_idx] = env_flags
+
         cmds.append(tokens_ext)
-        dbg(f"Command hosts={hosts_csv}: {' '.join(tokens_ext)}", verbose)
+        dbg(f"Command hosts={hosts_csv} [{mpi_impl}]: {' '.join(tokens_ext)}", verbose)
+
     return cmds
 
 
@@ -208,7 +268,7 @@ def main(argv: List[str]) -> int:
 
         base_env: Dict[str, str] = {}
         ensure_trace_env(base_env, trace_enabled)
-        envs = build_sync_envs(groups, base_env, total_ranks) if sync_enabled else [base_env.copy() for _ in groups]
+        envs = build_sync_envs(groups, base_env, total_ranks - 1, verbose) if sync_enabled else [base_env.copy() for _ in groups]
 
         commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
         return run_parallel(commands, envs, WRAPPER_DIR, verbose)
@@ -234,7 +294,7 @@ def main(argv: List[str]) -> int:
     ensure_trace_env(base_env, trace_enabled)
 
     if groups and (base_tokens[0].endswith('mpirun') or base_tokens[0].endswith('mpiexec')):
-        envs = build_sync_envs(groups, base_env, total_ranks) if sync_enabled else [base_env.copy() for _ in groups]
+        envs = build_sync_envs(groups, base_env, total_ranks - 1, verbose) if sync_enabled else [base_env.copy() for _ in groups]
         commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
         return run_parallel(commands, envs, WRAPPER_DIR, verbose)
     else:

@@ -16,7 +16,7 @@ void hook(const char* name);
 
 // Optional C API (convenient for C/LD_PRELOAD usage and C++ wrappers with C linkage)
 extern "C" {
-void rdmasync_init_if_needed();
+void rdmasync_init_if_needed(uint32_t mpi_rank);
 void rdmasync_finalize();
 void rdmasync_hook(const char* name);
 }
