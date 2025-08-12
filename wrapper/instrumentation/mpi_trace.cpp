@@ -236,6 +236,31 @@ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datat
     return ret;
 }
 
+int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
+    // Optional sync hook
+    rdmasync::hook(__func__);
+
+    double start_time, end_time, elapsed;
+    
+    if (log_file && log_file->is_open()) {
+        start_time = PMPI_Wtime();
+        *log_file << "[ " << start_time << " ] MPI_Allreduce(count=" << count
+                  << ", type=" << get_type_name(datatype) << ")\n";
+        *log_file << "    >> Path: all -> all\n";
+    }
+
+    int ret = PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+
+    if (log_file && log_file->is_open()) {
+        end_time = PMPI_Wtime();
+        elapsed = end_time - start_time;
+        *log_file << "    >> Execution Time: " << elapsed * 1e6 << " us\n";
+    }
+    
+    return ret;
+}
+
+
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm) {
     // Optional sync hook
     rdmasync::hook(__func__);

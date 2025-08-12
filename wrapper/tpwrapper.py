@@ -93,16 +93,22 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_
         return envs
     coord_host = groups[0][0]
     coord_ip = resolve_ip(coord_host)
+    
+    # Calculate expected connections for coordinator
+    # Coordinator expects connections from all other groups
+    participant_groups = len(groups) - 1
+    
     for gi, _ in enumerate(groups):
         e = dict(base_env)
         e['RDMASYNC_ENABLE'] = '1'
         if (verbose):
             e['RDMASYNC_DEBUG'] = '1'
         if gi == 0:
-            e['RDMASYNC_ROLE'] = 'AUTO'
+            e['RDMASYNC_ROLE'] = 'coordinator'
             e['RDMASYNC_BIND_IP'] = coord_ip
-            if expected_total > 0:
-                e['RDMASYNC_EXPECTED'] = str(expected_total)
+            # Coordinator expects one connection from each participant group
+            if participant_groups > 0:
+                e['RDMASYNC_EXPECTED'] = str(participant_groups)
             e['RDMASYNC_SERVER_IP'] = coord_ip
         else:
             e['RDMASYNC_ROLE'] = 'participant'
@@ -116,12 +122,12 @@ def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Pat
     for i, (cmd, env) in enumerate(zip(commands, envs)):
         penv = os.environ.copy()
         penv.update(env)
-        dbg(f"Launching [{i}]: {' '.join(cmd)}", verbose)
+        dbg(f"Launching [{i}]: {' '.join(cmd)}", True)
         procs.append(subprocess.Popen(cmd, cwd=str(cwd), env=penv))
     rc = 0
     for i, p in enumerate(procs):
         r = p.wait()
-        dbg(f"Process [{i}] exited with {r}", verbose)
+        dbg(f"Process [{i}] exited with {r}", True)
         rc = rc or r
     return rc
 
@@ -268,7 +274,7 @@ def main(argv: List[str]) -> int:
 
         base_env: Dict[str, str] = {}
         ensure_trace_env(base_env, trace_enabled)
-        envs = build_sync_envs(groups, base_env, total_ranks - 1, verbose) if sync_enabled else [base_env.copy() for _ in groups]
+        envs = build_sync_envs(groups, base_env, 0, verbose) if sync_enabled else [base_env.copy() for _ in groups]
 
         commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
         return run_parallel(commands, envs, WRAPPER_DIR, verbose)
@@ -294,7 +300,7 @@ def main(argv: List[str]) -> int:
     ensure_trace_env(base_env, trace_enabled)
 
     if groups and (base_tokens[0].endswith('mpirun') or base_tokens[0].endswith('mpiexec')):
-        envs = build_sync_envs(groups, base_env, total_ranks - 1, verbose) if sync_enabled else [base_env.copy() for _ in groups]
+        envs = build_sync_envs(groups, base_env, 0, verbose) if sync_enabled else [base_env.copy() for _ in groups]
         commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
         return run_parallel(commands, envs, WRAPPER_DIR, verbose)
     else:
