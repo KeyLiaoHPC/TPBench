@@ -149,6 +149,7 @@ int MPI_Finalize() {
  */
 int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
 
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
@@ -179,6 +180,7 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
     // Optional sync hook
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
 
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
@@ -216,6 +218,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
 int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
     // Optional sync hook
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
 
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
@@ -242,6 +245,7 @@ int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm
 int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm) {
     // Optional sync hook
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
     
@@ -267,6 +271,7 @@ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datat
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
     // Optional sync hook
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
 
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
@@ -294,6 +299,7 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm) {
     // Optional sync hook
     rdmasync::hook(__func__);
+    PMPI_Barrier(comm);
 
     uint64_t start_time, end_time, elapsed;
     uint64_t start_cy, end_cy;
