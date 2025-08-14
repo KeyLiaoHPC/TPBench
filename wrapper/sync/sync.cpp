@@ -22,11 +22,7 @@
 
 namespace {
 
-enum class SYNC_ERROR {
-    OK = 0,    
-};
-
-
+#ifdef DEBUG
 #define DBGPRINT(info, var, debug) \
     if (debug) { \
         std::cout << "[TPSYNC "<< __LINE__ <<"] " << info << ": " << var << std::endl; \
@@ -37,9 +33,17 @@ enum class SYNC_ERROR {
         std::cout << "[TPSYNC WARNING "<< __LINE__ <<"] " << info << ": " << var << std::endl; \
     } \
 
-
 #define ERRORPRINT(info, var) \
     std::cerr << "[TPSYNC ERROR "<< __LINE__ << "] " << info << ": " << var << std::endl; \
+
+#else
+
+#define DBGPRINT(info, var, debug) 
+#define WARNINGPRINT(info, var, debug) 
+#define ERRORPRINT(info, var) 
+
+#endif
+
 
 // --------- tools ----------
 static inline void cpu_relax() {
@@ -93,23 +97,23 @@ struct MsgPart2C {          // participant -> coordinator: expose local flag {ad
 struct MsgEpoch {           // participant -> coordinator: send current epoch
     uint64_t epoch;
 };
-#pragma pack(pop)
 
-        struct Conn {
-            int client_fd;
-            struct ibv_qp* qp;
-            bool established;
-            MsgPart2C part_info;  // participant flag info
-            MsgPart2C recv_buffer;  // separate buffer for receiving data
-            struct ibv_mr* flag_mr;  // participant's flag MR info
-            uint32_t last_epoch;
-            
-            // Additional fields needed for coordination
-            struct ibv_mr* mr_ctrl_recv;
-            struct ibv_mr* mr_ctrl_send;
-            MsgEpoch recv_epoch;
-            rdma_cm_id* id;  // RDMA connection ID
-        };
+#pragma pack(pop)
+struct Conn {
+    int client_fd;
+    struct ibv_qp* qp;
+    bool established;
+    MsgPart2C part_info;  // participant flag info
+    MsgPart2C recv_buffer;  // separate buffer for receiving data
+    struct ibv_mr* flag_mr;  // participant's flag MR info
+    uint32_t last_epoch;
+    
+    // Additional fields needed for coordination
+    struct ibv_mr* mr_ctrl_recv;
+    struct ibv_mr* mr_ctrl_send;
+    MsgEpoch recv_epoch;
+    rdma_cm_id* id;  // RDMA connection ID
+};
 
 class RDMASyncImpl {
 public:
@@ -289,9 +293,9 @@ public:
             while (__builtin_expect(*flag != e, 1)) {
                 cpu_relax();
                 // Reduce CPU usage without affecting latency too much
-                if (*flag == 0) {
-                    usleep(10); // Only sleep if flag is still 0
-                }
+                // if (*flag == 0) {
+                //     usleep(10); // Only sleep if flag is still 0
+                // }
             }
             DBGPRINT("Participant hook completed", e, debug_);
             return;
@@ -306,7 +310,8 @@ public:
         DBGPRINT("Coordinator waiting for RECVs", posted_recvs_, debug_);
         int got = 0;
         long long poll_attempts = 0;
-        const long long max_poll_attempts = 600000000; // Add timeout
+        const long long max_poll_attempts = 6000000000; // Add timeout
+        // Recieve
         while (got < expected_ && poll_attempts < max_poll_attempts) {
             ibv_wc wc{};
             int n = ibv_poll_cq(cq_, 1, &wc);
@@ -381,6 +386,7 @@ public:
         DBGPRINT("All RDMA WRITEs completed", done, debug_);
         DBGPRINT("Coordinator hook completed", 0, debug_);
     }
+
 
 private:
     // Participant initialization
@@ -896,7 +902,6 @@ void init_if_needed(uint32_t mpi_rank) { RDMASyncImpl::inst().init_if_needed(mpi
 void finalize()       { RDMASyncImpl::inst().finalize(); }
 void hook(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
-    RDMASyncImpl::inst().init_if_needed(0);
     RDMASyncImpl::inst().hook(name); 
 }
 } // namespace rdmasync
@@ -906,7 +911,6 @@ void rdmasync_init_if_needed(uint32_t mpi_rank) { rdmasync::init_if_needed(mpi_r
 void rdmasync_finalize()       { rdmasync::finalize(); }
 void rdmasync_hook(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
-    rdmasync::init_if_needed(0);
     rdmasync::hook(name); 
 }
 }

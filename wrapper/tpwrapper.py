@@ -8,6 +8,7 @@ import shlex
 import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import List, Dict, Tuple
 
@@ -15,6 +16,7 @@ WRAPPER_DIR = Path(__file__).resolve().parent
 LIB_DIR = WRAPPER_DIR / 'lib'
 LIB_MPI_TRACE = LIB_DIR / 'libmpi_trace.so'
 
+TPWRAPPER_TIME_STAMP=time.strftime("%Y%m%d_%H%M%S", time.localtime()) + f"_{int(time.time() * 1000000) % 1000000:06d}"
 
 def dbg(msg: str, verbose: bool):
     if verbose:
@@ -117,16 +119,40 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_
     return envs
 
 
-def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, verbose: bool) -> int:
+def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, cmd_output_dir: str = None, verbose: bool = False) -> int:
+    def get_hosts(cmd: List[str]) -> str:
+        # Extract hosts from the command line arguments
+        for i, token in enumerate(cmd):
+            if token in ('-hosts', '--hosts') and i + 1 < len(cmd):
+                return cmd[i+1]
+        return ""
+
     procs = []
+    fds = []
+    os.makedirs(cmd_output_dir, exist_ok=True)
     for i, (cmd, env) in enumerate(zip(commands, envs)):
+        node_list = get_hosts(cmd)
+        cmd_output_path = os.path.join(cmd_output_dir, f"{node_list}.out") if node_list else None
+        cmd_err_path = os.path.join(cmd_output_dir, f"{node_list}.err") if node_list else None
         penv = os.environ.copy()
         penv.update(env)
+        # 打开输出文件
+        out_f = open(cmd_output_path, 'w') if cmd_output_path else None
+        err_f = open(cmd_err_path, 'w') if cmd_err_path else None
         dbg(f"Launching [{i}]: {' '.join(cmd)}", True)
-        procs.append(subprocess.Popen(cmd, cwd=str(cwd), env=penv))
+        # 重定向 stdout 和 stderr
+        p = subprocess.Popen(cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
+        procs.append(p)
+        fds.append((out_f, err_f))
+
     rc = 0
     for i, p in enumerate(procs):
         r = p.wait()
+        out_f, err_f = fds[i]
+        if out_f:
+            out_f.close()
+        if err_f:
+            err_f.close()
         dbg(f"Process [{i}] exited with {r}", True)
         rc = rc or r
     return rc
@@ -165,7 +191,7 @@ def detect_mpi_impl(mpirun_exe: str) -> str:
     return 'unknown'
 
 
-def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], export_env: List[Dict[str, str]], verbose: bool) -> List[List[str]]:
+def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], export_env: List[Dict[str, str]], trace_storage_prefix: str, verbose: bool) -> List[List[str]]:
     # Detect implementation from the first segment's launcher (assume same mpirun across segments)
     mpirun_exe = base_cmd_tokens[0] if base_cmd_tokens else 'mpirun'
     mpi_impl = detect_mpi_impl(mpirun_exe)
@@ -182,6 +208,8 @@ def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], e
 
         # Build implementation-specific env propagation flags
         env_items = [(k, str(v)) for k, v in export_env[i].items() if (k.startswith('RDMASYNC_') or k == 'LD_PRELOAD' or k.startswith('OMP'))]
+        if trace_storage_prefix is not None and len(trace_storage_prefix) > 0:
+            env_items.append(('MPI_LOG_PATH_PREFIX', trace_storage_prefix))
         env_flags: List[str] = []
         if mpi_impl == 'openmpi':
             # Use: -x VAR=VALUE
@@ -209,11 +237,20 @@ def parse_args(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     p = argparse.ArgumentParser(description='TPBench Wrapper (tpwrapper)', allow_abbrev=False, add_help=False)
     p.add_argument('--help', action='help', help='show this help message and exit')
     p.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
-    p.add_argument('--nmpi', type=int, default=1, help='Number of mpirun processes')
     p.add_argument('--configfile', type=str, default=None, help='Configuration INI file')
     p.add_argument('--tphosts', type=str, default=None, help='hosts list or pattern (e.g., node[1-8])')
     p.add_argument('--sync', dest='sync', action='store_true', default=True, help='Enable synchronization (default)')
     p.add_argument('--trace', action='store_true', help='Enable tracing (LD_PRELOAD libmpi_trace.so)')
+    p.add_argument('--no-sync', dest='sync', action='store_false', help='Disable synchronization')
+
+    p.add_argument('--nmpi', type=int, default=1, help='Number of mpirun processes')
+    p.add_argument('--n_per_mpirun', type=int, default=None, action='store', help='number of processes per mpirun process (deprecated, use --nmpi)')
+    p.add_argument('--ppn', type=int, default=None, action='store', help='number of processes per node')
+
+    p.add_argument('--merge_trace_files', action='store_true', help='Let trace_storage_prefix=tpmpi_trace_logs/$time_stamp, merge all mpirun processes\' trace files into a single trace file')
+    p.add_argument('--trace_storage_prefix', type=str, default=None, help='Prefix for trace storage (default: None), trace files will be stored in trace_storage_prefix/$hostname/mpi_trace_rank_$rankid.log')
+    p.add_argument('--log_storage_prefix', type=str, default=f"./tpwrapper_logs/{TPWRAPPER_TIME_STAMP}", help='Prefix for mpirun log storage (default: ./tpwrapper_logs/$time_stamp), log files will be stored in log_storage_prefix/$hosts.log, hosts is the hosts list running an mpirun process.')
+
     args, rest = p.parse_known_args(argv)
     return args, rest
 
@@ -276,7 +313,7 @@ def main(argv: List[str]) -> int:
         ensure_trace_env(base_env, trace_enabled)
         envs = build_sync_envs(groups, base_env, 0, verbose) if sync_enabled else [base_env.copy() for _ in groups]
 
-        commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
+        commands = build_mpirun_commands(base_tokens, groups, envs, None, verbose)
         return run_parallel(commands, envs, WRAPPER_DIR, verbose)
 
     if not rest:
@@ -285,6 +322,14 @@ def main(argv: List[str]) -> int:
 
     sync_enabled = args.sync
     trace_enabled = args.trace
+    trace_storage_prefix = args.trace_storage_prefix
+    if args.merge_trace_files == True and trace_storage_prefix is None:
+        trace_storage_prefix = f"./tpmpi_trace_logs/{TPWRAPPER_TIME_STAMP}"
+
+    if args.log_storage_prefix is not None:
+        log_storage_prefix = args.log_storage_prefix
+    else:
+        log_storage_prefix = f"./tpwrapper_logs/{TPWRAPPER_TIME_STAMP}"
 
     groups: List[List[str]] = [[]]
     if args.tphosts:
@@ -299,10 +344,10 @@ def main(argv: List[str]) -> int:
     base_env: Dict[str, str] = {}
     ensure_trace_env(base_env, trace_enabled)
 
-    if groups and (base_tokens[0].endswith('mpirun') or base_tokens[0].endswith('mpiexec')):
+    if groups and base_tokens[0] in ('mpirun', 'mpiexec'):
         envs = build_sync_envs(groups, base_env, 0, verbose) if sync_enabled else [base_env.copy() for _ in groups]
-        commands = build_mpirun_commands(base_tokens, groups, envs, verbose)
-        return run_parallel(commands, envs, WRAPPER_DIR, verbose)
+        commands = build_mpirun_commands(base_tokens, groups, envs, trace_storage_prefix, verbose)
+        return run_parallel(commands, envs, WRAPPER_DIR, log_storage_prefix, verbose)
     else:
         hosts_csv = ','.join(groups[0]) if groups and groups[0] else ''
         tokens = substitute_tphosts(base_tokens, hosts_csv)

@@ -1,6 +1,10 @@
 # Compiler and flags
-CXX = /dssg/opt/icelake/linux-centos8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.4.0-5xzcg7kxlx4ytkz2plqalrg424so43cy/mpi/2021.4.0/bin/mpicxx
-CXXFLAGS = -fPIC -shared -std=c++17
+MPI_PATH = /dssg/opt/icelake/linux-centos8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.4.0-5xzcg7kxlx4ytkz2plqalrg424so43cy/mpi/2021.4.0/bin
+C = $(MPI_PATH)/mpicc
+CFLAGS = -O3 
+
+CXX = $(MPI_PATH)/mpicxx
+CXXFLAGS = -fPIC -shared -std=c++17 -O3 -Wno-write-strings -Wno-unused-result -w
 LDFLAGS = -lstdc++fs -lrdmacm -libverbs -lpthread
 
 # Directories

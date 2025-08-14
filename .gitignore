@@ -1,4 +1,6 @@
 *.o
+*.a
+*.so
 *.ko
 *.x
 *.symvers
@@ -20,3 +22,10 @@ scripts/
 .DS_Store
 result*/*
 __pycache__/
+obj/
+logs/
+test/
+*log*/
+tpmpi_trace/
+.gitignore
+*output/
