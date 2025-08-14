@@ -23,6 +23,9 @@
  */
 
 // ====
+#ifndef _TPMPI_H
+#define _TPMPI_H
+
 #ifdef USE_MPI
 
 #include <mpi.h>
@@ -66,3 +69,5 @@ void tpmpi_exit();
  * @param header: the header of the csv file
  */
 int tpmpi_writecsv(char *path, uint64_t *data, int ncol, char *header);
+
+#endif // _TPMPI_H

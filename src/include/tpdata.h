@@ -21,7 +21,8 @@
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-26
  */
-
+#ifndef _TPDATA_H
+#define _TPDATA_H
 
 #include <stdint.h>
 
@@ -91,3 +92,5 @@ int dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t 
  * @return int 
  */
 int dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter);
+
+#endif // _TPDATA_H

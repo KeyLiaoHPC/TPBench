@@ -21,6 +21,8 @@
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-22
  */
+#ifndef _CLI_PARSER_H
+#define _CLI_PARSER_H
 
 #define _GNU_SOURCE
 
@@ -71,3 +73,5 @@ static struct argp_option options[] = {
  * @return int 
  */
 int parse_args(int argc, char **argv, __tp_args_t *tp_args);
+
+#endif

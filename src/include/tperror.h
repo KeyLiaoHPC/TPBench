@@ -24,6 +24,9 @@
  * =================================================================================
  */
 
+#ifndef _TPERROR_H
+#define _TPERROR_H
+
 // Error macro for translating error messages into tpbench error
 #define __error_lt(evar, eno, err_name) if((evar) < (eno)) {    \
                                             return (err_name);  \
@@ -73,3 +76,5 @@
 
 #define DHLINE "================================================================================\n"
 #define HLINE  "--------------------------------------------------------------------------------\n"
+
+#endif // _TPERROR_H

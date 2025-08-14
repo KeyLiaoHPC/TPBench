@@ -23,9 +23,11 @@
  * Email: keyliao@sjtu.edu.cn
  * =================================================================================
  */
+#ifndef _TPBENCH_H
+#define _TPBENCH_H
 #include <stdint.h>
 #include "tpb_core.h"
 #include "cli_parser.h"
 #include "tpio.h"
 #include "tpmpi.h"
-
+#endif // _TPBENCH_H

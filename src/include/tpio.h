@@ -21,6 +21,9 @@
  * @date 2024-01-22
  */
 
+#ifndef _TPB_IO_H
+#define _TPB_IO_H
+
 #define _GNU_SOURCE
 
 #include <stdint.h>
@@ -77,3 +80,5 @@ int tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...);
  * @return int 0 or 1, set 1 when writing order is different from [row][col]
  */
 int tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag);
+
+#endif

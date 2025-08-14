@@ -22,6 +22,9 @@
  * @date 2024-01-22
  */
 
+#ifndef _TPB_CORE_H
+#define _TPB_CORE_H
+
 #define _GNU_SOURCE
 
 #include "tperror.h"
@@ -73,3 +76,6 @@ int tpb_run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint
  * @return char* reutrn buf.
  */
 char *tpb_geterr(const int err, char *buf);
+
+
+#endif // _TPB_CORE_H

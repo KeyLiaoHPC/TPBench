@@ -28,7 +28,10 @@
  * =================================================================================
  *
  */
- 
+
+#ifndef _TPTIMER_H
+#define _TPTIMER_H
+
 #define _GNU_SOURCE
 #include <time.h>
 #include <unistd.h>
@@ -129,6 +132,17 @@
                                 :                                   \
                                 :"%rax", "%rbx", "%rcx", "%rdx");
 
+#define __getcy_end_t        asm volatile(                           \
+                                "RDTSCP"        "\n\t"              \
+                                "RDTSC"         "\n\t"              \
+                                "CPUID"         "\n\t"              \
+                                "RDTSCP"        "\n\t"              \
+                                "mov %%rdx, %0" "\n\t"              \
+                                "mov %%rax, %1" "\n\t"              \
+                                :"=r" (hi2), "=r" (lo2)             \
+                                :                                   \
+                                :"%rax", "%rbx", "%rcx", "%rdx");
+
 #define __getcy_1d_st(rid)  __getcy_st_t
 
 #define __getcy_1d_en(rid)  asm volatile (                          \
@@ -201,3 +215,5 @@
 #define __getns_2d_en(rid, eid) clock_gettime(CLOCK_MONOTONIC, &ts1);   \
                                 ns[(rid)][(eid)] = ts1.tv_sec * 1e9 + ts1.tv_nsec - ns[(rid)][(eid)];
 #endif
+
+#endif // _TPTIMER_H
