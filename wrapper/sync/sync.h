@@ -9,8 +9,8 @@ void init_if_needed(uint32_t mpi_rank=0);
 // Finalize and clean up; no-op if not initialized/enabled
 void finalize();
 
-// Call at each point-to-point synchronization hook (e.g., at the very beginning of MPI_* wrappers)
-void hook(const char* name);
+// Call at each point-to-point synchronization tp_sync (e.g., at the very beginning of MPI_* wrappers)
+void tp_sync(const char* name);
 
 } // namespace rdmasync
 

@@ -119,7 +119,7 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], expected_
     return envs
 
 
-def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, cmd_output_dir: str = None, verbose: bool = False) -> int:
+def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, log_storage_prefix: str = None, verbose: bool = False) -> int:
     def get_hosts(cmd: List[str]) -> str:
         # Extract hosts from the command line arguments
         for i, token in enumerate(cmd):
@@ -129,11 +129,11 @@ def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Pat
 
     procs = []
     fds = []
-    os.makedirs(cmd_output_dir, exist_ok=True)
+    os.makedirs(log_storage_prefix, exist_ok=True)
     for i, (cmd, env) in enumerate(zip(commands, envs)):
         node_list = get_hosts(cmd)
-        cmd_output_path = os.path.join(cmd_output_dir, f"{node_list}.out") if node_list else None
-        cmd_err_path = os.path.join(cmd_output_dir, f"{node_list}.err") if node_list else None
+        cmd_output_path = os.path.join(log_storage_prefix, f"{node_list}.out") if node_list else None
+        cmd_err_path = os.path.join(log_storage_prefix, f"{node_list}.err") if node_list else None
         penv = os.environ.copy()
         penv.update(env)
         # 打开输出文件
@@ -322,6 +322,10 @@ def main(argv: List[str]) -> int:
 
     sync_enabled = args.sync
     trace_enabled = args.trace
+
+    if args.nmpi <= 1:
+        sync_enabled = False
+        
     trace_storage_prefix = args.trace_storage_prefix
     if args.merge_trace_files == True and trace_storage_prefix is None:
         trace_storage_prefix = f"./tpmpi_trace_logs/{TPWRAPPER_TIME_STAMP}"

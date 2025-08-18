@@ -251,15 +251,15 @@ public:
         enabled_ = false;
     }
 
-    void hook(const char* /*name*/) {
+    void tp_sync(const char* /*name*/) {
         if (!enabled_) {
-            WARNINGPRINT("RDMASync not enabled, skipping hook", "", debug_);
+            WARNINGPRINT("RDMASync not enabled, skipping tp_sync", "", debug_);
             return;
         }
         
         // Passive participants (rank > 0 in participant mpirun) just wait
         if (is_passive_participant_) {
-            // WARNINGPRINT("Passive participant, skipping hook", "", debug_);
+            // WARNINGPRINT("Passive participant, skipping tp_sync", "", debug_);
             // In cross-mpirun mode, non-rank-0 participants don't have RDMA connection
             // They synchronize via MPI barrier within their own communicator
             // For now, just return as they don't participate in cross-mpirun sync
@@ -297,7 +297,7 @@ public:
                 //     usleep(10); // Only sleep if flag is still 0
                 // }
             }
-            DBGPRINT("Participant hook completed", e, debug_);
+            DBGPRINT("Participant tp_sync completed", e, debug_);
             return;
         }
 
@@ -384,8 +384,10 @@ public:
             }
         }
         DBGPRINT("All RDMA WRITEs completed", done, debug_);
-        DBGPRINT("Coordinator hook completed", 0, debug_);
+        DBGPRINT("Coordinator tp_sync completed", 0, debug_);
     }
+
+
 
 
 private:
@@ -824,11 +826,11 @@ private:
             }
         }
 
-        // Pre-post RECVs for the first hook round
+        // Pre-post RECVs for the first tp_sync round
         // Reset counter since the RECVs posted during setup were consumed for flag info
         posted_recvs_ = 0;  
         ensure_posted_recvs(expected_);
-        DBGPRINT("Pre-posted RECVs for hook operations", posted_recvs_, debug_);
+        DBGPRINT("Pre-posted RECVs for tp_sync operations", posted_recvs_, debug_);
 
         DBGPRINT("Coordinator setup complete with", expected_, debug_);
         return true;
@@ -900,9 +902,9 @@ private:
 namespace rdmasync {
 void init_if_needed(uint32_t mpi_rank) { RDMASyncImpl::inst().init_if_needed(mpi_rank); }
 void finalize()       { RDMASyncImpl::inst().finalize(); }
-void hook(const char* name) { 
+void tp_sync(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
-    RDMASyncImpl::inst().hook(name); 
+    RDMASyncImpl::inst().tp_sync(name); 
 }
 } // namespace rdmasync
 
@@ -911,6 +913,6 @@ void rdmasync_init_if_needed(uint32_t mpi_rank) { rdmasync::init_if_needed(mpi_r
 void rdmasync_finalize()       { rdmasync::finalize(); }
 void rdmasync_hook(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
-    rdmasync::hook(name); 
+    rdmasync::tp_sync(name); 
 }
 }

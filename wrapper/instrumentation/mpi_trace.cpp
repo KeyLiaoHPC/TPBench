@@ -6,6 +6,8 @@
 #include <memory>
 #include <unistd.h>
 #include <chrono>
+#include <array>
+#include <functional>
 
 #include <mpi.h>
 
@@ -20,30 +22,48 @@ extern "C" {
 namespace fs = std::filesystem;
 
 namespace {
-    #define GET_NS \
-        std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
-    // Define a prefix for log files
-    static std::string LOG_PATH_PREFIX = "./tpmpi_trace_logs"; // Change this to your desired log path prefix
+// Define a prefix for log files
+static std::string LOG_PATH_PREFIX = "./tpmpi_trace_logs"; // Change this to your desired log path prefix
 
-    /* Global variables for logging */
-    // log files' directory should use this pattern: 
-    // {LOG_PATH_PREFIX}/logs/{timestamp}/{node_name}/mpi_profile_rank_{rank}.log
-    static std::string log_file_dir;    
-    static std::unique_ptr<std::ofstream> log_file;
-    static int profiler_rank = -1;
+/* Global variables for logging */
+// log files' directory should use this pattern: 
+// {LOG_PATH_PREFIX}/logs/{timestamp}/{node_name}/mpi_profile_rank_{rank}.log
+static bool trace_store_flag = true;
+static bool sync_flag = true;
+static std::string log_file_dir;    
+static std::unique_ptr<std::ofstream> log_file;
+static int profiler_rank = -1;
 
-    uint64_t total_time = 0;
-    uint64_t program_start_time = 0;
-    uint64_t program_end_time = 0;
-    uint64_t program_start_cy = 0;
-    uint64_t program_end_cy = 0;
+uint64_t total_time = 0;
+uint64_t program_start_time = 0;
+uint64_t program_end_time = 0;
+uint64_t program_start_cy = 0;
+uint64_t program_end_cy = 0;
 
-    __getcy_init;
-    __getcy_grp_init;
-}
+__getcy_init;
+__getcy_grp_init;
+
+
+#define GET_NS \
+    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
+
+
+enum class MPI_FUNC {
+    MPI_SEND = 0,
+    MPI_RECV,
+    MPI_BCAST,
+    MPI_SCATTER,
+    MPI_GATHER,
+    MPI_ALLREDUCE,
+    MPI_ALLTOALL,
+    MPI_WAIT
+};
+
+// record time, cy, size, count
+std::array <std::array<uint64_t, 4>, static_cast<size_t>(MPI_FUNC::MPI_WAIT) + 1> MPI_FUNC_TRACE_TIMER;
 
 // tools: 
-const char* get_type_name(MPI_Datatype type) {
+std::string get_type_name(MPI_Datatype type) {
     if (type == MPI_CHAR) return "MPI_CHAR";
     if (type == MPI_INT) return "MPI_INT";
     if (type == MPI_FLOAT) return "MPI_FLOAT";
@@ -51,6 +71,65 @@ const char* get_type_name(MPI_Datatype type) {
     // Add more types as needed
     return "UNKNOWN_TYPE";
 }
+
+std::string get_func_name(MPI_FUNC func) {
+    switch (func) {
+        case MPI_FUNC::MPI_SEND: return "MPI_Send";
+        case MPI_FUNC::MPI_RECV: return "MPI_Recv";
+        case MPI_FUNC::MPI_BCAST: return "MPI_Bcast";
+        case MPI_FUNC::MPI_SCATTER: return "MPI_Scatter";
+        case MPI_FUNC::MPI_GATHER: return "MPI_Gather";
+        case MPI_FUNC::MPI_ALLREDUCE: return "MPI_Allreduce";
+        case MPI_FUNC::MPI_ALLTOALL: return "MPI_Alltoall";
+        case MPI_FUNC::MPI_WAIT: return "MPI_Wait";
+        default: return "UNKNOWN_FUNC";
+    }
+}
+
+size_t get_type_size(MPI_Datatype type) {
+    if (type == MPI_CHAR) return sizeof(char);
+    if (type == MPI_INT) return sizeof(int);
+    if (type == MPI_FLOAT) return sizeof(float);
+    if (type == MPI_DOUBLE) return sizeof(double);
+    // Add more types as needed
+    return 1; // Default size
+}
+
+template <typename Func>
+inline int measure_time(Func func, MPI_FUNC func_type, size_t size, const std::string& log_info = "") {
+    uint64_t start_time, end_time, elapsed_time;
+    uint64_t start_cy, end_cy, elapsed_cy;
+    
+    start_time = GET_NS;
+    __getcy_st_t;
+    int result = func();
+    __getcy_end_t;
+    end_time = GET_NS;
+
+    start_cy = ((hi1 << 32) | lo1);
+    end_cy = ((hi2 << 32) | lo2);
+
+    elapsed_time = end_time - start_time;
+    elapsed_cy = end_cy - start_cy;
+
+    MPI_FUNC_TRACE_TIMER[static_cast<size_t>(func_type)][0] += elapsed_time;
+    MPI_FUNC_TRACE_TIMER[static_cast<size_t>(func_type)][1] += elapsed_cy;
+    MPI_FUNC_TRACE_TIMER[static_cast<size_t>(func_type)][2] += size;
+    MPI_FUNC_TRACE_TIMER[static_cast<size_t>(func_type)][3] ++;
+
+    if (log_file != nullptr && log_file->is_open() && !log_info.empty()) {
+        *log_file << "[ " << start_time << " ] " << log_info << "\n";
+        *log_file << "    >> Execution Time: " << elapsed_time << " ns\n";
+        *log_file << "    >> Data Size: " << size << " bytes\n";
+        *log_file << "    >> Execution Cycles: " << elapsed_cy << "\n";
+    }
+   
+    return result;
+}
+
+}
+
+
 
 // C linkage for MPI functions
 extern "C" {
@@ -61,19 +140,34 @@ extern "C" {
  */
 
 int MPI_Init(int *argc, char ***argv) {
+
     program_start_time = GET_NS;
     __getcy_st_t;
     program_start_cy = ((hi1 << 32) | lo1);
+
+    // 0. Get the environment variables
+    const char *trace_file_env = std::getenv("TPMPI_TRACE_STORE");
+    const char *log_path_env = std::getenv("MPI_LOG_PATH_PREFIX");
+    const char *sync_env = std::getenv("RDMASYNC_ENABLE");
+
+    if (trace_file_env == "false") {
+        trace_store_flag == false;
+    }
+
+    if (sync_env != "1") {
+        sync_flag = false;
+    }
+
     // 1. Call the actual MPI_Init
     int ret = PMPI_Init(argc, argv);
 
     // 2. Get the process rank
     PMPI_Comm_rank(MPI_COMM_WORLD, &profiler_rank);
 
-     // Initialize optional RDMA sync (no-op if disabled)
-    rdmasync::init_if_needed(profiler_rank);
-
-    const char* log_path_env = std::getenv("MPI_LOG_PATH_PREFIX");
+    // Initialize optional RDMA sync (no-op if disabled)
+    if (sync_flag == true)
+        rdmasync::init_if_needed(profiler_rank);
+    
     if (log_path_env != nullptr) {
         // Use environment variable if set
         LOG_PATH_PREFIX = log_path_env;
@@ -108,7 +202,12 @@ int MPI_Init(int *argc, char ***argv) {
     }
 
     std::string filename = log_file_dir + "/mpi_profile_rank_" + std::to_string(profiler_rank) + ".log";
-    log_file = std::make_unique<std::ofstream>(filename);
+
+    if (trace_store_flag == true) {
+        log_file = std::make_unique<std::ofstream>(filename);
+    } else {
+        log_file = nullptr;
+    }
 
     if (log_file && log_file->is_open()) {
         *log_file << "=========================================================\n";
@@ -118,24 +217,47 @@ int MPI_Init(int *argc, char ***argv) {
         *log_file << " Start Cycles: " << program_start_cy << "\n";
         *log_file << "=========================================================\n";
     }
-
     return ret;
 }
 
 
 int MPI_Finalize() {
     // Optional RDMA sync finalization
-    rdmasync::finalize();
+    if (sync_flag == true)
+        rdmasync::finalize();
     int ret = PMPI_Finalize();
     __getcy_end_t;
     program_end_cy = ((hi2 << 32) | lo2);
     program_end_time = GET_NS;
+
+    std::string log_data;
+
+    for (size_t i = 0; i < MPI_FUNC_TRACE_TIMER.size(); ++i) {
+        const auto& value = MPI_FUNC_TRACE_TIMER[i];
+        if (value[3] > 0) { 
+            MPI_FUNC func_type = static_cast<MPI_FUNC>(i);
+            log_data += "[ " + std::to_string(program_end_time) + " ] " + get_func_name(func_type) + "\n";
+            log_data += "    >> Total Time: " + std::to_string(value[0]) + " ns\n";
+            log_data += "    >> Total Cycles: " + std::to_string(value[1]) + "\n";
+            log_data += "    >> Data Size: " + std::to_string(value[2]) + " bytes\n";
+            log_data += "    >> Call Count: " + std::to_string(value[3]) + "\n";
+        }
+    }
+    
+    log_data += " Total Execution Time: " + std::to_string(program_end_time - program_start_time) + " ns\n";
+    log_data += " Total Execution Cycles: " + std::to_string(program_end_cy - program_start_cy) + "\n";
+
+    if (profiler_rank == 0) {
+        std::cout << "=========================================================\n";
+        std::cout << log_data;
+        std::cout << "=========================================================\n";
+    }
+    
     if (log_file && log_file->is_open()) {
         *log_file << "[ " << program_end_time << " ] MPI_Finalize()\n";
         *log_file << "=========================================================\n";
         *log_file << " MPI Profiler Finalized for Rank " << profiler_rank << "\n";
-        *log_file << " Total Execution Time: " << (program_end_time - program_start_time) << " ns\n";
-        *log_file << " Total Execution Cycles: " << (program_end_cy - program_start_cy) << "\n";
+        *log_file << log_data;
         *log_file << "=========================================================\n";
         log_file->close();
     }
@@ -148,63 +270,32 @@ int MPI_Finalize() {
  * =============================================================================
  */
 int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-    
-
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Send(buf, count, datatype, dest, tag, comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    start_cy = ((hi1 << 32) | lo1);
-    end_cy = ((hi2 << 32) | lo2);
-    
-    if (log_file && log_file->is_open()) {
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Send(count=" << count 
-                  << ", type=" << get_type_name(datatype) 
-                  << ", dest=" << dest 
-                  << ", tag=" << tag << ")\n";
-        *log_file << "    >> Path: " << profiler_rank << " -> " << dest << "\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+    int ret = measure_time([&]() {
+        return PMPI_Send(buf, count, datatype, dest, tag, comm);
+    }, MPI_FUNC::MPI_SEND, count * get_type_size(datatype),
+    "MPI_Send(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) +
+    ", dest=" + std::to_string(dest) + ", tag=" + std::to_string(tag) + ")" +
+    "\n    >> Path: " + std::to_string(profiler_rank) + " -> " + std::to_string(dest));
+
     return ret;
 }
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-    
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Recv(buf, count, datatype, source, tag, comm, status);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    start_cy = ((hi1 << 32) | lo1);
-    end_cy = ((hi2 << 32) | lo2);
-
-    if (log_file && log_file->is_open()) {
-        elapsed = end_time - start_time;
-        int actual_source = (status != MPI_STATUS_IGNORE) ? status->MPI_SOURCE : source;
-        *log_file << "[ " << start_time << " ] MPI_Recv(count=" << count 
-                  << ", type=" << get_type_name(datatype) 
-                  << ", source=" << source 
-                  << ", tag=" << tag << ")\n";
-        *log_file << "    >> Path: " << actual_source << " -> " << profiler_rank << "\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+    
+    int ret = measure_time([&]() {
+        return PMPI_Recv(buf, count, datatype, source, tag, comm, status);
+    }, MPI_FUNC::MPI_RECV, count * get_type_size(datatype), 
+    "MPI_Recv(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) + 
+    ", source=" + std::to_string(source) + ", tag=" + std::to_string(tag) + ")" +
+    "\n    >> Path: " + std::to_string(source) + " -> " + std::to_string(profiler_rank));
     
     return ret;
 }
@@ -216,139 +307,111 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
  */
 
 int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-    
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Bcast(buffer, count, datatype, root, comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    if (log_file && log_file->is_open()) {
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Bcast(count=" << count
-                  << ", type=" << get_type_name(datatype)
-                  << ", root=" << root << ")\n";
-        *log_file << "    >> Path: " << root << " -> all\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+
+    int ret = measure_time([&]() {
+        return PMPI_Bcast(buffer, count, datatype, root, comm);
+    }, MPI_FUNC::MPI_BCAST, count * get_type_size(datatype),
+    "MPI_Bcast(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) +
+    ", root=" + std::to_string(root) + ")" +
+    "\n    >> Path: " + std::to_string(root) + " -> all");
     
     return ret;
 }
 
 int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-    
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Reduce(sendbuf, recvbuf, count, datatype, op, root, comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    if (log_file && log_file->is_open()) {
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Reduce(count=" << count
-                  << ", type=" << get_type_name(datatype)
-                  << ", root=" << root << ")\n";
-        *log_file << "    >> Path: all -> " << root << "\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+    
+    int ret = measure_time([&]() {
+        return PMPI_Reduce(sendbuf, recvbuf, count, datatype, op, root, comm);
+    }, MPI_FUNC::MPI_GATHER, count * get_type_size(datatype),
+    "MPI_Reduce(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) +
+    ", root=" + std::to_string(root) + ")" +
+    "\n    >> Path: all -> " + std::to_string(root));
     
     return ret;
 }
 
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    if (log_file && log_file->is_open()) {
-        end_time = GET_NS;
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Allreduce(count=" << count
-                  << ", type=" << get_type_name(datatype) << ")\n";
-        *log_file << "    >> Path: all -> all\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+
+    int ret = measure_time([&]() {
+        return PMPI_Allreduce(sendbuf, recvbuf, count, datatype, op, comm);
+    }, MPI_FUNC::MPI_ALLREDUCE, count * get_type_size(datatype),
+    "MPI_Allreduce(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) + ")" +
+    "\n    >> Path: all -> all");
     
     return ret;
 }
 
+int MPI_Scatter(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm) {
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
+
+    int ret = measure_time([&]() {
+        return PMPI_Scatter(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm);
+    }, MPI_FUNC::MPI_SCATTER, sendcount * get_type_size(sendtype),
+    "MPI_Scatter(sendcount=" + std::to_string(sendcount) + ", sendtype=" + get_type_name(sendtype) +
+    ", recvcount=" + std::to_string(recvcount) + ", recvtype=" + get_type_name(recvtype) +
+    ", root=" + std::to_string(root) + ")" +
+    "\n    >> Path: " + std::to_string(root) + " -> all");
+
+    return ret;
+}
+
+int MPI_Gather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm) {
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
+
+    int ret = measure_time([&]() {
+        return PMPI_Gather(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, root, comm);
+    }, MPI_FUNC::MPI_GATHER, sendcount * get_type_size(sendtype),
+    "MPI_Gather(sendcount=" + std::to_string(sendcount) + ", sendtype=" + get_type_name(sendtype) +
+    ", recvcount=" + std::to_string(recvcount) + ", recvtype=" + get_type_name(recvtype) +
+    ", root=" + std::to_string(root) + ")" +
+    "\n    >> Path: " + std::to_string(root) + " <- all");
+
+    return ret;
+}
 
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
-    PMPI_Barrier(comm);
-
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    if (log_file && log_file->is_open()) {
-        end_time = GET_NS;
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Alltoall(sendcount=" << sendcount
-                  << ", sendtype=" << get_type_name(sendtype) << ", recvcount=" << recvcount
-                  << ", recvtype=" << get_type_name(recvtype) << ")\n";
-        *log_file << "    >> Path: all <-> all\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
+    if (sync_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
     }
+    int ret = measure_time([&]() {
+        return PMPI_Alltoall(sendbuf, sendcount, sendtype, recvbuf, recvcount, recvtype, comm);
+    }, MPI_FUNC::MPI_ALLTOALL, sendcount * get_type_size(sendtype),
+    "MPI_Alltoall(sendcount=" + std::to_string(sendcount) + ", sendtype=" + get_type_name(sendtype) +
+    ", recvcount=" + std::to_string(recvcount) + ", recvtype=" + get_type_name(recvtype) + ")" +
+    "\n    >> Path: all <-> all");
     
     return ret;
 }
-
 
 int MPI_Barrier(MPI_Comm comm) {
-    // Optional sync hook
-    rdmasync::hook(__func__);
+    if (sync_flag == true)
+        rdmasync::tp_sync(__func__);
 
-    uint64_t start_time, end_time, elapsed;
-    uint64_t start_cy, end_cy;
-    
-
-    start_time = GET_NS;
-    __getcy_st_t;
-    int ret = PMPI_Barrier(comm);
-    __getcy_end_t;
-    end_time = GET_NS;
-
-    if (log_file && log_file->is_open()) {
-        end_time = GET_NS;
-        elapsed = end_time - start_time;
-        *log_file << "[ " << start_time << " ] MPI_Barrier()\n";
-        *log_file << "    >> Execution Time: " << elapsed << " ns\n";
-        *log_file << "    >> Execution Cycles: " << end_cy - start_cy << "\n";
-
-    }
+    int ret = measure_time([&]() {
+        return PMPI_Barrier(comm);
+    }, MPI_FUNC::MPI_WAIT, 0, "MPI_Barrier()");
     
     return ret;
 }
+
 
 } // extern "C"
