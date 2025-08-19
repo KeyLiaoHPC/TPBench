@@ -20,30 +20,30 @@
 #include <poll.h>
 #include <fcntl.h>
 
+
+using rdmasync::TRIGGER_MSG;
+
 namespace {
 
 #ifdef DEBUG
 #define DBGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC "<< __LINE__ <<"] " << info << ": " << var << std::endl; \
+        std::cout << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
     } \
 
 #define WARNINGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC WARNING "<< __LINE__ <<"] " << info << ": " << var << std::endl; \
+        std::cout << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
     } \
-
-#define ERRORPRINT(info, var) \
-    std::cerr << "[TPSYNC ERROR "<< __LINE__ << "] " << info << ": " << var << std::endl; \
 
 #else
 
 #define DBGPRINT(info, var, debug) 
 #define WARNINGPRINT(info, var, debug) 
-#define ERRORPRINT(info, var) 
-
 #endif
 
+#define ERRORPRINT(info, var) \
+    std::cerr << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
 
 // --------- tools ----------
 static inline void cpu_relax() {
@@ -88,6 +88,26 @@ static bool poll_cq_one_timeout(ibv_cq* cq, int timeout_ms) {
     }
 }
 
+// Helper function to post RDMA write operation
+static bool post_rdma_write(ibv_qp* qp, void* local_addr, size_t length, uint64_t remote_addr, uint32_t rkey, ibv_mr* local_mr) {
+    if (!qp || !local_addr || !local_mr) return false;
+    
+    ibv_sge sge{};
+    sge.addr = (uintptr_t)local_addr;
+    sge.length = (uint32_t)length;
+    sge.lkey = local_mr->lkey;
+    
+    ibv_send_wr wr{}, *bad = nullptr;
+    wr.opcode = IBV_WR_RDMA_WRITE;
+    wr.send_flags = IBV_SEND_SIGNALED;
+    wr.wr.rdma.remote_addr = remote_addr;
+    wr.wr.rdma.rkey = rkey;
+    wr.sg_list = &sge;
+    wr.num_sge = 1;
+    
+    return ibv_post_send(qp, &wr, &bad) == 0;
+}
+
 #pragma pack(push,1)
 struct MsgPart2C {          // participant -> coordinator: expose local flag {addr, rkey}
     uint64_t flag_addr;
@@ -97,7 +117,12 @@ struct MsgPart2C {          // participant -> coordinator: expose local flag {ad
 struct MsgEpoch {           // participant -> coordinator: send current epoch
     uint64_t epoch;
 };
-
+struct MsgC2P {             // coordinator -> participant: trigger message
+    uint64_t flag_addr;     // participant's flag address (for verification)
+    uint32_t flag_rkey;     // participant's flag rkey (for verification)  
+    TRIGGER_MSG send_msg;   // trigger message type
+    uint32_t pad;
+};
 #pragma pack(pop)
 struct Conn {
     int client_fd;
@@ -123,7 +148,7 @@ public:
     }
 
     // Public entry points
-    void init_if_needed(size_t mpi_rank = 0) {
+    void init(size_t mpi_rank = 0) {
         if (inited_) return;
         const char* en = std::getenv("RDMASYNC_ENABLE");
         if (!en || std::strcmp(en, "1") != 0) { enabled_ = false; inited_ = true; return; }
@@ -387,10 +412,135 @@ public:
         DBGPRINT("Coordinator tp_sync completed", 0, debug_);
     }
 
+    /**
+     * tp_trigger function can be used to trigger a specific function in other participants,
+     * when coordinator sends a trigger message, the participant should respond accordingly
+     * the preset behavior
+     * @param send_msg The message to send to other participants
+     */
+    TRIGGER_MSG tp_trigger(TRIGGER_MSG send_msg) {
+        if (!enabled_) {
+            WARNINGPRINT("RDMASync not enabled, skipping tp_trigger", "", debug_);
+            return TRIGGER_MSG::FINISH;
+        }
+        
+        // Passive participants (rank > 0 in participant mpirun) just wait
+        if (is_passive_participant_) {
+            // WARNINGPRINT("Passive participant, skipping tp_trigger", "", debug_);
+            return TRIGGER_MSG::FINISH;
+        }
 
+        // When role_ is coordinator,
+        // send message "send_msg" to all participant, and the participant should respond
+        // try 10 times until success
+        if (role_ == "coordinator") {
+            for (int i = 0; i < 10; i++) {
+                // Send trigger message to all participants
+                for (auto& c : conns_) {
+                    MsgC2P* msg = reinterpret_cast<MsgC2P*>(ctrl_mem_);
+                    msg->flag_addr = c.part_info.flag_addr;
+                    msg->flag_rkey = c.part_info.flag_rkey;
+                    msg->send_msg = send_msg;
+                    msg->pad = 0;
+                    
+                    // Post RDMA WRITE to participant's flag memory with trigger message
+                    if (!post_rdma_write(c.qp, msg, sizeof(MsgC2P), c.part_info.flag_addr, c.part_info.flag_rkey, mr_ctrl_send_)) {
+                        DBGPRINT("Failed to post RDMA WRITE", i, debug_);
+                        continue;
+                    }
+                }
+                // Wait for all participants to respond
+                if (wait_for_responses()) {
+                    DBGPRINT("All participants responded", "", debug_);
+                    return send_msg;  // Return the sent message
+                }
+                usleep(100000);  // Sleep 100ms before retrying
+            }
+            ERRORPRINT("Failed to trigger participants", "retries_exhausted");
+        }
+
+        // When role_ is participant,
+        // wait for message from coordinator and respond accordingly
+        if (role_ == "participant") {
+            // Wait for the coordinator to write a trigger message to our flag memory
+            volatile uint64_t* flag = (volatile uint64_t*) flag_mem_;
+
+            // Wait for the coordinator to write a trigger message
+            while (__builtin_expect(*flag == 0, 1)) {
+                cpu_relax();
+            }
+            
+            // The flag memory now contains the MsgC2P structure
+            MsgC2P* received_msg = reinterpret_cast<MsgC2P*>(flag_mem_);
+            TRIGGER_MSG received_trigger = received_msg->send_msg;
+            
+            DBGPRINT("Received trigger message", static_cast<int>(received_trigger), debug_);
+            
+            // Reset flag after processing
+            *flag = 0;
+            
+            // Send acknowledgment back to coordinator by writing to ctrl_mem_
+            // This will be detected by coordinator's wait_for_responses()
+            uint64_t ack = 1;
+            if (mr_ctrl_send_ && cq_) {
+                ibv_sge sge{};
+                sge.addr = (uintptr_t)&ack;
+                sge.length = sizeof(ack);
+                sge.lkey = mr_ctrl_send_->lkey;
+                
+                ibv_send_wr wr{}, *bad = nullptr;
+                wr.opcode = IBV_WR_RDMA_WRITE;
+                wr.send_flags = IBV_SEND_INLINE | IBV_SEND_SIGNALED;
+                wr.wr.rdma.remote_addr = (uint64_t)(uintptr_t)ctrl_mem_; // Write back to our ctrl memory
+                wr.wr.rdma.rkey = mr_ctrl_send_->rkey;
+                wr.sg_list = &sge;
+                wr.num_sge = 1;
+                
+                if (ibv_post_send(id_p_->qp, &wr, &bad) == 0) {
+                    // Wait for completion
+                    poll_cq_one(cq_);
+                    DBGPRINT("Sent acknowledgment to coordinator", "", debug_);
+                }
+            }
+            return received_trigger;  // Return the received trigger message
+        }
+    }
 
 
 private:
+    // Helper method to wait for responses from all participants
+    bool wait_for_responses() {
+        if (!enabled_ || role_ != "coordinator") return false;
+        
+        int responses_received = 0;
+        const int timeout_ms = 5000; // 5 second timeout
+        auto start_time = std::chrono::steady_clock::now();
+        
+        while (responses_received < expected_) {
+            ibv_wc wc{};
+            int n = ibv_poll_cq(cq_, 1, &wc);
+            
+            if (n > 0 && wc.status == IBV_WC_SUCCESS) {
+                if (wc.opcode == IBV_WC_RDMA_WRITE) {
+                    responses_received++;
+                    DBGPRINT("Response received", responses_received, debug_);
+                }
+            }
+            
+            // Check timeout
+            auto current_time = std::chrono::steady_clock::now();
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
+            if (elapsed.count() > timeout_ms) {
+                DBGPRINT("Timeout waiting for responses", responses_received, debug_);
+                return false;
+            }
+            
+            usleep(1000); // Small delay to avoid busy waiting
+        }
+        
+        return true;
+    }
+
     // Participant initialization
     bool setup_participant() {
         // Optional small delay to let the coordinator come up first
@@ -900,19 +1050,27 @@ private:
 
 // --------- Public API implementation ---------
 namespace rdmasync {
-void init_if_needed(uint32_t mpi_rank) { RDMASyncImpl::inst().init_if_needed(mpi_rank); }
+void init(uint32_t mpi_rank) { RDMASyncImpl::inst().init(mpi_rank); }
 void finalize()       { RDMASyncImpl::inst().finalize(); }
 void tp_sync(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
     RDMASyncImpl::inst().tp_sync(name); 
 }
+
+TRIGGER_MSG tp_trigger(TRIGGER_MSG send_msg) {
+    return RDMASyncImpl::inst().tp_trigger(send_msg);
+}
+
 } // namespace rdmasync
 
 extern "C" {
-void rdmasync_init_if_needed(uint32_t mpi_rank) { rdmasync::init_if_needed(mpi_rank); }
-void rdmasync_finalize()       { rdmasync::finalize(); }
+void rdmasync_init(uint32_t mpi_rank) { ::rdmasync::init(mpi_rank); }
+void rdmasync_finalize()       { ::rdmasync::finalize(); }
 void rdmasync_hook(const char* name) { 
     // Auto-initialize with rank 0 if not already initialized
-    rdmasync::tp_sync(name); 
+    ::rdmasync::tp_sync(name); 
+}
+int rdmasync_trigger(int send_msg) {
+    return static_cast<int>(::rdmasync::tp_trigger(static_cast<::rdmasync::TRIGGER_MSG>(send_msg)));
 }
 }

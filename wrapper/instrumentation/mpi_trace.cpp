@@ -30,6 +30,7 @@ static std::string LOG_PATH_PREFIX = "./tpmpi_trace_logs"; // Change this to you
 // {LOG_PATH_PREFIX}/logs/{timestamp}/{node_name}/mpi_profile_rank_{rank}.log
 static bool trace_store_flag = true;
 static bool sync_flag = true;
+static bool trigger_flag = true;
 static std::string log_file_dir;    
 static std::unique_ptr<std::ofstream> log_file;
 static int profiler_rank = -1;
@@ -166,7 +167,7 @@ int MPI_Init(int *argc, char ***argv) {
 
     // Initialize optional RDMA sync (no-op if disabled)
     if (sync_flag == true)
-        rdmasync::init_if_needed(profiler_rank);
+        rdmasync::init(profiler_rank);
     
     if (log_path_env != nullptr) {
         // Use environment variable if set
@@ -270,6 +271,9 @@ int MPI_Finalize() {
  * =============================================================================
  */
 int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::REPEAT);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -285,6 +289,9 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
 }
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::REPEAT);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);

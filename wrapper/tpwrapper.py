@@ -136,11 +136,9 @@ def run_parallel(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Pat
         cmd_err_path = os.path.join(log_storage_prefix, f"{node_list}.err") if node_list else None
         penv = os.environ.copy()
         penv.update(env)
-        # 打开输出文件
         out_f = open(cmd_output_path, 'w') if cmd_output_path else None
         err_f = open(cmd_err_path, 'w') if cmd_err_path else None
         dbg(f"Launching [{i}]: {' '.join(cmd)}", True)
-        # 重定向 stdout 和 stderr
         p = subprocess.Popen(cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
         procs.append(p)
         fds.append((out_f, err_f))

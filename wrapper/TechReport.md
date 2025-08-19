@@ -53,6 +53,20 @@ Therefore, we should focus on the following implementation:
 Cases:
 - SharedIO performance evaluation
 
+### Benchmark Path
+
+The realization path of tpwrapper follows three key components:
+- interference pattern:
+  - Resources Contention
+- interference behavior:
+  - symmetrical (sync):
+    - two same mpirun processes
+  - asymmetrical (trigger):
+    - custom + preset(Communication/IO)
+- metrics:
+  - Performance Metrics
+
+
 ## Phase II (September - October)
 
 - Implementation on arm platform
@@ -73,6 +87,9 @@ TPBench/wrapper
 ├── sync
 │   ├── sync.cpp             # Synchronization implementation
 │   ├── sync.h               # Header file for synchronization
+├── trigger
+│   ├── bench_io.cpp
+
 ├── Makefile                 # Makefile to build the wrapper and libraries
 └── wrapper                  # The script to use the wrapper
 ```
@@ -86,11 +103,39 @@ The MPI hijacking implementation is in `instrumentation/mpi_trace.cpp`. It provi
 
 ## Synchronization
 
-
 The synchronization implementation is in `sync/sync.cpp` and `sync/sync.h`. It is the core component of the wrapper. It provides precise multi-core and multi-node synchronization in both MPI and non-MPI environments. The synchronization can be enabled or disabled via the wrapper options.
 
-The synchronization mechanism uses RDMA for low-latency communication between processes. It supports two roles: coordinator and participant. The coordinator is responsible for managing the synchronization, while participants synchronize their state with the coordinator.
+The synchronization mechanism uses RDMA for low-latency communication between processes. It supports two roles: coordinator and participant. The coordinator is responsible for managing the synchronization, while participants synchronize their state with the coordinator. 
+### symmetrical
 
+Based on synchronization mechanism, we realized a `tp_sync` function. When coordinator and participant call the sync function, they will synchronize at that point with each other. Therefore, coordinator and participant must be the same program with same input parameter.
+
+### asymmetrical
+Based on synchronization mechanism, we realized a `tp_trigger` function. When coordinator calls trigger, the participant will recieve a message and then launch or start a specific program which can be customed (such as mpi benchmark, RDMA perftest and IO test). In this case, we can custume what the other nodes will done when the coordinator calls the mpi function. Let's take an example:
+
+1. The coordinator and participants are launched at same time. The coordinator and participants will initilize the tp_rdmasync library at first.
+2. The coordinator will continue its process and the participants will spin and wait for the coordinator's trigger signal.
+3. When coordinator send a trigger signal (through rdma) and participants receive it, the participants will start a preset program (such as IO test or rdma test or mpi function test which are all implemented in the wrapper/trigger folder).
+4. The coordinator can also send additional commands to participants to control their behavior during the test (such as ONCE, STOP, FINISH or REPEAT)
+5. The participants is realized in `wrapper/trigger`.
+6. The participants will report their status and results back to the coordinator after the test is completed.
+
+## Trigger's Benchmark
+All three benchmarks are realized in `wrapper/trigger`, which are participants' preset programs:
+
+1. RDMA bench: use perftest library, it should run on at least two nodes.
+2. MPI bench: realize some sample mpi function test, such as MPI_Send and MPI_Recv, allreduce, reduce, bcast and so on. 
+3. IO bench: use iozone or fio to test file system performance. It can run on a single node.
+
+For above three tests, we can choose different function and test size (transmit size) when we launch the whole program. All the performance of above test will be recorded and store in local file(s).
+
+### MPI
+
+
+### RDMA 
+
+
+### IO
 
 
 
