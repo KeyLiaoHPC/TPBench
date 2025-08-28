@@ -11,14 +11,16 @@ class MPIBench : public BenchmarkBase {
 private:
     int rank_, size_;
     std::vector<char> send_buffer_, recv_buffer_;
+    std::vector<double> send_data_, recv_data_;
     bool mpi_initialized_by_me_;
+    size_t data_size;
 
 public:
     MPIBench() : rank_(0), size_(1), mpi_initialized_by_me_(false) {}
     
     void initialize(int argc, char** argv) override {
         int provided;
-        MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided);
+        MPI_Init(&argc, &argv);
         mpi_initialized_by_me_ = true;
         
         MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
@@ -29,33 +31,64 @@ public:
         }
     }
 
+    int get_rank() override {
+        return rank_;
+    }
+
+    int get_world_size() override {
+        return size_;
+    }
+
     void setup_buffers(size_t buffer_size) override {
+        data_size = buffer_size;
         send_buffer_.resize(buffer_size, 'A' + rank_);
         recv_buffer_.resize(buffer_size, 0);
-        
+
+        send_data_.resize(buffer_size / sizeof(double), rank_);
+        recv_data_.resize(buffer_size / sizeof(double), 0.0);
         // Initialize send buffer with some pattern
         for (size_t i = 0; i < buffer_size; ++i) {
             send_buffer_[i] = (char)((i + rank_) % 256);
         }
+        for (size_t i = 0; i < send_data_.size(); ++i) {
+            send_data_[i] = static_cast<double>(rank_);
+        }
     }
 
-    void run_benchmark(const std::string& func_name, size_t data_size) override {
+    void run_warmup(const std::string& func_name, size_t data_size) override {
         if (func_name == "allreduce") {
-            run_allreduce(data_size);
+            warmup_allreduce();
         } else if (func_name == "send_recv" || func_name == "sendrecv") {
-            run_send_recv(data_size);
+            warmup_send_recv();
         } else if (func_name == "bcast" || func_name == "broadcast") {
-            run_bcast(data_size);
+            warmup_bcast();
         } else if (func_name == "alltoall") {
-            run_alltoall(data_size);
+            warmup_alltoall();
         } else if (func_name == "reduce") {
-            run_reduce(data_size);
-        } else if (func_name == "barrier") {
-            run_barrier();
+            warmup_reduce();
         } else {
             if (rank_ == 0) {
                 std::cerr << "[MPI] Unknown function: " << func_name << std::endl;
-                std::cerr << "[MPI] Available functions: allreduce, send_recv, bcast, alltoall, reduce, barrier" << std::endl;
+                std::cerr << "[MPI] Available functions: allreduce, send_recv, bcast, alltoall, reduce" << std::endl;
+            }
+        }
+    }
+
+    void run_benchmark(const std::string& func_name) override {
+        if (func_name == "allreduce") {
+            run_allreduce();
+        } else if (func_name == "send_recv" || func_name == "sendrecv") {
+            run_send_recv();
+        } else if (func_name == "bcast" || func_name == "broadcast") {
+            run_bcast();
+        } else if (func_name == "alltoall") {
+            run_alltoall();
+        } else if (func_name == "reduce") {
+            run_reduce();
+        } else {
+            if (rank_ == 0) {
+                std::cerr << "[MPI] Unknown function: " << func_name << std::endl;
+                std::cerr << "[MPI] Available functions: allreduce, send_recv, bcast, alltoall, reduce" << std::endl;
             }
         }
     }
@@ -67,25 +100,16 @@ public:
     }
 
 private:
-    void run_allreduce(size_t data_size) {
-        size_t count = data_size / sizeof(double);
+    void run_allreduce() {
+        size_t count = send_data_.size();
         if (count == 0) count = 1;
         
         std::vector<double> send_data(count, rank_);
         std::vector<double> recv_data(count, 0.0);
         
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            MPI_Allreduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-        
         auto start = get_timestamp_us();
         MPI_Allreduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         auto end = get_timestamp_us();
-        
-        MPI_Barrier(MPI_COMM_WORLD);
         
         uint64_t time_us = end - start;
         double bandwidth = calculate_bandwidth(data_size * 2, time_us); // Send and receive
@@ -95,41 +119,26 @@ private:
         }
     }
 
-    void run_send_recv(size_t data_size) {
+    void run_send_recv() {
+        size_t data_size = send_buffer_.size();
         if (size_ < 2) {
             if (rank_ == 0) {
                 std::cerr << "[MPI] send_recv requires at least 2 processes" << std::endl;
             }
             return;
         }
-        
-        setup_buffers(data_size);
-        
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            if (rank_ == 0) {
-                MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
-                MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            } else if (rank_ == 1) {
-                MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-                MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, 0, 1, MPI_COMM_WORLD);
-            }
-        }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
+
+        auto rank_offset = size_ >> 1;
         
         uint64_t start = get_timestamp_us();
         
-        if (rank_ == 0) {
-            MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
-            MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, 1, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        } else if (rank_ == 1) {
-            MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-            MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, 0, 1, MPI_COMM_WORLD);
+        if (rank_ < rank_offset) {
+            MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, rank_ + rank_offset, 0, MPI_COMM_WORLD);
+        } else {
+            MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, rank_ - rank_offset, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         
         uint64_t end = get_timestamp_us();
-        MPI_Barrier(MPI_COMM_WORLD);
         
         uint64_t time_us = end - start;
         double bandwidth = calculate_bandwidth(data_size * 2, time_us);
@@ -139,21 +148,11 @@ private:
         }
     }
 
-    void run_bcast(size_t data_size) {
-        setup_buffers(data_size);
-        
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            MPI_Bcast(send_buffer_.data(), data_size, MPI_CHAR, 0, MPI_COMM_WORLD);
-        }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-        
+    void run_bcast() {
+        size_t data_size = send_buffer_.size();
         auto start = get_timestamp_us();
         MPI_Bcast(send_buffer_.data(), data_size, MPI_CHAR, 0, MPI_COMM_WORLD);
         auto end = get_timestamp_us();
-        
-        MPI_Barrier(MPI_COMM_WORLD);
         
         uint64_t time_us = end - start;
         double bandwidth = calculate_bandwidth(data_size, time_us);
@@ -163,62 +162,31 @@ private:
         }
     }
 
-    void run_alltoall(size_t data_size) {
-        size_t per_process_size = data_size / size_;
+    void run_alltoall() {
+        size_t per_process_size = send_buffer_.size();
         if (per_process_size == 0) per_process_size = 1;
         
-        std::vector<char> send_data(per_process_size * size_);
-        std::vector<char> recv_data(per_process_size * size_);
-        
-        // Initialize send data
-        for (size_t i = 0; i < send_data.size(); ++i) {
-            send_data[i] = (char)((i + rank_) % 256);
-        }
-        
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            MPI_Alltoall(send_data.data(), per_process_size, MPI_CHAR,
-                        recv_data.data(), per_process_size, MPI_CHAR,
-                        MPI_COMM_WORLD);
-        }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-        
         auto start = get_timestamp_us();
-        MPI_Alltoall(send_data.data(), per_process_size, MPI_CHAR,
-                    recv_data.data(), per_process_size, MPI_CHAR,
+        MPI_Alltoall(send_buffer_.data(), per_process_size, MPI_CHAR,
+                    recv_buffer_.data(), per_process_size, MPI_CHAR,
                     MPI_COMM_WORLD);
         auto end = get_timestamp_us();
         
-        MPI_Barrier(MPI_COMM_WORLD);
-        
         uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size * 2, time_us);
+        double bandwidth = calculate_bandwidth(per_process_size * 2, time_us);
         
         if (rank_ == 0) {
-            log_performance("MPI", "alltoall", data_size, time_us, bandwidth);
+            log_performance("MPI", "alltoall", per_process_size, time_us, bandwidth);
         }
     }
 
-    void run_reduce(size_t data_size) {
-        size_t count = data_size / sizeof(double);
-        if (count == 0) count = 1;
-        
-        std::vector<double> send_data(count, rank_ + 1.0);
-        std::vector<double> recv_data(count, 0.0);
-        
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            MPI_Reduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        }
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-        
+    void run_reduce() {
+        size_t data_size = send_data_.size();
+        if (data_size == 0) data_size = 1;
+
         auto start = get_timestamp_us();
-        MPI_Reduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        MPI_Reduce(send_data_.data(), recv_data_.data(), data_size, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         auto end = get_timestamp_us();
-        
-        MPI_Barrier(MPI_COMM_WORLD);
         
         uint64_t time_us = end - start;
         double bandwidth = calculate_bandwidth(data_size, time_us);
@@ -228,20 +196,55 @@ private:
         }
     }
 
-    void run_barrier() {
-        // Warmup
+    void warmup_allreduce() {
+        size_t count = send_data_.size();
+        if (count == 0) count = 1;
+        
+        std::vector<double> send_data(count, rank_);
+        std::vector<double> recv_data(count, 0.0);
+        
         for (int i = 0; i < 3; ++i) {
-            MPI_Barrier(MPI_COMM_WORLD);
+            MPI_Allreduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         }
+    }
+
+    void warmup_send_recv() {
+        if (size_ < 2) return;
         
-        auto start = get_timestamp_us();
-        MPI_Barrier(MPI_COMM_WORLD);
-        auto end = get_timestamp_us();
+        size_t warmup_size = std::min(data_size, (size_t)1024);
+        auto rank_offset = size_ >> 1;
         
-        uint64_t time_us = end - start;
+        for (int i = 0; i < 3; ++i) {
+            if (rank_ < rank_offset) {
+                MPI_Send(send_buffer_.data(), warmup_size, MPI_CHAR, rank_ + rank_offset, 0, MPI_COMM_WORLD);
+            } else {
+                MPI_Recv(recv_buffer_.data(), warmup_size, MPI_CHAR, rank_ - rank_offset, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            }
+        }
+    }
+
+    void warmup_bcast() {
+        size_t warmup_size = std::min(data_size, (size_t)1024);
+        for (int i = 0; i < 3; ++i) {
+            MPI_Bcast(send_buffer_.data(), warmup_size, MPI_CHAR, 0, MPI_COMM_WORLD);
+        }
+    }
+
+    void warmup_alltoall() {
+        size_t warmup_size = std::min(data_size, (size_t)1024);
+        for (int i = 0; i < 3; ++i) {
+            MPI_Alltoall(send_buffer_.data(), warmup_size, MPI_CHAR,
+                        recv_buffer_.data(), warmup_size, MPI_CHAR,
+                        MPI_COMM_WORLD);
+        }
+    }
+
+    void warmup_reduce() {
+        size_t count = std::min(send_data_.size(), (size_t)256);
+        if (count == 0) count = 1;
         
-        if (rank_ == 0) {
-            log_performance("MPI", "barrier", 0, time_us, 0.0);
+        for (int i = 0; i < 3; ++i) {
+            MPI_Reduce(send_data_.data(), recv_data_.data(), count, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
         }
     }
 };
@@ -251,29 +254,3 @@ BenchmarkBase* create_mpi_benchmark() {
     return new MPIBench();
 }
 
-// Standalone main function for direct execution
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <function> <size>" << std::endl;
-        std::cerr << "Functions: allreduce, send_recv, bcast, alltoall, reduce, barrier" << std::endl;
-        std::cerr << "Size: data size in bytes (ignored for barrier)" << std::endl;
-        return 1;
-    }
-    
-    std::string function = argv[1];
-    size_t size = std::stoull(argv[2]);
-    
-    MPIBench bench;
-    
-    try {
-        bench.initialize(argc, argv);
-        bench.setup_buffers(size);
-        bench.run_benchmark(function, size);
-        bench.finalize();
-    } catch (const std::exception& e) {
-        std::cerr << "[MPI] Error: " << e.what() << std::endl;
-        return 1;
-    }
-    
-    return 0;
-}

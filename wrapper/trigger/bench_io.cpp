@@ -3,6 +3,7 @@
 #include <fstream>
 #include <vector>
 #include <random>
+#include <algorithm>
 #include <cstdlib>
 #include <unistd.h>
 #include <fcntl.h>
@@ -18,6 +19,8 @@ private:
     std::string test_dir_;
     size_t file_size_;
     size_t block_size_;
+    size_t data_size;
+
     bool use_direct_io_;
     bool use_sync_;
     
@@ -66,7 +69,8 @@ public:
 
     void setup_buffers(size_t buffer_size) override {
         file_size_ = buffer_size;
-        
+        data_size = buffer_size;
+
         // Align buffer size to block size for direct I/O
         size_t aligned_size = ((buffer_size + block_size_ - 1) / block_size_) * block_size_;
         
@@ -82,26 +86,54 @@ public:
         } else {
             buffer_.resize(aligned_size);
         }
-        
+
         // Initialize buffer with pattern
         for (size_t i = 0; i < buffer_.size(); ++i) {
             buffer_[i] = (char)(i % 256);
         }
-        
+
+        std::vector<std::string> test_file_list = {
+            test_file_prefix_ + "_mixed",
+            test_file_prefix_ + "_seq_read",
+            test_file_prefix_ + "_seq_write",
+            test_file_prefix_ + "_rand_read",
+            test_file_prefix_ + "_rand_write"};
+        for (auto test_file: test_file_list) {
+            // Create the test file with the specified size
+            create_test_file(test_file, data_size);
+        }
+
         std::cout << "[IO] Buffer allocated: " << buffer_.size() << " bytes" << std::endl;
     }
 
-    void run_benchmark(const std::string& func_name, size_t data_size) override {
+    void run_warmup(const std::string& func_name, size_t data_size) override {
         if (func_name == "read" || func_name == "sequential_read") {
-            run_sequential_read(data_size);
+            warmup_sequential_read();
         } else if (func_name == "write" || func_name == "sequential_write") {
-            run_sequential_write(data_size);
+            warmup_sequential_write();
         } else if (func_name == "random_read") {
-            run_random_read(data_size);
+            warmup_random_read();
         } else if (func_name == "random_write") {
-            run_random_write(data_size);
+            warmup_random_write();
         } else if (func_name == "mixed") {
-            run_mixed_io(data_size);
+            warmup_mixed_io();
+        } else {
+            std::cerr << "[IO] Unknown function: " << func_name << std::endl;
+            std::cerr << "[IO] Available functions: read, write, random_read, random_write, mixed" << std::endl;
+        }
+    }
+
+    void run_benchmark(const std::string& func_name) override {
+        if (func_name == "read" || func_name == "sequential_read") {
+            run_sequential_read();
+        } else if (func_name == "write" || func_name == "sequential_write") {
+            run_sequential_write();
+        } else if (func_name == "random_read") {
+            run_random_read();
+        } else if (func_name == "random_write") {
+            run_random_write();
+        } else if (func_name == "mixed") {
+            run_mixed_io();
         } else {
             std::cerr << "[IO] Unknown function: " << func_name << std::endl;
             std::cerr << "[IO] Available functions: read, write, random_read, random_write, mixed" << std::endl;
@@ -115,9 +147,8 @@ public:
     }
 
 private:
-    void run_sequential_write(size_t data_size) {
+    void run_sequential_write() {
         std::string filename = test_file_prefix_ + "_seq_write";
-        
         // Prepare file for writing
         int flags = O_CREAT | O_WRONLY | O_TRUNC;
         if (use_direct_io_) {
@@ -127,15 +158,6 @@ private:
         int fd = open(filename.c_str(), flags, 0644);
         if (fd < 0) {
             throw std::runtime_error("Failed to open file for writing: " + filename);
-        }
-        
-        // Warmup writes
-        for (int i = 0; i < 3; ++i) {
-            lseek(fd, 0, SEEK_SET);
-            write_data(fd, data_size);
-            if (use_sync_) {
-                fsync(fd);
-            }
         }
         
         // Measured write
@@ -154,13 +176,10 @@ private:
         
         log_performance("IO", "sequential_write", data_size, time_us, bandwidth);
     }
-    
-    void run_sequential_read(size_t data_size) {
+
+    void run_sequential_read() {
         std::string filename = test_file_prefix_ + "_seq_read";
-        
-        // First create the file
-        create_test_file(filename, data_size);
-        
+
         // Prepare file for reading
         int flags = O_RDONLY;
         if (use_direct_io_) {
@@ -170,12 +189,6 @@ private:
         int fd = open(filename.c_str(), flags);
         if (fd < 0) {
             throw std::runtime_error("Failed to open file for reading: " + filename);
-        }
-        
-        // Warmup reads
-        for (int i = 0; i < 3; ++i) {
-            lseek(fd, 0, SEEK_SET);
-            read_data(fd, data_size);
         }
         
         // Measured read
@@ -192,11 +205,8 @@ private:
         log_performance("IO", "sequential_read", data_size, time_us, bandwidth);
     }
     
-    void run_random_write(size_t data_size) {
+    void run_random_write() {
         std::string filename = test_file_prefix_ + "_random_write";
-        
-        // Create file with the target size
-        create_test_file(filename, data_size);
         
         int flags = O_WRONLY;
         if (use_direct_io_) {
@@ -222,17 +232,6 @@ private:
             offsets.push_back(dis(gen) * block_size_);
         }
         
-        // Warmup
-        for (int w = 0; w < 3; ++w) {
-            for (size_t i = 0; i < std::min(num_ops, (size_t)10); ++i) {
-                lseek(fd, offsets[i], SEEK_SET);
-                write(fd, buffer_.data(), block_size_);
-            }
-            if (use_sync_) {
-                fsync(fd);
-            }
-        }
-        
         // Measured random writes
         auto start = get_timestamp_us();
         for (size_t i = 0; i < num_ops; ++i) {
@@ -255,11 +254,8 @@ private:
                   << " iops=" << iops << std::endl;
     }
     
-    void run_random_read(size_t data_size) {
+    void run_random_read() {
         std::string filename = test_file_prefix_ + "_random_read";
-        
-        // Create file with the target size
-        create_test_file(filename, data_size);
         
         int flags = O_RDONLY;
         if (use_direct_io_) {
@@ -285,14 +281,6 @@ private:
             offsets.push_back(dis(gen) * block_size_);
         }
         
-        // Warmup
-        for (int w = 0; w < 3; ++w) {
-            for (size_t i = 0; i < std::min(num_ops, (size_t)10); ++i) {
-                lseek(fd, offsets[i], SEEK_SET);
-                read(fd, buffer_.data(), block_size_);
-            }
-        }
-        
         // Measured random reads
         auto start = get_timestamp_us();
         for (size_t i = 0; i < num_ops; ++i) {
@@ -312,11 +300,8 @@ private:
                   << " iops=" << iops << std::endl;
     }
     
-    void run_mixed_io(size_t data_size) {
+    void run_mixed_io() {
         std::string filename = test_file_prefix_ + "_mixed";
-        
-        // Create file with the target size
-        create_test_file(filename, data_size);
         
         int flags = O_RDWR;
         if (use_direct_io_) {
@@ -350,21 +335,6 @@ private:
         
         // Shuffle operations
         std::shuffle(operations.begin(), operations.end(), gen);
-        
-        // Warmup
-        for (int w = 0; w < 3; ++w) {
-            for (size_t i = 0; i < std::min(total_ops, (size_t)10); ++i) {
-                lseek(fd, operations[i].second, SEEK_SET);
-                if (operations[i].first) {
-                    read(fd, buffer_.data(), block_size_);
-                } else {
-                    write(fd, buffer_.data(), block_size_);
-                }
-            }
-            if (use_sync_) {
-                fsync(fd);
-            }
-        }
         
         // Measured mixed I/O
         auto start = get_timestamp_us();
@@ -435,6 +405,164 @@ private:
             unlink(filename.c_str());
         }
     }
+
+    void warmup_sequential_write() {
+        std::string filename = test_file_prefix_ + "_seq_write_warmup";
+        create_test_file(filename, data_size);
+        int flags = O_CREAT | O_WRONLY | O_TRUNC;
+        if (use_direct_io_) {
+            flags |= O_DIRECT;
+        }
+        
+        int fd = open(filename.c_str(), flags, 0644);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open file for warmup writing: " + filename);
+        }
+        
+        for (int i = 0; i < 3; ++i) {
+            lseek(fd, 0, SEEK_SET);
+            write_data(fd, data_size);
+            if (use_sync_) {
+                fsync(fd);
+            }
+        }
+        
+        close(fd);
+        unlink(filename.c_str());
+    }
+
+    void warmup_sequential_read() {
+        std::string filename = test_file_prefix_ + "_seq_read_warmup";
+        create_test_file(filename, data_size);
+        
+        int flags = O_RDONLY;
+        if (use_direct_io_) {
+            flags |= O_DIRECT;
+        }
+        
+        int fd = open(filename.c_str(), flags);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open file for warmup reading: " + filename);
+        }
+        
+        for (int i = 0; i < 3; ++i) {
+            lseek(fd, 0, SEEK_SET);
+            read_data(fd, data_size);
+        }
+        
+        close(fd);
+        unlink(filename.c_str());
+    }
+
+    void warmup_random_write() {
+        std::string filename = test_file_prefix_ + "_random_write_warmup";
+        create_test_file(filename, data_size);
+        
+        int flags = O_WRONLY;
+        if (use_direct_io_) {
+            flags |= O_DIRECT;
+        }
+        
+        int fd = open(filename.c_str(), flags);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open file for warmup random writing: " + filename);
+        }
+        
+        size_t num_ops = std::min((size_t)100, data_size / block_size_);
+        if (num_ops == 0) num_ops = 1;
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<off_t> dis(0, (data_size - block_size_) / block_size_);
+        
+        for (int w = 0; w < 3; ++w) {
+            for (size_t i = 0; i < std::min(num_ops, (size_t)10); ++i) {
+                off_t offset = dis(gen) * block_size_;
+                lseek(fd, offset, SEEK_SET);
+                write(fd, buffer_.data(), block_size_);
+            }
+            if (use_sync_) {
+                fsync(fd);
+            }
+        }
+        
+        close(fd);
+        unlink(filename.c_str());
+    }
+
+    void warmup_random_read() {
+        std::string filename = test_file_prefix_ + "_random_read_warmup";
+        create_test_file(filename, data_size);
+        
+        int flags = O_RDONLY;
+        if (use_direct_io_) {
+            flags |= O_DIRECT;
+        }
+        
+        int fd = open(filename.c_str(), flags);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open file for warmup random reading: " + filename);
+        }
+        
+        size_t num_ops = std::min((size_t)100, data_size / block_size_);
+        if (num_ops == 0) num_ops = 1;
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<off_t> dis(0, (data_size - block_size_) / block_size_);
+        
+        for (int w = 0; w < 3; ++w) {
+            for (size_t i = 0; i < std::min(num_ops, (size_t)10); ++i) {
+                off_t offset = dis(gen) * block_size_;
+                lseek(fd, offset, SEEK_SET);
+                read(fd, buffer_.data(), block_size_);
+            }
+        }
+        
+        close(fd);
+        unlink(filename.c_str());
+    }
+
+    void warmup_mixed_io() {
+        std::string filename = test_file_prefix_ + "_mixed_warmup";
+        create_test_file(filename, data_size);
+        
+        int flags = O_RDWR;
+        if (use_direct_io_) {
+            flags |= O_DIRECT;
+        }
+        
+        int fd = open(filename.c_str(), flags);
+        if (fd < 0) {
+            throw std::runtime_error("Failed to open file for warmup mixed I/O: " + filename);
+        }
+        
+        size_t total_ops = std::min((size_t)100, data_size / block_size_);
+        if (total_ops == 0) total_ops = 1;
+        
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<off_t> dis(0, (data_size - block_size_) / block_size_);
+        std::uniform_int_distribution<int> op_dis(0, 1);
+        
+        for (int w = 0; w < 3; ++w) {
+            for (size_t i = 0; i < std::min(total_ops, (size_t)10); ++i) {
+                off_t offset = dis(gen) * block_size_;
+                lseek(fd, offset, SEEK_SET);
+                if (op_dis(gen)) {
+                    read(fd, buffer_.data(), block_size_);
+                } else {
+                    write(fd, buffer_.data(), block_size_);
+                }
+            }
+            if (use_sync_) {
+                fsync(fd);
+            }
+        }
+        
+        close(fd);
+        unlink(filename.c_str());
+    }
 };
 
 // Factory function
@@ -442,34 +570,3 @@ BenchmarkBase* create_io_benchmark() {
     return new IOBench();
 }
 
-// Standalone main function for direct execution
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <function> <size> [options]" << std::endl;
-        std::cerr << "Functions: read, write, random_read, random_write, mixed" << std::endl;
-        std::cerr << "Size: data size in bytes" << std::endl;
-        std::cerr << "Options:" << std::endl;
-        std::cerr << "  --dir <directory>     Test directory (default: /tmp)" << std::endl;
-        std::cerr << "  --block-size <size>   Block size for random I/O (default: 4096)" << std::endl;
-        std::cerr << "  --direct              Use direct I/O (O_DIRECT)" << std::endl;
-        std::cerr << "  --no-sync             Don't use fsync" << std::endl;
-        return 1;
-    }
-    
-    std::string function = argv[1];
-    size_t size = std::stoull(argv[2]);
-    
-    IOBench bench;
-    
-    try {
-        bench.initialize(argc, argv);
-        bench.setup_buffers(size);
-        bench.run_benchmark(function, size);
-        bench.finalize();
-    } catch (const std::exception& e) {
-        std::cerr << "[IO] Error: " << e.what() << std::endl;
-        return 1;
-    }
-    
-    return 0;
-}

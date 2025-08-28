@@ -12,9 +12,17 @@ public:
     virtual ~BenchmarkBase() = default;
     virtual void initialize(int argc, char** argv) = 0;
     virtual void setup_buffers(size_t buffer_size) = 0;
-    virtual void run_benchmark(const std::string& func_name, size_t data_size) = 0;
+    virtual void run_benchmark(const std::string& func_name) = 0;
+    virtual void run_warmup(const std::string& func_name, size_t data_size) = 0;
     virtual void finalize() = 0;
-    
+
+    virtual int get_rank() {
+        return 0;
+    };
+    virtual int get_world_size() {
+        return 1;
+    }
+
 protected:
     // Helper function to get current timestamp in microseconds
     static uint64_t get_timestamp_us() {

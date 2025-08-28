@@ -21,7 +21,7 @@
 #include <memory>
 
 #include "bench.h"
-#include "../sync/sync.h"
+#include "sync.h"
 
 class ParticipantBench {
 private:
@@ -30,6 +30,7 @@ private:
     std::string benchmark_type_;
     std::string function_name_;
     size_t data_size_;
+    int rank_, world_size_;
     std::unique_ptr<BenchmarkBase> benchmark_;
     std::thread worker_thread_;
     
@@ -54,20 +55,22 @@ public:
     }
     
     void initialize(int argc, char** argv) {
-        // Initialize RDMA sync as participant
-        rdmasync::init(0);
-        
         // Initialize the benchmark
         benchmark_->initialize(argc, argv);
         benchmark_->setup_buffers(std::max(data_size_, (size_t)4096));
+
+        rank_ = benchmark_->get_rank();
+        world_size_ = benchmark_->get_world_size(); 
+
+        rdmasync::init(rank_);
         
-        std::cout << "[ParticipantBench] Initialized " << benchmark_type_ 
+        if(rank_ == 0) std::cout << "[ParticipantBench] Initialized " << benchmark_type_ 
                   << " benchmark with function " << function_name_ 
                   << " and size " << data_size_ << std::endl;
     }
     
     void start() {
-        std::cout << "[ParticipantBench] Started as participant, waiting for coordinator messages..." << std::endl;
+        if(rank_ == 0) std::cout << "[ParticipantBench] Started as participant, waiting for coordinator messages..." << std::endl;
         
         running_ = true;
         
@@ -80,11 +83,14 @@ public:
                 rdmasync::TRIGGER_MSG received_msg = rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
                 rdmasync::tp_sync(__func__);
                 if (received_msg == rdmasync::TRIGGER_MSG::ONCE) {
+                    if(rank_ == 0) std::cout << "[ParticipantBench] Received ONCE message, executing benchmark..." << std::endl;
                     execute_once();
                 } else if (received_msg == rdmasync::TRIGGER_MSG::REPEAT) {
                     execute_repeat();
                 } else if (received_msg == rdmasync::TRIGGER_MSG::STOP) {
                     stop_repeat();
+                } else if (received_msg == rdmasync::TRIGGER_MSG::FINISH) {
+                    break;
                 }
                 rdmasync::tp_sync(__func__);
             } catch (const std::exception& e) {
@@ -93,7 +99,7 @@ public:
             }
         }
         finalize();
-        std::cout << "[ParticipantBench] Exiting..." << std::endl;
+        if(rank_ == 0) std::cout << "[ParticipantBench] Exiting..." << std::endl;
     }
     
     void stop() {
@@ -103,18 +109,18 @@ public:
             worker_thread_.join();
         }
     }
-    
+
     void execute_once() {
         if (!benchmark_) {
-            std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
+            if(rank_ == 0) std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
             return;
         }
         
-        std::cout << "[ParticipantBench] Executing " << benchmark_type_ 
+        if(rank_ == 0) std::cout << "[ParticipantBench] Executing " << benchmark_type_ 
                   << "::" << function_name_ << " once..." << std::endl;
         
         try {
-            benchmark_->run_benchmark(function_name_, data_size_);
+            benchmark_->run_benchmark(function_name_);
         } catch (const std::exception& e) {
             std::cerr << "[ParticipantBench] Error executing benchmark: " << e.what() << std::endl;
         }
@@ -122,7 +128,7 @@ public:
     
     void execute_repeat() {
         if (!benchmark_) {
-            std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
+            if(rank_ == 0) std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
             return;
         }
         
@@ -133,25 +139,25 @@ public:
         }
         
         worker_thread_ = std::thread([this]() {
-            std::cout << "[ParticipantBench] Starting repeat mode for " 
+            if(rank_ == 0) std::cout << "[ParticipantBench] Starting repeat mode for " 
                       << benchmark_type_ << "::" << function_name_ << "..." << std::endl;
             
             while (repeat_mode_ && running_) {
                 try {
-                    benchmark_->run_benchmark(function_name_, data_size_);
+                    benchmark_->run_benchmark(function_name_);
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 } catch (const std::exception& e) {
                     std::cerr << "[ParticipantBench] Error in repeat mode: " << e.what() << std::endl;
                     break;
                 }
             }
-            std::cout << "[ParticipantBench] Repeat mode stopped" << std::endl;
+            if(rank_ == 0) std::cout << "[ParticipantBench] Repeat mode stopped" << std::endl;
         });
     }
     
     void stop_repeat() {
         repeat_mode_ = false;
-        std::cout << "[ParticipantBench] Stopping repeat mode..." << std::endl;
+        if(rank_ == 0) std::cout << "[ParticipantBench] Stopping repeat mode..." << std::endl;
     }
     
     void finalize() {
@@ -182,6 +188,21 @@ void print_usage(const char* program_name) {
     std::cout << "  " << program_name << " io read 1048576" << std::endl;
 }
 
+/**
+ * Receive and set environment variables
+ * -env VAR value
+ */
+void parse_and_set_envs(int argc, char* argv[]) {
+    for (int i = 0; i < argc; i++) {
+        if (std::string(argv[i]) == "-env" && i + 2 < argc) {
+            const char* var = argv[i + 1];
+            const char* value = argv[i + 2];
+            setenv(var, value, 1);
+            i += 2;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     if (argc < 4) {
         print_usage(argv[0]);
@@ -191,6 +212,8 @@ int main(int argc, char* argv[]) {
     std::string benchmark_type = argv[1];
     std::string function = argv[2];
     size_t size = 0;
+
+    parse_and_set_envs(argc, argv);
     
     try {
         size = std::stoull(argv[3]);

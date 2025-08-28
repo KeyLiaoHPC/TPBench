@@ -23,6 +23,8 @@ void tp_sync(const char* name);
 // Trigger function for asymmetric coordination
 TRIGGER_MSG tp_trigger(TRIGGER_MSG send_msg);
 
+bool is_enabled();
+
 } // namespace rdmasync
 
 // Optional C API (convenient for C/LD_PRELOAD usage and C++ wrappers with C linkage)
@@ -31,4 +33,8 @@ void rdmasync_init(uint32_t mpi_rank);
 void rdmasync_finalize();
 void rdmasync_hook(const char* name);
 int rdmasync_trigger(int send_msg);
+int rdmasync_is_enabled();
 }
+
+
+

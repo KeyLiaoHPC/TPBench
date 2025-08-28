@@ -3,6 +3,7 @@
 #include <fstream>
 #include <filesystem>
 #include <string>
+#include <cstring>
 #include <memory>
 #include <unistd.h>
 #include <chrono>
@@ -22,6 +23,9 @@ extern "C" {
 namespace fs = std::filesystem;
 
 namespace {
+
+#define dbg(msg) std::cout << "[MPI_TRACE] " << __FILE__ << ":" << __LINE__ << " " << msg << std::endl;
+
 // Define a prefix for log files
 static std::string LOG_PATH_PREFIX = "./tpmpi_trace_logs"; // Change this to your desired log path prefix
 
@@ -47,7 +51,6 @@ __getcy_grp_init;
 
 #define GET_NS \
     std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
-
 
 enum class MPI_FUNC {
     MPI_SEND = 0,
@@ -124,12 +127,10 @@ inline int measure_time(Func func, MPI_FUNC func_type, size_t size, const std::s
         *log_file << "    >> Data Size: " << size << " bytes\n";
         *log_file << "    >> Execution Cycles: " << elapsed_cy << "\n";
     }
-   
     return result;
 }
 
 }
-
 
 
 // C linkage for MPI functions
@@ -150,14 +151,21 @@ int MPI_Init(int *argc, char ***argv) {
     const char *trace_file_env = std::getenv("TPMPI_TRACE_STORE");
     const char *log_path_env = std::getenv("MPI_LOG_PATH_PREFIX");
     const char *sync_env = std::getenv("RDMASYNC_ENABLE");
+    const char *trigger_env = std::getenv("RDMASYNC_TRIGGER");
 
-    if (trace_file_env == "false") {
-        trace_store_flag == false;
+    if (trace_file_env != nullptr && std::strcmp(trace_file_env, "0") == 0) {
+        trace_store_flag = false;
     }
-
-    if (sync_env != "1") {
+    if (sync_env == nullptr || std::strcmp(sync_env, "1") != 0) {
         sync_flag = false;
     }
+    if (trigger_env == nullptr || std::strcmp(trigger_env, "1") != 0) {
+        trigger_flag = false;
+    }
+
+    // dbg("MPI_Init called with trace_store_flag: " + std::to_string(trace_store_flag) +
+    //    ", sync_flag: " + std::to_string(sync_flag) +
+    //    ", trigger_flag: " + std::to_string(trigger_flag));
 
     // 1. Call the actual MPI_Init
     int ret = PMPI_Init(argc, argv);
@@ -166,8 +174,24 @@ int MPI_Init(int *argc, char ***argv) {
     PMPI_Comm_rank(MPI_COMM_WORLD, &profiler_rank);
 
     // Initialize optional RDMA sync (no-op if disabled)
-    if (sync_flag == true)
+    if (sync_flag == true) {
+        // Check if we're inside a participant process - if so, skip RDMA initialization
+        // to prevent double initialization conflicts
+        if (profiler_rank == 0)
+            std::cout << "[MPI_TRACE] Rank " << profiler_rank << " initializing RDMA..." << std::endl;
         rdmasync::init(profiler_rank);
+        // Check if RDMA is actually enabled after initialization
+        if (!rdmasync::is_enabled()) {
+            std::cout << "[MPI_TRACE] Rank " << profiler_rank << " RDMA initialization failed, disabling trigger and sync" << std::endl;
+            sync_flag = false;
+            trigger_flag = false;
+        } else {
+            if (profiler_rank == 0)
+                std::cout << "[MPI_TRACE] Rank " << profiler_rank << " RDMA initialization successful" << std::endl;
+        }
+    } else {
+        std::cout << "[MPI_TRACE] Rank " << profiler_rank << " RDMA sync disabled by environment" << std::endl;
+    }
     
     if (log_path_env != nullptr) {
         // Use environment variable if set
@@ -224,6 +248,9 @@ int MPI_Init(int *argc, char ***argv) {
 
 int MPI_Finalize() {
     // Optional RDMA sync finalization
+    if (trigger_flag) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::FINISH);
+    }
     if (sync_flag == true)
         rdmasync::finalize();
     int ret = PMPI_Finalize();
@@ -235,7 +262,7 @@ int MPI_Finalize() {
 
     for (size_t i = 0; i < MPI_FUNC_TRACE_TIMER.size(); ++i) {
         const auto& value = MPI_FUNC_TRACE_TIMER[i];
-        if (value[3] > 0) { 
+        if (value[3] > 0) {
             MPI_FUNC func_type = static_cast<MPI_FUNC>(i);
             log_data += "[ " + std::to_string(program_end_time) + " ] " + get_func_name(func_type) + "\n";
             log_data += "    >> Total Time: " + std::to_string(value[0]) + " ns\n";
@@ -271,9 +298,10 @@ int MPI_Finalize() {
  * =============================================================================
  */
 int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int tag, MPI_Comm comm) {
-    if (trigger_flag == true) {
-        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::REPEAT);
-    }
+    // Temporarily disable trigger for debugging
+    // if (trigger_flag == true) {
+    //     rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    // }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -285,12 +313,16 @@ int MPI_Send(const void *buf, int count, MPI_Datatype datatype, int dest, int ta
     ", dest=" + std::to_string(dest) + ", tag=" + std::to_string(tag) + ")" +
     "\n    >> Path: " + std::to_string(profiler_rank) + " -> " + std::to_string(dest));
 
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
     return ret;
 }
 
 int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, MPI_Comm comm, MPI_Status *status) {
     if (trigger_flag == true) {
-        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::REPEAT);
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
     }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
@@ -303,6 +335,12 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
     "MPI_Recv(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) + 
     ", source=" + std::to_string(source) + ", tag=" + std::to_string(tag) + ")" +
     "\n    >> Path: " + std::to_string(source) + " -> " + std::to_string(profiler_rank));
+
+    if (trigger_flag == true) {
+        
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
     
     return ret;
 }
@@ -314,6 +352,9 @@ int MPI_Recv(void *buf, int count, MPI_Datatype datatype, int source, int tag, M
  */
 
 int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -325,11 +366,19 @@ int MPI_Bcast(void *buffer, int count, MPI_Datatype datatype, int root, MPI_Comm
     "MPI_Bcast(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) +
     ", root=" + std::to_string(root) + ")" +
     "\n    >> Path: " + std::to_string(root) + " -> all");
+
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
     
     return ret;
 }
 
 int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -341,11 +390,18 @@ int MPI_Reduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datat
     "MPI_Reduce(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) +
     ", root=" + std::to_string(root) + ")" +
     "\n    >> Path: all -> " + std::to_string(root));
-    
+
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
     return ret;
 }
 
 int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype datatype, MPI_Op op, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -356,11 +412,19 @@ int MPI_Allreduce(const void *sendbuf, void *recvbuf, int count, MPI_Datatype da
     }, MPI_FUNC::MPI_ALLREDUCE, count * get_type_size(datatype),
     "MPI_Allreduce(count=" + std::to_string(count) + ", type=" + get_type_name(datatype) + ")" +
     "\n    >> Path: all -> all");
-    
+
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
+
     return ret;
 }
 
 int MPI_Scatter(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -374,10 +438,18 @@ int MPI_Scatter(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void 
     ", root=" + std::to_string(root) + ")" +
     "\n    >> Path: " + std::to_string(root) + " -> all");
 
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
+
     return ret;
 }
 
 int MPI_Gather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, int root, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -390,11 +462,18 @@ int MPI_Gather(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *
     ", recvcount=" + std::to_string(recvcount) + ", recvtype=" + get_type_name(recvtype) +
     ", root=" + std::to_string(root) + ")" +
     "\n    >> Path: " + std::to_string(root) + " <- all");
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
 
     return ret;
 }
 
 int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void *recvbuf, int recvcount, MPI_Datatype recvtype, MPI_Comm comm) {
+    if (trigger_flag == true) {
+        rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
+    }
     if (sync_flag == true) {
         rdmasync::tp_sync(__func__);
         PMPI_Barrier(comm);
@@ -405,6 +484,10 @@ int MPI_Alltoall(const void *sendbuf, int sendcount, MPI_Datatype sendtype, void
     "MPI_Alltoall(sendcount=" + std::to_string(sendcount) + ", sendtype=" + get_type_name(sendtype) +
     ", recvcount=" + std::to_string(recvcount) + ", recvtype=" + get_type_name(recvtype) + ")" +
     "\n    >> Path: all <-> all");
+    if (trigger_flag == true) {
+        rdmasync::tp_sync(__func__);
+        PMPI_Barrier(comm);
+    }
     
     return ret;
 }

@@ -13,6 +13,7 @@ TPBENCH_DIR := $(abspath $(CURRENT_DIR)/..)
 SRC_DIR = instrumentation
 OBJ_DIR = obj
 LIB_DIR = lib
+BIN_DIR = bin
 TPBENCH_LIB_DIR = $(TPBENCH_DIR)/lib
 SYNC_INC = -I$(CURRENT_DIR)/sync
 
@@ -29,13 +30,8 @@ LDFLAGS += -L$(TPBENCH_LIB_DIR) -ltpbench
 
 # Target libraries and binaries
 TARGET_LIB = $(LIB_DIR)/libmpi_trace.so
-TRIGGER_BIN = trigger/trigger
-COORDINATOR_BIN = trigger/coordinator
-PARTICIPANT_BIN = trigger/participant
-BENCH_MPI_BIN = trigger/bench_mpi
-BENCH_RDMA_BIN = trigger/bench_rdma
-BENCH_IO_BIN = trigger/bench_io
-BENCH_UNIFIED_BIN = trigger/bench_unified
+PARTICIPANT_BIN = $(BIN_DIR)/participant
+
 
 # Default target
 all: $(TARGET_LIB) $(TRIGGER_BIN) $(COORDINATOR_BIN) $(PARTICIPANT_BIN) $(BENCH_MPI_BIN) $(BENCH_RDMA_BIN) $(BENCH_IO_BIN) $(BENCH_UNIFIED_BIN)
@@ -56,49 +52,19 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.cpp | $(OBJ_DIR)
 $(OBJ_DIR)/sync_%.o: sync/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
-# Rule to build trigger binary
-$(TRIGGER_BIN): trigger/trigger.cpp $(TARGET_LIB)
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ $< -L$(LIB_DIR) -lmpi_trace -lstdc++fs -lrdmacm -libverbs -lpthread -L$(TPBENCH_LIB_DIR) -ltpbench
-
-# Rule to build coordinator binary
-$(COORDINATOR_BIN): trigger/coordinator.cpp $(TARGET_LIB)
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ $< -L$(LIB_DIR) -lmpi_trace -lstdc++fs -lrdmacm -libverbs -lpthread -L$(TPBENCH_LIB_DIR) -ltpbench
-
 # Rule to build participant binary
-$(PARTICIPANT_BIN): trigger/participant.cpp trigger/bench_mpi.cpp trigger/bench_rdma.cpp trigger/bench_io.cpp trigger/bench.h $(TARGET_LIB)
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ trigger/participant.cpp trigger/bench_mpi.cpp trigger/bench_rdma.cpp trigger/bench_io.cpp -L$(LIB_DIR) -lmpi_trace $(LDFLAGS)
-
-# Rule to build MPI benchmark binary
-$(BENCH_MPI_BIN): trigger/bench_mpi.cpp trigger/bench.h
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ $< $(LDFLAGS)
-
-# Rule to build RDMA benchmark binary
-$(BENCH_RDMA_BIN): trigger/bench_rdma.cpp trigger/bench.h
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ $< -lrdmacm -libverbs -lpthread
-
-# Rule to build IO benchmark binary
-$(BENCH_IO_BIN): trigger/bench_io.cpp trigger/bench.h
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ $< -lpthread
-
-# Rule to build unified benchmark binary
-$(BENCH_UNIFIED_BIN): trigger/bench_unified.cpp trigger/bench_mpi.cpp trigger/bench_rdma.cpp trigger/bench_io.cpp trigger/bench.h
-	$(CXX) -std=c++17 -O3 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ trigger/bench_unified.cpp trigger/bench_mpi.cpp trigger/bench_rdma.cpp trigger/bench_io.cpp $(LDFLAGS)
+$(PARTICIPANT_BIN): trigger/*.cpp trigger/bench.h sync/*.cpp $(TARGET_LIB) | $(BIN_DIR)
+	$(CXX) -std=c++17 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ trigger/*.cpp sync/*.cpp $(LDFLAGS)
 
 # Create directories if they don't exist
-$(OBJ_DIR) $(LIB_DIR):
+$(OBJ_DIR) $(LIB_DIR) $(BIN_DIR):
 	mkdir -p $@
 
 # Clean rule (keep prebuilt libs in lib/)
 clean:
 	rm -rf $(OBJ_DIR)
 	rm -f $(TARGET_LIB)
-	rm -f $(TRIGGER_BIN)
-	rm -f $(COORDINATOR_BIN)
 	rm -f $(PARTICIPANT_BIN)
-	rm -f $(BENCH_MPI_BIN)
-	rm -f $(BENCH_RDMA_BIN)
-	rm -f $(BENCH_IO_BIN)
-	rm -f $(BENCH_UNIFIED_BIN)
 
 # Clean both wrapper and TPBench libraries
 cleanall: clean

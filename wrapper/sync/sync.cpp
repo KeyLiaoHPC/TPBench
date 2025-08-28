@@ -25,15 +25,17 @@ using rdmasync::TRIGGER_MSG;
 
 namespace {
 
+#define DEBUG
+
 #ifdef DEBUG
 #define DBGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
+        std::cout << "[TPSYNC INFO]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
     } \
 
 #define WARNINGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
+        std::cout << "[TPSYNC WARNNING]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
     } \
 
 #else
@@ -43,7 +45,7 @@ namespace {
 #endif
 
 #define ERRORPRINT(info, var) \
-    std::cerr << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] " << info << ": " << var << std::endl; \
+    std::cerr << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
 
 // --------- tools ----------
 static inline void cpu_relax() {
@@ -84,7 +86,7 @@ static bool poll_cq_one_timeout(ibv_cq* cq, int timeout_ms) {
         }
         
         // Small sleep to avoid busy-waiting
-        usleep(100);  // 100 microseconds
+        usleep(100);  
     }
 }
 
@@ -504,9 +506,11 @@ public:
             }
             return received_trigger;  // Return the received trigger message
         }
+        return TRIGGER_MSG::FINISH; // Default return for unsupported roles
     }
 
-
+    bool is_enabled() const { return enabled_; }
+    
 private:
     // Helper method to wait for responses from all participants
     bool wait_for_responses() {
@@ -1059,6 +1063,10 @@ void tp_sync(const char* name) {
 
 TRIGGER_MSG tp_trigger(TRIGGER_MSG send_msg) {
     return RDMASyncImpl::inst().tp_trigger(send_msg);
+}
+
+bool is_enabled() {
+    return RDMASyncImpl::inst().is_enabled();
 }
 
 } // namespace rdmasync

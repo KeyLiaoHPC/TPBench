@@ -35,6 +35,7 @@ private:
     // Remote memory info
     uint64_t remote_addr_;
     uint32_t remote_rkey_;
+    size_t data_size;
     
 public:
     RDMABench() : listen_id_(nullptr), conn_id_(nullptr), ec_(nullptr),
@@ -90,6 +91,7 @@ public:
 
     void setup_buffers(size_t buffer_size) override {
         buffer_size_ = buffer_size;
+        data_size = buffer_size;
         
         // Allocate aligned buffers
         if (posix_memalign(&send_buffer_, 4096, buffer_size_) != 0) {
@@ -122,18 +124,31 @@ public:
         std::cout << "[RDMA] Buffers allocated and registered (size: " << buffer_size_ << ")" << std::endl;
     }
 
-    void run_benchmark(const std::string& func_name, size_t data_size) override {
+    void run_warmup(const std::string& func_name, size_t data_size) override {
+        if (func_name == "write") {
+            warmup_rdma_write();
+        } else if (func_name == "read") {
+            warmup_rdma_read();
+        } else if (func_name == "send") {
+            warmup_rdma_send();
+        } else {
+            std::cerr << "[RDMA] Unknown function: " << func_name << std::endl;
+            std::cerr << "[RDMA] Available functions: write, read, send" << std::endl;
+        }
+    }
+
+    void run_benchmark(const std::string& func_name) override {
         if (data_size > buffer_size_) {
             std::cerr << "[RDMA] Data size " << data_size << " exceeds buffer size " << buffer_size_ << std::endl;
             return;
         }
         
         if (func_name == "write") {
-            run_rdma_write(data_size);
+            run_rdma_write();
         } else if (func_name == "read") {
-            run_rdma_read(data_size);
+            run_rdma_read();
         } else if (func_name == "send") {
-            run_rdma_send(data_size);
+            run_rdma_send();
         } else {
             std::cerr << "[RDMA] Unknown function: " << func_name << std::endl;
             std::cerr << "[RDMA] Available functions: write, read, send" << std::endl;
@@ -335,7 +350,7 @@ private:
         std::cout << "[RDMA] Connection established (client)" << std::endl;
     }
     
-    void run_rdma_write(size_t data_size) {
+    void run_rdma_write() {
         if (is_server_) {
             std::cout << "[RDMA] Server waiting for RDMA write operations..." << std::endl;
             sleep(5); // Wait for client operations
@@ -348,12 +363,6 @@ private:
         remote_addr_ = (uint64_t)(uintptr_t)recv_buffer_; // Simplified
         remote_rkey_ = recv_mr_->rkey; // Simplified
         
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            post_rdma_write(data_size);
-            poll_send_completion();
-        }
-        
         auto start = get_timestamp_us();
         post_rdma_write(data_size);
         poll_send_completion();
@@ -365,7 +374,7 @@ private:
         log_performance("RDMA", "write", data_size, time_us, bandwidth);
     }
     
-    void run_rdma_read(size_t data_size) {
+    void run_rdma_read() {
         if (is_server_) {
             std::cout << "[RDMA] Server waiting for RDMA read operations..." << std::endl;
             sleep(5); // Wait for client operations
@@ -375,12 +384,6 @@ private:
         // Client performs RDMA read from server
         remote_addr_ = (uint64_t)(uintptr_t)send_buffer_; // Simplified
         remote_rkey_ = send_mr_->rkey; // Simplified
-        
-        // Warmup
-        for (int i = 0; i < 3; ++i) {
-            post_rdma_read(data_size);
-            poll_send_completion();
-        }
         
         auto start = get_timestamp_us();
         post_rdma_read(data_size);
@@ -393,22 +396,16 @@ private:
         log_performance("RDMA", "read", data_size, time_us, bandwidth);
     }
     
-    void run_rdma_send(size_t data_size) {
+    void run_rdma_send() {
         if (is_server_) {
             // Server receives
-            for (int i = 0; i < 4; ++i) { // 3 warmup + 1 measured
+            for (int i = 0; i < 1; ++i) { // Only measured operation
                 post_recv(data_size);
                 poll_recv_completion();
             }
             std::cout << "[RDMA] Server completed receive operations" << std::endl;
         } else {
             // Client sends
-            // Warmup
-            for (int i = 0; i < 3; ++i) {
-                post_send(data_size);
-                poll_send_completion();
-            }
-            
             auto start = get_timestamp_us();
             post_send(data_size);
             poll_send_completion();
@@ -532,37 +529,62 @@ private:
             usleep(1);
         } while (true);
     }
+
+    void warmup_rdma_write() {
+        if (is_server_) {
+            std::cout << "[RDMA] Server waiting for RDMA write warmup..." << std::endl;
+            sleep(2); // Wait for client warmup operations
+            return;
+        }
+        
+        remote_addr_ = (uint64_t)(uintptr_t)recv_buffer_;
+        remote_rkey_ = recv_mr_->rkey;
+        
+        size_t warmup_size = std::min(data_size, (size_t)1024);
+        for (int i = 0; i < 3; ++i) {
+            post_rdma_write(warmup_size);
+            poll_send_completion();
+        }
+    }
+
+    void warmup_rdma_read() {
+        if (is_server_) {
+            std::cout << "[RDMA] Server waiting for RDMA read warmup..." << std::endl;
+            sleep(2); // Wait for client warmup operations
+            return;
+        }
+        
+        remote_addr_ = (uint64_t)(uintptr_t)send_buffer_;
+        remote_rkey_ = send_mr_->rkey;
+        
+        size_t warmup_size = std::min(data_size, (size_t)1024);
+        for (int i = 0; i < 3; ++i) {
+            post_rdma_read(warmup_size);
+            poll_send_completion();
+        }
+    }
+
+    void warmup_rdma_send() {
+        if (is_server_) {
+            // Server receives warmup operations
+            size_t warmup_size = std::min(data_size, (size_t)1024);
+            for (int i = 0; i < 3; ++i) {
+                post_recv(warmup_size);
+                poll_recv_completion();
+            }
+            std::cout << "[RDMA] Server completed warmup receive operations" << std::endl;
+        } else {
+            // Client sends warmup operations
+            size_t warmup_size = std::min(data_size, (size_t)1024);
+            for (int i = 0; i < 3; ++i) {
+                post_send(warmup_size);
+                poll_send_completion();
+            }
+        }
+    }
 };
 
 // Factory function
 BenchmarkBase* create_rdma_benchmark() {
     return new RDMABench();
-}
-
-// Standalone main function for direct execution
-int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Usage: " << argv[0] << " <function> <size> [--server|--client <server_ip>] [--port <port>]" << std::endl;
-        std::cerr << "Functions: write, read, send" << std::endl;
-        std::cerr << "Size: data size in bytes" << std::endl;
-        std::cerr << "Example: " << argv[0] << " write 4096 --client 192.168.1.100" << std::endl;
-        return 1;
-    }
-    
-    std::string function = argv[1];
-    size_t size = std::stoull(argv[2]);
-    
-    RDMABench bench;
-    
-    try {
-        bench.initialize(argc, argv);
-        bench.setup_buffers(std::max(size, (size_t)4096));
-        bench.run_benchmark(function, size);
-        bench.finalize();
-    } catch (const std::exception& e) {
-        std::cerr << "[RDMA] Error: " << e.what() << std::endl;
-        return 1;
-    }
-    
-    return 0;
 }
