@@ -93,7 +93,10 @@ def parse_ranks_from_cmd(cmd_tokens: List[str], cmd) -> int:
 
 
 def substitute_tphosts(cmd_tokens: List[str], hosts_csv: str) -> List[str]:
-    return [hosts_csv if tok == 'TPHOSTS' else tok for tok in cmd_tokens]
+    if 'TPHOSTS' in cmd_tokens:
+        return [hosts_csv if tok == 'TPHOSTS' else tok for tok in cmd_tokens]
+    else:
+        return cmd_tokens + ['-hosts', hosts_csv]
 
 
 def ensure_trace_env(env: Dict[str, str], enable_trace: bool):
@@ -135,7 +138,8 @@ def build_participant_commands(groups: List[List[str]], trigger_program: str, tr
         participant_binary = str(WRAPPER_DIR / 'bin' / 'participant')
         
         # Build implementation-specific env propagation flags
-        env_items = [(k, str(v)) for k, v in participant_envs[i].items() if (k.startswith('RDMASYNC_')  or k.startswith('OMP'))]
+        # Note: Explicitly exclude LD_PRELOAD to prevent participant processes from loading libmpi_trace.so
+        env_items = [(k, str(v)) for k, v in participant_envs[i].items() if (k.startswith('RDMASYNC_') or k.startswith('TP') or k.startswith('OMP')) and k != 'LD_PRELOAD']
         env_flags: List[str] = []
         for k, v in env_items:
             env_flags += ['-env', k, v]
@@ -144,23 +148,24 @@ def build_participant_commands(groups: List[List[str]], trigger_program: str, tr
 
         if bench_type == 'mpi':
             # use mpirun command
-            mpi_cmd = ["mpirun", "-n", str(process_per_mpi), "-ppn", str(ppn), "--host", hosts_csv]
+            mpi_cmd = ["mpirun", "-n", str(process_per_mpi), "-ppn", str(ppn), '-hosts', hosts_csv]
             if trace_storage_prefix is not None and len(trace_storage_prefix) > 0:
                 env_items.append(('MPI_LOG_PATH_PREFIX', trace_storage_prefix))
-            env_flags: List[str] = []
+            # Rebuild env_flags for MPI command (keeping the LD_PRELOAD exclusion)
+            mpi_env_flags: List[str] = []
             if mpi_impl == 'openmpi':
                 # Use: -x VAR=VALUE
                 for k, v in env_items:
-                    env_flags += ['-x', f'{k}={v}']
+                    mpi_env_flags += ['-x', f'{k}={v}']
             elif mpi_impl in ('oneapi', 'mpich'):
                 # Hydra: -genv VAR VALUE
                 for k, v in env_items:
-                    env_flags += ['-genv', k, v]
+                    mpi_env_flags += ['-genv', k, v]
             else:
                 # Fallback to Open MPI style if unknown
                 for k, v in env_items:
-                    env_flags += ['-x', f'{k}={v}']
-            cmd = mpi_cmd + env_flags + cmd
+                    mpi_env_flags += ['-x', f'{k}={v}']
+            cmd = mpi_cmd + mpi_env_flags + cmd
         elif bench_type == 'rdma':
             # For RDMA, we need to specify client mode and server IP
             # use ssh
@@ -179,13 +184,8 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], trigger_f
     envs: List[Dict[str, str]] = []
     if not groups:
         return envs
-    
-    # Coordinator runs on the current node (where tpwrapper.py is executed)
-    # Get current node's hostname and IP
-    import socket
-    current_host = socket.gethostname()
-    coord_ip = resolve_ip(current_host)
-    
+    coord_host = groups[0][0]
+    coord_ip = resolve_ip(coord_host)
     # Calculate expected connections for coordinator
     # Coordinator expects connections from all other groups
     participant_groups = len(groups) - 1
@@ -197,6 +197,7 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], trigger_f
         e['TPMPI_TRACE_STORE'] = '1' if store_trace_files_enable else '0'
         if (verbose):
             e['RDMASYNC_DEBUG'] = '1'
+            e['TPMPI_DEBUG'] = '1'
         if gi == 0:
             e['RDMASYNC_ROLE'] = 'coordinator'
             e['RDMASYNC_BIND_IP'] = coord_ip
@@ -207,6 +208,9 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], trigger_f
         else:
             e['RDMASYNC_ROLE'] = 'participant'
             e['RDMASYNC_SERVER_IP'] = coord_ip
+            # Remove LD_PRELOAD from participant environments to prevent loading libmpi_trace.so
+            if 'LD_PRELOAD' in e and trigger_flag == True:
+                del e['LD_PRELOAD']
         envs.append(e)
     return envs
 
@@ -274,8 +278,6 @@ def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, st
             penv.update(env)
             out_f = open(cmd_output_path, 'w') if cmd_output_path else None
             err_f = open(cmd_err_path, 'w') if cmd_err_path else None
-            dbg(f"Launching participant [{i}]: {' '.join(cmd)}", verbose)
-            p = subprocess.Popen(cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
             cmd_dict = {}
             cmd_dict['cmd'] = cmd
             cmd_dict['cwd'] = cwd
@@ -283,8 +285,7 @@ def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, st
             cmd_dict['stdout'] = out_f
             cmd_dict['stderr'] = err_f
             cmd_list.append(cmd_dict)
-            # procs.append(p)  # Insert coordinator at the beginning
-            # fds.append((out_f, err_f))
+
 
     # Launch coordinator process (main MPI program)
     if commands:
@@ -296,8 +297,6 @@ def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, st
         penv.update(coord_env)
         out_f = open(cmd_output_path, 'w') if cmd_output_path else None
         err_f = open(cmd_err_path, 'w') if cmd_err_path else None
-        dbg(f"Launching coordinator: {' '.join(coord_cmd)}", verbose)
-        # p = subprocess.Popen(coord_cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
         cmd_dict = {}
         cmd_dict['cmd'] = coord_cmd
         cmd_dict['cwd'] = cwd
@@ -305,11 +304,12 @@ def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, st
         cmd_dict['stdout'] = out_f
         cmd_dict['stderr'] = err_f
         cmd_list.append(cmd_dict)
-        # procs.append(p)  # Insert coordinator at the beginning
-        # fds.append((out_f, err_f))
-    
+    print(f"Total processes to run: {len(cmd_list)}")
+
+
     for cmd_dict in cmd_list:
-        p = subprocess.Popen(cmd_dict['cmd'], cwd=str(cmd_dict['cwd']), env=cmd_dict['env'], stdout=cmd_dict['stdout'], stderr=cmd_dict['stderr'])
+        dbg(f"Launching: {' '.join(cmd_dict['cmd'])}", verbose)
+        p = subprocess.Popen(cmd_dict['cmd'], cwd=str(cmd_dict['cwd']), stdout=cmd_dict['stdout'], stderr=cmd_dict['stderr'])
         procs.append(p)
         fds.append((cmd_dict['stdout'], cmd_dict['stderr']))
 
@@ -375,7 +375,7 @@ def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], e
         insert_idx = 1 if tokens_ext and (tokens_ext[0].endswith('mpirun') or tokens_ext[0].endswith('mpiexec')) else 0
 
         # Build implementation-specific env propagation flags
-        env_items = [(k, str(v)) for k, v in export_env[i].items() if (k.startswith('RDMASYNC_') or k == 'LD_PRELOAD' or k.startswith('OMP'))]
+        env_items = [(k, str(v)) for k, v in export_env[i].items() if (k.startswith('RDMASYNC_') or k.startswith('TP') or k == 'LD_PRELOAD' or k.startswith('OMP'))]
         if trace_storage_prefix is not None and len(trace_storage_prefix) > 0:
             env_items.append(('MPI_LOG_PATH_PREFIX', trace_storage_prefix))
         env_flags: List[str] = []
@@ -484,7 +484,7 @@ def main(argv: List[str]) -> int:
     base_env: Dict[str, str] = {}
     ensure_trace_env(base_env, trace_enabled)
 
-    print(f"{trace_enabled = }")
+    print(f"base_env = {base_env}")
     if groups and base_tokens[0] in ('mpirun', 'mpiexec'): 
         # Check if we need to run in asymmetrical mode
         if trigger_enabled and len(groups) > 1 and args.trigger_program:

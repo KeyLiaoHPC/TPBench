@@ -25,10 +25,25 @@ public:
         
         MPI_Comm_rank(MPI_COMM_WORLD, &rank_);
         MPI_Comm_size(MPI_COMM_WORLD, &size_);
+
+        char hostname[256];
+        gethostname(hostname, sizeof(hostname));
+        hostname[sizeof(hostname) - 1] = '\0'; // Ensure null-termination
+        auto node_name = hostname;
         
         if (rank_ == 0) {
-            std::cout << "[MPI] Initialized with " << size_ << " processes" << std::endl;
+            std::cout << "[MPI] Initialized with " << size_ << " processes on node " << node_name << std::endl;
         }
+    }
+
+    rdmasync::TRIGGER_MSG bench_bcast(rdmasync::TRIGGER_MSG send_msg) override {
+        auto msg = send_msg;
+        MPI_Bcast(&msg, sizeof(msg), MPI_BYTE, 0, MPI_COMM_WORLD);
+        return msg;
+    };
+
+    int bench_sync() override {
+        return MPI_Barrier(MPI_COMM_WORLD);
     }
 
     int get_rank() override {

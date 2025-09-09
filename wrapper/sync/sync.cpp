@@ -30,12 +30,12 @@ namespace {
 #ifdef DEBUG
 #define DBGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC INFO]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
-    } \
+        std::cout << "[TPSYNC INFO]"<< "[" << __FILE__ << ":" << __LINE__ << "][" <<  __func__ << "][" << role_ << "] " << info << ": " << var << std::endl; \
+    }
 
 #define WARNINGPRINT(info, var, debug) \
     if (debug) { \
-        std::cout << "[TPSYNC WARNNING]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
+        std::cout << "[TPSYNC WARNNING]"<< "[" << __FILE__ << ":" << __LINE__ << "][" <<  __func__ << "][" << role_ << "] " << info << ": " << var << std::endl; \
     } \
 
 #else
@@ -45,7 +45,7 @@ namespace {
 #endif
 
 #define ERRORPRINT(info, var) \
-    std::cerr << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "] [" << role_ << "] " << info << ": " << var << std::endl; \
+    std::cerr << "[TPSYNC ERROR]"<< "[" << __FILE__ << ":" << __LINE__ << "][" <<  __func__ << "][" << role_ << "] " << info << ": " << var << std::endl; \
 
 // --------- tools ----------
 static inline void cpu_relax() {
@@ -286,10 +286,6 @@ public:
         
         // Passive participants (rank > 0 in participant mpirun) just wait
         if (is_passive_participant_) {
-            // WARNINGPRINT("Passive participant, skipping tp_sync", "", debug_);
-            // In cross-mpirun mode, non-rank-0 participants don't have RDMA connection
-            // They synchronize via MPI barrier within their own communicator
-            // For now, just return as they don't participate in cross-mpirun sync
             return;
         }
         
@@ -423,90 +419,128 @@ public:
     TRIGGER_MSG tp_trigger(TRIGGER_MSG send_msg) {
         if (!enabled_) {
             WARNINGPRINT("RDMASync not enabled, skipping tp_trigger", "", debug_);
-            return TRIGGER_MSG::FINISH;
-        }
-        
-        // Passive participants (rank > 0 in participant mpirun) just wait
-        if (is_passive_participant_) {
-            // WARNINGPRINT("Passive participant, skipping tp_trigger", "", debug_);
-            return TRIGGER_MSG::FINISH;
+            return TRIGGER_MSG::UNKOWN;
         }
 
-        // When role_ is coordinator,
-        // send message "send_msg" to all participant, and the participant should respond
-        // try 10 times until success
+        if (is_passive_participant_) return TRIGGER_MSG::UNKOWN;
+
+        // --------------------- COORDINATOR ---------------------
         if (role_ == "coordinator") {
-            for (int i = 0; i < 10; i++) {
-                // Send trigger message to all participants
+            constexpr int kMaxRetries = 10;
+            DBGPRINT("Coordinator triggering participants", static_cast<int>(send_msg), debug_);
+            for (int attempt = 0; attempt < kMaxRetries; ++attempt) {
+                bool send_error = false;
+
+                // 1) send trigger to all participants (RDMA WRITE + INLINE) and poll completions
+                int writes_needed = static_cast<int>(conns_.size());
+                int writes_done   = 0;
+
                 for (auto& c : conns_) {
-                    MsgC2P* msg = reinterpret_cast<MsgC2P*>(ctrl_mem_);
-                    msg->flag_addr = c.part_info.flag_addr;
-                    msg->flag_rkey = c.part_info.flag_rkey;
-                    msg->send_msg = send_msg;
-                    msg->pad = 0;
-                    
-                    // Post RDMA WRITE to participant's flag memory with trigger message
-                    if (!post_rdma_write(c.qp, msg, sizeof(MsgC2P), c.part_info.flag_addr, c.part_info.flag_rkey, mr_ctrl_send_)) {
-                        DBGPRINT("Failed to post RDMA WRITE", i, debug_);
-                        continue;
+                    MsgC2P trigger_msg{};
+                    trigger_msg.flag_addr = c.part_info.flag_addr;
+                    trigger_msg.flag_rkey = c.part_info.flag_rkey;
+                    trigger_msg.send_msg  = send_msg;
+                    trigger_msg.pad       = 0;
+
+                    ibv_sge sge{};
+                    sge.addr   = (uintptr_t)&trigger_msg;          // stack is OK because we use INLINE
+                    sge.length = (uint32_t)sizeof(trigger_msg);
+                    sge.lkey   = 0;
+
+                    ibv_send_wr wr{}, *bad = nullptr;
+                    wr.opcode              = IBV_WR_RDMA_WRITE;
+                    wr.send_flags          = IBV_SEND_INLINE | IBV_SEND_SIGNALED;  // INLINE => no lkey check
+                    wr.wr.rdma.remote_addr = c.part_info.flag_addr;
+                    wr.wr.rdma.rkey        = c.part_info.flag_rkey;
+                    wr.sg_list             = &sge;
+                    wr.num_sge             = 1;
+
+                    int ret = ibv_post_send(c.qp, &wr, &bad);
+                    if (ret != 0) {
+                        ERRORPRINT("Failed to post RDMA WRITE", ret);
+                        send_error = true;
+                        break;
                     }
                 }
-                // Wait for all participants to respond
+
+                // poll completions for this batch of writes
+                while (!send_error && writes_done < writes_needed) {
+                    ibv_wc wc{};
+                    int n = ibv_poll_cq(cq_, 1, &wc);
+                    if (n <= 0) continue;
+                    if (wc.status != IBV_WC_SUCCESS) {
+                        WARNINGPRINT("RDMA WRITE completion error", wc.status, debug_);
+                        send_error = true;
+                        break;
+                    }
+                    if (wc.opcode == IBV_WC_RDMA_WRITE) {
+                        ++writes_done;
+                    }
+                }
+
+                if (send_error) {
+                    usleep(100); // brief backoff before retry
+                    continue;
+                }
+
+                // 2) wait for all participants' ACK (IBV_WC_RECV)
                 if (wait_for_responses()) {
                     DBGPRINT("All participants responded", "", debug_);
-                    return send_msg;  // Return the sent message
+                    return send_msg;
                 }
-                usleep(100000);  // Sleep 100ms before retrying
+
+                // timed out: retry
+                usleep(100); // brief backoff before retry
             }
+
             ERRORPRINT("Failed to trigger participants", "retries_exhausted");
+            return TRIGGER_MSG::FINISH;
         }
 
-        // When role_ is participant,
-        // wait for message from coordinator and respond accordingly
+        // --------------------- PARTICIPANT ---------------------
         if (role_ == "participant") {
-            // Wait for the coordinator to write a trigger message to our flag memory
-            volatile uint64_t* flag = (volatile uint64_t*) flag_mem_;
+            // wait for coordinator to WRITE a MsgC2P into our flag buffer
+            DBGPRINT("Participant waiting for trigger message", "", debug_);
 
-            // Wait for the coordinator to write a trigger message
-            while (__builtin_expect(*flag == 0, 1)) {
+            volatile MsgC2P* msg_ptr      = reinterpret_cast<volatile MsgC2P*>(flag_mem_);
+            volatile uint64_t* first_qword = reinterpret_cast<volatile uint64_t*>(flag_mem_);
+
+            // The simplest “arrival” check: first field becomes non-zero.
+            while (__builtin_expect(*first_qword == 0, 1)) {
                 cpu_relax();
+                usleep(10);
             }
-            
-            // The flag memory now contains the MsgC2P structure
-            MsgC2P* received_msg = reinterpret_cast<MsgC2P*>(flag_mem_);
-            TRIGGER_MSG received_trigger = received_msg->send_msg;
-            
-            DBGPRINT("Received trigger message", static_cast<int>(received_trigger), debug_);
-            
-            // Reset flag after processing
-            *flag = 0;
-            
-            // Send acknowledgment back to coordinator by writing to ctrl_mem_
-            // This will be detected by coordinator's wait_for_responses()
+
+            TRIGGER_MSG received_trigger = msg_ptr->send_msg;
+            DBGPRINT("Received trigger message", (int)received_trigger, debug_);
+
+            // clear buffer for the next trigger
+            memset((void*)flag_mem_, 0, sizeof(MsgC2P));
+
+            // send ACK back by SEND (coordinator expects IBV_WC_RECV)
             uint64_t ack = 1;
             if (mr_ctrl_send_ && cq_) {
                 ibv_sge sge{};
-                sge.addr = (uintptr_t)&ack;
+                sge.addr   = (uintptr_t)&ack;
                 sge.length = sizeof(ack);
-                sge.lkey = mr_ctrl_send_->lkey;
-                
+                sge.lkey   = mr_ctrl_send_->lkey;        // this MR covers &ack (stack) only if INLINE; use INLINE
                 ibv_send_wr wr{}, *bad = nullptr;
-                wr.opcode = IBV_WR_RDMA_WRITE;
-                wr.send_flags = IBV_SEND_INLINE | IBV_SEND_SIGNALED;
-                wr.wr.rdma.remote_addr = (uint64_t)(uintptr_t)ctrl_mem_; // Write back to our ctrl memory
-                wr.wr.rdma.rkey = mr_ctrl_send_->rkey;
-                wr.sg_list = &sge;
-                wr.num_sge = 1;
-                
+                wr.opcode     = IBV_WR_SEND;
+                wr.send_flags = IBV_SEND_INLINE | IBV_SEND_SIGNALED; // INLINE => no lkey needed
+                wr.sg_list    = &sge;
+                wr.num_sge    = 1;
+
                 if (ibv_post_send(id_p_->qp, &wr, &bad) == 0) {
-                    // Wait for completion
                     poll_cq_one(cq_);
                     DBGPRINT("Sent acknowledgment to coordinator", "", debug_);
+                } else {
+                    WARNINGPRINT("Failed to post ACK SEND", 0, debug_);
                 }
             }
-            return received_trigger;  // Return the received trigger message
+            return received_trigger;
         }
-        return TRIGGER_MSG::FINISH; // Default return for unsupported roles
+
+        return TRIGGER_MSG::UNKOWN;
     }
 
     bool is_enabled() const { return enabled_; }
@@ -515,36 +549,44 @@ private:
     // Helper method to wait for responses from all participants
     bool wait_for_responses() {
         if (!enabled_ || role_ != "coordinator") return false;
-        
+
+        int need_to_post = expected_ - posted_recvs_;
+        if (need_to_post > 0) {
+            ensure_posted_recvs(need_to_post);
+            DBGPRINT("Posted additional RECVs for trigger responses", need_to_post, debug_);
+        }
+
         int responses_received = 0;
-        const int timeout_ms = 5000; // 5 second timeout
+        const int timeout_ms = 5000;
         auto start_time = std::chrono::steady_clock::now();
-        
+
         while (responses_received < expected_) {
             ibv_wc wc{};
             int n = ibv_poll_cq(cq_, 1, &wc);
-            
-            if (n > 0 && wc.status == IBV_WC_SUCCESS) {
-                if (wc.opcode == IBV_WC_RDMA_WRITE) {
-                    responses_received++;
-                    DBGPRINT("Response received", responses_received, debug_);
+            if (n > 0) {
+                if (wc.status == IBV_WC_SUCCESS && wc.opcode == IBV_WC_RECV) {
+                    ++responses_received;
+                    DBGPRINT("Trigger response received", responses_received, debug_);
                 }
             }
-            
-            // Check timeout
-            auto current_time = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
-            if (elapsed.count() > timeout_ms) {
+
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(now - start_time).count() > timeout_ms) {
+                // timeout: deduct only what we actually consumed
+                posted_recvs_ -= responses_received;
+                if (posted_recvs_ < 0) posted_recvs_ = 0;
                 DBGPRINT("Timeout waiting for responses", responses_received, debug_);
                 return false;
             }
-            
-            usleep(1000); // Small delay to avoid busy waiting
+            usleep(100);
         }
-        
-        return true;
-    }
 
+        // success: we consumed exactly expected_ RECVs
+        posted_recvs_ -= expected_;
+        if (posted_recvs_ < 0) posted_recvs_ = 0;
+        return true;
+    } 
+        
     // Participant initialization
     bool setup_participant() {
         // Optional small delay to let the coordinator come up first
@@ -792,11 +834,17 @@ private:
             sin.sin_addr.s_addr = INADDR_ANY;
         }
 
-        if (rdma_bind_addr(listen_id_, (sockaddr*)&sin)) {
+        auto bind_res = rdma_bind_addr(listen_id_, (sockaddr*)&sin);
+        if (bind_res) {
+            ERRORPRINT("errno", errno);
+            ERRORPRINT("Error description", strerror(errno));
             ERRORPRINT("Failed to bind address", bind_ip_);
             return false;
         }
-        if (rdma_listen(listen_id_, expected_)) {
+        auto listen_res = rdma_listen(listen_id_, expected_);
+        if (listen_res) {
+            ERRORPRINT("errno", errno);
+            ERRORPRINT("Error description", strerror(errno));
             ERRORPRINT("Failed to listen", expected_);
             return false;
         }
@@ -1017,7 +1065,7 @@ private:
     bool debug_ = false;                     // Debug mode (print extra info)
     bool is_passive_participant_ = false;    // True for non-rank-0 participants in cross-mpirun mode
     std::string role_;
-    std::string port_ = "7471";
+    std::string port_;
     int spin_us_ = 200;                         // Reserved (current impl uses busy-wait; no sleep)
     size_t mpi_rank_ = 0;                    // MPI rank within this process
 

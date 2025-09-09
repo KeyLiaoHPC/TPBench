@@ -4,7 +4,8 @@
 namespace rdmasync {
 
 enum class TRIGGER_MSG {
-    FINISH = 0,
+    UNKOWN,
+    FINISH,
     ONCE,
     REPEAT,
     STOP

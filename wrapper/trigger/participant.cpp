@@ -19,9 +19,28 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <memory>
+#include <cstring>
 
 #include "bench.h"
 #include "sync.h"
+
+#define DEBUG
+#ifdef DEBUG
+#define DBGPRINT(msg, dbg) if (dbg == true && rank_ == 0) { \
+    std::cout << "[ParticipantBench][" << __FILE__ << ":" << __LINE__ << "][" << node_name_ << "] "<< msg << std::endl; \
+}
+#define WARNINGPRINT(msg, dbg) if (dbg == true && rank_ == 0) { \
+    std::cout << "[ParticipantBench WARNING][" << __FILE__ << ":" << __LINE__ << "][" << node_name_ << "] " << msg << std::endl; \
+}
+
+#else
+#define DBGPRINT(msg, dbg) 
+#define WARNINGPRINT(msg, dbg)  
+#endif
+
+#define ERRORPRINT(msg, dbg) if (dbg == true && rank_ == 0) { \
+    std::cerr << "[ParticipantBench ERROR][" << __FILE__ << ":" << __LINE__ << "][" << node_name_ << "] " << msg << std::endl; \
+}
 
 class ParticipantBench {
 private:
@@ -33,7 +52,9 @@ private:
     int rank_, world_size_;
     std::unique_ptr<BenchmarkBase> benchmark_;
     std::thread worker_thread_;
-    
+    bool debug_ = false;
+    std::string node_name_;
+
 public:
     ParticipantBench(const std::string& bench_type, const std::string& func, size_t size) 
         : benchmark_type_(bench_type), function_name_(func), data_size_(size) {
@@ -55,6 +76,16 @@ public:
     }
     
     void initialize(int argc, char** argv) {
+        char hostname[256];
+        gethostname(hostname, sizeof(hostname));
+        hostname[sizeof(hostname) - 1] = '\0'; // Ensure null-termination
+        node_name_ = hostname;
+
+        const char* debug_env = std::getenv("TPMPI_DEBUG");
+        if (debug_env != nullptr && std::strcmp(debug_env, "1") == 0) {
+            debug_ = true;
+        }
+
         // Initialize the benchmark
         benchmark_->initialize(argc, argv);
         benchmark_->setup_buffers(std::max(data_size_, (size_t)4096));
@@ -63,14 +94,13 @@ public:
         world_size_ = benchmark_->get_world_size(); 
 
         rdmasync::init(rank_);
-        
-        if(rank_ == 0) std::cout << "[ParticipantBench] Initialized " << benchmark_type_ 
-                  << " benchmark with function " << function_name_ 
-                  << " and size " << data_size_ << std::endl;
+        benchmark_->bench_sync();
+
+        DBGPRINT("Initialized " + benchmark_type_ + " benchmark with function " + function_name_ + " and size " + std::to_string(data_size_) + " for rank " + std::to_string(rank_) + " out of " + std::to_string(world_size_) + " processes", debug_);
     }
     
     void start() {
-        if(rank_ == 0) std::cout << "[ParticipantBench] Started as participant, waiting for coordinator messages..." << std::endl;
+        DBGPRINT("Started as participant, waiting for coordinator messages...", debug_);
         
         running_ = true;
         
@@ -81,25 +111,33 @@ public:
                 // The tp_trigger function in sync.cpp will handle the message reception
                 // and call our callback through the RDMA sync mechanism
                 rdmasync::TRIGGER_MSG received_msg = rdmasync::tp_trigger(rdmasync::TRIGGER_MSG::ONCE);
-                rdmasync::tp_sync(__func__);
-                if (received_msg == rdmasync::TRIGGER_MSG::ONCE) {
-                    if(rank_ == 0) std::cout << "[ParticipantBench] Received ONCE message, executing benchmark..." << std::endl;
-                    execute_once();
-                } else if (received_msg == rdmasync::TRIGGER_MSG::REPEAT) {
-                    execute_repeat();
-                } else if (received_msg == rdmasync::TRIGGER_MSG::STOP) {
-                    stop_repeat();
-                } else if (received_msg == rdmasync::TRIGGER_MSG::FINISH) {
+                received_msg = benchmark_->bench_bcast(received_msg);
+                benchmark_->bench_sync();
+                if (received_msg == rdmasync::TRIGGER_MSG::FINISH) {
+                    DBGPRINT("Received FINISH message, exiting...", debug_);
+                    running_ = false;
                     break;
                 }
                 rdmasync::tp_sync(__func__);
+                if (received_msg == rdmasync::TRIGGER_MSG::ONCE) {
+                    DBGPRINT("Received ONCE message, executing benchmark...", debug_);
+                    execute_once();
+                } else if (received_msg == rdmasync::TRIGGER_MSG::REPEAT) {
+                    DBGPRINT("Received REPEAT message, starting repeat mode...", debug_);
+                    execute_repeat();
+                } else if (received_msg == rdmasync::TRIGGER_MSG::STOP) {
+                    DBGPRINT("Received STOP message, stopping repeat mode...", debug_);
+                    stop_repeat();
+                }
+                rdmasync::tp_sync(__func__);
+                DBGPRINT("Waiting for next trigger message...", debug_);
             } catch (const std::exception& e) {
-                std::cerr << "[ParticipantBench] Error in main loop: " << e.what() << std::endl;
+                ERRORPRINT("Exception in main loop: " + std::string(e.what()), debug_);
                 break;
             }
         }
         finalize();
-        if(rank_ == 0) std::cout << "[ParticipantBench] Exiting..." << std::endl;
+        DBGPRINT("Exiting...", debug_);
     }
     
     void stop() {
@@ -112,23 +150,22 @@ public:
 
     void execute_once() {
         if (!benchmark_) {
-            if(rank_ == 0) std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
+            WARNINGPRINT("No benchmark configured", debug_);
             return;
         }
-        
-        if(rank_ == 0) std::cout << "[ParticipantBench] Executing " << benchmark_type_ 
-                  << "::" << function_name_ << " once..." << std::endl;
+
+        DBGPRINT("Executing " + benchmark_type_ + "::" + function_name_ + " once...", debug_);
         
         try {
             benchmark_->run_benchmark(function_name_);
         } catch (const std::exception& e) {
-            std::cerr << "[ParticipantBench] Error executing benchmark: " << e.what() << std::endl;
+            ERRORPRINT("Error executing benchmark: " + std::string(e.what()), debug_);
         }
     }
     
     void execute_repeat() {
         if (!benchmark_) {
-            if(rank_ == 0) std::cout << "[ParticipantBench] No benchmark configured" << std::endl;
+            WARNINGPRINT("No benchmark configured", debug_);
             return;
         }
         
@@ -139,32 +176,35 @@ public:
         }
         
         worker_thread_ = std::thread([this]() {
-            if(rank_ == 0) std::cout << "[ParticipantBench] Starting repeat mode for " 
-                      << benchmark_type_ << "::" << function_name_ << "..." << std::endl;
-            
+            DBGPRINT("Starting repeat mode for " + benchmark_type_ + "::" + function_name_ + "...", debug_);
+
             while (repeat_mode_ && running_) {
                 try {
                     benchmark_->run_benchmark(function_name_);
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 } catch (const std::exception& e) {
-                    std::cerr << "[ParticipantBench] Error in repeat mode: " << e.what() << std::endl;
+                    ERRORPRINT("Error in repeat benchmark: " + std::string(e.what()), debug_);
                     break;
                 }
             }
-            if(rank_ == 0) std::cout << "[ParticipantBench] Repeat mode stopped" << std::endl;
+            DBGPRINT("Repeat mode stopped", debug_);
         });
     }
     
     void stop_repeat() {
         repeat_mode_ = false;
-        if(rank_ == 0) std::cout << "[ParticipantBench] Stopping repeat mode..." << std::endl;
+        DBGPRINT("Stopping repeat mode...", debug_);
+        if (worker_thread_.joinable()) {
+            worker_thread_.join();
+        }
     }
     
     void finalize() {
+        DBGPRINT("Finalizing...", debug_);
+        rdmasync::finalize();
         if (benchmark_) {
             benchmark_->finalize();
         }
-        rdmasync::finalize();
     }
 };
 
@@ -230,6 +270,5 @@ int main(int argc, char* argv[]) {
         std::cerr << "[ParticipantBench] Fatal error: " << e.what() << std::endl;
         return 1;
     }
-    
     return 0;
 }

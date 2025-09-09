@@ -53,8 +53,8 @@ $(OBJ_DIR)/sync_%.o: sync/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Rule to build participant binary
-$(PARTICIPANT_BIN): trigger/*.cpp trigger/bench.h sync/*.cpp $(TARGET_LIB) | $(BIN_DIR)
-	$(CXX) -std=c++17 $(TPBENCH_INCLUDES) $(SYNC_INC) -o $@ trigger/*.cpp sync/*.cpp $(LDFLAGS)
+$(PARTICIPANT_BIN): trigger/*.cpp trigger/bench.h sync/*.cpp | $(BIN_DIR)
+	$(CXX) -std=c++17 $(TPBENCH_INCLUDES) $(SYNC_INC) -O3 -o $@ trigger/*.cpp sync/*.cpp  -lstdc++fs -lrdmacm -libverbs -lpthread
 
 # Create directories if they don't exist
 $(OBJ_DIR) $(LIB_DIR) $(BIN_DIR):

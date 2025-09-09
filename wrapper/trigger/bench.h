@@ -5,6 +5,8 @@
 #include <string>
 #include <chrono>
 #include <iostream>
+#include "bench.h"
+#include "sync.h"
 
 // Common benchmark interface
 class BenchmarkBase {
@@ -15,13 +17,20 @@ public:
     virtual void run_benchmark(const std::string& func_name) = 0;
     virtual void run_warmup(const std::string& func_name, size_t data_size) = 0;
     virtual void finalize() = 0;
+    
+    virtual rdmasync::TRIGGER_MSG bench_bcast(rdmasync::TRIGGER_MSG send_msg) {
+        return send_msg;
+    };
 
+    virtual int bench_sync() {
+        return 0;
+    };
     virtual int get_rank() {
         return 0;
     };
     virtual int get_world_size() {
         return 1;
-    }
+    };
 
 protected:
     // Helper function to get current timestamp in microseconds
