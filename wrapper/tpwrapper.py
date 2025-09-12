@@ -214,15 +214,14 @@ def build_sync_envs(groups: List[List[str]], base_env: Dict[str, str], trigger_f
         envs.append(e)
     return envs
 
+def get_hosts(cmd: List[str]) -> str:
+    # Extract hosts from the command line arguments
+    for i, token in enumerate(cmd):
+        if token in ('-hosts', '--hosts') and i + 1 < len(cmd):
+            return cmd[i+1]
+    return ""
 
 def run_parallel_symmetrical(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, log_storage_prefix: str = None, verbose: bool = False) -> int:
-    def get_hosts(cmd: List[str]) -> str:
-        # Extract hosts from the command line arguments
-        for i, token in enumerate(cmd):
-            if token in ('-hosts', '--hosts') and i + 1 < len(cmd):
-                return cmd[i+1]
-        return ""
-
     procs = []
     fds = []
     os.makedirs(log_storage_prefix, exist_ok=True)
@@ -255,37 +254,12 @@ def run_parallel_symmetrical(commands: List[List[str]], envs: List[Dict[str, str
 def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, 
                               participant_commands: List[List[str]] = None, 
                               log_storage_prefix: str = None, verbose: bool = False) -> int:
-    def get_hosts(cmd: List[str]) -> str:
-        # Extract hosts from the command line arguments
-        for i, token in enumerate(cmd):
-            if token in ('-hosts', '--hosts') and i + 1 < len(cmd):
-                return cmd[i+1]
-        return ""
     
     cmd_list = []
     
     procs = []
     fds = []
     os.makedirs(log_storage_prefix, exist_ok=True)
-
-    # Launch participant processes first (they will wait for coordinator)
-    if participant_commands:
-        for i, (cmd, env) in enumerate(zip(participant_commands, envs[1:])):  # Skip coordinator env
-            node_list = get_hosts(cmd)
-            cmd_output_path = os.path.join(log_storage_prefix, f"participant_{node_list}.out") if node_list else None
-            cmd_err_path = os.path.join(log_storage_prefix, f"participant_{node_list}.err") if node_list else None
-            penv = os.environ.copy()
-            penv.update(env)
-            out_f = open(cmd_output_path, 'w') if cmd_output_path else None
-            err_f = open(cmd_err_path, 'w') if cmd_err_path else None
-            cmd_dict = {}
-            cmd_dict['cmd'] = cmd
-            cmd_dict['cwd'] = cwd
-            cmd_dict['env'] = penv
-            cmd_dict['stdout'] = out_f
-            cmd_dict['stderr'] = err_f
-            cmd_list.append(cmd_dict)
-
 
     # Launch coordinator process (main MPI program)
     if commands:
@@ -306,23 +280,72 @@ def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, st
         cmd_list.append(cmd_dict)
     print(f"Total processes to run: {len(cmd_list)}")
 
+    # Launch participant processes first (they will wait for coordinator)
+    if participant_commands:
+        for i, (cmd, env) in enumerate(zip(participant_commands, envs[1:])):  # Skip coordinator env
+            node_list = get_hosts(cmd)
+            cmd_output_path = os.path.join(log_storage_prefix, f"participant_{node_list}.out") if node_list else None
+            cmd_err_path = os.path.join(log_storage_prefix, f"participant_{node_list}.err") if node_list else None
+            penv = os.environ.copy()
+            penv.update(env)
+            out_f = open(cmd_output_path, 'w') if cmd_output_path else None
+            err_f = open(cmd_err_path, 'w') if cmd_err_path else None
+            cmd_dict = {}
+            cmd_dict['cmd'] = cmd
+            cmd_dict['cwd'] = cwd
+            cmd_dict['env'] = penv
+            cmd_dict['stdout'] = out_f
+            cmd_dict['stderr'] = err_f
+            cmd_list.append(cmd_dict)
 
     for cmd_dict in cmd_list:
-        dbg(f"Launching: {' '.join(cmd_dict['cmd'])}", verbose)
+        dbg(f"Launching: {' '.join(cmd_dict['cmd'])}", True)
         p = subprocess.Popen(cmd_dict['cmd'], cwd=str(cmd_dict['cwd']), stdout=cmd_dict['stdout'], stderr=cmd_dict['stderr'])
         procs.append(p)
         fds.append((cmd_dict['stdout'], cmd_dict['stderr']))
 
     rc = 0
-    for i, p in enumerate(procs):
-        r = p.wait()
-        out_f, err_f = fds[i]
+    # Wait for coordinator process first
+    if procs:
+        coordinator_proc = procs[0]
+        r = coordinator_proc.wait()
+        out_f, err_f = fds[0]
         if out_f:
             out_f.close()
         if err_f:
             err_f.close()
-        dbg(f"Process [{i}] exited with {r}", verbose)
+        dbg(f"Coordinator process exited with {r}", True)
         rc = rc or r
+        
+        # Wait 5 seconds for participant processes to finish
+        if len(procs) > 1:
+            time.sleep(5)
+            # Check and terminate any remaining participant processes
+            for i in range(1, len(procs)):
+                p = procs[i]
+                if p.poll() is None:  # Process is still running
+                    dbg(f"Participant process [{i}] still running after coordinator exit, terminating...", True)
+                    p.terminate()
+                    try:
+                        p.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        dbg(f"Participant process [{i}] did not terminate gracefully, killing...", True)
+                        p.kill()
+                        p.wait()
+                    print(f"[ERROR] Participant process [{i}] was forcibly terminated after coordinator exit", file=sys.stderr)
+                    rc = rc or 1
+                else:
+                    r = p.returncode
+                    dbg(f"Participant process [{i}] exited with {r}", True)
+                    rc = rc or r
+                
+                # Close file descriptors for participant processes
+                out_f, err_f = fds[i]
+                if out_f:
+                    out_f.close()
+                if err_f:
+                    err_f.close()
+    
     return rc
 
 def detect_mpi_impl(mpirun_exe: str) -> str:
@@ -370,10 +393,8 @@ def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], e
         hosts_csv = ','.join(hosts)
         tokens = substitute_tphosts(base_cmd_tokens, hosts_csv)
         tokens_ext = list(tokens)
-
         # Determine where to insert flags: right after 'mpirun/mpiexec'
         insert_idx = 1 if tokens_ext and (tokens_ext[0].endswith('mpirun') or tokens_ext[0].endswith('mpiexec')) else 0
-
         # Build implementation-specific env propagation flags
         env_items = [(k, str(v)) for k, v in export_env[i].items() if (k.startswith('RDMASYNC_') or k.startswith('TP') or k == 'LD_PRELOAD' or k.startswith('OMP'))]
         if trace_storage_prefix is not None and len(trace_storage_prefix) > 0:
@@ -394,9 +415,8 @@ def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], e
 
         # Insert flags right after the launcher token
         tokens_ext[insert_idx:insert_idx] = env_flags
-
         cmds.append(tokens_ext)
-        dbg(f"Command hosts={hosts_csv} [{mpi_impl}]: {' '.join(tokens_ext)}", verbose)
+        dbg(f"Command hosts={hosts_csv} [{mpi_impl}]: {' '.join(tokens_ext)}", True)
 
     return cmds
 
@@ -404,13 +424,13 @@ def build_mpirun_commands(base_cmd_tokens: List[str], groups: List[List[str]], e
 def parse_args(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     p = argparse.ArgumentParser(description='TPBench Wrapper (tpwrapper)', allow_abbrev=False, add_help=False)
     p.add_argument('--help', action='help', help='show this help message and exit')
-    p.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
+    p.add_argument('-v', '--verbose', action='store_true', default=False, help='Verbose output')
     p.add_argument('--tphosts', type=str, default=None, help='hosts list or pattern (e.g., node[1-8])')
 
     p.add_argument('--sync', dest='sync', action='store_true', default=True, help='Enable synchronization (default)')
     p.add_argument('--no-sync', dest='sync', action='store_false', help='Disable synchronization')
 
-    p.add_argument('--trace', action='store_true', help='Enable tracing (LD_PRELOAD libmpi_trace.so)')
+    p.add_argument('--trace', action='store_true', default=True, help='Enable tracing (LD_PRELOAD libmpi_trace.so)')
 
     p.add_argument('--nmpi', type=int, default=1, help='Number of mpirun processes')
     
@@ -418,8 +438,8 @@ def parse_args(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     p.add_argument('--trigger_program', type=str, default=None, help='Trigger program to run with the main MPI program (e.g., mpi_allreduce, rdma_write, io_read)')
     p.add_argument('--trigger_program_size', type=int, default=1024, help='Data Size (Byte) for the trigger program (default: 1024)')
 
-    p.add_argument('--store_trace_files_enable', action='store_true', help='Enable storing trace files to local')
-    p.add_argument('--merge_trace_files', action='store_true', help='Let trace_storage_prefix=tpmpi_trace_logs/$time_stamp, merge all mpirun processes\' trace files into a single trace file')
+    p.add_argument('--store_trace_files_enable', action='store_true', default=False, help='Enable storing trace files to local')
+    p.add_argument('--merge_trace_files', action='store_true', default=False, help='Let trace_storage_prefix=tpmpi_trace_logs/$time_stamp, merge all mpirun processes\' trace files into a single trace file')
     p.add_argument('--trace_storage_prefix', type=str, default=None, help='Prefix for trace storage (default: None), trace files will be stored in trace_storage_prefix/$hostname/mpi_trace_rank_$rankid.log')
     p.add_argument('--log_storage_prefix', type=str, default=f"./tpwrapper_logs/{TPWRAPPER_TIME_STAMP}", help='Prefix for mpirun log storage (default: ./tpwrapper_logs/$time_stamp), log files will be stored in log_storage_prefix/$hosts.log, hosts is the hosts list running an mpirun process.')
 

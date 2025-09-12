@@ -24,7 +24,7 @@
 #include "bench.h"
 #include "sync.h"
 
-#define DEBUG
+// #define DEBUG
 #ifdef DEBUG
 #define DBGPRINT(msg, dbg) if (dbg == true && rank_ == 0) { \
     std::cout << "[ParticipantBench][" << __FILE__ << ":" << __LINE__ << "][" << node_name_ << "] "<< msg << std::endl; \
@@ -118,7 +118,7 @@ public:
                     running_ = false;
                     break;
                 }
-                rdmasync::tp_sync(__func__);
+                // rdmasync::tp_sync(__func__);
                 if (received_msg == rdmasync::TRIGGER_MSG::ONCE) {
                     DBGPRINT("Received ONCE message, executing benchmark...", debug_);
                     execute_once();
@@ -129,7 +129,7 @@ public:
                     DBGPRINT("Received STOP message, stopping repeat mode...", debug_);
                     stop_repeat();
                 }
-                rdmasync::tp_sync(__func__);
+                // rdmasync::tp_sync(__func__);
                 DBGPRINT("Waiting for next trigger message...", debug_);
             } catch (const std::exception& e) {
                 ERRORPRINT("Exception in main loop: " + std::string(e.what()), debug_);

@@ -25,7 +25,7 @@ using rdmasync::TRIGGER_MSG;
 
 namespace {
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
 #define DBGPRINT(info, var, debug) \
@@ -316,9 +316,6 @@ public:
             while (__builtin_expect(*flag != e, 1)) {
                 cpu_relax();
                 // Reduce CPU usage without affecting latency too much
-                // if (*flag == 0) {
-                //     usleep(10); // Only sleep if flag is still 0
-                // }
             }
             DBGPRINT("Participant tp_sync completed", e, debug_);
             return;
@@ -479,7 +476,7 @@ public:
                 }
 
                 if (send_error) {
-                    usleep(100); // brief backoff before retry
+                    usleep(10); // brief backoff before retry
                     continue;
                 }
 
@@ -490,13 +487,12 @@ public:
                 }
 
                 // timed out: retry
-                usleep(100); // brief backoff before retry
+                usleep(1); // brief backoff before retry
             }
 
             ERRORPRINT("Failed to trigger participants", "retries_exhausted");
             return TRIGGER_MSG::FINISH;
         }
-
         // --------------------- PARTICIPANT ---------------------
         if (role_ == "participant") {
             // wait for coordinator to WRITE a MsgC2P into our flag buffer
@@ -508,7 +504,7 @@ public:
             // The simplest “arrival” check: first field becomes non-zero.
             while (__builtin_expect(*first_qword == 0, 1)) {
                 cpu_relax();
-                usleep(10);
+                usleep(1);
             }
 
             TRIGGER_MSG received_trigger = msg_ptr->send_msg;
