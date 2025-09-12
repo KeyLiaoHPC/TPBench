@@ -42,7 +42,10 @@ public:
                   context_(nullptr), pd_(nullptr), send_cq_(nullptr), recv_cq_(nullptr),
                   send_mr_(nullptr), recv_mr_(nullptr), qp_(nullptr),
                   send_buffer_(nullptr), recv_buffer_(nullptr), buffer_size_(0),
-                  is_server_(false), port_(12345), remote_addr_(0), remote_rkey_(0) {}
+                  is_server_(false), port_(12345), remote_addr_(0), remote_rkey_(0) {
+        __getcy_init;
+        __getcy_grp_init;
+    }
 
     void initialize(int argc, char** argv) override {
         // Parse arguments for server/client mode
@@ -156,6 +159,7 @@ public:
     }
 
     void finalize() override {
+        print_performance();
         if (send_mr_) ibv_dereg_mr(send_mr_);
         if (recv_mr_) ibv_dereg_mr(recv_mr_);
         if (send_buffer_) free(send_buffer_);
@@ -363,15 +367,23 @@ private:
         remote_addr_ = (uint64_t)(uintptr_t)recv_buffer_; // Simplified
         remote_rkey_ = recv_mr_->rkey; // Simplified
         
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         post_rdma_write(data_size);
         poll_send_completion();
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
-        log_performance("RDMA", "write", data_size, time_us, bandwidth);
+        log_performance("RDMA", "write", data_size, elapsed_time, elapsed_cy);
     }
     
     void run_rdma_read() {
@@ -385,15 +397,23 @@ private:
         remote_addr_ = (uint64_t)(uintptr_t)send_buffer_; // Simplified
         remote_rkey_ = send_mr_->rkey; // Simplified
         
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         post_rdma_read(data_size);
         poll_send_completion();
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
-        log_performance("RDMA", "read", data_size, time_us, bandwidth);
+        log_performance("RDMA", "read", data_size, elapsed_time, elapsed_cy);
     }
     
     void run_rdma_send() {
@@ -406,15 +426,23 @@ private:
             std::cout << "[RDMA] Server completed receive operations" << std::endl;
         } else {
             // Client sends
-            auto start = get_timestamp_us();
+            uint64_t start_time, end_time, elapsed_time;
+            uint64_t start_cy, end_cy, elapsed_cy;
+            uint64_t hi1, lo1, hi2, lo2;
+            
+            start_time = GET_NS;
+            __getcy_st_t;
             post_send(data_size);
             poll_send_completion();
-            auto end = get_timestamp_us();
+            __getcy_end_t;
+            end_time = GET_NS;
             
-            uint64_t time_us = end - start;
-            double bandwidth = calculate_bandwidth(data_size, time_us);
+            start_cy = ((hi1 << 32) | lo1);
+            end_cy = ((hi2 << 32) | lo2);
+            elapsed_time = end_time - start_time;
+            elapsed_cy = end_cy - start_cy;
             
-            log_performance("RDMA", "send", data_size, time_us, bandwidth);
+            log_performance("RDMA", "send", data_size, elapsed_time, elapsed_cy);
         }
     }
     

@@ -26,6 +26,8 @@ private:
     
 public:
     IOBench() : file_size_(0), block_size_(4096), use_direct_io_(false), use_sync_(true) {
+        __getcy_init;
+        __getcy_grp_init;
         // Use process ID to avoid conflicts
         pid_t pid = getpid();
         test_file_prefix_ = "/tmp/tpbench_io_test_" + std::to_string(pid);
@@ -142,6 +144,7 @@ public:
 
     void finalize() override {
         // Clean up test files
+        print_performance();
         cleanup_test_files();
         std::cout << "[IO] Cleanup completed" << std::endl;
     }
@@ -162,19 +165,28 @@ private:
         
         // Measured write
         lseek(fd, 0, SEEK_SET);
-        auto start = get_timestamp_us();
+        
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         write_data(fd, data_size);
         if (use_sync_) {
             fsync(fd);
         }
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
         close(fd);
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
-        log_performance("IO", "sequential_write", data_size, time_us, bandwidth);
+        log_performance("IO", "sequential_write", data_size, elapsed_time, elapsed_cy);
     }
 
     void run_sequential_read() {
@@ -193,16 +205,25 @@ private:
         
         // Measured read
         lseek(fd, 0, SEEK_SET);
-        auto start = get_timestamp_us();
+        
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         read_data(fd, data_size);
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
         close(fd);
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
-        log_performance("IO", "sequential_read", data_size, time_us, bandwidth);
+        log_performance("IO", "sequential_read", data_size, elapsed_time, elapsed_cy);
     }
     
     void run_random_write() {
@@ -233,7 +254,12 @@ private:
         }
         
         // Measured random writes
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         for (size_t i = 0; i < num_ops; ++i) {
             lseek(fd, offsets[i], SEEK_SET);
             write(fd, buffer_.data(), block_size_);
@@ -241,17 +267,20 @@ private:
         if (use_sync_) {
             fsync(fd);
         }
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
         close(fd);
         
-        uint64_t time_us = end - start;
-        double iops = (double)num_ops / (time_us / 1000000.0);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         std::cout << "[PERF] IO::random_write size=" << data_size 
                   << " ops=" << num_ops 
-                  << " time=" << time_us << "us"
-                  << " iops=" << iops << std::endl;
+                  << " time=" << elapsed_time << "ns"
+                  << " cycles=" << elapsed_cy << std::endl;
     }
     
     void run_random_read() {
@@ -282,22 +311,30 @@ private:
         }
         
         // Measured random reads
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         for (size_t i = 0; i < num_ops; ++i) {
             lseek(fd, offsets[i], SEEK_SET);
             read(fd, buffer_.data(), block_size_);
         }
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
         close(fd);
         
-        uint64_t time_us = end - start;
-        double iops = (double)num_ops / (time_us / 1000000.0);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         std::cout << "[PERF] IO::random_read size=" << data_size 
                   << " ops=" << num_ops 
-                  << " time=" << time_us << "us"
-                  << " iops=" << iops << std::endl;
+                  << " time=" << elapsed_time << "ns"
+                  << " cycles=" << elapsed_cy << std::endl;
     }
     
     void run_mixed_io() {
@@ -337,7 +374,12 @@ private:
         std::shuffle(operations.begin(), operations.end(), gen);
         
         // Measured mixed I/O
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         for (const auto& op : operations) {
             lseek(fd, op.second, SEEK_SET);
             if (op.first) {
@@ -349,17 +391,20 @@ private:
         if (use_sync_) {
             fsync(fd);
         }
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
         close(fd);
         
-        uint64_t time_us = end - start;
-        double iops = (double)total_ops / (time_us / 1000000.0);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         std::cout << "[PERF] IO::mixed size=" << data_size 
                   << " ops=" << total_ops << " (r:" << read_ops << " w:" << write_ops << ")"
-                  << " time=" << time_us << "us"
-                  << " iops=" << iops << std::endl;
+                  << " time=" << elapsed_time << "ns"
+                  << " cycles=" << elapsed_cy << std::endl;
     }
     
     void create_test_file(const std::string& filename, size_t size) {

@@ -5,8 +5,15 @@
 #include <string>
 #include <chrono>
 #include <iostream>
-#include "bench.h"
+#include <vector>
 #include "sync.h"
+
+extern "C" {
+#include "tpbench.h"
+}
+
+#define GET_NS \
+    std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()
 
 // Common benchmark interface
 class BenchmarkBase {
@@ -33,33 +40,45 @@ public:
     };
 
 protected:
-    // Helper function to get current timestamp in microseconds
-    static uint64_t get_timestamp_us() {
-        auto now = std::chrono::high_resolution_clock::now();
-        auto duration = now.time_since_epoch();
-        return std::chrono::duration_cast<std::chrono::microseconds>(duration).count();
+    // Helper function to get current timestamp in nanoseconds  
+    static uint64_t get_timestamp_ns() {
+        return GET_NS;
     }
     
-    // Helper function to calculate bandwidth in MB/s
-    static double calculate_bandwidth(size_t bytes, uint64_t time_us) {
-        if (time_us == 0) return 0.0;
-        return (double)bytes / time_us; // MB/s
-    }
-    
-    // Helper function to log performance results
+
     static void log_performance(const std::string& benchmark_type, 
                                const std::string& function_name,
                                size_t data_size, 
-                               uint64_t time_us, 
-                               double bandwidth = 0.0) {
-        std::cout << "[PERF] " << benchmark_type << "::" << function_name 
-                  << " size=" << data_size 
-                  << " time=" << time_us << "us";
-        if (bandwidth > 0.0) {
-            std::cout << " bandwidth=" << bandwidth << "MB/s";
-        }
-        std::cout << std::endl;
+                               uint64_t time_ns, 
+                               uint64_t cycles = 0) {
+        performance_records_.push_back({benchmark_type, function_name, data_size, time_ns, cycles});
     }
+    
+    static void print_performance() {
+        for (const auto& record : performance_records_) {
+            std::cout << "[PERF] " << record.benchmark_type << "::" << record.function_name 
+                      << " size=" << record.data_size 
+                      << " time=" << record.time_ns << "ns";
+            if (record.cycles > 0) {
+                std::cout << " cycles=" << record.cycles;
+            }
+            std::cout << std::endl;
+        }
+    }
+    
+    static void clear_performance() {
+        performance_records_.clear();
+    }
+private:
+    // Helper function to log performance results
+    struct PerformanceRecord {
+        std::string benchmark_type;
+        std::string function_name;
+        size_t data_size;
+        uint64_t time_ns;
+        uint64_t cycles;
+    };
+    inline static std::vector<PerformanceRecord> performance_records_;
 };
 
 // Benchmark factory function declarations

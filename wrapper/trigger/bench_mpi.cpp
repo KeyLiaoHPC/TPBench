@@ -7,6 +7,10 @@
 #include <cstdlib>
 #include <unistd.h>
 
+extern "C" {
+#include "tpbench.h"
+}
+
 class MPIBench : public BenchmarkBase {
 private:
     int rank_, size_;
@@ -16,7 +20,10 @@ private:
     size_t data_size;
 
 public:
-    MPIBench() : rank_(0), size_(1), mpi_initialized_by_me_(false) {}
+    MPIBench() : rank_(0), size_(1), mpi_initialized_by_me_(false) {
+        __getcy_init;
+        __getcy_grp_init;
+    }
     
     void initialize(int argc, char** argv) override {
         int provided;
@@ -109,12 +116,14 @@ public:
     }
 
     void finalize() override {
+        print_performance();
         if (mpi_initialized_by_me_) {
             MPI_Finalize();
         }
     }
 
 private:
+
     void run_allreduce() {
         size_t count = send_data_.size();
         if (count == 0) count = 1;
@@ -122,15 +131,23 @@ private:
         std::vector<double> send_data(count, rank_);
         std::vector<double> recv_data(count, 0.0);
         
-        auto start = get_timestamp_us();
-        MPI_Allreduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-        auto end = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size * 2, time_us); // Send and receive
+        start_time = GET_NS;
+        __getcy_st_t;
+        MPI_Allreduce(send_data.data(), recv_data.data(), count, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        __getcy_end_t;
+        end_time = GET_NS;
+
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         if (rank_ == 0) {
-            log_performance("MPI", "allreduce", data_size, time_us, bandwidth);
+            log_performance("MPI", "allreduce", data_size, elapsed_time, elapsed_cy);
         }
     }
 
@@ -145,7 +162,12 @@ private:
 
         auto rank_offset = size_ >> 1;
         
-        uint64_t start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         
         if (rank_ < rank_offset) {
             MPI_Send(send_buffer_.data(), data_size, MPI_CHAR, rank_ + rank_offset, 0, MPI_COMM_WORLD);
@@ -153,27 +175,39 @@ private:
             MPI_Recv(recv_buffer_.data(), data_size, MPI_CHAR, rank_ - rank_offset, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         }
         
-        uint64_t end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size * 2, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         if (rank_ == 0) {
-            log_performance("MPI", "send_recv", data_size, time_us, bandwidth);
+            log_performance("MPI", "send_recv", data_size, elapsed_time, elapsed_cy);
         }
     }
 
     void run_bcast() {
         size_t data_size = send_buffer_.size();
-        auto start = get_timestamp_us();
-        MPI_Bcast(send_buffer_.data(), data_size, MPI_CHAR, 0, MPI_COMM_WORLD);
-        auto end = get_timestamp_us();
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
+        MPI_Bcast(send_buffer_.data(), data_size, MPI_CHAR, 0, MPI_COMM_WORLD);
+        __getcy_end_t;
+        end_time = GET_NS;
+        
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         if (rank_ == 0) {
-            log_performance("MPI", "bcast", data_size, time_us, bandwidth);
+            log_performance("MPI", "bcast", data_size, elapsed_time, elapsed_cy);
         }
     }
 
@@ -181,17 +215,25 @@ private:
         size_t per_process_size = send_buffer_.size();
         if (per_process_size == 0) per_process_size = 1;
         
-        auto start = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
+        
+        start_time = GET_NS;
+        __getcy_st_t;
         MPI_Alltoall(send_buffer_.data(), per_process_size, MPI_CHAR,
                     recv_buffer_.data(), per_process_size, MPI_CHAR,
                     MPI_COMM_WORLD);
-        auto end = get_timestamp_us();
+        __getcy_end_t;
+        end_time = GET_NS;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(per_process_size * 2, time_us);
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         if (rank_ == 0) {
-            log_performance("MPI", "alltoall", per_process_size, time_us, bandwidth);
+            log_performance("MPI", "alltoall", per_process_size, elapsed_time, elapsed_cy);
         }
     }
 
@@ -199,15 +241,23 @@ private:
         size_t data_size = send_data_.size();
         if (data_size == 0) data_size = 1;
 
-        auto start = get_timestamp_us();
-        MPI_Reduce(send_data_.data(), recv_data_.data(), data_size, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-        auto end = get_timestamp_us();
+        uint64_t start_time, end_time, elapsed_time;
+        uint64_t start_cy, end_cy, elapsed_cy;
+        uint64_t hi1, lo1, hi2, lo2;
         
-        uint64_t time_us = end - start;
-        double bandwidth = calculate_bandwidth(data_size, time_us);
+        start_time = GET_NS;
+        __getcy_st_t;
+        MPI_Reduce(send_data_.data(), recv_data_.data(), data_size, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+        __getcy_end_t;
+        end_time = GET_NS;
+        
+        start_cy = ((hi1 << 32) | lo1);
+        end_cy = ((hi2 << 32) | lo2);
+        elapsed_time = end_time - start_time;
+        elapsed_cy = end_cy - start_cy;
         
         if (rank_ == 0) {
-            log_performance("MPI", "reduce", data_size, time_us, bandwidth);
+            log_performance("MPI", "reduce", data_size, elapsed_time, elapsed_cy);
         }
     }
 
