@@ -73,6 +73,11 @@ After warming up, the first 10 results will be skipped, you can change the numbe
 If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
 The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
 
+### 2.4 - TPWrapper Component
+
+TPBench Wrapper (tpwrapper) is a framework designed to run mpi micro-benchmarks and mini-applications with benefits of TPBench's high-precision timing capabilities. It aims to evaluate the performance interference between different applications and communication patterns. It supports both MPI and non-MPI environments, allowing for precise multi-core and multi-node synchronization. For more information, please refer to [TPBench Wrapper](wrapper/README.md) and [TPBench Technique Report](wrapper/TechReport.md).
+
+
 ## 3 - Benchmarking Methodology
 
 TPBench provides two different timing area to classify your benchmarking target, groups and kernels. The **group** targets are programs including multiple loop epoch which you want to measure. And the **kernel** target is those simple comupting kernel which you only want to measure the overall time. 
@@ -84,6 +89,9 @@ your code with timer in tptimer.h, and put your interface definition and informa
 ## 4 - FAQ
 
 ## 5 - Changelog
+
+### Version 0.8
+- Add TPBench Wrapper (tpwrapper) component.
 
 ### Version 0.71
 - Add support for Arm SVE with any width in kernel `d_fmaldr` and `d_mulldr`
