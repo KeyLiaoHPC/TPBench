@@ -1,11 +1,15 @@
 # Compiler and flags
-MPI_PATH = /dssg/opt/icelake/linux-centos8-icelake/gcc-8.5.0/intel-oneapi-mpi-2021.4.0-5xzcg7kxlx4ytkz2plqalrg424so43cy/mpi/2021.4.0/bin
-C = $(MPI_PATH)/mpicc
+CC ?= mpicc
 CFLAGS = -O3 
 
-CXX = $(MPI_PATH)/mpicxx
+CXX ?= mpicxx
 CXXFLAGS = -fPIC -shared -std=c++17 -O3 -Wno-write-strings -Wno-unused-result -w
 LDFLAGS = -lstdc++fs -lrdmacm -libverbs -lpthread
+
+ifdef DEBUG
+	CFLAGS += -DDEBUG
+	CXXFLAGS += -DDEBUG
+endif
 
 # Directories
 CURRENT_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -53,8 +57,13 @@ $(OBJ_DIR)/sync_%.o: sync/%.cpp | $(OBJ_DIR)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 # Rule to build participant binary
+ifdef DEBUG
 $(PARTICIPANT_BIN): trigger/*.cpp trigger/bench.h sync/*.cpp | $(BIN_DIR)
-	$(CXX) -std=c++17 $(TPBENCH_INCLUDES) $(SYNC_INC) -O3 -o $@ trigger/*.cpp sync/*.cpp  -lstdc++fs -lrdmacm -libverbs -lpthread
+	$(CXX) -std=c++17 -DDEBUG $(TPBENCH_INCLUDES) $(SYNC_INC) -O3 -Wno-write-strings -w -o $@ trigger/*.cpp sync/*.cpp  -lstdc++fs -lrdmacm -libverbs -lpthread -lmpi
+else
+$(PARTICIPANT_BIN): trigger/*.cpp trigger/bench.h sync/*.cpp | $(BIN_DIR)
+	$(CXX) -std=c++17 $(TPBENCH_INCLUDES) $(SYNC_INC) -O3 -Wno-write-strings -w -o $@ trigger/*.cpp sync/*.cpp  -lstdc++fs -lrdmacm -libverbs -lpthread -lmpi
+endif	
 
 # Create directories if they don't exist
 $(OBJ_DIR) $(LIB_DIR) $(BIN_DIR):

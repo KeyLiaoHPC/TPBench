@@ -7,9 +7,6 @@
 #include <cstdlib>
 #include <unistd.h>
 
-extern "C" {
-#include "tpbench.h"
-}
 
 class MPIBench : public BenchmarkBase {
 private:

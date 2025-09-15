@@ -14,7 +14,7 @@
 
 // Include TPBench headers for additional functionality
 extern "C" {
-#include "tpbench.h"
+#include "tptimer.h"
 }
 
 // Optional RDMA-based sync hooks

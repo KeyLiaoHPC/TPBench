@@ -9,7 +9,7 @@
 #include "sync.h"
 
 extern "C" {
-#include "tpbench.h"
+#include "tptimer.h"
 }
 
 #define GET_NS \
