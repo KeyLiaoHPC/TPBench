@@ -221,131 +221,262 @@ def get_hosts(cmd: List[str]) -> str:
             return cmd[i+1]
     return ""
 
-def run_parallel_symmetrical(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, log_storage_prefix: str = None, verbose: bool = False) -> int:
-    procs = []
-    fds = []
-    os.makedirs(log_storage_prefix, exist_ok=True)
-    for i, (cmd, env) in enumerate(zip(commands, envs)):
-        node_list = get_hosts(cmd)
-        cmd_output_path = os.path.join(log_storage_prefix, f"{node_list}.out") if node_list else None
-        cmd_err_path = os.path.join(log_storage_prefix, f"{node_list}.err") if node_list else None
-        penv = os.environ.copy()
-        penv.update(env)
-        out_f = open(cmd_output_path, 'w') if cmd_output_path else None
-        err_f = open(cmd_err_path, 'w') if cmd_err_path else None
-        dbg(f"Launching [{i}]: {' '.join(cmd)}", True)
-        p = subprocess.Popen(cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
-        procs.append(p)
-        fds.append((out_f, err_f))
+def check_tpsync_error_in_stderr(stderr_path: str) -> bool:
+    """Check if stderr file contains [TPSYNC ERROR]"""
+    if not stderr_path or not os.path.exists(stderr_path):
+        return False
+    try:
+        with open(stderr_path, 'r') as f:
+            content = f.read()
+            if '[TPSYNC ERROR]' in content:
+                print("[TPSYNC ERROR] detected in stderr file:\n", content, file=sys.stderr)
+                return True
+            else:
+                return False
+    except Exception:
+        return False
 
-    rc = 0
+
+def monitor_processes_with_error_detection(procs: List[subprocess.Popen], stderr_paths: List[str], 
+                                         fds: List[Tuple], check_interval: int = 2, verbose: bool = False) -> bool:
+    while any(p.poll() is None for p in procs):
+        time.sleep(check_interval)
+        # Check for TPSYNC ERROR in stderr files
+        for stderr_path in stderr_paths:
+            if check_tpsync_error_in_stderr(stderr_path):
+                dbg(f"[TPSYNC ERROR] detected in {stderr_path}, terminating processes...", verbose)
+                terminate_processes_and_cleanup(procs, fds, verbose)
+                return True
+    return False
+
+
+def terminate_processes_and_cleanup(procs: List[subprocess.Popen], fds: List[Tuple], verbose: bool = False):
     for i, p in enumerate(procs):
-        r = p.wait()
-        out_f, err_f = fds[i]
+        if p.poll() is None:  # Process is still running
+            dbg(f"Terminating process [{i}] due to TPSYNC ERROR", verbose)
+            p.kill()
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                dbg(f"Process [{i}] did not terminate gracefully, killing...", verbose)
+                p.kill()
+                p.wait()
+    
+    # Close file descriptors
+    for out_f, err_f in fds:
         if out_f:
             out_f.close()
         if err_f:
             err_f.close()
-        dbg(f"Process [{i}] exited with {r}", True)
-        rc = rc or r
+
+
+def check_final_tpsync_errors(stderr_paths: List[str], verbose: bool = False) -> bool:
+    for stderr_path in stderr_paths:
+        if check_tpsync_error_in_stderr(stderr_path):
+            dbg(f"[TPSYNC ERROR] detected in final check: {stderr_path}", verbose)
+            return True
+    return False
+
+
+
+def run_parallel_symmetrical(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, log_storage_prefix: str = None, verbose: bool = False) -> int:
+    max_retries = 3
+    
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            dbg(f"Retry attempt {attempt} due to TPSYNC ERROR detection", verbose)
+            time.sleep(2)  # Small delay before retry
+        
+        procs = []
+        fds = []
+        stderr_paths = []
+        
+        os.makedirs(log_storage_prefix, exist_ok=True)
+        
+        for i, (cmd, env) in enumerate(zip(commands, envs)):
+            node_list = get_hosts(cmd)
+            attempt_suffix = f"_attempt_{attempt}" if attempt > 0 else ""
+            cmd_output_path = os.path.join(log_storage_prefix, f"{node_list}.out") if node_list else None
+            cmd_err_path = os.path.join(log_storage_prefix, f"{node_list}.err") if node_list else None
+            penv = os.environ.copy()
+            penv.update(env)
+            out_f = open(cmd_output_path, 'w') if cmd_output_path else None
+            err_f = open(cmd_err_path, 'w') if cmd_err_path else None
+            dbg(f"Launching [{i}]: {' '.join(cmd)}", True)
+            p = subprocess.Popen(cmd, cwd=str(cwd), env=penv, stdout=out_f, stderr=err_f)
+            procs.append(p)
+            fds.append((out_f, err_f))
+            stderr_paths.append(cmd_err_path)
+
+        rc = 0
+        
+        # Monitor processes with periodic error checking
+        tpsync_error_detected = monitor_processes_with_error_detection(procs, stderr_paths, fds, 2, verbose)
+        
+        # If TPSYNC error detected, retry if possible
+        if tpsync_error_detected:
+            # If this is not the last retry, continue to next attempt
+            if attempt < max_retries:
+                continue
+            else:
+                print("[ERROR] TPSYNC ERROR detected and max retries exceeded", file=sys.stderr)
+                return 1
+        
+        # Normal completion path - wait for all processes to complete
+        for i, p in enumerate(procs):
+            r = p.wait()
+            out_f, err_f = fds[i]
+            if out_f:
+                out_f.close()
+            if err_f:
+                err_f.close()
+            dbg(f"Process [{i}] exited with {r}", True)
+            rc = rc or r
+        
+        # Check for TPSYNC ERROR one final time after all processes completed
+        final_error_detected = check_final_tpsync_errors(stderr_paths, verbose)
+        
+        # If no error detected or this was the last retry, return
+        if not final_error_detected or attempt >= max_retries:
+            if final_error_detected and attempt >= max_retries:
+                print("[ERROR] TPSYNC ERROR detected in final check and max retries exceeded", file=sys.stderr)
+                return 1
+            return rc
+    
     return rc
+
+
 
 
 def run_parallel_asymmetrical(commands: List[List[str]], envs: List[Dict[str, str]], cwd: Path, 
                               participant_commands: List[List[str]] = None, 
                               log_storage_prefix: str = None, verbose: bool = False) -> int:
     
-    cmd_list = []
+    max_retries = 0  # Allow one retry
     
-    procs = []
-    fds = []
-    os.makedirs(log_storage_prefix, exist_ok=True)
+    for attempt in range(max_retries + 1):
+        if attempt > 0:
+            dbg(f"Retry attempt {attempt} due to TPSYNC ERROR detection", verbose)
+            time.sleep(2)  # Small delay before retry
+        cmd_list = []
+        procs = []
+        fds = []
+        stderr_paths = []
+        os.makedirs(log_storage_prefix, exist_ok=True)
 
-    # Launch coordinator process (main MPI program)
-    if commands:
-        coord_cmd, coord_env = commands[0], envs[0]
-        node_list = get_hosts(coord_cmd)
-        cmd_output_path = os.path.join(log_storage_prefix, f"coordinator_{node_list}.out") if node_list else None
-        cmd_err_path = os.path.join(log_storage_prefix, f"coordinator_{node_list}.err") if node_list else None
-        penv = os.environ.copy()
-        penv.update(coord_env)
-        out_f = open(cmd_output_path, 'w') if cmd_output_path else None
-        err_f = open(cmd_err_path, 'w') if cmd_err_path else None
-        cmd_dict = {}
-        cmd_dict['cmd'] = coord_cmd
-        cmd_dict['cwd'] = cwd
-        cmd_dict['env'] = penv
-        cmd_dict['stdout'] = out_f
-        cmd_dict['stderr'] = err_f
-        cmd_list.append(cmd_dict)
-    print(f"Total processes to run: {len(cmd_list)}")
-
-    # Launch participant processes first (they will wait for coordinator)
-    if participant_commands:
-        for i, (cmd, env) in enumerate(zip(participant_commands, envs[1:])):  # Skip coordinator env
-            node_list = get_hosts(cmd)
-            cmd_output_path = os.path.join(log_storage_prefix, f"participant_{node_list}.out") if node_list else None
-            cmd_err_path = os.path.join(log_storage_prefix, f"participant_{node_list}.err") if node_list else None
+        # Launch coordinator process (main MPI program)
+        if commands:
+            coord_cmd, coord_env = commands[0], envs[0]
+            node_list = get_hosts(coord_cmd)
+            attempt_suffix = f"_attempt_{attempt}" if attempt > 0 else ""
+            cmd_output_path = os.path.join(log_storage_prefix, f"coordinator_{node_list}.out") if node_list else None
+            cmd_err_path = os.path.join(log_storage_prefix, f"coordinator_{node_list}.err") if node_list else None
             penv = os.environ.copy()
-            penv.update(env)
+            penv.update(coord_env)
             out_f = open(cmd_output_path, 'w') if cmd_output_path else None
             err_f = open(cmd_err_path, 'w') if cmd_err_path else None
             cmd_dict = {}
-            cmd_dict['cmd'] = cmd
+            cmd_dict['cmd'] = coord_cmd
             cmd_dict['cwd'] = cwd
             cmd_dict['env'] = penv
             cmd_dict['stdout'] = out_f
             cmd_dict['stderr'] = err_f
             cmd_list.append(cmd_dict)
-
-    for cmd_dict in cmd_list:
-        dbg(f"Launching: {' '.join(cmd_dict['cmd'])}", True)
-        p = subprocess.Popen(cmd_dict['cmd'], cwd=str(cmd_dict['cwd']), stdout=cmd_dict['stdout'], stderr=cmd_dict['stderr'])
-        procs.append(p)
-        fds.append((cmd_dict['stdout'], cmd_dict['stderr']))
-
-    rc = 0
-    # Wait for coordinator process first
-    if procs:
-        coordinator_proc = procs[0]
-        r = coordinator_proc.wait()
-        out_f, err_f = fds[0]
-        if out_f:
-            out_f.close()
-        if err_f:
-            err_f.close()
-        dbg(f"Coordinator process exited with {r}", True)
-        rc = rc or r
+            stderr_paths.append(cmd_err_path)
         
-        # Wait 5 seconds for participant processes to finish
-        if len(procs) > 1:
-            time.sleep(5)
-            # Check and terminate any remaining participant processes
-            for i in range(1, len(procs)):
-                p = procs[i]
-                if p.poll() is None:  # Process is still running
-                    dbg(f"Participant process [{i}] still running after coordinator exit, terminating...", True)
-                    p.terminate()
-                    try:
-                        p.wait(timeout=2)
-                    except subprocess.TimeoutExpired:
-                        dbg(f"Participant process [{i}] did not terminate gracefully, killing...", True)
-                        p.kill()
-                        p.wait()
-                    print(f"[ERROR] Participant process [{i}] was forcibly terminated after coordinator exit", file=sys.stderr)
-                    rc = rc or 1
+        # Launch participant processes first (they will wait for coordinator)
+        if participant_commands:
+            for i, (cmd, env) in enumerate(zip(participant_commands, envs[1:])):  # Skip coordinator env
+                node_list = get_hosts(cmd)
+                attempt_suffix = f"_attempt_{attempt}" if attempt > 0 else ""
+                cmd_output_path = os.path.join(log_storage_prefix, f"participant_{node_list}.out") if node_list else None
+                cmd_err_path = os.path.join(log_storage_prefix, f"participant_{node_list}.err") if node_list else None
+                penv = os.environ.copy()
+                penv.update(env)
+                out_f = open(cmd_output_path, 'w') if cmd_output_path else None
+                err_f = open(cmd_err_path, 'w') if cmd_err_path else None
+                cmd_dict = {}
+                cmd_dict['cmd'] = cmd
+                cmd_dict['cwd'] = cwd
+                cmd_dict['env'] = penv
+                cmd_dict['stdout'] = out_f
+                cmd_dict['stderr'] = err_f
+                cmd_list.append(cmd_dict)
+                stderr_paths.append(cmd_err_path)
+
+        # Launch all processes
+        for cmd_dict in cmd_list:
+            dbg(f"Launching: {' '.join(cmd_dict['cmd'])}", True)
+            p = subprocess.Popen(cmd_dict['cmd'], cwd=str(cmd_dict['cwd']), env=cmd_dict['env'], 
+                               stdout=cmd_dict['stdout'], stderr=cmd_dict['stderr'])
+            procs.append(p)
+            fds.append((cmd_dict['stdout'], cmd_dict['stderr']))
+
+        rc = 0
+        
+        # Monitor processes with periodic error checking
+        if procs:
+            coordinator_proc = procs[0]
+            # Poll all processes with periodic error checking  
+            tpsync_error_detected = monitor_processes_with_error_detection(procs, stderr_paths, fds, 1, verbose)
+            
+            # If TPSYNC error detected, retry if possible
+            if tpsync_error_detected:
+                # If this is not the last retry, continue to next attempt
+                if attempt < max_retries:
+                    continue
                 else:
-                    r = p.returncode
-                    dbg(f"Participant process [{i}] exited with {r}", True)
-                    rc = rc or r
-                
-                # Close file descriptors for participant processes
-                out_f, err_f = fds[i]
+                    print("[ERROR] TPSYNC ERROR detected and max retries exceeded", file=sys.stderr)
+                    return 1
+            else:
+                # Normal completion path
+                r = coordinator_proc.wait()
+                out_f, err_f = fds[0]
                 if out_f:
                     out_f.close()
                 if err_f:
                     err_f.close()
-    
+                dbg(f"Coordinator process exited with {r}", verbose)
+                rc = rc or r
+                
+                # Wait 5 seconds for participant processes to finish
+                if len(procs) > 1:
+                    time.sleep(5)
+                    # Check and terminate any remaining participant processes
+                    for i in range(1, len(procs)):
+                        p = procs[i]
+                        if p.poll() is None:  # Process is still running
+                            dbg(f"Participant process [{i}] still running after coordinator exit, terminating...", True)
+                            p.kill()
+                            try:
+                                p.wait(timeout=2)
+                            except subprocess.TimeoutExpired:
+                                dbg(f"Participant process [{i}] did not terminate gracefully, killing...", True)
+                                p.kill()
+                                p.wait()
+                            print(f"[ERROR] Participant process [{i}] was forcibly terminated after coordinator exit", file=sys.stderr)
+                            rc = rc or 1
+                        else:
+                            r = p.returncode
+                            dbg(f"Participant process [{i}] exited with {r}", True)
+                            rc = rc or r
+                        
+                        # Close file descriptors for participant processes
+                        out_f, err_f = fds[i]
+                        if out_f:
+                            out_f.close()
+                        if err_f:
+                            err_f.close()
+            
+        # Check for TPSYNC ERROR one final time after all processes completed
+        final_error_detected = check_final_tpsync_errors(stderr_paths, verbose)
+        
+        # If no error detected or this was the last retry, return
+        if not final_error_detected or attempt >= max_retries:
+            if final_error_detected and attempt >= max_retries:
+                print("[ERROR] TPSYNC ERROR detected in final check and max retries exceeded", file=sys.stderr)
+                return 1
+            return rc
     return rc
 
 def detect_mpi_impl(mpirun_exe: str) -> str:
@@ -431,7 +562,6 @@ def parse_args(argv: List[str]) -> Tuple[argparse.Namespace, List[str]]:
     p.add_argument('--no-sync', dest='sync', action='store_false', help='Disable synchronization')
 
     p.add_argument('--trace', action='store_true', default=True, help='Enable tracing (LD_PRELOAD libmpi_trace.so)')
-
     p.add_argument('--nmpi', type=int, default=1, help='Number of mpirun processes')
     
     p.add_argument('--trigger', dest='trigger', action='store_true', default=False, help='Enable trigger mode for asymmetrical testing')
