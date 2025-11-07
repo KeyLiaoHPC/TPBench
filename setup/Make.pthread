@@ -1,0 +1,10 @@
+#!/bin/sh
+CC=gcc
+CFLAGS=-O3 -fno-builtin -DUSE_PTHREAD -pthread
+DEF=-DNTIMES=1000 
+SIZE=-DKIB_SIZE=32768 
+
+# Enable NUMA support if available
+ifdef USE_NUMA
+    CFLAGS += -DUSE_NUMA -lnuma
+endif
