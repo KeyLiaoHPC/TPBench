@@ -20,3 +20,16 @@ scripts/
 .DS_Store
 result*/*
 __pycache__/
+
+# Kernel modules
+*.ko
+*.o
+*.mod.c
+*.order
+*.symvers
+*.cmd
+*.mod
+*.mod.o
+*.mod.o.cmd
+*.mod.o.o
+*.mod.o.o.cmd
