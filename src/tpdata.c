@@ -23,7 +23,6 @@
  */
 #include <stdlib.h>
 #include "tpdata.h"
-#include "tperror.h"
 #include "tpio.h"
 #include "stdio.h"
 
@@ -69,7 +68,7 @@ calc_quant(double *data, int nitem, __ovl_t *res) {
 
 // calculate task volumn per time unit. (e.g. MB/s, Bytes/cy, etc.)
 int
-calc_rate_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res) {
+calc_rate_quant(int64_t *raw, int nitem, double volume, double s, __ovl_t *res) {
     double rate[nitem];
 
     for(int i = 0; i < nitem; i ++) {
@@ -95,57 +94,14 @@ calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *re
 }
 
 int
-dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
+dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
     __ovl_t res;
 
     tpprintf(0, 0, 0, OVL_QUANT_HEADER);
-#ifndef TPM_NO_NS
     // MB/s
-    calc_rate_quant(&ns[nskip], ntest - nskip, niter * bpi, 1e3, &res);
+    calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
     tpprintf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
-#endif
-
-#ifndef TPM_NO_CYCLE
-    // Byte/cy
-    calc_rate_quant(&cy[nskip], ntest - nskip, niter * bpi, 1, &res);
-    tpprintf(0, 0, 0, "B/c     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-           res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
-#endif
-
-#if !defined(TPM_NO_NS) && !defined(TPM_NO_CYCLE)
-    if(freq) {
-        double *freqs =  (double *)malloc(sizeof(double) * ntest);
-        for(int i = nskip; i < ntest; i ++) {
-            freqs[i] = (double)cy[i] / (double)ns[i];
-            // printf("%d, %f", i, freqs[i]);
-        }
-        calc_quant(&freqs[nskip], ntest - nskip, &res);
-        tpprintf(0, 0, 0, "GHz     %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-               res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
-        free(freqs);
-    }
-#endif
-
-    return 0;
-}
-
-int
-dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
-    uint64_t kern_ns[ntest];
-    uint64_t kern_cy[ntest];
-
-    for(int i = 0; i < ntest; i ++) {
-#ifndef TPM_NO_NS
-        kern_ns[i] = ns[i][eid];
-#endif
-#ifndef TPM_NO_CYCLE
-        kern_cy[i] = cy[i][eid];
-#endif
-        // printf("%llu, %llu\n", kern_ns[i], kern_cy[i]);
-    }
-
-    dpipe_k0(kern_ns, kern_cy, nskip, ntest, freq, bpi, niter);
 
     return 0;
 }

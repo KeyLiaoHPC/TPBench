@@ -29,7 +29,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "tpmpi.h"
-#include "tperror.h"
+#include "../tpb-impl.h"
 
 int
 tpmpi_init() {
@@ -47,7 +47,7 @@ tpmpi_init() {
     tpmpi_info.pcpu = sched_getcpu();
     tpmpi_info.tcpu;
 
-    return NO_ERROR;
+    return 0;
 }
 
 // process synchronization
@@ -134,5 +134,5 @@ tpmpi_writecsv(char *path, uint64_t *data, int ncol, char *header) {
     
     fclose(fp);
 #endif
-    return NO_ERROR;
+    return 0;
 }

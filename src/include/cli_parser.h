@@ -28,6 +28,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include "argp.h"
+#include "../tpb-types.h"
 
 /**
  * @brief tpbench argument struct
@@ -37,7 +38,8 @@ typedef struct {
     uint64_t ntest; // [Mandatory] Number of tests per job.
     uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
     char kstr[1024], gstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
-    int *klist, *glist; 
+    char timer[128];
+    int *klist; 
     int nkern, ngrp;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
 } __tp_args_t;
@@ -49,8 +51,6 @@ static struct argp_option options[] = {
         "Overall number of tests."},
     {"nkib",        's',    "kib_size",     0, 
         "Memory usage for a single test array, in KiB."},
-    {"group",       'g',    "group_list",   0, 
-        "Group list. (e.g. -g g1_kernel,g2_kernel)."},
     {"kernel",      'k',    "kernel_list",  0,
         "Kernel list.(e.g. -k d_init,d_sum). "},
     {"list",        'L',    0,              0,
@@ -58,8 +58,10 @@ static struct argp_option options[] = {
     {"data_dir",    'd',    "PATH",         OPTION_ARG_OPTIONAL,
         "Optional. Data directory."},
     {"mode",        'm',    "MODE",         0,
-        "Run mode: Supported modes: Manual(Default), BenchScore, BenchCompute, "
+        "Run mode: Supported modes: Manual (Default), BenchScore, BenchCompute, "
         "BenchMemory, BenchNetwork, BenchIO."},
+    {"timer",       't',    "timer_name",    0, 
+        "Timer name: Supported timers: clock_gettime (default), tsc_asym."},
     { 0 }
 };
 
@@ -68,6 +70,7 @@ static struct argp_option options[] = {
  * @param argc int, argc of main()
  * @param argv char**, argv of main()
  * @param tp_args __tp_args_t*，pointer to argument data struct
+ * @param timer tpb_timer_t*，pointer to timer data struct
  * @return int 
  */
-int parse_args(int argc, char **argv, __tp_args_t *tp_args);
+int parse_args(int argc, char **argv, __tp_args_t *tp_args, tpb_timer_t *timer);

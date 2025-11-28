@@ -22,7 +22,7 @@
  * @date 2024-01-26
  */
 
-
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct __stat_result {
@@ -43,7 +43,7 @@ typedef struct __stat_result {
  * @param res 
  * @return int 
  */
-int calc_rate_quant(uint64_t * raw, int nitem, double tpt, double s, __ovl_t *res);
+int calc_rate_quant(int64_t * raw, int nitem, double tpt, double s, __ovl_t *res);
 
 /**
  * @brief 
@@ -67,8 +67,7 @@ int calc_quant(double *data, int nitem, __ovl_t *res);
 
 /**
  * @brief 
- * @param ns 
- * @param cy 
+ * @param time_arr 1D array of measured runtime.
  * @param nskip 
  * @param ntest 
  * @param freq 
@@ -76,18 +75,4 @@ int calc_quant(double *data, int nitem, __ovl_t *res);
  * @param nsize 
  * @return int 
  */
-int dpipe_k0(uint64_t *ns, uint64_t *cy, int nskip, int ntest, int freq, size_t bpi, size_t nsize);
-
-/**
- * @brief 
- * @param ns 
- * @param cy 
- * @param eid 
- * @param nskip 
- * @param ntest 
- * @param freq 
- * @param bpi 
- * @param nsize 
- * @return int 
- */
-int dpipe_g0(uint64_t **ns, uint64_t **cy, int eid, int nskip, int ntest, int freq, size_t bpi, size_t niter);
+int dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t nsize);

@@ -20,26 +20,11 @@
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-22
  */
-
 #define _GNU_SOURCE
 
 #include <stdint.h>
 #include <limits.h>
 #include "tpmpi.h"
-
-/**
- * @brief 
- */
-typedef struct __result {
-    char header[1024];
-    char fname[1024];
-    char fdir[PATH_MAX];
-    char fpath[PATH_MAX];
-    uint64_t **data; //data[col][row], row for run id, col for different tests.
-} __res_t;
-
-
-
 
 /**
  * @brief 
@@ -73,7 +58,6 @@ int tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...);
  * @param nrow 
  * @param ncol 
  * @param header 
- * @param tran_flag 
- * @return int 0 or 1, set 1 when writing order is different from [row][col]
+ * @return int 
  */
-int tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag);
+int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);

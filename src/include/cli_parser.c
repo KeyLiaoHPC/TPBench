@@ -26,9 +26,8 @@
 
 #include <stdlib.h>
 #include <limits.h>
-#include <errno.h>
 #include "cli_parser.h"
-#include "tperror.h"
+#include "../tpb-impl.h"
 #include "tpb_core.h"
 
 /**
@@ -38,7 +37,7 @@
  * @param state 
  * @return error_t 
  */
-static error_t parse_opt(int key, char *arg, struct argp_state *state);
+static error_t parse_opt(int key, char *arg, tpb_timer_t *timer, struct argp_state *state);
 
 /**
  * @brief check syntax of aruments while counting segments.
@@ -75,7 +74,7 @@ check_count(int *n, char *strarg) {
     
     if(strarg[0] == '\0') {
         *n = 0;
-        return NO_ERROR;
+        return 0;
     }
     len = strlen(strarg);
     if(strarg[len-1] == ',') {
@@ -105,7 +104,7 @@ check_count(int *n, char *strarg) {
         }
         ch ++;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 int
@@ -143,7 +142,7 @@ parse_klist(__tp_args_t *tp_args) {
         // move to next segment
         ch = che + 1;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 int
@@ -179,7 +178,7 @@ parse_glist(__tp_args_t *tp_args) {
         }
         ch = che + 1;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 // extract tpbench arguments from string
@@ -208,7 +207,7 @@ init_list(__tp_args_t *tp_args) {
     if(tp_args->ngrp && err) {
         return err;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 // ============================================================================
@@ -244,6 +243,16 @@ parse_opt(int key, char *arg, struct argp_state *state) {
                 return SYNTAX_ERROR;
             }
             sprintf(args->data_dir, "%s", arg);
+            break;
+        case 't':
+            if(strcmp(arg, "clock_gettime") == 0) {
+                args->timer = clock_gettime;
+            } else if(strcmp(arg, "tsc_asym") == 0) {
+                args->timer = tsc_asym;
+            } else {
+                return SYNTAX_ERROR;
+            }
+            break;
         case ARGP_KEY_ARG:
             argp_usage(state);
             break;
@@ -291,7 +300,7 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
 
     // list only
     if(tp_args->list_only_flag) {
-        return NO_ERROR;
+        return 0;
     }
 
     // argument integrity check

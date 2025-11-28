@@ -27,7 +27,7 @@
 #include <time.h>
 #include <string.h>
 #include "tptimer.h"
-#include "tperror.h"
+#include "../tpb-impl.h"
 #include "tpdata.h"
 #include "tpmpi.h"
 #include "tpio.h"

@@ -27,10 +27,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <time.h>
 #include "tptimer.h"
-#include "tperror.h"
 #include "tpdata.h"
 #include "tpmpi.h"
+#include "../../tpb-types.h"
+#include "../../tpb-impl.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"
@@ -46,7 +48,7 @@
                             }
 
 int
-d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
+d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {
     int nsize, err;
     volatile double *a, *b, *c;
     register double s = 0.42;
@@ -77,9 +79,11 @@ d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     // kernel warm
     struct timespec wts;
     uint64_t wns0, wns1;
-    __getns(wts, wns1);
-    wns0 = wns1 + 1e9;
-    while(wns1 < wns0) {
+
+    clock_gettime(CLOCK_MONOTONIC, &wts);
+    wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
+    wns1 = wns0 + 1e9;
+    while(wns0 < wns1) {
 #ifdef KP_SVE
         #pragma omp parallel for shared(a, b, c, s, nsize)
         for (int j = 0; j < nsize; j += vec_len) {
@@ -114,17 +118,16 @@ d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
             a[j] = b[j] + s * c[j];
         }
 #endif
-        __getns(wts, wns1);
+        clock_gettime(CLOCK_MONOTONIC, &wts);
+        wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
     }
 
-    __getcy_init;
-    __getns_init;
+    timer->init();
 
     // kernel start
     for(int i = 0; i < ntest; i ++){
         tpmpi_dbarrier();
-        __getns_1d_st(i);
-        __getcy_1d_st(i);
+        int64_t t0 = timer->tick();
 #ifdef KP_SVE
         #pragma omp parallel for shared(a, b, c, s, nsize)
         for (int j = 0; j < nsize; j += vec_len) {
@@ -160,14 +163,13 @@ d_triad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
         }
 #endif
         #pragma omp barrier
-        __getcy_1d_en(i);
-        __getns_1d_en(i);
+        time_arr[i] = timer->tock() - t0;
     }
     // kernel end
 
     // overall result
     int nskip = 10, freq=1;
-    dpipe_k0(ns, cy, nskip, ntest, freq, 24, nsize);
+    dpipe_k0(time_arr, nskip, ntest, freq, 24, nsize);
     
     free((void *)a);
     free((void *)b);

@@ -28,7 +28,6 @@
 #include <string.h>
 #include "tplog.h"
 #include "tptimer.h"
-#include "tperror.h"
 #include "tpdata.h"
 #include "tpmpi.h"
 #include "tpio.h"

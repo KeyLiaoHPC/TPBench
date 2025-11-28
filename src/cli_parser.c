@@ -27,13 +27,15 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "cli_parser.h"
-#include "tperror.h"
+#include "tpb-impl.h"
 #include "tpb_core.h"
+#include "tpb-types.h"
 
 /**
  * @brief 
  * @param key 
  * @param arg 
+ * @param timer 
  * @param state 
  * @return error_t 
  */
@@ -58,13 +60,6 @@ int parse_klist(__tp_args_t *tp_args);
  * @param tp_args 
  * @return int 
  */
-int parse_glist(__tp_args_t *tp_args);
-
-/**
- * @brief 
- * @param tp_args 
- * @return int 
- */
 int init_list(__tp_args_t *tp_args);
 
 
@@ -76,7 +71,7 @@ check_count(int *n, char *strarg) {
     
     if(strarg[0] == '\0') {
         *n = 0;
-        return NO_ERROR;
+        return 0;
     }
     len = strlen(strarg);
     if(strarg[len-1] == ',') {
@@ -106,7 +101,7 @@ check_count(int *n, char *strarg) {
         }
         ch ++;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 int
@@ -144,43 +139,7 @@ parse_klist(__tp_args_t *tp_args) {
         // move to next segment
         ch = che + 1;
     }
-    return NO_ERROR;
-}
-
-int
-parse_glist(__tp_args_t *tp_args) {
-    int cmplen, matched;
-    char *ch, *che;
-
-    ch = tp_args->gstr;
-    for(int seg = 0; seg < tp_args->ngrp; seg ++) {
-        matched = 0;
-        che = ch;
-        while (1) {
-            if(*che == ',') {
-                *che = '\0';
-                break;
-            }
-            if(*che == '\0') {
-                break;
-            }
-            che ++;
-            // printf("%s\n", che);
-        }
-        for(int rid = 0; rid < ngrout; rid ++) {
-            if(strcmp(ch, grp_info[rid].rname) == 0) {
-                // matched, append index
-                tp_args->glist[seg] = rid;
-                matched = 1;
-                break;
-            }
-        }
-        if(matched == 0) {
-            return GRP_NE;
-        }
-        ch = che + 1;
-    }
-    return NO_ERROR;
+    return 0;
 }
 
 // extract tpbench arguments from string
@@ -208,12 +167,8 @@ init_list(__tp_args_t *tp_args) {
         if ((err = check_count(&(tp_args->nkern), tp_args->kstr))) {
             return err;
         }
-        if ((err = check_count(&(tp_args->ngrp), tp_args->gstr))) {
-            return err;
-        }
         tp_args->klist = (int *)malloc(sizeof(int) * tp_args->nkern);
-        tp_args->glist = (int *)malloc(sizeof(int) * tp_args->ngrp);
-        if(tp_args->klist == NULL || tp_args->glist == NULL) {
+        if(tp_args->klist == NULL) {
             return MALLOC_FAIL;
         }
         // parse kstr
@@ -221,14 +176,10 @@ init_list(__tp_args_t *tp_args) {
         if(tp_args->nkern && err) {
             return err;
         }
-        // parse gstr
-        err = parse_glist(tp_args);
-        if(tp_args->ngrp && err) {
-            return err;
-        }
-        return NO_ERROR;
+
+        return 0;
     }
-    return NO_ERROR;
+    return 0;
 }
 
 // ============================================================================
@@ -237,18 +188,14 @@ init_list(__tp_args_t *tp_args) {
 static error_t
 parse_opt(int key, char *arg, struct argp_state *state) {
     __tp_args_t *args = state->input;
+
+    sprintf(args->timer, "%s", "clock_gettime");
     switch(key) {
         case 'n':
             args->ntest = atoi(arg);
             break;
         case 's':
             args->nkib = atoi(arg);
-            break;
-        case 'g':
-            if(strlen(arg) > 1023) {
-                return SYNTAX_ERROR;
-            }
-            sprintf(args->gstr, "%s", arg);
             break;
         case 'k':
             if(strlen(arg) > 1023) {
@@ -280,6 +227,15 @@ parse_opt(int key, char *arg, struct argp_state *state) {
                 return SYNTAX_ERROR;
             }
             break;
+        case 't':
+            if(strcmp(arg, "clock_gettime") == 0) {
+                sprintf(args->timer, "clock_gettime");
+            } else if(strcmp(arg, "tsc_asym") == 0) {
+                sprintf(args->timer, "tsc_asym");
+            } else {
+                return SYNTAX_ERROR;
+            }
+            break;
         case ARGP_KEY_ARG:
             argp_usage(state);
             break;
@@ -303,11 +259,10 @@ static char args_doc[] = "";
 
 // entry of parser.
 int
-parse_args(int argc, char **argv, __tp_args_t *tp_args) {
-    int err;
+parse_args(int argc, char **argv, __tp_args_t *tp_args, tpb_timer_t *timer) {
+    int err = 0;
     struct argp argp = {options, parse_opt, args_doc, doc};
 
-    err = 0;
     if(argc <= 1) {
         printf("argc = %d, argv = %s\n", argc, argv[0]);
         return SYNTAX_ERROR;
@@ -317,18 +272,31 @@ parse_args(int argc, char **argv, __tp_args_t *tp_args) {
     tp_args->ntest = 0;
     tp_args->nkib = 0;
     tp_args->nkern = 0;
-    tp_args->ngrp = 0;
     tp_args->list_only_flag = 0;
     tp_args->klist = NULL;
-    tp_args->glist = NULL;
     tp_args->data_dir[0] = '\0';
 
     // parse by argp
-    argp_parse(&argp, argc, argv, 0, 0, tp_args);
+    err = argp_parse(&argp, argc, argv, 0, 0, tp_args);
+    if(err) {
+        return err;
+    }
+
+    // Set timer
+    if(strcmp(tp_args->timer, "clock_gettime") == 0) {
+        timer->init = init_timer_clock_gettime;
+        timer->tick = tick_clock_gettime;
+        timer->tock = tock_clock_gettime;
+        timer->get_stamp = get_stamp_clock_gettime;
+    } else if(strcmp(tp_args->timer, "tsc_asym") == 0) {
+        timer->init = init_timer_tsc_asym;
+        timer->tick = tick_tsc_asym;
+        timer->tock = tock_tsc_asym;
+    }
 
     // list only
     if(tp_args->list_only_flag) {
-        return NO_ERROR;
+        return 0;
     }
 
     // argument integrity check

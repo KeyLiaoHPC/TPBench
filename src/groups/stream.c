@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "tperror.h"
+#include "../tpb-impl.h"
 #include "tptimer.h"
 #include "tpdata.h"
 #include "tpmpi.h"

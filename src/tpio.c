@@ -31,6 +31,7 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <inttypes.h>
 #include "tpio.h"
 #include "tpb_core.h"
 
@@ -76,9 +77,9 @@ tpb_mkdir(char *path) {
 
 
 int
-tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int tran_flag) {
+tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 #ifdef TPM_NO_RAW_DATA
-    return NO_ERROR;
+    return 0;
 #else
     int err, i, j;
     FILE *fp;    
@@ -92,27 +93,16 @@ tpb_writecsv(char *path, uint64_t **data, int nrow, int ncol, char *header, int 
     }
 
     // data[col][row], for kernel benchmark
-    if(tran_flag) {
-        for(i = 0; i < nrow; i ++) {
-            for(j = 0; j < ncol - 1; j ++) {
-                fprintf(fp, "%llu,", data[j][i]);
-            }
-            fprintf(fp, "%llu\n", data[ncol-1][i]);
+    for(i = 0; i < nrow; i ++) {
+        for(j = 0; j < ncol - 1; j ++) {
+            fprintf(fp, "%"PRId64",", data[j][i]);
         }
-    }
-    // data[row][col], for group benchmark
-    else {
-        for(i = 0; i < nrow; i ++) {
-            for(j = 0; j < ncol - 1; j ++) {
-                fprintf(fp, "%llu,", data[i][j]);
-            }
-            fprintf(fp, "%llu\n", data[i][ncol-1]);
-        }
+        fprintf(fp, "%"PRId64"\n", data[ncol-1][i]);
     }
     fflush(fp);
     fclose(fp);
 
-    return NO_ERROR;
+    return 0;
 #endif
 }
 
@@ -202,19 +192,12 @@ tpb_list(){
         tpprintf(0, 0, 0, "%-12s    %-12s    %s\n", 
                    kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
     }
-    tpprintf(0, 0, 0, HLINE);
-    tpprintf(0, 0, 0, "GROUP           Routine         NOTE\n");
-    tpprintf(0, 0, 0, HLINE);
-    for(int i = 0 ; i < ngrout; i ++) {
-        tpprintf(0, 0, 0, "%-12s    %-12s    %s\n",
-                   grp_info[i].gname, grp_info[i].rname, grp_info[i].note);
-    }
     tpprintf(0, 0, 0, DHLINE);
 }
 
 char *tpb_geterr(const int err, char *buf) {
     switch (err) {
-        case NO_ERROR:
+        case 0:
             sprintf(buf, "NO_ERROR");
             break;
         case GRP_ARG_ERROR:

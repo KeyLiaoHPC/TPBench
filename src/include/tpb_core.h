@@ -24,9 +24,8 @@
 
 #define _GNU_SOURCE
 
-#include "tperror.h"
+#include "../tpb-impl.h"
 #include "tpkernels.h"
-#include "tpgroups.h"
 #include "tptimer.h"
 
 /**
@@ -48,23 +47,11 @@ int tpb_init();
  * @brief 
  * @param id 
  * @param ntest 
- * @param res_ns 
- * @param res_cy 
- * @param kib 
+ * @param time_arr 
+ * @param nkib 
  * @return int 
  */
-int tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t nkib);
-
-/**
- * @brief 
- * @param gid 
- * @param ntest 
- * @param res_ns 
- * @param res_cy 
- * @param kib 
- * @return int 
- */
-int tpb_run_group(int gid, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib);
+int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib);
 
 /**
  * @brief get error message according to error code

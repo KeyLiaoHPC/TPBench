@@ -29,13 +29,14 @@
 #include <stdint.h>
 #include "tpb_core.h"
 #include "tpio.h"
+#include "tpb-types.h"
 
 
 /**
  * Basic information of tpbench benchmarking sets, init by tpb_init().
  */
 // # of kernels, kernel routines, groups and group routines
-int nkern, nkrout, ngrp, ngrout;
+int nkern, nkrout;
 
 /**
  * @brief set number of kernels, groups, kernel routines, and grou routines.
@@ -43,34 +44,20 @@ int nkern, nkrout, ngrp, ngrout;
  */
 int
 tpb_init() {
-    // count # of routines.
-    nkrout = sizeof(kern_info) / sizeof(__kern_info_t);
-    ngrout = sizeof(grp_info) / sizeof(__grp_info_t);
-    // count # of kernel and groups.
-    // TODO: equals to # of routine in current moment.
+    nkrout = sizeof(kern_info) / sizeof(tpb_kern_info_t);
     nkern = nkrout;
-    ngrp = ngrout;
 
     return 0;
 }
 
 int
-tpb_run_kernel(int id, int ntest, uint64_t *res_ns, uint64_t *res_cy, uint64_t nkib){
+tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib){
     int err;
 
     tpprintf(0, 0, 0, "Running Kernel %s - %s\n", kern_info[id].kname, kern_info[id].rname);
     tpprintf(0, 0, 0, "Number of tests: %d\n", ntest);
     tpprintf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
-    err = kern_info[id].pfun(ntest, res_ns, res_cy, nkib);
-    tpprintf(0, 0, 0, HLINE);
-    return err;
-}
-
-int
-tpb_run_group(int id, int ntest, uint64_t **res_ns, uint64_t **res_cy, uint64_t nkib){
-    int err;
-    tpprintf(0, 0, 0, "Running Group %s - %s\n", grp_info[id].gname, grp_info[id].rname);
-    err = grp_info[id].pfun(ntest, grp_info[id].nepoch+1, res_ns, res_cy, nkib);
+    err = kern_info[id].pfun(timer, ntest, time_arr, nkib);
     tpprintf(0, 0, 0, HLINE);
     return err;
 }
