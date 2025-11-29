@@ -17,7 +17,7 @@ tpbench.x:	main.c tpmpi.c tpb_core.c cli_parser.c tpio.c tpdata.c tplog.c init.c
 			fmaldr.c rtriad.c gemm_bcast.c gemm_allreduce.c jacobi2d5p_sendrecv.c
 			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
 
-tpbcgt.x:	main.c tpmpi.c tpb_core.c cli_parser.c tpio.c tpdata.c tplog.c triad.c clock_gettime.c tsc_asym.c
+tpbcgt.x:	main.c tpmpi.c tpb_core.c tpb-cli.c tpio.c tpdata.c tplog.c triad.c clock_gettime.c tsc_asym.c
 			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
 
 test: test.x

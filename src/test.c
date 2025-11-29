@@ -65,7 +65,7 @@ void
 test_parse_args(int argc, char **argv) {
     //int argc;
     //char **argv;
-    __tp_args_t tp_args;
+    tpb_args_t tp_args;
     //argc = 11;
     //argv = (char **)malloc(sizeof(char *) * 11);
 

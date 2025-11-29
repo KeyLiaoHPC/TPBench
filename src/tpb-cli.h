@@ -28,22 +28,7 @@
 #include <ctype.h>
 #include <stdint.h>
 #include "argp.h"
-#include "../tpb-types.h"
-
-/**
- * @brief tpbench argument struct
- */
-typedef struct {
-    int mode; // [Optional] The flag for socre benchmarking.
-    uint64_t ntest; // [Mandatory] Number of tests per job.
-    uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
-    char kstr[1024], gstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
-    char timer[128];
-    int *klist; 
-    int nkern, ngrp;
-    int list_only_flag; // [Optinal] flags for list mode and consecutive run
-} __tp_args_t;
-
+#include "tpb-types.h"
 
 // argp option
 static struct argp_option options[] = {
@@ -69,8 +54,8 @@ static struct argp_option options[] = {
  * @brief parse cli arguments 
  * @param argc int, argc of main()
  * @param argv char**, argv of main()
- * @param tp_args __tp_args_t*，pointer to argument data struct
+ * @param tp_args tpb_args_t*，pointer to argument data struct
  * @param timer tpb_timer_t*，pointer to timer data struct
  * @return int 
  */
-int parse_args(int argc, char **argv, __tp_args_t *tp_args, tpb_timer_t *timer);
+int parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer);

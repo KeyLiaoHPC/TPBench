@@ -8,6 +8,21 @@
 #include <limits.h>
 #include <stdint.h>
 
+/**
+ * @brief tpbench argument struct
+ */
+typedef struct __tp_args {
+    int mode; // [Optional] The flag for socre benchmarking.
+    uint64_t ntest; // [Mandatory] Number of tests per job.
+    uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
+    char kstr[1024], gstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
+    char timer[128];
+    int *klist; 
+    int nkern, ngrp;
+    int list_only_flag; // [Optinal] flags for list mode and consecutive run
+} tpb_args_t;
+
+
 typedef struct tpb_res {
     char header[1024];
     char fname[1024];

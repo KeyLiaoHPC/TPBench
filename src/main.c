@@ -34,6 +34,7 @@
 #include <string.h>
 #include <limits.h>
 #include "tpb-types.h"
+#include "tpb-cli.h"
 #include "tpbench.h"
 
 #ifdef USE_MPI
@@ -42,7 +43,7 @@
 
 struct tpmpi_info_t tpmpi_info;
 
-int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, tpb_res_t *res);
+int init_res(char *prefix, char *posfix, char *host_dir, tpb_args_t *args, tpb_res_t *res);
 
 // =============================================================================
 // utilities
@@ -50,7 +51,7 @@ int init_res(char *prefix, char *posfix, char *host_dir, __tp_args_t *args, tpb_
 
 // init result data structure
 int
-init_res(char *prefix, char *posfix, char *hostname, __tp_args_t *args, tpb_res_t *res) {
+init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t *res) {
     int err;
     // print headers
     res->header[0] = '\0';
@@ -87,7 +88,7 @@ int
 main(int argc, char **argv) {
     // process info
     int err;
-    __tp_args_t tp_args;
+    tpb_args_t tp_args;
     tpb_timer_t timer;
     char filename[1024], mydir[PATH_MAX], full_path[PATH_MAX], hostname[128]; 
     tpb_res_t time_arr, kib;

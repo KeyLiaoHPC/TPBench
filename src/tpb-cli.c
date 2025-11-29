@@ -21,15 +21,16 @@
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-22
  */
-
-#define _GNU_SOURCE
-
 #include <stdlib.h>
 #include <limits.h>
-#include "cli_parser.h"
+#include "tpb-cli.h"
 #include "tpb-impl.h"
 #include "tpb_core.h"
 #include "tpb-types.h"
+
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 
 /**
  * @brief 
@@ -53,14 +54,14 @@ int check_count(int *n, char *strarg);
  * @param tp_args 
  * @return int 
  */
-int parse_klist(__tp_args_t *tp_args);
+int parse_klist(tpb_args_t *tp_args);
 
 /**
  * @brief 
  * @param tp_args 
  * @return int 
  */
-int init_list(__tp_args_t *tp_args);
+int init_list(tpb_args_t *tp_args);
 
 
 
@@ -105,7 +106,7 @@ check_count(int *n, char *strarg) {
 }
 
 int
-parse_klist(__tp_args_t *tp_args) {
+parse_klist(tpb_args_t *tp_args) {
     int cmplen, matched;
     char *ch, *che;
 
@@ -144,7 +145,7 @@ parse_klist(__tp_args_t *tp_args) {
 
 // extract tpbench arguments from string
 int
-init_list(__tp_args_t *tp_args) {
+init_list(tpb_args_t *tp_args) {
     int err;
     // If mode is set, use mode-specific kernel and/or group list.
     // Otherwise, read kernel and group list from command line.
@@ -187,7 +188,7 @@ init_list(__tp_args_t *tp_args) {
 
 static error_t
 parse_opt(int key, char *arg, struct argp_state *state) {
-    __tp_args_t *args = state->input;
+    tpb_args_t *args = state->input;
 
     sprintf(args->timer, "%s", "clock_gettime");
     switch(key) {
@@ -259,7 +260,7 @@ static char args_doc[] = "";
 
 // entry of parser.
 int
-parse_args(int argc, char **argv, __tp_args_t *tp_args, tpb_timer_t *timer) {
+parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer) {
     int err = 0;
     struct argp argp = {options, parse_opt, args_doc, doc};
 
