@@ -15,54 +15,48 @@
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
- * @file tpmpi.h
+ * @file tpb-core.h
  * @version 0.3
- * @brief Header for tpbench data processor 
+ * @brief Header for tpb-core library 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2024-01-29
+ * @date 2024-01-22
  */
 
-// ====
-#ifdef USE_MPI
+#define _GNU_SOURCE
 
-#include <mpi.h>
+#include "../tpb-impl.h"
+#include "tpkernels.h"
+#include "tptimer.h"
 
-#endif // #ifdef USE_MPI
-
-#include <stdint.h>
-
-// ====
-#ifndef __PROC_VAR_H
-
-#define __PROC_VAR_H
-
-struct tpmpi_info_t {
-    // # of process, proc id, process core, thread core.
-    // TODO: malicious naming space for parent process and spawned thread
-    int32_t nrank, myrank, pcpu, tcpu;
-    // thread info
-    int32_t nthread, mythread;
-};
-
-extern struct tpmpi_info_t tpmpi_info;
-
-#endif //#ifndef __PROC_VAR_H
-
-// ====
-int tpmpi_init();
-
-void tpmpi_barrier();
-
-void tpmpi_dbarrier();
-
-void tpmpi_exit();
-
-/***
- * Log every step's performance data into a csv file
- * Processes will log its own performance data into a row in rank order
- * @param path: the path of the csv file
- * @param data: the time data of each step
- * @param ncol: the number of columns
- * @param header: the header of the csv file
+/**
+ * Basic information of tpbench benchmarking sets, init by tpb_init().
  */
-int tpmpi_writecsv(char *path, uint64_t *data, int ncol, char *header);
+// # of kernels, kernel routines, groups and group routines
+extern int nkern, nkrout, ngrp, ngrout;
+// granularity and tick of timer.
+// uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
+
+
+/**
+ * @brief 
+ * @return int 
+ */
+int tpb_init();
+
+/**
+ * @brief 
+ * @param id 
+ * @param ntest 
+ * @param time_arr 
+ * @param nkib 
+ * @return int 
+ */
+int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib);
+
+/**
+ * @brief get error message according to error code
+ * @param err  error code
+ * @param buf  error message buffer, 31 characters.
+ * @return char* reutrn buf.
+ */
+char *tpb_geterr(const int err, char *buf);

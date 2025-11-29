@@ -35,7 +35,7 @@
 #include <limits.h>
 #include "tpb-types.h"
 #include "tpb-cli.h"
-#include "tpb_core.h"
+#include "tpb-core.h"
 #include "tpb-io.h"
 #include "tpmpi.h"
 

@@ -25,7 +25,7 @@
 #include <limits.h>
 #include "tpb-cli.h"
 #include "tpb-impl.h"
-#include "tpb_core.h"
+#include "tpb-core.h"
 #include "tpb-types.h"
 
 #ifndef _GNU_SOURCE
