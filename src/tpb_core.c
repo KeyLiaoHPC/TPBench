@@ -28,7 +28,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include "tpb_core.h"
-#include "tpio.h"
+#include "tpb-io.h"
 #include "tpb-types.h"
 
 

@@ -30,7 +30,7 @@
 #include "../tpb-impl.h"
 #include "tptimer.h"
 #include "tpdata.h"
-#include "tpio.h"
+#include "tpb-io.h"
 #include "tpmpi.h"
 
 

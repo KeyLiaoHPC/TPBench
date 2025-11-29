@@ -28,7 +28,7 @@
 #include "tptimer.h"
 #include "tpdata.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 // kernel data
 static volatile double **in, **out;

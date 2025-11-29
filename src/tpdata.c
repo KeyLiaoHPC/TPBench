@@ -23,7 +23,7 @@
  */
 #include <stdlib.h>
 #include "tpdata.h"
-#include "tpio.h"
+#include "tpb-io.h"
 #include "stdio.h"
 
 

@@ -28,7 +28,7 @@
 #include "tptimer.h"
 #include "tpdata.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 // cg_calc_w data
 static volatile double **w;
