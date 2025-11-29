@@ -35,7 +35,9 @@
 #include <limits.h>
 #include "tpb-types.h"
 #include "tpb-cli.h"
-#include "tpbench.h"
+#include "tpb_core.h"
+#include "tpb-io.h"
+#include "tpmpi.h"
 
 #ifdef USE_MPI
 #include "mpi.h"
