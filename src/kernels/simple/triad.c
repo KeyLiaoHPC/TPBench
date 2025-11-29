@@ -29,10 +29,10 @@
 #include <stdlib.h>
 #include <time.h>
 #include "tptimer.h"
-#include "tpdata.h"
 #include "tpmpi.h"
 #include "../../tpb-types.h"
 #include "../../tpb-impl.h"
+#include "../../tpb-stat.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"

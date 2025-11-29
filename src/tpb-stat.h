@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
- * @file tpdata.h
+ * @file tpb-stat.h
  * @version 0.3
  * @brief Header for tpbench data processor 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)

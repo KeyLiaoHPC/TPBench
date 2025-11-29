@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include "tpb-io.h"
-#include "tpdata.h"
+#include "tpb-stat.h"
 #include "tpb-core.h"
 
 int

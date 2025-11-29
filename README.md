@@ -69,7 +69,7 @@ For Armv8 architecture, TPBench provide a simple PMU kernel module to let you ac
 
 ### 2.3 - Data and timer
 All tests include cycle-level timer and nanosecond-level timer. For now, every test include a 1-second warmup. 
-After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpdata.h.
+After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpb-stat.h.
 If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
 The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
 

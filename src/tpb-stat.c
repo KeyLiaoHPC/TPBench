@@ -15,14 +15,14 @@
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
- * @file tpdata.c
+ * @file tpb-stat.c
  * @version 0.3
  * @brief factory of benchmarking data
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-27
  */
 #include <stdlib.h>
-#include "tpdata.h"
+#include "tpb-stat.h"
 #include "tpb-io.h"
 #include "stdio.h"
 
