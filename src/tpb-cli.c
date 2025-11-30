@@ -24,46 +24,9 @@
 #include <stdlib.h>
 #include <limits.h>
 #include "tpb-cli.h"
+#include "timers/timers.h"
 #include "tpb-impl.h"
 #include "tpb-core.h"
-#include "tpb-types.h"
-
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#endif
-
-/**
- * @brief 
- * @param key 
- * @param arg 
- * @param timer 
- * @param state 
- * @return error_t 
- */
-static error_t parse_opt(int key, char *arg, struct argp_state *state);
-
-/**
- * @brief check syntax of aruments while counting segments.
- * @param strarg 
- * @return int 
- */
-int check_count(int *n, char *strarg);
-
-/**
- * @brief 
- * @param tp_args 
- * @return int 
- */
-int parse_klist(tpb_args_t *tp_args);
-
-/**
- * @brief 
- * @param tp_args 
- * @return int 
- */
-int init_list(tpb_args_t *tp_args);
-
-
 
 int
 check_count(int *n, char *strarg) {
@@ -288,11 +251,12 @@ parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer) {
         timer->init = init_timer_clock_gettime;
         timer->tick = tick_clock_gettime;
         timer->tock = tock_clock_gettime;
-        timer->get_stamp = get_stamp_clock_gettime;
+        timer->get_stamp = get_time_clock_gettime;
     } else if(strcmp(tp_args->timer, "tsc_asym") == 0) {
         timer->init = init_timer_tsc_asym;
         timer->tick = tick_tsc_asym;
         timer->tock = tock_tsc_asym;
+        timer->get_stamp = get_time_tsc_asym;
     }
 
     // list only

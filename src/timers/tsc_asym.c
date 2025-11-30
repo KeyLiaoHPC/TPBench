@@ -6,17 +6,17 @@
 #define _XOPEN_SOURCE 700
 #define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
-#include "timers.h"
+
+static int64_t ts0;
 
 int
 init_timer_tsc_asym(void)
 {
-    // No initialization needed for clock_gettime
     return 0;
 }
 
-int64_t
-tick_tsc_asym(void)
+int
+tick_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
 
@@ -27,14 +27,18 @@ tick_tsc_asym(void)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    return (int64_t)ch * 1000000000LL + (int64_t)cl;
+    ts0 = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl);
+    if (ts) *ts = ts0;
+
+    return 0;
 }
 
-int64_t 
-tock_tsc_asym(void)
+int
+tock_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
 
+    *ts = 0;
     __asm__ volatile (  "RDTSCP" "\n\t"
                         "mov %%edx, %0" "\n\t"
                         "mov %%eax, %1" "\n\t"
@@ -42,11 +46,13 @@ tock_tsc_asym(void)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    return (int64_t)ch * 1000000000LL + (int64_t)cl;
+    *ts = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl) - ts0;
+
+    return 0;
 }
 
-int64_t
-get_stamp_tsc_asym(void)
+void
+get_time_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
 
@@ -58,6 +64,5 @@ get_stamp_tsc_asym(void)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    return (int64_t)ch * 1000000000LL + (int64_t)cl;
-
+    *ts = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl);
 }

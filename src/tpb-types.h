@@ -35,9 +35,9 @@ typedef struct tpb_res {
 
 typedef struct tpb_timer {
     int (*init)(void);
-    int64_t (*tick)(void);
-    int64_t (*tock)(void);
-    int64_t (*get_stamp)(void);
+    int (*tick)(int64_t *ts);
+    int (*tock)(int64_t *ts);
+    void (*get_stamp)(int64_t *ts);
 } tpb_timer_t; 
 
 #endif

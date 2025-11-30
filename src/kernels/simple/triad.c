@@ -24,6 +24,7 @@
  * =================================================================================
  */
 
+#include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -127,7 +128,7 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {
     // kernel start
     for(int i = 0; i < ntest; i ++){
         tpmpi_dbarrier();
-        int64_t t0 = timer->tick();
+        timer->tick(NULL);
 #ifdef KP_SVE
         #pragma omp parallel for shared(a, b, c, s, nsize)
         for (int j = 0; j < nsize; j += vec_len) {
@@ -163,7 +164,7 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {
         }
 #endif
         #pragma omp barrier
-        time_arr[i] = timer->tock() - t0;
+        timer->tock(time_arr+i);
     }
     // kernel end
 

@@ -1,27 +1,7 @@
 /**
- * =================================================================================
- * TPBench - A throughputs benchmarking tool for high-performance computing
- * 
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- *  terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * =================================================================================
  * @file cli_parser.h
- * @version 0.3
- * @brief Header for tpbench command line parser 
- * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2024-01-22
+ * @brief Header for tpbench command line parser.
  */
-
 #define _GNU_SOURCE
 
 #include <string.h>
@@ -59,3 +39,34 @@ static struct argp_option options[] = {
  * @return int 
  */
 int parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer);
+
+/**
+ * @brief 
+ * @param key 
+ * @param arg 
+ * @param timer 
+ * @param state 
+ * @return error_t 
+ */
+ static error_t parse_opt(int key, char *arg, struct argp_state *state);
+
+ /**
+  * @brief check syntax of aruments while counting segments.
+  * @param strarg 
+  * @return int 
+  */
+ int check_count(int *n, char *strarg);
+ 
+ /**
+  * @brief 
+  * @param tp_args 
+  * @return int 
+  */
+ int parse_klist(tpb_args_t *tp_args);
+ 
+ /**
+  * @brief 
+  * @param tp_args 
+  * @return int 
+  */
+ int init_list(tpb_args_t *tp_args);

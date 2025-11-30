@@ -13,15 +13,15 @@
  };
  
  int init_timer_clock_gettime(void);
- int64_t tick_clock_gettime(void);
- int64_t tock_clock_gettime(void);
- int64_t get_stamp_clock_gettime(void);
+ int tick_clock_gettime(int64_t *ts);
+ int tock_clock_gettime(int64_t *ts);
+ void get_time_clock_gettime(int64_t *ts);
  
  #ifdef __x86_64__
  int init_timer_tsc_asym(void);
- int64_t tick_tsc_asym(void);
- int64_t tock_tsc_asym(void);
- int64_t get_stamp_tsc_asym(void);
+ int tick_tsc_asym(int64_t *ts);
+ int tock_tsc_asym(int64_t *ts);
+ void get_time_tsc_asym(int64_t *ts);
  #endif 
  
  #endif
