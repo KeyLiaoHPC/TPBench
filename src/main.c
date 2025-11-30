@@ -28,6 +28,7 @@
 #define VER "0.71"
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <sched.h>
@@ -115,7 +116,7 @@ main(int argc, char **argv) {
     }
     
     // tpprintf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
-    err = parse_args(argc, argv, &tp_args, &timer);
+    err = tpb_parse_args(argc, argv, &tp_args, &timer);
     if(err) {
         err = tpprintf(err, 1, 1, "In arg parsing.", err);
         __error_exit(err);
