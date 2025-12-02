@@ -9,6 +9,38 @@
 #include <stdint.h>
 
 /**
+ * @brief Error codes for tpbench. Error has three levels:[NOTE], [WARNING], [FAIL].
+ */
+enum _tpb_errno {
+    TPBE_SUCCESS = 0,
+    TPBE_WARNING,
+    VERIFY_FAIL,
+    OVER_OPTMIZE,
+    DEFAULT_DIR,
+    CORE_NOT_BIND,
+    TPBE_FAIL,
+    TPBE_EXIT_ON_HELP,
+    GRP_ARG_ERROR,
+    KERN_ARG_ERROR,
+    KERN_NE,
+    GRP_NE,
+    TPBE_CLI_SYNTAX_FAIL,
+    FILE_OPEN_FAIL,
+    MALLOC_FAIL,
+    ARGS_MISS,
+    MKDIR_ERROR,
+    RES_INIT_FAIL,
+    TPBE_MPI_INIT_FAIL,
+};
+
+typedef enum _tpb_errno tpb_errno_t;
+typedef struct _tpb_error {
+    tpb_errno_t err_code;
+    int err_type;
+    char err_msg[256];
+} tpb_error_type;
+
+/**
  * @brief tpbench argument struct
  */
 typedef struct tpb_args {

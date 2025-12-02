@@ -23,12 +23,14 @@
  */
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <limits.h>
 #include "tpb-cli.h"
 #include "timers/timers.h"
 #include "tpb-impl.h"
 #include "tpb-core.h"
+#include "tpb-io.h"
 
 int
 tpb_check_count(int *n, char *strarg)
@@ -47,14 +49,14 @@ tpb_check_count(int *n, char *strarg)
     *n = 1;
     ch = strarg;
     if(!isalnum(*ch)) {
-        return SYNTAX_ERROR;
+        return TPBE_CLI_SYNTAX_FAIL;
     }
     while(*ch != '\0') {
         if(!isalnum(*ch) && *ch != ',' && *ch != '_') {
-            return SYNTAX_ERROR;
+            return TPBE_CLI_SYNTAX_FAIL;
         }
         if(*ch == ',' && *(ch+1) == ',') {
-            return SYNTAX_ERROR;
+            return TPBE_CLI_SYNTAX_FAIL;
         }
         if(*ch == ',') {
             (*n) += 1;
@@ -148,7 +150,7 @@ tpb_set_mode(tpb_args_t *args, const char *arg)
     } else if(strcmp(arg, "BenchIO") == 0) {
         args->mode = 5;
     } else {
-        return SYNTAX_ERROR;
+        return TPBE_CLI_SYNTAX_FAIL;
     }
     return 0;
 }
@@ -161,7 +163,7 @@ tpb_set_timer(tpb_args_t *args, const char *arg)
     } else if(strcmp(arg, "tsc_asym") == 0) {
         sprintf(args->timer, "tsc_asym");
     } else {
-        return SYNTAX_ERROR;
+        return TPBE_CLI_SYNTAX_FAIL;
     }
     return 0;
 }
@@ -182,25 +184,6 @@ tpb_set_timer_funcs(tpb_timer_t *timer, const char *timer_name)
     }
 }
 
-void
-tpb_print_help(const char *progname)
-{
-    printf("\n");
-    printf("Usage: %s [OPTIONS]\n", progname);
-    printf("\n");
-    printf("Options:\n");
-    printf("  -n, --ntest <# of test>        Overall number of tests.\n");
-    printf("  -s, --nkib <kib_size>           Memory usage for a single test array, in KiB.\n");
-    printf("  -k, --kernel <kernel_list>      Kernel list. (e.g. -k d_init,d_sum)\n");
-    printf("  -L, --list                     List all group and kernels then exit.\n");
-    printf("  -d, --data_dir <PATH>           Optional. Data directory.\n");
-    printf("  -m, --mode <MODE>               Run mode: Supported modes: Manual (Default), BenchScore,\n");
-    printf("                                  BenchCompute, BenchMemory, BenchNetwork, BenchIO.\n");
-    printf("  -t, --timer <timer_name>        Timer name: Supported timers: clock_gettime (default), tsc_asym.\n");
-    printf("  -h, --help                      Print this help message and exit.\n");
-    printf("\n");
-}
-
 int
 tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
 {
@@ -208,13 +191,25 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
     int err = 0;
 
     if(argc <= 1) {
-        return SYNTAX_ERROR;
-    }
+        // No args.
+        tpb_printf(0, 0, 0, "No arguments provided, exit after printing help message.");
+        tpb_print_help_total();
+        return TPBE_EXIT_ON_HELP;
+    } else {
+        // Parse args.
+        if (strcmp(argv[1], "help") || 
+        strcmp(argv[1], "--help") == 0 ||
+        strcmp(argv[1], "-h") == 0) {
+            tpb_print_help_total();
+            return TPBE_EXIT_ON_HELP;
 
-    for(int i = 1; i < argc; i++) {
-        if(strcmp(argv[i], "--help") == 0) {
-            tpb_print_help(argv[0]);
-            exit(0);
+        } else if (strcmp(argv[1], "run") == 0 ) {
+            // Parse run args.
+
+        } else {
+            tpb_printf(0, 0, 0, "Unsupported action: %s", argv[1]);
+            tpb_print_help_total();
+            return TPBE_CLI_SYNTAX_FAIL;
         }
     }
 
@@ -237,7 +232,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
             break;
         case 'k':
             if(strlen(optarg) > 1023) {
-                return SYNTAX_ERROR;
+                return TPBE_CLI_SYNTAX_FAIL;
             }
             sprintf(tp_args->kstr, "%s", optarg);
             break;
@@ -246,7 +241,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
             break;
         case 'd':
             if(strlen(optarg) > 1023) {
-                return SYNTAX_ERROR;
+                return TPBE_CLI_SYNTAX_FAIL;
             }
             sprintf(tp_args->data_dir, "%s", optarg);
             break;
@@ -262,19 +257,13 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
                 return err;
             }
             break;
-        case 'h':
-            tpb_print_help(argv[0]);
-            exit(0);
-        case '?':
-            tpb_print_help(argv[0]);
-            return SYNTAX_ERROR;
         default:
-            return SYNTAX_ERROR;
+            return TPBE_CLI_SYNTAX_FAIL;
         }
     }
 
     if(optind < argc) {
-        return SYNTAX_ERROR;
+        return TPBE_CLI_SYNTAX_FAIL;
     }
 
     tpb_set_timer_funcs(timer, tp_args->timer);

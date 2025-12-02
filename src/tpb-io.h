@@ -30,9 +30,13 @@ int tpb_mkdir(char *dirpath);
 * @param tag   Set to 0 to ignore error tag.
 * @param msg   char *msg, same syntax as printf.
 * @param ...   varlist, same syntax as printf.
-* @return int  return 0 if error is NOTE or WARN, 1 if critical error.
 */
-int tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...);
+void tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...);
+
+/**
+* @brief Print overall help message.
+*/
+void tpb_print_help_total(void);
 
 /**
 * @brief write 2d data with header into a csv file.
@@ -63,4 +67,4 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
  * @param skip_comp: whether to skip the computation
  * @return void
  */
-void log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);
+int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);

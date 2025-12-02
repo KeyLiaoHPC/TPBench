@@ -108,10 +108,9 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 }
 
 // tpbench printf wrapper. 
-int
+void
 tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
-    
-    int err_op = 0;
+    int err_type = 0;
     time_t t = time(0);
     struct tm* lt = localtime(&t);
     char tag[5], err_msg[32];
@@ -119,68 +118,47 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     // print splitter directly.
     if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
         // only allow rank 0 to print
-        if(tpmpi_info.myrank) {
-            return err_op;
-        }
-        printf("\n%s", fmt);
-        return err_op;
+        if(tpmpi_info.myrank == 0) printf("\n%s", fmt);
     }
-    
-    if(err == 0) {
-        // no error
-        err_op = 0;
-        if(tpmpi_info.myrank) {
-            return err_op;
-        }
+    err_type = tpb_get_err_exit_flag(err);
+    if(err_type == 0) {
         sprintf(tag, "NOTE");
-    }
-    else if(err > 100) {
-        // warning
-        err_op = 0;
-        if(tpmpi_info.myrank) {
-            return err_op;
-        }
+    } else if(err_type == 1) {
         sprintf(tag, "WARN");
-    } 
-    else {
-        // error
-        err_op = 1;
-        if(tpmpi_info.myrank) {
-            return err_op;
-        }
+    } else if(err_type == 2) {
         sprintf(tag, "FAIL");
+    } else {
+        sprintf(tag, "UNKN");
     }
-    if(ts_flag) {
-        printf("\n%04d-%02d-%02d %02d:%02d:%02d ", 
-               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
-               lt->tm_hour, lt->tm_min, lt->tm_sec);
-    }
-    if(tag_flag) {
-        if(ts_flag) {
-            printf("[%s] ", tag); 
-        }
-        else {
-            printf("\n[%s] ", tag);
-        }
-        
-    }
+    printf("\n%04d-%02d-%02d %02d:%02d:%02d [%s] ", 
+            lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
+            lt->tm_hour, lt->tm_min, lt->tm_sec, tag);
 
     // transport va_arg list to vprintf
     va_list args;
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
+}
 
-    // on error exit, print error message.
-    if(err != 0 &&  err < 100) {
-        printf("\n%04d-%02d-%02d %02d:%02d:%02d [EXIT] ", 
-               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
-               lt->tm_hour, lt->tm_min, lt->tm_sec);
-        printf("TPBench exit with error %s.\n" DHLINE, tpb_geterr(err, err_msg));
-    }
-    fflush(stdout);
-
-    return err_op;
+void
+tpb_print_help_total(void)
+{
+    printf("\n");
+    printf("Usage: tpbench <action> <options>\n");
+    printf("Action and available options: \n");
+    printf("    run:  Run one or more benchmark kernels.\n");
+    printf("        -n, --ntest <# of test>        Overall number of tests.\n");
+    printf("        -s, --nkib <kib_size>           Memory usage for a single test array, in KiB.\n");
+    printf("        -k, --kernel <kernel_list>      Kernel list. (e.g. -k d_init,d_sum)\n");
+    printf("        -L, --list                     List all group and kernels then exit.\n");
+    printf("        -d, --data_dir <PATH>           Optional. Data directory.\n");
+    printf("        -m, --mode <MODE>               Run mode: Supported modes: Manual (Default), BenchScore,\n");
+    printf("                                  BenchCompute, BenchMemory, BenchNetwork, BenchIO.\n");
+    printf("        -t, --timer <timer_name>        Timer name: Supported timers: clock_gettime (default), tsc_asym.\n");
+    printf("        -h, --help                      Print this help message and exit.\n");
+    printf("    help: Print this help message and exit.\n");
+    printf("\n");
 }
 
 void
@@ -194,59 +172,6 @@ tpb_list(){
                    kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
     }
     tpb_printf(0, 0, 0, DHLINE);
-}
-
-char *tpb_geterr(const int err, char *buf) {
-    switch (err) {
-        case 0:
-            sprintf(buf, "NO_ERROR");
-            break;
-        case GRP_ARG_ERROR:
-            sprintf(buf, "GRP_ARG_ERROR");
-            break;
-        case KERN_ARG_ERROR:
-            sprintf(buf, "KERN_ARG_ERROR");
-            break;
-        case KERN_NE:
-            sprintf(buf, "KERN_NE");
-            break;
-        case GRP_NE:
-            sprintf(buf, "GRP_NE");
-            break;
-        case SYNTAX_ERROR:
-            sprintf(buf, "SYNTAX_ERROR");
-            break;
-        case FILE_OPEN_FAIL:
-            sprintf(buf, "FILE_OPEN_FAIL");
-            break;
-        case MALLOC_FAIL:
-            sprintf(buf, "MALLOC_FAIL");
-            break;
-        case ARGS_MISS:
-            sprintf(buf, "ARGS_MISS");
-            break;
-        case MKDIR_ERROR:
-            sprintf(buf, "MKDIR_ERROR");
-            break;
-        case RES_INIT_FAIL:
-            sprintf(buf, "RES_INIT_FAIL");
-            break;
-        case MPI_INIT_FAIL:
-            sprintf(buf, "MPI_INIT_FAIL");
-            break;
-        case VERIFY_FAIL:
-            sprintf(buf, "VERIFY_FAIL");
-            break;
-        case OVER_OPTMIZE:
-            sprintf(buf, "OVER_OPTIMIZE");
-            break;
-        case DEFAULT_DIR:
-            sprintf(buf, "DEFAULT_DIR");
-            break;
-        default:
-            break;
-    }
-    return buf;
 }
 
 static void transpose(uint64_t *out, uint64_t **in, int m, int n) {
@@ -324,7 +249,7 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
  * @param skip_comp: whether to skip the computation
  * @return void
  */
-void log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm) {
+int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm) {
     int err = 0;
     const int BUFLEN = (ntest + 1) * 20;
     char *headers = malloc(BUFLEN);
@@ -373,16 +298,18 @@ void log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, i
 
     if (skip_comp == 0){
         err = tpmpi_writecsv(filepath[0], nst, ntest, headers);
-        __error_fun(err, "Writing ns csv failed.");
+        if (err) return err;
         err = tpmpi_writecsv(filepath[2], cyt, ntest, headers);
-        __error_fun(err, "Writing ns csv failed.");
+        if (err) return err;
     }
     if (skip_comm == 0) {
-        tpmpi_writecsv(filepath[1], &nst[ntest], ntest, headers);
-        __error_fun(err, "Writing ns csv failed.");
+        err = tpmpi_writecsv(filepath[1], &nst[ntest], ntest, headers);
+        if (err) return err;
     }
     
     free(nst);
     free(cyt);
     free(headers);
+
+    return 0;
 }

@@ -49,4 +49,11 @@ int tpb_init_list(tpb_args_t *tp_args);
  */
 void tpb_print_help(const char *progname);
 
+/**
+ * @brief Print help document and exit.
+ * @param argc Argument count from main()
+ * @param argv Argument vector from main()
+ */
+void tpb_print_help_callback_overall(void);
+
 #endif

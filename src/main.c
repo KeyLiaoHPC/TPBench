@@ -34,30 +34,23 @@ int init_res(char *prefix, char *posfix, char *host_dir, tpb_args_t *args, tpb_r
 // init result data structure
 int
 init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t *res) {
-    int err;
-    // print headers
     res->header[0] = '\0';
 
     if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
         for(int i = 0; i < args->nkern - 1; i ++){
-            err = sprintf(res->header, "%s,", strcat(res->header, kern_info[args->klist[i]].rname));
-            __error_lt(err, 0, RES_INIT_FAIL);
+            sprintf(res->header, "%s,", strcat(res->header, kern_info[args->klist[i]].rname));
         }
         int i = args->nkern - 1;
-        err = sprintf(res->header, "%s", strcat(res->header, kern_info[args->klist[i]].rname));
-        __error_lt(err, 0, RES_INIT_FAIL);
+        sprintf(res->header, "%s", strcat(res->header, kern_info[args->klist[i]].rname));
     }
     // print fname
-    err = sprintf(res->fname, "%s-r%d_c%d-%s.csv", 
+    sprintf(res->fname, "%s-r%d_c%d-%s.csv", 
                   prefix, tpmpi_info.myrank, tpmpi_info.pcpu, posfix);
-    __error_lt(err, 0, RES_INIT_FAIL);
     // print fdir
-    err = sprintf(res->fdir, "%s/%s", args->data_dir, hostname);
-    __error_lt(err, 0, RES_INIT_FAIL);
+    sprintf(res->fdir, "%s/%s", args->data_dir, hostname);
     // print fpath
-    err = sprintf(res->fpath, "%s/%s", res->fdir, res->fname);
-    __error_lt(err, 0, RES_INIT_FAIL);
+    sprintf(res->fpath, "%s/%s", res->fdir, res->fname);
     
     return 0;
 }
@@ -76,7 +69,8 @@ main(int argc, char **argv) {
     tpb_res_t time_arr, kib;
 
     // Init process info
-    tpmpi_init();
+    err = tpmpi_init();
+    __tpbm_exit_on_error(err, "At main.c: tpmpi_init");
     tpb_printf(0, 0, 0, DHLINE);
 #ifdef USE_MPI
     tpb_printf(0, 0, 0, "TPBench-MPI v" VER "\n");
@@ -86,17 +80,11 @@ main(int argc, char **argv) {
     // init kernel, init tpbench arguments
     tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
     err = tpb_init();
-    if(err) {
-        err = tpb_printf(err, 1, 1, "");
-        if(err) exit(1);
-    }
+    __tpbm_exit_on_error(err, "At main.c: tpb_init");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tp_args, &timer);
-    if(err) {
-        err = tpb_printf(err, 1, 1, "In arg parsing.", err);
-        __error_exit(err);
-    }
+    __tpbm_exit_on_error(err, "At main.c: tpb_parse_args");
 
     // List only.
     if(tp_args.list_only_flag){
@@ -120,14 +108,14 @@ main(int argc, char **argv) {
     gethostname(hostname, 128);
     sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
     err = tpb_mkdir(mydir);
-    __error_fun(err, "Cannot create data directory.");
+    __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
     tpb_printf(err, 1, 1, "Host dir %s", mydir);
 
     // kernel benchmark
     if(tp_args.nkern) {
         // Struct initialization
         err = init_res("kernels", "ns", hostname, &tp_args, &time_arr);
-        __error_fun(err, "Kernel data space init failed.");
+        __tpbm_exit_on_error(err, "At main.c: init_res");
 
         // allocate space for data
         time_arr.data = (int64_t **)malloc(tp_args.nkern * sizeof(int64_t *));
@@ -143,13 +131,13 @@ main(int argc, char **argv) {
                                  tp_args.ntest, 
                                  time_arr.data[i],
                                  tp_args.nkib);
-            __error_fun(err, "Benchmark failed.");
+            __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
             tpb_printf(err, 1, 1, "Finished.");
         }
 
         // Write raw data to csv files.
         err = tpb_writecsv(time_arr.fpath, time_arr.data, tp_args.ntest, tp_args.nkern, time_arr.header);
-        __error_fun(err, "Writing ns csv failed.");
+        __tpbm_exit_on_error(err, "At main.c: tpb_writecsv");
         // Clean up
         for(int i = 0; i < tp_args.nkern; i ++) {
             free(time_arr.data[i]);

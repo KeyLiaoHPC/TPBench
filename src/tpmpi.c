@@ -35,15 +35,15 @@ int
 tpmpi_init() {
     int err;
     // init mpi rank info
-    #ifdef USE_MPI
-        err = MPI_Init(NULL, NULL);
-        __error_ne(err, NO_ERROR, MPI_INIT_FAIL);
-        MPI_Comm_size(MPI_COMM_WORLD, &tpmpi_info.nrank);
-        MPI_Comm_rank(MPI_COMM_WORLD, &tpmpi_info.myrank);
-    #else
-        tpmpi_info.nrank = 1;
-        tpmpi_info.myrank = 0;
-    #endif //#ifdef USE_MPI
+#ifdef USE_MPI
+    err = MPI_Init(NULL, NULL);
+    if (err != MPI_SUCCESS) return TPBE_MPI_INIT_FAIL;
+    MPI_Comm_size(MPI_COMM_WORLD, &tpmpi_info.nrank);
+    MPI_Comm_rank(MPI_COMM_WORLD, &tpmpi_info.myrank);
+#else
+    tpmpi_info.nrank = 1;
+    tpmpi_info.myrank = 0;
+#endif //#ifdef USE_MPI
     tpmpi_info.pcpu = sched_getcpu();
     tpmpi_info.tcpu;
 
