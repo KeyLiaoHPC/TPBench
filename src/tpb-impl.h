@@ -28,7 +28,7 @@
 #define __error_exit(evar) if((evar)) {exit(1);}
 
 #define __error_fun(err, msg)   if((err)) { \
-err = tpprintf(err, 1, 1, msg);   \
+err = tpb_printf(err, 1, 1, msg);   \
 __error_exit(err);                  \
 }
 // ERROR CODE

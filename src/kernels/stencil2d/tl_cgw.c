@@ -157,11 +157,11 @@ d_tl_cgw(int ntest, uint64_t *ns, uint64_t *cy, uint64_t nsize_uint64, ...) {
 
     init_kernel_data(nsize);
 
-    tpprintf(0, 0, 0, "ignore the \"# of Elements ...\" line.\n");
-    tpprintf(0, 0, 0, "grid size: (%d, %d)\n", height, nsize);
+    tpb_printf(0, 0, 0, "ignore the \"# of Elements ...\" line.\n");
+    tpb_printf(0, 0, 0, "grid size: (%d, %d)\n", height, nsize);
     if (block_x)
-        tpprintf(0, 0, 0, "block size x: %d\n", block_x);
-    tpprintf(0, 0, 0, "working set size: %.1f KB\n", 1.0 * ((double) height) * nsize * sizeof(double) * 5.0 / 1024);
+        tpb_printf(0, 0, 0, "block size x: %d\n", block_x);
+    tpb_printf(0, 0, 0, "working set size: %.1f KB\n", 1.0 * ((double) height) * nsize * sizeof(double) * 5.0 / 1024);
 
 
     // kernel warm

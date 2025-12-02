@@ -97,10 +97,10 @@ int
 dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
     __ovl_t res;
 
-    tpprintf(0, 0, 0, OVL_QUANT_HEADER);
+    tpb_printf(0, 0, 0, OVL_QUANT_HEADER);
     // MB/s
     calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
-    tpprintf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
+    tpb_printf(0, 0, 0, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
            res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
 
     return 0;

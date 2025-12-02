@@ -91,7 +91,7 @@ d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
             l = atoi(s);
         }
     }
-    tpprintf(0, 0, 0, "striad: stride=%d, l=%d\n", stride, l);
+    tpb_printf(0, 0, 0, "striad: stride=%d, l=%d\n", stride, l);
 
     jump = stride + l;
     nb = nsize / jump;

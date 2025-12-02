@@ -119,8 +119,8 @@ d_rtriad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     int repeat = MAX(1e8 / (nsize / 8), 1);
 
-    tpprintf(0, 0, 0, "Working set size: %dKB.\n", kib * 3);
-    tpprintf(0, 0, 0, "repeat times: %lu.\n", repeat);
+    tpb_printf(0, 0, 0, "Working set size: %dKB.\n", kib * 3);
+    tpb_printf(0, 0, 0, "repeat times: %lu.\n", repeat);
 
     // kernel warm
     struct timespec wts;

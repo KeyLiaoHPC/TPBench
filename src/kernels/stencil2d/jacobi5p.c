@@ -125,10 +125,10 @@ d_jacobi5p(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 
     init_kernel_data(nsize);
 
-    tpprintf(0, 0, 0, "(please ignore the above \"# of Elements ...\" line.)\n");
-    tpprintf(0, 0, 0, "grid size: (%d, %d)\n", height, nsize);
-    tpprintf(0, 0, 0, "block size in x dim: %d\n", block_size);
-    tpprintf(0, 0, 0, "working set size: %.1f KB\n", ((double) nsize) * height * sizeof(double) * 2.0 / 1024);
+    tpb_printf(0, 0, 0, "(please ignore the above \"# of Elements ...\" line.)\n");
+    tpb_printf(0, 0, 0, "grid size: (%d, %d)\n", height, nsize);
+    tpb_printf(0, 0, 0, "block size in x dim: %d\n", block_size);
+    tpb_printf(0, 0, 0, "working set size: %.1f KB\n", ((double) nsize) * height * sizeof(double) * 2.0 / 1024);
 
 
     // kernel warm

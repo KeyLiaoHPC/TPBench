@@ -109,7 +109,7 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 
 // tpbench printf wrapper. 
 int
-tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
+tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     
     int err_op = 0;
     time_t t = time(0);
@@ -185,15 +185,15 @@ tpprintf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
 
 void
 tpb_list(){
-    tpprintf(0, 1, 1, "Listing supported kernel and groups.\n");
-    tpprintf(0, 0, 0, HLINE);
-    tpprintf(0, 0, 0, "Kernel          Routine         NOTE\n");
-    tpprintf(0, 0, 0, HLINE);
+    tpb_printf(0, 1, 1, "Listing supported kernel and groups.\n");
+    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(0, 0, 0, "Kernel          Routine         NOTE\n");
+    tpb_printf(0, 0, 0, HLINE);
     for(int i = 0 ; i < nkrout; i ++) {
-        tpprintf(0, 0, 0, "%-12s    %-12s    %s\n", 
+        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n", 
                    kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
     }
-    tpprintf(0, 0, 0, DHLINE);
+    tpb_printf(0, 0, 0, DHLINE);
 }
 
 char *tpb_geterr(const int err, char *buf) {

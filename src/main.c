@@ -1,28 +1,7 @@
 /**
-  * =================================================================================
-  * TPBench - A high-precision throughputs benchmarking tool for HPC
-  * 
-  * Copyright (C) 2024 Key Liao (Liao Qiucheng)
-  * 
-  * This program is free software: you can redistribute it and/or modify it under the
-  *  terms of the GNU General Public License as published by the Free Software 
-  * Foundation, either version 3 of the License, or (at your option) any later 
-  * version.
-  * 
-  * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
-  * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
-  * PARTICULAR PURPOSE. See the GNU General Public License for more details.
-  * You should have received a copy of the GNU General Public License along with 
-  * this program. If not, see https://www.gnu.org/licenses/.
-  * =================================================================================
-  * 
   * @file main.c
-  * @version 0.71
   * @brief   main entry for tpbench
-  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
-  * @date 2024-01-22
   */
-
 
 #define _GNU_SOURCE
 #define VER "0.71"
@@ -96,29 +75,26 @@ main(int argc, char **argv) {
     char filename[1024], mydir[PATH_MAX], full_path[PATH_MAX], hostname[128]; 
     tpb_res_t time_arr, kib;
 
-// =============================================================================
-// Initialization
-// =============================================================================
     // Init process info
     tpmpi_init();
-    tpprintf(0, 0, 0, DHLINE);
+    tpb_printf(0, 0, 0, DHLINE);
 #ifdef USE_MPI
-    tpprintf(0, 0, 0, "TPBench-MPI v" VER "\n");
+    tpb_printf(0, 0, 0, "TPBench-MPI v" VER "\n");
 #else
-    tpprintf(0, 0, 0, "TPBench v" VER "\n");
+    tpb_printf(0, 0, 0, "TPBench v" VER "\n");
 #endif
     // init kernel, init tpbench arguments
-    tpprintf(0, 1, 1, "Initializing TPBench kernels.");
+    tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
     err = tpb_init();
     if(err) {
-        err = tpprintf(err, 1, 1, "");
+        err = tpb_printf(err, 1, 1, "");
         if(err) exit(1);
     }
     
-    // tpprintf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
+    // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tp_args, &timer);
     if(err) {
-        err = tpprintf(err, 1, 1, "In arg parsing.", err);
+        err = tpb_printf(err, 1, 1, "In arg parsing.", err);
         __error_exit(err);
     }
 
@@ -131,13 +107,13 @@ main(int argc, char **argv) {
 
     // print kernel list
     if(tp_args.nkern) {
-        tpprintf(0, 1, 1, "Kernel routine: ");
+        tpb_printf(0, 1, 1, "Kernel routine: ");
         for(int i = 0; i < tp_args.nkern; i ++) {
-            tpprintf(0, 0, 0, "%s, ", kern_info[tp_args.klist[i]].rname);
+            tpb_printf(0, 0, 0, "%s, ", kern_info[tp_args.klist[i]].rname);
         }
     }
     
-    tpprintf(0, 1, 1, "Each routine will be tested %d times.", tp_args.ntest);
+    tpb_printf(0, 1, 1, "Each routine will be tested %d times.", tp_args.ntest);
 
 
     // create host dir
@@ -145,7 +121,7 @@ main(int argc, char **argv) {
     sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
     err = tpb_mkdir(mydir);
     __error_fun(err, "Cannot create data directory.");
-    tpprintf(err, 1, 1, "Host dir %s", mydir);
+    tpb_printf(err, 1, 1, "Host dir %s", mydir);
 
     // kernel benchmark
     if(tp_args.nkern) {
@@ -161,14 +137,14 @@ main(int argc, char **argv) {
         
         // Run kernels.
         for(int i = 0; i < tp_args.nkern; i ++) {
-            tpprintf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tp_args.klist[i]].rname);
+            tpb_printf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tp_args.klist[i]].rname);
             err = tpb_run_kernel(tp_args.klist[i], 
                                  &timer,
                                  tp_args.ntest, 
                                  time_arr.data[i],
                                  tp_args.nkib);
             __error_fun(err, "Benchmark failed.");
-            tpprintf(err, 1, 1, "Finished.");
+            tpb_printf(err, 1, 1, "Finished.");
         }
 
         // Write raw data to csv files.
@@ -182,7 +158,7 @@ main(int argc, char **argv) {
     }
     
     // end of benchmark
-    tpprintf(0, 1, 1, "\nTPBench finished.\n" DHLINE);
+    tpb_printf(0, 1, 1, "\nTPBench finished.\n" DHLINE);
     tpmpi_exit();
 
     return 0;

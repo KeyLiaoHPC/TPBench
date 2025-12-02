@@ -42,10 +42,10 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
     volatile double *a, *b, *c;
     register double s = 0.42;
 
-    tpprintf(0, 0, 0, "Running STREAM Benchmark\n");
-    tpprintf(0, 0, 0, "Number of tests: %d\n", ntest);
-    tpprintf(0, 0, 0, "Estimated memory allocation: %llu Kib\n", nkib * 3);
-    tpprintf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
+    tpb_printf(0, 0, 0, "Running STREAM Benchmark\n");
+    tpb_printf(0, 0, 0, "Number of tests: %d\n", ntest);
+    tpb_printf(0, 0, 0, "Estimated memory allocation: %llu Kib\n", nkib * 3);
+    tpb_printf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
 
     narr = nkib * 1024 / sizeof(double);
     a = (double *)malloc(narr * sizeof(double));
@@ -143,7 +143,7 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         tpmpi_barrier();
     }
 
-    tpprintf(0, 0, 0, "STREAM Benchmark done, processing data.\n");
+    tpb_printf(0, 0, 0, "STREAM Benchmark done, processing data.\n");
 
 #ifdef USE_MPI
     uint64_t **all_ns, **all_cy;
@@ -163,19 +163,19 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
         MPI_Reduce(cy[i], all_cy[i], nepoch + 1, MPI_UINT64_T, MPI_MIN, 0, MPI_COMM_WORLD);
     }
     if(tpmpi_info.myrank == 0) {
-        tpprintf(0, 0, 0, "STREAM Overall performance\n");
+        tpb_printf(0, 0, 0, "STREAM Overall performance\n");
         dpipe_g0(all_ns, all_cy, 0, nskip, ntest, freq, tpmpi_info.nrank * 80, narr);
     
-        tpprintf(0, 0, 0, "STREAM-Copy performance\n");
+        tpb_printf(0, 0, 0, "STREAM-Copy performance\n");
         dpipe_g0(all_ns, all_cy, 1, nskip, ntest, freq, tpmpi_info.nrank * 16, narr);
     
-        tpprintf(0, 0, 0, "STREAM-Scale performance\n");
+        tpb_printf(0, 0, 0, "STREAM-Scale performance\n");
         dpipe_g0(all_ns, all_cy, 2, nskip, ntest, freq, tpmpi_info.nrank * 16, narr);
     
-        tpprintf(0, 0, 0, "STREAM-Add performance\n");
+        tpb_printf(0, 0, 0, "STREAM-Add performance\n");
         dpipe_g0(all_ns, all_cy, 3, nskip, ntest, freq, tpmpi_info.nrank * 24, narr);
     
-        tpprintf(0, 0, 0, "STREAM-Triad performance\n");
+        tpb_printf(0, 0, 0, "STREAM-Triad performance\n");
         dpipe_g0(all_ns, all_cy, 4, nskip, ntest, freq, tpmpi_info.nrank * 24, narr);
 
         for(int i = 0 ; i < ntest; i ++) {
@@ -192,19 +192,19 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
     if(ntest <= 10) {
         nskip = 0;
     }
-    tpprintf(0, 0, 0, "STREAM Overall performance\n");
+    tpb_printf(0, 0, 0, "STREAM Overall performance\n");
     dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
     
-    tpprintf(0, 0, 0, "STREAM-Copy performance\n");
+    tpb_printf(0, 0, 0, "STREAM-Copy performance\n");
     dpipe_g0(ns, cy, 1, nskip, ntest, freq, 16, narr);
     
-    tpprintf(0, 0, 0, "STREAM-Scale performance\n");
+    tpb_printf(0, 0, 0, "STREAM-Scale performance\n");
     dpipe_g0(ns, cy, 2, nskip, ntest, freq, 16, narr);
     
-    tpprintf(0, 0, 0, "STREAM-Add performance\n");
+    tpb_printf(0, 0, 0, "STREAM-Add performance\n");
     dpipe_g0(ns, cy, 3, nskip, ntest, freq, 24, narr);
     
-    tpprintf(0, 0, 0, "STREAM-Triad performance\n");
+    tpb_printf(0, 0, 0, "STREAM-Triad performance\n");
     dpipe_g0(ns, cy, 4, nskip, ntest, freq, 24, narr);
 #endif
 
