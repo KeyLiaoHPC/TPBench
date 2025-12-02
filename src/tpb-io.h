@@ -9,6 +9,41 @@
 #include "tpb-types.h"
 #include "tpmpi.h"
 
+#define TPBM_HELP_DOC_TOTAL \
+    "\n" \
+    "===========================================================================" \
+    "Usage: tpbench <action> <option>\n" \
+    "\n" \
+    "Actions: run, list, help\n" \
+    "Options and explanation for each action:\n" \
+    "---------------------------------------------------------------------------" \
+    "  run               Run one or more benchmark kernels.\n" \
+    "      -kargs <key>=<value>\n" \
+    "                    Default kernel run-time arguments.\n" \
+    "                    Use 'help kargs' for supported keys and values.\n" \
+    "      -memsize <kib_size>\n" \
+    "                    Memory usage for a single test array, in KiB.\n" \
+    "      -k <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
+    "                    Kernel list separated by comma. Each kernel can have\n" \
+    "                    multiple kargs separated by colon. (e.g.\n" \
+    "                    d_init:memsize=1024,triad:fp=fp64:memsize=1024)\n" \
+    "                    Use 'help <kernel>' for available options of a kernel.\n" \
+    "      -d, <PATH>\n  Data directory. Default: ./data\n" \
+    "      -t, --timer <timer_name>\n" \
+    "                    Timer name. Supported: clock_gettime (default),\n" \
+    "                    tsc_asym.\n" \
+    "      -h, --help    Print this help message and exit.\n" \
+    "---------------------------------------------------------------------------" \
+    "  benchmark         Run predefined benchmark suites.\n" \
+    "---------------------------------------------------------------------------" \
+    "  list              List kernels, parameters, implemented routines, etc.\n" \
+    "                    of an object then exit.\n" \
+    "---------------------------------------------------------------------------" \
+    "  help              Print help message for an object and exit.\n" \
+    "===========================================================================" \
+    "\n"
+
+
 /**
 * @brief 
 */

@@ -8,6 +8,7 @@
 #include <limits.h>
 #include <stdint.h>
 
+// === Errors ===
 /**
  * @brief Error codes for tpbench. Error has three levels:[NOTE], [WARNING], [FAIL].
  */
@@ -32,7 +33,6 @@ enum _tpb_errno {
     RES_INIT_FAIL,
     TPBE_MPI_INIT_FAIL,
 };
-
 typedef enum _tpb_errno tpb_errno_t;
 typedef struct _tpb_error {
     tpb_errno_t err_code;
@@ -40,19 +40,33 @@ typedef struct _tpb_error {
     char err_msg[256];
 } tpb_error_type;
 
+
 /**
- * @brief tpbench argument struct
+ * @brief tpbench run-time parameters
  */
 typedef struct tpb_args {
     int mode; // [Optional] The flag for socre benchmarking.
-    uint64_t ntest; // [Mandatory] Number of tests per job.
-    uint64_t nkib; // [Mandatory] Number of ngrps and nkerns
     char kstr[1024], data_dir[1024]; // [Mandatory] group and kernels name
     char timer[128];
     int *klist; 
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
 } tpb_args_t;
+
+/**
+ * @brief General run-time arguments for kernels
+ * @param ntest The number of repeat tests per kernel. This parameter will be used
+ *              to set the number of steps of the outmost loop by default.
+ * @param memsize The memory size of a kernel's working data set in KiB, including
+                  all of the intput, output and intermediate data. For a kernel with
+                  multiple arrays, the actual memory footprint will be rounded down
+                  to fit the nearest possible array settings. 
+                  1 KiB = 1024 Bytes = 8192 Bits.
+ */
+typedef struct tpb_kargs_common {
+    int ntest;
+    uint64_t memsize;
+} tpb_kargs_common_t;
 
 /**
  * @brief tpbench result data file struct

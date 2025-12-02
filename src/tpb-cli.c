@@ -214,8 +214,6 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
     }
 
     tp_args->mode = 0;
-    tp_args->ntest = 0;
-    tp_args->nkib = 0;
     tp_args->nkern = 0;
     tp_args->list_only_flag = 0;
     tp_args->klist = NULL;
@@ -224,12 +222,6 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
 
     while((opt = getopt(argc, argv, "n:s:k:Ld:m:t:h")) != -1) {
         switch(opt) {
-        case 'n':
-            tp_args->ntest = atoi(optarg);
-            break;
-        case 's':
-            tp_args->nkib = atoi(optarg);
-            break;
         case 'k':
             if(strlen(optarg) > 1023) {
                 return TPBE_CLI_SYNTAX_FAIL;
@@ -270,10 +262,6 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer)
 
     if(tp_args->list_only_flag) {
         return 0;
-    }
-
-    if(tp_args->ntest == 0 || tp_args->nkib == 0) {
-        return ARGS_MISS;
     }
 
     if(strlen(tp_args->data_dir) == 0) {

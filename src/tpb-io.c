@@ -144,21 +144,7 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
 void
 tpb_print_help_total(void)
 {
-    printf("\n");
-    printf("Usage: tpbench <action> <options>\n");
-    printf("Action and available options: \n");
-    printf("    run:  Run one or more benchmark kernels.\n");
-    printf("        -n, --ntest <# of test>        Overall number of tests.\n");
-    printf("        -s, --nkib <kib_size>           Memory usage for a single test array, in KiB.\n");
-    printf("        -k, --kernel <kernel_list>      Kernel list. (e.g. -k d_init,d_sum)\n");
-    printf("        -L, --list                     List all group and kernels then exit.\n");
-    printf("        -d, --data_dir <PATH>           Optional. Data directory.\n");
-    printf("        -m, --mode <MODE>               Run mode: Supported modes: Manual (Default), BenchScore,\n");
-    printf("                                  BenchCompute, BenchMemory, BenchNetwork, BenchIO.\n");
-    printf("        -t, --timer <timer_name>        Timer name: Supported timers: clock_gettime (default), tsc_asym.\n");
-    printf("        -h, --help                      Print this help message and exit.\n");
-    printf("    help: Print this help message and exit.\n");
-    printf("\n");
+    printf(TPBM_HELP_DOC_TOTAL);
 }
 
 void
