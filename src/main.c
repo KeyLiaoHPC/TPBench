@@ -63,9 +63,10 @@ int
 main(int argc, char **argv) {
     // process info
     int err;
-    tpb_args_t tp_args;
+    tpb_args_t tpb_args;
+    tpb_kargs_common_t tpb_kargs_common;
     tpb_timer_t timer;
-    char filename[1024], mydir[PATH_MAX], full_path[PATH_MAX], hostname[128]; 
+    char filename[1024], mydir[PATH_MAX], hostname[128]; 
     tpb_res_t time_arr, kib;
 
     // Init process info
@@ -75,7 +76,7 @@ main(int argc, char **argv) {
 #ifdef USE_MPI
     tpb_printf(0, 0, 0, "TPBench-MPI v" VER "\n");
 #else
-    tpb_printf(0, 0, 0, "TPBench v" VER "\n");
+    tpb_printf(0, 0, 0, "TPBench v" VER);
 #endif
     // init kernel, init tpbench arguments
     tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
@@ -83,63 +84,63 @@ main(int argc, char **argv) {
     __tpbm_exit_on_error(err, "At main.c: tpb_init");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
-    err = tpb_parse_args(argc, argv, &tp_args, &timer);
+    err = tpb_parse_args(argc, argv, &tpb_args, &tpb_kargs_common, &timer);
     __tpbm_exit_on_error(err, "At main.c: tpb_parse_args");
 
     // List only.
-    if(tp_args.list_only_flag){
+    if(tpb_args.list_only_flag){
         tpb_list();
         tpmpi_exit();
         exit(0);
     }
 
     // print kernel list
-    if(tp_args.nkern) {
+    if(tpb_args.nkern) {
         tpb_printf(0, 1, 1, "Kernel routine: ");
-        for(int i = 0; i < tp_args.nkern; i ++) {
-            tpb_printf(0, 0, 0, "%s, ", kern_info[tp_args.klist[i]].rname);
+        for(int i = 0; i < tpb_args.nkern; i ++) {
+            tpb_printf(0, 0, 0, "%s, ", kern_info[tpb_args.klist[i]].rname);
         }
     }
     
-    tpb_printf(0, 1, 1, "Each routine will be tested %d times.", tp_args.ntest);
+    tpb_printf(0, 1, 1, "Each routine will be tested %d times.", tpb_kargs_common.ntest);
 
 
     // create host dir
     gethostname(hostname, 128);
-    sprintf(mydir, "%s/%s", tp_args.data_dir, hostname);
+    sprintf(mydir, "%s/%s", tpb_args.data_dir, hostname);
     err = tpb_mkdir(mydir);
     __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
     tpb_printf(err, 1, 1, "Host dir %s", mydir);
 
     // kernel benchmark
-    if(tp_args.nkern) {
+    if(tpb_args.nkern) {
         // Struct initialization
-        err = init_res("kernels", "ns", hostname, &tp_args, &time_arr);
+        err = init_res("kernels", "ns", hostname, &tpb_args, &time_arr);
         __tpbm_exit_on_error(err, "At main.c: init_res");
 
         // allocate space for data
-        time_arr.data = (int64_t **)malloc(tp_args.nkern * sizeof(int64_t *));
-        for(int i = 0; i < tp_args.nkern; i ++) {
-            time_arr.data[i] = (int64_t *)malloc(tp_args.ntest * sizeof(int64_t));
+        time_arr.data = (int64_t **)malloc(tpb_args.nkern * sizeof(int64_t *));
+        for(int i = 0; i < tpb_args.nkern; i ++) {
+            time_arr.data[i] = (int64_t *)malloc(tpb_kargs_common.ntest * sizeof(int64_t));
         }
         
         // Run kernels.
-        for(int i = 0; i < tp_args.nkern; i ++) {
-            tpb_printf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tp_args.klist[i]].rname);
-            err = tpb_run_kernel(tp_args.klist[i], 
+        for(int i = 0; i < tpb_args.nkern; i ++) {
+            tpb_printf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tpb_args.klist[i]].rname);
+            err = tpb_run_kernel(tpb_args.klist[i], 
                                  &timer,
-                                 tp_args.ntest, 
+                                 tpb_kargs_common.ntest, 
                                  time_arr.data[i],
-                                 tp_args.nkib);
+                                 tpb_kargs_common.memsize);
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
             tpb_printf(err, 1, 1, "Finished.");
         }
 
         // Write raw data to csv files.
-        err = tpb_writecsv(time_arr.fpath, time_arr.data, tp_args.ntest, tp_args.nkern, time_arr.header);
+        err = tpb_writecsv(time_arr.fpath, time_arr.data, tpb_kargs_common.ntest, tpb_args.nkern, time_arr.header);
         __tpbm_exit_on_error(err, "At main.c: tpb_writecsv");
         // Clean up
-        for(int i = 0; i < tp_args.nkern; i ++) {
+        for(int i = 0; i < tpb_args.nkern; i ++) {
             free(time_arr.data[i]);
         }
         free(time_arr.data);

@@ -17,6 +17,18 @@
 int tpb_get_err_exit_flag(int err);
 const char *tpb_get_err_msg(int err);
 
+/**
+ * @brief Verify a string represents an integer within [lower, upper].
+ * @return 1 if legal, 0 otherwise.
+ */
+int tpb_char_is_legal_int(int64_t lower, int64_t upper, char *str);
+
+/**
+ * @brief Verify a string represents a floating point within [lower, upper].
+ * @return 1 if legal, 0 otherwise.
+ */
+int tpb_char_is_legal_fp(double lower, double upper, char *str);
+
 #define __tpbm_exit_on_error(err, msg) \
     do { \
         if (err) { \

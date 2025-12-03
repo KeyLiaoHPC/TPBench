@@ -11,36 +11,35 @@
 
 #define TPBM_HELP_DOC_TOTAL \
     "\n" \
-    "===========================================================================" \
+    "===========================================================================\n" \
     "Usage: tpbench <action> <option>\n" \
     "\n" \
-    "Actions: run, list, help\n" \
+    "Actions: run, benchmark, list, help\n" \
     "Options and explanation for each action:\n" \
-    "---------------------------------------------------------------------------" \
+    "---------------------------------------------------------------------------\n" \
     "  run               Run one or more benchmark kernels.\n" \
-    "      -kargs <key>=<value>\n" \
-    "                    Default kernel run-time arguments.\n" \
-    "                    Use 'help kargs' for supported keys and values.\n" \
-    "      -memsize <kib_size>\n" \
-    "                    Memory usage for a single test array, in KiB.\n" \
-    "      -k <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
+    "      -k, --kernel_list <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
     "                    Kernel list separated by comma. Each kernel can have\n" \
     "                    multiple kargs separated by colon. (e.g.\n" \
     "                    d_init:memsize=1024,triad:fp=fp64:memsize=1024)\n" \
     "                    Use 'help <kernel>' for available options of a kernel.\n" \
-    "      -d, <PATH>\n  Data directory. Default: ./data\n" \
+    "          --kargs <key>=<value>\n" \
+    "                    Default kernel run-time arguments.\n" \
+    "                    Use 'help kargs' for supported keys and values.\n" \
+    "      -d, --data_path <PATH>\n" \
+    "                    Data directory. Default: ./data\n" \
     "      -t, --timer <timer_name>\n" \
     "                    Timer name. Supported: clock_gettime (default),\n" \
     "                    tsc_asym.\n" \
     "      -h, --help    Print this help message and exit.\n" \
-    "---------------------------------------------------------------------------" \
+    "---------------------------------------------------------------------------\n" \
     "  benchmark         Run predefined benchmark suites.\n" \
-    "---------------------------------------------------------------------------" \
+    "---------------------------------------------------------------------------\n" \
     "  list              List kernels, parameters, implemented routines, etc.\n" \
     "                    of an object then exit.\n" \
-    "---------------------------------------------------------------------------" \
+    "---------------------------------------------------------------------------\n" \
     "  help              Print help message for an object and exit.\n" \
-    "===========================================================================" \
+    "===========================================================================\n" \
     "\n"
 
 

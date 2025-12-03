@@ -11,15 +11,21 @@
 #include "tpb-types.h"
 #include "tpb-impl.h"
 
+
 /**
  * @brief Parse command line arguments.
  * @param argc Argument count from main()
  * @param argv Argument vector from main()
- * @param tp_args Pointer to argument data structure
+ * @param tpb_args CLI run-time args data structure
+ * @param tpb_kargs_common CLI run-time args data structure
  * @param timer Pointer to timer data structure
  * @return Error code (0 on success)
  */
-int tpb_parse_args(int argc, char **argv, tpb_args_t *tp_args, tpb_timer_t *timer);
+int tpb_parse_args( int argc, 
+                    char **argv, 
+                    tpb_args_t *tpb_args, 
+                    tpb_kargs_common_t *tpb_kargs, 
+                    tpb_timer_t *timer);
 
 /**
  * @brief Check syntax and count segments in kernel string.
@@ -31,17 +37,25 @@ int tpb_check_count(int *n, char *strarg);
 
 /**
  * @brief Parse kernel list string into kernel IDs.
- * @param tp_args Pointer to argument data structure
+ * @param tpb_args Pointer to argument data structure
  * @return Error code (0 on success)
  */
-int tpb_parse_klist(tpb_args_t *tp_args);
+int tpb_parse_klist(tpb_args_t *tpb_args);
+
+/**
+ * @brief Parse default kernel arguments string.
+ * @param tpb_args Pointer to argument structure containing kargstr
+ * @param tpb_kargs_common Pointer to common kernel arguments
+ * @return Error code (0 on success)
+ */
+int tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs);
 
 /**
  * @brief Initialize kernel and group lists from arguments.
- * @param tp_args Pointer to argument data structure
+ * @param tpb_args Pointer to argument data structure
  * @return Error code (0 on success)
  */
-int tpb_init_list(tpb_args_t *tp_args);
+int tpb_init_list(tpb_args_t *tpb_args);
 
 /**
  * @brief Print help document and exit.

@@ -118,7 +118,10 @@ tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
     // print splitter directly.
     if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
         // only allow rank 0 to print
-        if(tpmpi_info.myrank == 0) printf("\n%s", fmt);
+        if(tpmpi_info.myrank == 0) {
+            printf("\n%s", fmt);
+            return;
+        }
     }
     err_type = tpb_get_err_exit_flag(err);
     if(err_type == 0) {
