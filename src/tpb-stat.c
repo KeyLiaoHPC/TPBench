@@ -97,7 +97,7 @@ int
 dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
     __ovl_t res;
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, OVL_QUANT_HEADER);
+    tpb_printf(TPBM_PRTN_M_DIRECT, OVL_QUANT_HEADER "\n");
     // MB/s
     calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
     tpb_printf(TPBM_PRTN_M_DIRECT, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 

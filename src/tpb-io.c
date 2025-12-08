@@ -127,7 +127,7 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...) {
     if(print_mode == TPBM_PRTN_M_DIRECT &&
        (strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0)) {
         if(tpmpi_info.myrank == 0) {
-            printf("\n%s", fmt);
+            printf("%s", fmt);
         }
         return;
     }
@@ -140,8 +140,6 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...) {
         va_end(args);
         return;
     }
-
-    printf("\n");
     if(print_mode & TPBM_PRTN_M_TS) {
         time_t t = time(0);
         struct tm* lt = localtime(&t);

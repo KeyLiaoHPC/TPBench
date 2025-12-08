@@ -72,7 +72,7 @@ main(int argc, char **argv) {
 #ifdef USE_MPI
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench-MPI v" VER "\n");
 #else
-    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER "\n");
 #endif
     // init kernel, init tpbench arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
@@ -96,13 +96,13 @@ main(int argc, char **argv) {
 
     // print kernel list
     if(tpb_args.nkern) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine: ");
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine:\n");
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, ", kern_info[tpb_args.klist[i]].rname);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kern_info[tpb_args.klist[i]].rname);
         }
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Each routine will be tested %d times.", tpb_kargs_common.ntest);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Each routine will be tested %d times.\n", tpb_kargs_common.ntest);
 
 
     // create host dir
@@ -112,7 +112,7 @@ main(int argc, char **argv) {
     __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
     {
         unsigned err_type = tpb_get_err_exit_flag(err);
-        tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s", mydir);
+        tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s\n", mydir);
     }
 
     // kernel benchmark
@@ -138,7 +138,7 @@ main(int argc, char **argv) {
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
             {
                 unsigned err_type = tpb_get_err_exit_flag(err);
-                tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Finished.");
+                tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Finished.\n");
             }
         }
 

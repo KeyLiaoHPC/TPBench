@@ -34,7 +34,7 @@ int tpb_char_is_legal_fp(double lower, double upper, char *str);
     do { \
         if (err) { \
             unsigned __err_type = tpb_get_err_exit_flag(err); \
-            tpb_printf(TPBM_PRTN_M_TSTAG | __err_type, "%s. Error message: %s", msg, tpb_get_err_msg(err)); \
+            tpb_printf(TPBM_PRTN_M_TSTAG | __err_type, "%s. Error message: %s\n", msg, tpb_get_err_msg(err)); \
             if (__err_type == TPBE_FAIL) { \
                 exit(err); \
             } \
