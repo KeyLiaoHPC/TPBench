@@ -27,10 +27,6 @@ struct tpmpi_info_t tpmpi_info;
 
 int init_res(char *prefix, char *posfix, char *host_dir, tpb_args_t *args, tpb_res_t *res);
 
-// =============================================================================
-// utilities
-// =============================================================================
-
 // init result data structure
 int
 init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t *res) {
@@ -72,20 +68,24 @@ main(int argc, char **argv) {
     // Init process info
     err = tpmpi_init();
     __tpbm_exit_on_error(err, "At main.c: tpmpi_init");
-    tpb_printf(0, 0, 0, DHLINE);
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 #ifdef USE_MPI
-    tpb_printf(0, 0, 0, "TPBench-MPI v" VER "\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench-MPI v" VER "\n");
 #else
-    tpb_printf(0, 0, 0, "TPBench v" VER);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER);
 #endif
     // init kernel, init tpbench arguments
-    tpb_printf(0, 1, 1, "Initializing TPBench kernels.");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_init();
     __tpbm_exit_on_error(err, "At main.c: tpb_init");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tpb_args, &tpb_kargs_common, &timer);
-    __tpbm_exit_on_error(err, "At main.c: tpb_parse_args");
+    if (err == TPBE_EXIT_ON_HELP) {
+        goto MAIN_EXIT;
+    } else {
+        __tpbm_exit_on_error(err, "At main.c: tpb_parse_args");
+    }
 
     // List only.
     if(tpb_args.list_only_flag){
@@ -96,13 +96,13 @@ main(int argc, char **argv) {
 
     // print kernel list
     if(tpb_args.nkern) {
-        tpb_printf(0, 1, 1, "Kernel routine: ");
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine: ");
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(0, 0, 0, "%s, ", kern_info[tpb_args.klist[i]].rname);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, ", kern_info[tpb_args.klist[i]].rname);
         }
     }
     
-    tpb_printf(0, 1, 1, "Each routine will be tested %d times.", tpb_kargs_common.ntest);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Each routine will be tested %d times.", tpb_kargs_common.ntest);
 
 
     // create host dir
@@ -110,7 +110,10 @@ main(int argc, char **argv) {
     sprintf(mydir, "%s/%s", tpb_args.data_dir, hostname);
     err = tpb_mkdir(mydir);
     __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
-    tpb_printf(err, 1, 1, "Host dir %s", mydir);
+    {
+        unsigned err_type = tpb_get_err_exit_flag(err);
+        tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s", mydir);
+    }
 
     // kernel benchmark
     if(tpb_args.nkern) {
@@ -126,14 +129,17 @@ main(int argc, char **argv) {
         
         // Run kernels.
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(err, 1, 1, "Kernel routine %s started.\n" HLINE, kern_info[tpb_args.klist[i]].rname);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine %s started.\n" HLINE, kern_info[tpb_args.klist[i]].rname);
             err = tpb_run_kernel(tpb_args.klist[i], 
                                  &timer,
                                  tpb_kargs_common.ntest, 
                                  time_arr.data[i],
                                  tpb_kargs_common.memsize);
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
-            tpb_printf(err, 1, 1, "Finished.");
+            {
+                unsigned err_type = tpb_get_err_exit_flag(err);
+                tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Finished.");
+            }
         }
 
         // Write raw data to csv files.
@@ -147,7 +153,9 @@ main(int argc, char **argv) {
     }
     
     // end of benchmark
-    tpb_printf(0, 1, 1, "\nTPBench finished.\n" DHLINE);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "\nTPBench finished.\n" DHLINE);
+
+MAIN_EXIT:
     tpmpi_exit();
 
     return 0;

@@ -2,21 +2,24 @@
  * @file tpb_io.h
  * @brief Header for handling input/output of tpbench.
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdint.h>
 #include <limits.h>
 #include "tpb-types.h"
 #include "tpmpi.h"
 
+#define DHLINE "================================================================================\n"
+#define HLINE  "--------------------------------------------------------------------------------\n"
+
 #define TPBM_HELP_DOC_TOTAL \
-    "\n" \
-    "===========================================================================\n" \
+    DHLINE \
     "Usage: tpbench <action> <option>\n" \
-    "\n" \
     "Actions: run, benchmark, list, help\n" \
     "Options and explanation for each action:\n" \
-    "---------------------------------------------------------------------------\n" \
+    HLINE \
     "  run               Run one or more benchmark kernels.\n" \
     "      -k, --kernel_list <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
     "                    Kernel list separated by comma. Each kernel can have\n" \
@@ -32,15 +35,14 @@
     "                    Timer name. Supported: clock_gettime (default),\n" \
     "                    tsc_asym.\n" \
     "      -h, --help    Print this help message and exit.\n" \
-    "---------------------------------------------------------------------------\n" \
+    HLINE \
     "  benchmark         Run predefined benchmark suites.\n" \
-    "---------------------------------------------------------------------------\n" \
+    HLINE \
     "  list              List kernels, parameters, implemented routines, etc.\n" \
     "                    of an object then exit.\n" \
-    "---------------------------------------------------------------------------\n" \
+    HLINE \
     "  help              Print help message for an object and exit.\n" \
-    "===========================================================================\n" \
-    "\n"
+    DHLINE 
 
 
 /**
@@ -59,13 +61,11 @@ int tpb_mkdir(char *dirpath);
 * @brief TPBench format stdout module. Return error level according to error number. 
 *        Print message if tpmpi_info.myrank == 0. Output syntax:
 *        YYYY-mm-dd HH:MM:SS [TAG ] *msg
-* @param err   Error number described in tperror.h
-* @param ts    Set to 0 to ignore timestamp.
-* @param tag   Set to 0 to ignore error tag.
-* @param msg   char *msg, same syntax as printf.
-* @param ...   varlist, same syntax as printf.
+* @param mode_bit   Mode bit, including message header type, error header type. 
+* @param fmt        Formats characters.
+* @param ...        Varargs for fmt printf.
 */
-void tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...);
+void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 /**
 * @brief Print overall help message.

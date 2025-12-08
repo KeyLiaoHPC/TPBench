@@ -23,6 +23,7 @@
  * Email: keyliaohpc@gmail.com
  * =================================================================================
  */
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -109,37 +110,48 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 
 // tpbench printf wrapper. 
 void
-tpb_printf(int err, int ts_flag, int tag_flag, char *fmt, ...) {
-    int err_type = 0;
-    time_t t = time(0);
-    struct tm* lt = localtime(&t);
-    char tag[5], err_msg[32];
-    
+tpb_printf(uint64_t mode_bit, char *fmt, ...) {
+    uint64_t print_mode = mode_bit & 0x0F;
+    uint64_t tag_mode = mode_bit & 0xF0;
+    const char *tag = "NOTE";
+
+    if(tag_mode == TPBE_WARN) {
+        tag = "WARN";
+    } else if(tag_mode == TPBE_FAIL) {
+        tag = "FAIL";
+    } else if(tag_mode == TPBE_UNKN) {
+        tag = "UNKN";
+    }
+
     // print splitter directly.
-    if(strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0) {
-        // only allow rank 0 to print
+    if(print_mode == TPBM_PRTN_M_DIRECT &&
+       (strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0)) {
         if(tpmpi_info.myrank == 0) {
             printf("\n%s", fmt);
-            return;
         }
+        return;
     }
-    err_type = tpb_get_err_exit_flag(err);
-    if(err_type == 0) {
-        sprintf(tag, "NOTE");
-    } else if(err_type == 1) {
-        sprintf(tag, "WARN");
-    } else if(err_type == 2) {
-        sprintf(tag, "FAIL");
-    } else {
-        sprintf(tag, "UNKN");
-    }
-    printf("\n%04d-%02d-%02d %02d:%02d:%02d [%s] ", 
-            lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday, 
-            lt->tm_hour, lt->tm_min, lt->tm_sec, tag);
 
-    // transport va_arg list to vprintf
     va_list args;
     va_start(args, fmt);
+
+    if(print_mode == TPBM_PRTN_M_DIRECT) {
+        vprintf(fmt, args);
+        va_end(args);
+        return;
+    }
+
+    printf("\n");
+    if(print_mode & TPBM_PRTN_M_TS) {
+        time_t t = time(0);
+        struct tm* lt = localtime(&t);
+        printf("%04d-%02d-%02d %02d:%02d:%02d ",
+               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
+               lt->tm_hour, lt->tm_min, lt->tm_sec);
+    }
+    if(print_mode & TPBM_PRTN_M_TAG) {
+        printf("[%s] ", tag);
+    }
     vprintf(fmt, args);
     va_end(args);
 }
@@ -152,15 +164,15 @@ tpb_print_help_total(void)
 
 void
 tpb_list(){
-    tpb_printf(0, 1, 1, "Listing supported kernel and groups.\n");
-    tpb_printf(0, 0, 0, HLINE);
-    tpb_printf(0, 0, 0, "Kernel          Routine         NOTE\n");
-    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernel and groups.\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Routine         NOTE\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     for(int i = 0 ; i < nkrout; i ++) {
-        tpb_printf(0, 0, 0, "%-12s    %-12s    %s\n", 
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%-12s    %-12s    %s\n", 
                    kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
     }
-    tpb_printf(0, 0, 0, DHLINE);
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 }
 
 static void transpose(uint64_t *out, uint64_t **in, int m, int n) {

@@ -54,10 +54,10 @@ int
 tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib){
     int err;
 
-    tpb_printf(0, 0, 0, "Running Kernel %s - %s\n", kern_info[id].kname, kern_info[id].rname);
-    tpb_printf(0, 0, 0, "Number of tests: %d\n", ntest);
-    tpb_printf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s - %s\n", kern_info[id].kname, kern_info[id].rname);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", ntest);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
     err = kern_info[id].pfun(timer, ntest, time_arr, nkib);
-    tpb_printf(0, 0, 0, HLINE);
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     return err;
 }

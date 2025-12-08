@@ -6,6 +6,7 @@
 #define TPB_IMPL_H
 
 #include "tpb-types.h"
+#include "tpb-io.h"
 
 // === Timers ===
 #include "timers/timers.h"
@@ -32,14 +33,14 @@ int tpb_char_is_legal_fp(double lower, double upper, char *str);
 #define __tpbm_exit_on_error(err, msg) \
     do { \
         if (err) { \
-            tpb_printf(err, 1, 1, "%s. TPB message: %s", msg, tpb_get_err_msg(err)); \
-            if (tpb_get_err_exit_flag(err) == 1) { \
+            unsigned __err_type = tpb_get_err_exit_flag(err); \
+            tpb_printf(TPBM_PRTN_M_TSTAG | __err_type, "%s. Error message: %s", msg, tpb_get_err_msg(err)); \
+            if (__err_type == TPBE_FAIL) { \
                 exit(err); \
             } \
         } \
-    } while(0); \
+    } while(0)
 
-#define DHLINE "================================================================================\n"
-#define HLINE  "--------------------------------------------------------------------------------\n"
+
 
 #endif

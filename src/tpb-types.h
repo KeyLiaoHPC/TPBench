@@ -10,6 +10,15 @@
 #include <stdint.h>
 
 #define TPBM_CLI_STR_MAX_LEN 4096
+#define TPBM_PRTN_M_DIRECT 0x00     // Directly print, ignore headers.
+#define TPBM_PRTN_M_TS 0x01         // Only print the timestamp header.
+#define TPBM_PRTN_M_TAG 0x02        // Only print the tag header.
+#define TPBM_PRTN_M_TSTAG 0x03      // Print both timestamp and tag headers.
+
+#define TPBE_NOTE   0x00            // Tag: NOTE
+#define TPBE_WARN   0x10            // Tag: WARN
+#define TPBE_FAIL   0x20            // Tag: FAIL
+#define TPBE_UNKN   0x30            // Tag: UNKN
 
 // === Errors ===
 /**
@@ -17,12 +26,8 @@
  */
 enum _tpb_errno {
     TPBE_SUCCESS = 0,
-    TPBE_WARNING,
-    VERIFY_FAIL,
-    OVER_OPTMIZE,
-    DEFAULT_DIR,
-    CORE_NOT_BIND,
-    TPBE_FAIL,
+    TPBE_KERN_VERIFY_FAIL,
+    TPBE_PE_NOT_BIND,
     TPBE_EXIT_ON_HELP,
     GRP_ARG_ERROR,
     KERN_ARG_ERROR,
@@ -39,7 +44,7 @@ enum _tpb_errno {
 typedef enum _tpb_errno tpb_errno_t;
 typedef struct _tpb_error {
     tpb_errno_t err_code;
-    int err_type;
+    unsigned err_type;
     char err_msg[256];
 } tpb_error_type;
 

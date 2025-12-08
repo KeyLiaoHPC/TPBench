@@ -156,7 +156,7 @@ tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
         char *value;
 
         if(eq == NULL) {
-            tpb_printf(0, 0, 0, "Invalid --kargs entry \"%s\". Expected key=value.", token);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid --kargs entry \"%s\". Expected key=value.", token);
             return TPBE_ARGS_FAIL;
         }
 
@@ -165,36 +165,36 @@ tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
         value = tpb_trim_whitespace(eq + 1);
 
         if(key == NULL || value == NULL || *key == '\0' || *value == '\0') {
-            tpb_printf(0, 0, 0, "Invalid --kargs entry. Empty key or value detected.");
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid --kargs entry. Empty key or value detected.");
             return TPBE_ARGS_FAIL;
         }
 
         if(strcmp(key, "ntest") == 0) {
             if(!tpb_char_is_legal_int(1, INT_MAX, value)) {
-                tpb_printf(0, 0, 0, "Invalid ntest value: %s", value);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid ntest value: %s", value);
                 return TPBE_ARGS_FAIL;
             }
             tpb_kargs->ntest = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "nwarm") == 0) {
             if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
-                tpb_printf(0, 0, 0, "Invalid nwarm value: %s", value);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid nwarm value: %s", value);
                 return TPBE_ARGS_FAIL;
             }
             tpb_kargs->nwarm = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "twarm") == 0) {
             if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
-                tpb_printf(0, 0, 0, "Invalid twarm value: %s", value);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid twarm value: %s", value);
                 return TPBE_ARGS_FAIL;
             }
             tpb_kargs->twarm = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "memsize") == 0) {
             if(!tpb_char_is_legal_int(1, INT64_MAX, value)) {
-                tpb_printf(0, 0, 0, "Invalid memsize value: %s", value);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid memsize value: %s", value);
                 return TPBE_ARGS_FAIL;
             }
             tpb_kargs->memsize = (uint64_t)strtoll(value, NULL, 10);
         } else {
-            tpb_printf(0, 0, 0, "Unsupported --kargs key: %s", key);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported --kargs key: %s", key);
             return TPBE_ARGS_FAIL;
         }
 
@@ -291,7 +291,7 @@ tpb_parse_args( int argc,
 
     if(argc <= 1) {
         // No args.
-        tpb_printf(0, 0, 0, "No arguments provided, exit after printing help message.");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "No arguments provided, exit after printing help message.");
         tpb_print_help_total();
         return TPBE_EXIT_ON_HELP;
     }
@@ -316,12 +316,12 @@ tpb_parse_args( int argc,
         for (int i = 2; i < argc; i ++) {
             if (strcmp(argv[i], "-k") == 0 || strcmp(argv[i], "--kernel_list") == 0) {
                 if (i + 1 >= argc) {
-                    tpb_printf(0, 0, 0, "Option %s requires arguments.", argv[i]);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.", argv[i]);
                     err = TPBE_ARGS_FAIL;
                     break;
                 }
                 if (strlen(argv[i + 1]) > TPBM_CLI_STR_MAX_LEN) {
-                    tpb_printf( 0, 0, 0, 
+                    tpb_printf(TPBM_PRTN_M_DIRECT, 
                                 "Kernel list only supports up to %s characters.\n"
                                 "Please use config file for complex tests.",
                                 TPBM_CLI_STR_MAX_LEN);
@@ -331,35 +331,35 @@ tpb_parse_args( int argc,
                 sprintf(tpb_args->kstr, "%s", argv[++i]);
             } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--data_path") == 0) {
                 if (i + 1 >= argc) {
-                    tpb_printf(0, 0, 0, "Option %s requires an argument.", argv[i]);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires an argument.", argv[i]);
                     err = TPBE_ARGS_FAIL;
                     break;
                 }
                 if (strlen(argv[i + 1]) > PATH_MAX - 1) {
-                    tpb_printf(0, 0, 0, "Data path string too long.");
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Data path string too long.");
                     err = TPBE_CLI_SYNTAX_FAIL;
                     break;
                 }
                 sprintf(tpb_args->data_dir, "%s", argv[++i]);
             } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--timer") == 0) {
                 if (i + 1 >= argc) {
-                    tpb_printf(0, 0, 0, "Option %s requires arguments.", argv[i]);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.", argv[i]);
                     err = TPBE_ARGS_FAIL;
                     break;
                 }
                 err = tpb_set_timer(argv[++i], tpb_args, timer);
                 if (err) {
-                    tpb_printf(0, 0, 0, "Invalid timer: %s", argv[i]);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s", argv[i]);
                     break;
                 }
             } else if (strcmp(argv[i], "--kargs") == 0) {
                 if (i + 1 >= argc) {
-                    tpb_printf(0, 0, 0, "Option %s requires arguments.", argv[i]);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.", argv[i]);
                     err = TPBE_ARGS_FAIL;
                     break;
                 }
                 if (strlen(argv[i + 1]) >= TPBM_CLI_STR_MAX_LEN) {
-                    tpb_printf(0, 0, 0, "--kargs string too long.");
+                    tpb_printf(TPBM_PRTN_M_DIRECT, "--kargs string too long.");
                     err = TPBE_CLI_SYNTAX_FAIL;
                     break;
                 }
@@ -369,7 +369,7 @@ tpb_parse_args( int argc,
                     break;
                 }
             } else {
-                tpb_printf(0, 0, 0, "Unknown option %s.", argv[i]);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Unknown option %s.", argv[i]);
                 err = TPBE_CLI_SYNTAX_FAIL;
                 break;
             }
@@ -377,7 +377,7 @@ tpb_parse_args( int argc,
     } else if (strcmp(argv[1], "benchmark") == 0 ) {
     } else if (strcmp(argv[1], "list") == 0 ) {
     } else {
-        tpb_printf( 0, 0, 0, "Unsupported action: %s. Please use one of actions:\n"
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported action: %s. Please use one of actions:\n"
                     "run, benchmark, list, help.", argv[1]);
         tpb_print_help_total();
         return TPBE_CLI_SYNTAX_FAIL;
