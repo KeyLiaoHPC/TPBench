@@ -145,12 +145,10 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     tpb_printf(0, 0, 0, "Verbose STREAM Benchmark done, processing data.\n");
 
     // skip some tests in the front 
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     uint64_t nitem, snitem;
     snitem = ntest - nskip;
-    if(ntest <= 10) {
-        nskip = 0;
-    }
+
 #ifdef USE_MPI
     MPI_Status stat;
     if(tpmpi_info.myrank == 0) {

@@ -160,7 +160,7 @@ d_jacobi5p(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     free_kernel_data(nsize);
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, (6 - 2) * sizeof(double), (height - 2) * (nsize - 2));
     return 0;
 }

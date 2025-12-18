@@ -147,11 +147,9 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
 
 #ifdef USE_MPI
     uint64_t **all_ns, **all_cy;
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
 
-    if(ntest <= 10) {
-        nskip = 0;
-    }
+
     all_ns = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
     all_cy = (uint64_t **)malloc(sizeof(uint64_t *) * ntest);
     for(int i = 0; i < ntest; i ++) {
@@ -188,10 +186,8 @@ d_stream(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t nkib) {
 
     tpmpi_barrier();
 #else
-    int nskip = 10, freq=1;
-    if(ntest <= 10) {
-        nskip = 0;
-    }
+    int nskip = 1, freq=1;
+
     tpb_printf(0, 0, 0, "STREAM Overall performance\n");
     dpipe_g0(ns, cy, 0, nskip, ntest, freq, 80, narr);
     

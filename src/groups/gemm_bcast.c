@@ -275,7 +275,7 @@ int d_gemm_bcast(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t m
     free_kernel_data();
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     report_performance(ns, cy, total_wall_time, nskip, ntest, nepoch, N, Nr, skip_comp, skip_comm);
 
     char kernel_name[32] = "gemmbcast";

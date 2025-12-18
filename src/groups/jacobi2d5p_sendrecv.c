@@ -169,7 +169,7 @@ int d_jacobi2d5p_sendrecv(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, u
     free_kernel_data();
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     report_performance(ns, cy, nskip, ntest, nepoch, N, skip_comp);
     char kernel_name[32] = "jacobi2d5p_sendrecv";
     log_step_info(ns, cy, kernel_name, ntest, nepoch, N, skip_comp);

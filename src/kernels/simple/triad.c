@@ -169,7 +169,7 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {
     // kernel end
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(time_arr, nskip, ntest, freq, 24, nsize);
     
     free((void *)a);
