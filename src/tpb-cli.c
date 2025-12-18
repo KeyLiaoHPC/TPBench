@@ -52,14 +52,14 @@ tpb_check_count(int *n, char *strarg)
     *n = 1;
     ch = strarg;
     if(!isalnum(*ch)) {
-        return TPBE_CLI_SYNTAX_FAIL;
+        return -1;
     }
     while(*ch != '\0') {
         if(!isalnum(*ch) && *ch != ',' && *ch != '_') {
-            return TPBE_CLI_SYNTAX_FAIL;
+            return -1;
         }
         if(*ch == ',' && *(ch+1) == ',') {
-            return TPBE_CLI_SYNTAX_FAIL;
+            return -1;
         }
         if(*ch == ',') {
             (*n) += 1;
@@ -97,7 +97,8 @@ tpb_parse_klist(tpb_args_t *tpb_args)
             }
         }
         if(matched == 0) {
-            return TPBE_KERN_NE;
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel %s not found.\n", ch);
+            return 1;
         }
         ch = che + 1;
     }
@@ -134,73 +135,297 @@ tpb_trim_whitespace(char *str)
 }
 
 int
-tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
+tpb_argstr_token(const char *argstr, tpb_kargs_token_t *karg_token)
 {
     char buf[TPBM_CLI_STR_MAX_LEN];
-    char *token, *saveptr;
+    char *saveptr_kern, *saveptr_arg;
+    char *kernel_seg, *arg_token;
+    int kernel_count = 0;
+    int token_count = 0;
+    int total_tokens = 0;
+    int is_kernel_format = 0;
+    char *first_colon, *first_comma, *first_eq;
+
+    if(argstr == NULL || karg_token == NULL) {
+        return TPBE_CLI_ARG_FAIL;
+    }
+
+    if(argstr[0] == '\0') {
+        karg_token->nkern = 0;
+        karg_token->ntoken = NULL;
+        karg_token->token = NULL;
+        return 0;
+    }
+
+    snprintf(buf, sizeof(buf), "%s", argstr);
+
+    // Detect format: kernel-specific or common kargs
+    // Kernel format: contains pattern like "name:arg=val" or "name,name2"
+    // Common format: only "arg=val,arg=val"
+    first_colon = strchr(buf, ':');
+    first_comma = strchr(buf, ',');
+    first_eq = strchr(buf, '=');
+
+    // If there's a colon before '=', it's kernel format
+    if(first_colon != NULL && (first_eq == NULL || first_colon < first_eq)) {
+        is_kernel_format = 1;
+    }
+
+    if(is_kernel_format) {
+        // Kernel-specific format: kernel1:arg1=val1:arg2=val2,kernel2:arg3=val3
+        // First pass: count kernels and total tokens
+        char buf_copy[TPBM_CLI_STR_MAX_LEN];
+        snprintf(buf_copy, sizeof(buf_copy), "%s", argstr);
+        
+        kernel_seg = strtok_r(buf_copy, ",", &saveptr_kern);
+        while(kernel_seg != NULL) {
+            kernel_count++;
+            char *colon_pos = strchr(kernel_seg, ':');
+            if(colon_pos != NULL) {
+                // Count args for this kernel
+                char *arg_start = colon_pos + 1;
+                char *arg_copy = strdup(arg_start);
+                char *arg_saveptr;
+                char *arg = strtok_r(arg_copy, ":", &arg_saveptr);
+                while(arg != NULL) {
+                    if(strchr(arg, '=') != NULL) {
+                        total_tokens++;
+                    }
+                    arg = strtok_r(NULL, ":", &arg_saveptr);
+                }
+                free(arg_copy);
+            }
+            kernel_seg = strtok_r(NULL, ",", &saveptr_kern);
+        }
+
+        karg_token->nkern = kernel_count;
+        karg_token->ntoken = (int *)malloc(sizeof(int) * kernel_count);
+        if(karg_token->ntoken == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+
+        karg_token->token = (char **)malloc(sizeof(char *) * total_tokens);
+        if(karg_token->token == NULL) {
+            free(karg_token->ntoken);
+            return TPBE_MALLOC_FAIL;
+        }
+
+        // Second pass: extract tokens
+        snprintf(buf, sizeof(buf), "%s", argstr);
+        kernel_count = 0;
+        total_tokens = 0;
+
+        kernel_seg = strtok_r(buf, ",", &saveptr_kern);
+        while(kernel_seg != NULL) {
+            token_count = 0;
+            char *colon_pos = strchr(kernel_seg, ':');
+            
+            if(colon_pos != NULL) {
+                // Skip kernel name, extract args
+                arg_token = strtok_r(colon_pos + 1, ":", &saveptr_arg);
+                while(arg_token != NULL) {
+                    if(strchr(arg_token, '=') != NULL) {
+                        karg_token->token[total_tokens] = strdup(arg_token);
+                        if(karg_token->token[total_tokens] == NULL) {
+                            // Cleanup
+                            for(int i = 0; i < total_tokens; i++) {
+                                free(karg_token->token[i]);
+                            }
+                            free(karg_token->token);
+                            free(karg_token->ntoken);
+                            return TPBE_MALLOC_FAIL;
+                        }
+                        total_tokens++;
+                        token_count++;
+                    }
+                    arg_token = strtok_r(NULL, ":", &saveptr_arg);
+                }
+            }
+            
+            karg_token->ntoken[kernel_count] = token_count;
+            kernel_count++;
+            kernel_seg = strtok_r(NULL, ",", &saveptr_kern);
+        }
+    } else {
+        // Common kargs format: arg1=val1,arg2=val2
+        // First pass: count tokens
+        char buf_copy[TPBM_CLI_STR_MAX_LEN];
+        snprintf(buf_copy, sizeof(buf_copy), "%s", argstr);
+        
+        arg_token = strtok_r(buf_copy, ",", &saveptr_arg);
+        while(arg_token != NULL) {
+            if(strchr(arg_token, '=') != NULL) {
+                total_tokens++;
+            }
+            arg_token = strtok_r(NULL, ",", &saveptr_arg);
+        }
+
+        karg_token->nkern = 0;
+        karg_token->ntoken = (int *)malloc(sizeof(int));
+        if(karg_token->ntoken == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        karg_token->ntoken[0] = total_tokens;
+
+        karg_token->token = (char **)malloc(sizeof(char *) * total_tokens);
+        if(karg_token->token == NULL) {
+            free(karg_token->ntoken);
+            return TPBE_MALLOC_FAIL;
+        }
+
+        // Second pass: extract tokens
+        snprintf(buf, sizeof(buf), "%s", argstr);
+        token_count = 0;
+
+        arg_token = strtok_r(buf, ",", &saveptr_arg);
+        while(arg_token != NULL) {
+            if(strchr(arg_token, '=') != NULL) {
+                karg_token->token[token_count] = strdup(arg_token);
+                if(karg_token->token[token_count] == NULL) {
+                    // Cleanup
+                    for(int i = 0; i < token_count; i++) {
+                        free(karg_token->token[i]);
+                    }
+                    free(karg_token->token);
+                    free(karg_token->ntoken);
+                    return TPBE_MALLOC_FAIL;
+                }
+                token_count++;
+            }
+            arg_token = strtok_r(NULL, ",", &saveptr_arg);
+        }
+    }
+
+    return 0;
+}
+
+void
+tpb_argstr_token_free(tpb_kargs_token_t *karg_token)
+{
+    int total_tokens;
+
+    if(karg_token == NULL) {
+        return;
+    }
+
+    if(karg_token->ntoken != NULL) {
+        if(karg_token->nkern == 0) {
+            total_tokens = karg_token->ntoken[0];
+        } else {
+            total_tokens = 0;
+            for(int i = 0; i < karg_token->nkern; i++) {
+                total_tokens += karg_token->ntoken[i];
+            }
+        }
+
+        if(karg_token->token != NULL) {
+            for(int i = 0; i < total_tokens; i++) {
+                if(karg_token->token[i] != NULL) {
+                    free(karg_token->token[i]);
+                }
+            }
+            free(karg_token->token);
+        }
+        free(karg_token->ntoken);
+    }
+
+    karg_token->nkern = 0;
+    karg_token->ntoken = NULL;
+    karg_token->token = NULL;
+}
+
+int
+tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
+{
+    tpb_kargs_token_t karg_token;
+    int err;
+    int total_tokens;
 
     if(tpb_args == NULL || tpb_kargs == NULL) {
-        return TPBE_ARGS_FAIL;
+        return TPBE_CLI_ARG_FAIL;
     }
 
     if(tpb_args->kargstr[0] == '\0') {
         return 0;
     }
 
-    snprintf(buf, sizeof(buf), "%s", tpb_args->kargstr);
-    saveptr = NULL;
-    token = strtok_r(buf, ",", &saveptr);
-    while(token != NULL) {
-        char *eq = strchr(token, '=');
+    // Tokenize the argument string
+    err = tpb_argstr_token(tpb_args->kargstr, &karg_token);
+    if(err) {
+        return err;
+    }
+    // For common kargs, nkern should be 0
+    if(karg_token.nkern != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, 
+                   "Invalid --kargs format. Expected key=value pairs.\n");
+        tpb_argstr_token_free(&karg_token);
+        return TPBE_CLI_ARG_FAIL;
+    }
+    total_tokens = karg_token.ntoken[0];
+    for(int i = 0; i < total_tokens; i++) {
+        char token_buf[TPBM_CLI_STR_MAX_LEN];
+        char *eq;
         char *key;
         char *value;
 
+        snprintf(token_buf, sizeof(token_buf), "%s", karg_token.token[i]);
+        eq = strchr(token_buf, '=');
+
         if(eq == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid --kargs entry \"%s\". Expected key=value.\n", token);
-            return TPBE_ARGS_FAIL;
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                       "Invalid --kargs entry \"%s\". Expected key=value.\n", 
+                       karg_token.token[i]);
+            tpb_argstr_token_free(&karg_token);
+            return TPBE_CLI_ARG_FAIL;
         }
 
         *eq = '\0';
-        key = tpb_trim_whitespace(token);
+        key = tpb_trim_whitespace(token_buf);
         value = tpb_trim_whitespace(eq + 1);
 
         if(key == NULL || value == NULL || *key == '\0' || *value == '\0') {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid --kargs entry. Empty key or value detected.\n");
-            return TPBE_ARGS_FAIL;
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                       "Invalid --kargs entry. Empty key or value detected.\n");
+            tpb_argstr_token_free(&karg_token);
+            return TPBE_CLI_ARG_FAIL;
         }
 
         if(strcmp(key, "ntest") == 0) {
             if(!tpb_char_is_legal_int(1, INT_MAX, value)) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid ntest value: %s\n", value);
-                return TPBE_ARGS_FAIL;
+                tpb_argstr_token_free(&karg_token);
+                return TPBE_CLI_ARG_FAIL;
             }
             tpb_kargs->ntest = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "nwarm") == 0) {
             if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid nwarm value: %s\n", value);
-                return TPBE_ARGS_FAIL;
+                tpb_argstr_token_free(&karg_token);
+                return TPBE_CLI_ARG_FAIL;
             }
             tpb_kargs->nwarm = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "twarm") == 0) {
             if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid twarm value: %s\n", value);
-                return TPBE_ARGS_FAIL;
+                tpb_argstr_token_free(&karg_token);
+                return TPBE_CLI_ARG_FAIL;
             }
             tpb_kargs->twarm = (int)strtol(value, NULL, 10);
         } else if(strcmp(key, "memsize") == 0) {
             if(!tpb_char_is_legal_int(1, INT64_MAX, value)) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid memsize value: %s\n", value);
-                return TPBE_ARGS_FAIL;
+                tpb_argstr_token_free(&karg_token);
+                return TPBE_CLI_ARG_FAIL;
             }
             tpb_kargs->memsize = (uint64_t)strtoll(value, NULL, 10);
         } else {
             tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported --kargs key: %s\n", key);
-            return TPBE_ARGS_FAIL;
+            tpb_argstr_token_free(&karg_token);
+            return TPBE_CLI_ARG_FAIL;
         }
-
-        token = strtok_r(NULL, ",", &saveptr);
     }
 
+    tpb_argstr_token_free(&karg_token);
     return 0;
 }
 
@@ -228,7 +453,7 @@ tpb_init_list(tpb_args_t *tpb_args)
         }
         tpb_args->klist = (int *)malloc(sizeof(int) * tpb_args->nkern);
         if(tpb_args->klist == NULL) {
-            return MALLOC_FAIL;
+            return TPBE_MALLOC_FAIL;
         }
         err = tpb_parse_klist(tpb_args);
         if(tpb_args->nkern && err) {
@@ -253,7 +478,7 @@ tpb_set_mode(tpb_args_t *args, const char *arg)
     } else if(strcmp(arg, "BenchIO") == 0) {
         args->mode = 5;
     } else {
-        return TPBE_CLI_SYNTAX_FAIL;
+        return -1;
     }
     return 0;
 }
@@ -274,7 +499,7 @@ tpb_set_timer(const char *arg, tpb_args_t *args, tpb_timer_t *timer)
         timer->tock = tock_tsc_asym;
         timer->get_stamp = get_time_tsc_asym;
     } else {
-        return TPBE_CLI_SYNTAX_FAIL;
+        return -1;
     }
     return 0;
 }
@@ -317,61 +542,53 @@ tpb_parse_args( int argc,
             if (strcmp(argv[i], "-k") == 0 || strcmp(argv[i], "--kernel_list") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.\n", argv[i]);
-                    err = TPBE_ARGS_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 if (strlen(argv[i + 1]) > TPBM_CLI_STR_MAX_LEN) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, 
                                 "Kernel list only supports up to %s characters.\n"
                                 "Please use config file for complex tests.\n",
                                 TPBM_CLI_STR_MAX_LEN);
-                    err = TPBE_CLI_SYNTAX_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 sprintf(tpb_args->kstr, "%s", argv[++i]);
             } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--data_path") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires an argument.\n", argv[i]);
-                    err = TPBE_ARGS_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 if (strlen(argv[i + 1]) > PATH_MAX - 1) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Data path string too long.\n");
-                    err = TPBE_CLI_SYNTAX_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 sprintf(tpb_args->data_dir, "%s", argv[++i]);
             } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--timer") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.\n", argv[i]);
-                    err = TPBE_ARGS_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 err = tpb_set_timer(argv[++i], tpb_args, timer);
                 if (err) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
             } else if (strcmp(argv[i], "--kargs") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.\n", argv[i]);
-                    err = TPBE_ARGS_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 if (strlen(argv[i + 1]) >= TPBM_CLI_STR_MAX_LEN) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "--kargs string too long.\n");
-                    err = TPBE_CLI_SYNTAX_FAIL;
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
                 sprintf(tpb_args->kargstr, "%s", argv[++i]);
                 err = tpb_parse_kargs_common(tpb_args, tpb_kargs);
                 if (err) {
-                    break;
+                    return TPBE_CLI_ARG_FAIL;
                 }
             } else {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Unknown option %s.\n", argv[i]);
-                err = TPBE_CLI_SYNTAX_FAIL;
-                break;
+                return TPBE_CLI_ARG_FAIL;
             }
         }
     } else if (strcmp(argv[1], "benchmark") == 0 ) {
@@ -380,7 +597,7 @@ tpb_parse_args( int argc,
         tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported action: %s. Please use one of actions:\n"
                     "run, benchmark, list, help.\n", argv[1]);
         tpb_print_help_total();
-        return TPBE_CLI_SYNTAX_FAIL;
+        return TPBE_CLI_ARG_FAIL;
     }
 
     err = tpb_init_list(tpb_args);

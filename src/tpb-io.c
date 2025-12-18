@@ -88,7 +88,7 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 
     fp = fopen(path, "w");
     if(fp == NULL) {
-        return FILE_OPEN_FAIL;
+        return TPBE_FILE_IO_FAIL;
     }
     if (header != NULL && strlen(header) > 0) {
         fprintf(fp, "%s\n", header);

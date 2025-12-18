@@ -9,20 +9,14 @@
 
 static tpb_error_type tpb_errors[] = {
     {TPBE_SUCCESS,          TPBE_NOTE,  "Action successful."},
-    {TPBE_KERN_VERIFY_FAIL, TPBE_WARN,  "Kernel verification failed."},
-    {TPBE_PE_NOT_BIND,      TPBE_WARN,  "Compute PE not binded."},
     {TPBE_EXIT_ON_HELP,     TPBE_FAIL,  "TPBench exits on help."},
-    {GRP_ARG_ERROR,         TPBE_FAIL,  "GRP_ARG_ERROR"},
-    {KERN_ARG_ERROR,        TPBE_FAIL,  "KERN_ARG_ERROR"},
-    {TPBE_KERN_NE,          TPBE_FAIL,  "Kernel is not existed."},
-    {GRP_NE,                TPBE_FAIL,  "GRP_NE"},
-    {TPBE_CLI_SYNTAX_FAIL,  TPBE_FAIL,  "Command line syntax error."},
-    {FILE_OPEN_FAIL,        TPBE_FAIL,  "FILE_OPEN_FAIL"},
-    {MALLOC_FAIL,           TPBE_FAIL,  "MALLOC_FAIL"},
-    {TPBE_ARGS_FAIL,        TPBE_FAIL,  "TPBE_ARGS_FAIL"},
-    {MKDIR_ERROR,           TPBE_FAIL,  "MKDIR_ERROR"},
-    {RES_INIT_FAIL,         TPBE_FAIL,  "RES_INIT_FAIL"},
-    {TPBE_MPI_INIT_FAIL,    TPBE_FAIL,  "MPI initialization failed."},
+    {TPBE_CLI_ARG_FAIL,     TPBE_FAIL,  "Failed to parse TPbench CLI argument."},
+    {TPBE_FILE_IO_FAIL,     TPBE_FAIL,  "File I/O failed."},
+    {TPBE_MALLOC_FAIL,      TPBE_FAIL,  "Memory allocation failed."},
+    {TPBE_MPI_FAIL,         TPBE_FAIL,  "MPI initialization failed."},
+    {TPBE_KERN_VERIFY_FAIL, TPBE_WARN,  "Kernel verification failed."},
+    {TPBE_KERN_ARG_FAIL,    TPBE_FAIL,  "Failed to parse kernel arguments."},
+    {TPBE_KERN_NOT_FOUND,   TPBE_FAIL,  "Kernel not found."}
 };
 
 int tpb_get_err_exit_flag(int err) {

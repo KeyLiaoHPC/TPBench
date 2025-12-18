@@ -43,6 +43,20 @@ int tpb_check_count(int *n, char *strarg);
 int tpb_parse_klist(tpb_args_t *tpb_args);
 
 /**
+ * @brief Tokenize argument string into key-value pairs.
+ * @param argstr Argument string to parse
+ * @param karg_token Pointer to token structure to fill
+ * @return Error code (0 on success, negative on failure)
+ */
+int tpb_argstr_token(const char *argstr, tpb_kargs_token_t *karg_token);
+
+/**
+ * @brief Free memory allocated for kargs token structure.
+ * @param karg_token Pointer to token structure to free
+ */
+void tpb_argstr_token_free(tpb_kargs_token_t *karg_token);
+
+/**
  * @brief Parse default kernel arguments string.
  * @param tpb_args Pointer to argument structure containing kargstr
  * @param tpb_kargs_common Pointer to common kernel arguments

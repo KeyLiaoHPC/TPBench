@@ -26,20 +26,14 @@
  */
 enum _tpb_errno {
     TPBE_SUCCESS = 0,
-    TPBE_KERN_VERIFY_FAIL,
-    TPBE_PE_NOT_BIND,
     TPBE_EXIT_ON_HELP,
-    GRP_ARG_ERROR,
-    KERN_ARG_ERROR,
-    TPBE_KERN_NE,
-    GRP_NE,
-    TPBE_CLI_SYNTAX_FAIL,
-    FILE_OPEN_FAIL,
-    MALLOC_FAIL,
-    TPBE_ARGS_FAIL,
-    MKDIR_ERROR,
-    RES_INIT_FAIL,
-    TPBE_MPI_INIT_FAIL,
+    TPBE_CLI_ARG_FAIL,
+    TPBE_FILE_IO_FAIL,
+    TPBE_MALLOC_FAIL,
+    TPBE_MPI_FAIL,
+    TPBE_KERN_ARG_FAIL,
+    TPBE_KERN_VERIFY_FAIL,
+    TPBE_KERN_NOT_FOUND
 };
 typedef enum _tpb_errno tpb_errno_t;
 typedef struct _tpb_error {
@@ -61,6 +55,15 @@ typedef struct tpb_args {
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
 } tpb_args_t;
+
+/**
+ *  @brief Type for kernel arguments token
+ */
+typedef struct tpb_kargs_token {
+    int nkern;
+    int *ntoken;
+    char **token;
+} tpb_kargs_token_t;
 
 /**
  * @brief General run-time arguments for kernels

@@ -90,7 +90,7 @@ tpmpi_writecsv(char *path, uint64_t *data, int ncol, char *header) {
     if (err != MPI_SUCCESS) {
         printf("无法打开文件\n");
         MPI_Abort(MPI_COMM_WORLD, err);
-        return FILE_OPEN_FAIL;
+        return TPBE_FILE_IO_FAIL;
     }
 
     // 创建缓冲区以存储即将写入的字符串
@@ -122,7 +122,7 @@ tpmpi_writecsv(char *path, uint64_t *data, int ncol, char *header) {
 #else 
     FILE *fp = fopen(path, "w");
     if (fp == NULL) {
-        return FILE_OPEN_FAIL;
+        return TPBE_FILE_IO_FAIL;
     }
     fprintf(fp, "%s\n", header);
     

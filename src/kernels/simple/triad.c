@@ -45,7 +45,7 @@
 
 #define MALLOC(_A, _NSIZE)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NSIZE);   \
                             if((_A) == NULL) {                                  \
-                                return  MALLOC_FAIL;                            \
+                                return  TPBE_MALLOC_FAIL;                            \
                             }
 
 int
