@@ -65,11 +65,21 @@ void tpb_argstr_token_free(tpb_kargs_token_t *karg_token);
 int tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs);
 
 /**
+ * @brief Validate kernel-specific arguments against supported parameters.
+ * @param kargs_user Pointer to user kernel arguments token structure
+ * @param kernel_id ID of the kernel to validate against
+ * @param kargs_common Pointer to common kernel arguments to update
+ * @return Error code (0 on success, error on unsupported kernel-specific arg)
+ */
+int tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id, 
+                              tpb_kargs_common_t *kargs_common);
+
+/**
  * @brief Initialize kernel and group lists from arguments.
  * @param tpb_args Pointer to argument data structure
  * @return Error code (0 on success)
  */
-int tpb_init_list(tpb_args_t *tpb_args);
+int tpb_get_kernel_info_list(tpb_args_t *tpb_args);
 
 /**
  * @brief Print help document and exit.

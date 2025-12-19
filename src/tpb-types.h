@@ -44,6 +44,22 @@ typedef struct _tpb_error {
 
 
 /**
+ *  @brief Type for kernel arguments token
+ *  For CLI parsing: nkern=number of kernels (0 for common kargs), 
+ *                   ntoken[i]=number of tokens for kernel i,
+ *                   kname[i]=kernel names, token[j]=key=value pairs
+ *  For kernel definition: nkern=1, ntoken[0]=number of supported params,
+ *                        kname[0]=kernel name, 
+ *                        token[j]="key=default_value=description"
+ */
+typedef struct tpb_kargs_token {
+    int nkern;
+    int *ntoken;
+    char **kname;
+    char **token;
+} tpb_kargs_token_t;
+
+/**
  * @brief tpbench run-time parameters
  */
 typedef struct tpb_args {
@@ -54,16 +70,32 @@ typedef struct tpb_args {
     int *klist; 
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
+    tpb_kargs_token_t kargs_kernel;  // Kernel-specific arguments from -k
 } tpb_args_t;
 
 /**
- *  @brief Type for kernel arguments token
+ * @brief Metric-unit pair for performance reporting
  */
-typedef struct tpb_kargs_token {
-    int nkern;
-    int *ntoken;
-    char **token;
-} tpb_kargs_token_t;
+typedef struct tpb_metric_unit {
+    char *metric;  // e.g., "bandwidth", "throughput", "latency"
+    char *unit;    // e.g., "GB/s", "GFLOPS", "ns"
+} tpb_metric_unit_t;
+
+typedef struct tpb_kinfo_dyn{
+    char *name; // Name of kernel
+    int (*reg_func);
+} tpb_kinfo_dyn_t;
+
+/**
+ * @brief Kernel structure with metadata and function pointers
+ */
+typedef struct tpb_kernel {
+    char *kname;                    // Kernel name
+    char *kdesc;                    // Kernel description
+    tpb_kargs_token_t kargs_def;    // Supported parameters definition
+    tpb_metric_unit_t metric_unit;  // Performance metric and unit
+    int (*run)(void *args);         // Run function with arguments
+} tpb_kernel_t;
 
 /**
  * @brief General run-time arguments for kernels

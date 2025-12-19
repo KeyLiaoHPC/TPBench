@@ -15,9 +15,9 @@
  * You should have received a copy of the GNU General Public License along with 
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
- * @file tpb-core.h
+ * @file tpb-driver.h
  * @version 0.3
- * @brief Header for tpb-core library 
+ * @brief Header for tpb-driver library 
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-22
  */
@@ -29,10 +29,12 @@
 #include "tptimer.h"
 
 /**
- * Basic information of tpbench benchmarking sets, init by tpb_init().
+ * Basic information of tpbench benchmarking sets, init by tpb_get_kernel_info().
  */
 // # of kernels, kernel routines, groups and group routines
-extern int nkern, nkrout, ngrp, ngrout;
+extern int nkern, nkrout;
+extern tpb_kernel_t *kernel_all;
+extern tpb_kern_info_t *kern_info;
 // granularity and tick of timer.
 // uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
 
@@ -41,7 +43,7 @@ extern int nkern, nkrout, ngrp, ngrout;
  * @brief 
  * @return int 
  */
-int tpb_init();
+int tpb_get_kernel_info();
 
 /**
  * @brief 

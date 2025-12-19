@@ -35,7 +35,7 @@
 #include <inttypes.h>
 #include "tpb-io.h"
 #include "tpb-stat.h"
-#include "tpb-core.h"
+#include "tpb-driver.h"
 
 int
 tpb_mkdir(char *path) {

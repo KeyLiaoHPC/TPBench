@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include "tptimer.h"
 #include "tpmpi.h"
@@ -47,6 +48,68 @@
                             if((_A) == NULL) {                                  \
                                 return  TPBE_MALLOC_FAIL;                            \
                             }
+// Parameter table
+typedef struct triad_args {
+    int ntest;
+    int nskip;
+    int twarm;
+    char dtype[32];
+    uint64_t memsize;
+    double s;
+} triad_args_t;
+
+static triad_args_t triad_args_default = {
+    .ntest = 10,
+    .nskip = 2,
+    .twarm = 100,
+    .dtype = "double",
+    .memsize = 32,
+    .s = 0.42
+};
+
+int
+register_triad(tpb_kernel_t *kernel)
+{
+    if(kernel == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    // Set kernel name and description
+    kernel->kname = strdup("triad");
+    kernel->kdesc = strdup("STREAM Triad: a[i] = b[i] + s * c[i]");
+    
+    // Set metric-unit pair
+    kernel->metric_unit.metric = strdup("bandwidth");
+    kernel->metric_unit.unit = strdup("GB/s");
+    
+    // Set up supported parameters
+    kernel->kargs_def.nkern = 1;
+    kernel->kargs_def.ntoken = (int *)malloc(sizeof(int));
+    kernel->kargs_def.ntoken[0] = 5;  // 5 supported parameters
+    
+    kernel->kargs_def.kname = (char **)malloc(sizeof(char *));
+    kernel->kargs_def.kname[0] = strdup("triad");
+    
+    kernel->kargs_def.token = (char **)malloc(sizeof(char *) * 5);
+    kernel->kargs_def.token[0] = strdup("ntest=10=Number of test iterations");
+    kernel->kargs_def.token[1] = strdup("nskip=2=Number of initial iterations to skip");
+    kernel->kargs_def.token[2] = strdup("twarm=100=Warmup time in milliseconds");
+    kernel->kargs_def.token[3] = strdup("dtype=double=Data type (double, float)");
+    kernel->kargs_def.token[4] = strdup("memsize=32=Memory size in KiB");
+    
+    // Set run function
+    kernel->run = NULL;  // Will be set later
+    
+    return 0;
+}
+
+int
+run_triad(void *args)
+{
+    // Entry point for running triad kernel
+    // Will be implemented to call d_triad or other type-specific implementations
+    return 0;
+}
 
 int
 d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {

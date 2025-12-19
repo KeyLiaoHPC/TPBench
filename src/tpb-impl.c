@@ -14,8 +14,8 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_FILE_IO_FAIL,     TPBE_FAIL,  "File I/O failed."},
     {TPBE_MALLOC_FAIL,      TPBE_FAIL,  "Memory allocation failed."},
     {TPBE_MPI_FAIL,         TPBE_FAIL,  "MPI initialization failed."},
-    {TPBE_KERN_VERIFY_FAIL, TPBE_WARN,  "Kernel verification failed."},
     {TPBE_KERN_ARG_FAIL,    TPBE_FAIL,  "Failed to parse kernel arguments."},
+    {TPBE_KERN_VERIFY_FAIL, TPBE_WARN,  "Kernel verification failed."},
     {TPBE_KERN_NOT_FOUND,   TPBE_FAIL,  "Kernel not found."}
 };
 

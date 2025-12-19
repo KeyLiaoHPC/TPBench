@@ -65,11 +65,11 @@ int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
 // d_: fp64, double
 // s_: fp32, single
 // m_: mix
-static tpb_kern_info_t kern_info[] = {
-    {"triad",       "d_triad",      4,  24, 2,  d_triad,
-       "FP64 STREAM Triad."}
-
-};
+// NOTE: kern_info is now dynamically built in tpb-driver.c
+// static tpb_kern_info_t kern_info[] = {
+//     {"triad",       "d_triad",      4,  24, 2,  d_triad,
+//        "FP64 STREAM Triad."}
+// };
 //     {"init",        "d_init",       0,  8,  0,  d_init,
 //       "FP64 init."},
 //     {"sum",         "d_sum",        1,  8,  1,  d_sum,

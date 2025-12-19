@@ -15,7 +15,7 @@
 #include <limits.h>
 #include "tpb-types.h"
 #include "tpb-cli.h"
-#include "tpb-core.h"
+#include "tpb-driver.h"
 #include "tpb-io.h"
 #include "tpmpi.h"
 
@@ -76,8 +76,8 @@ main(int argc, char **argv) {
 #endif
     // init kernel, init tpbench arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
-    err = tpb_init();
-    __tpbm_exit_on_error(err, "At main.c: tpb_init");
+    err = tpb_get_kernel_info();
+    __tpbm_exit_on_error(err, "At main.c: tpb_get_kernel_info");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tpb_args, &tpb_kargs_common, &timer);
