@@ -75,13 +75,6 @@ int tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id,
                               tpb_kargs_common_t *kargs_common);
 
 /**
- * @brief Initialize kernel and group lists from arguments.
- * @param tpb_args Pointer to argument data structure
- * @return Error code (0 on success)
- */
-int tpb_get_kernel_info_list(tpb_args_t *tpb_args);
-
-/**
  * @brief Print help document and exit.
  * @param progname Program name (argv[0])
  */

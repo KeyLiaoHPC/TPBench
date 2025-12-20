@@ -604,53 +604,6 @@ tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id,
     return 0;
 }
 
-int
-tpb_get_kernel_info_list(tpb_args_t *tpb_args)
-{
-    int err;
-    tpb_kargs_token_t kargs_token;
-
-    if(tpb_args->mode == 1) {
-        // BenchScore mode: including compute/memory/network.
-        // Compute subsystem: fmaldr, mulldr.
-        // Memory subsystem: init, copy, scale, striad.
-        // Network subsystem: MPI_Send/Recv, MPI_Allreduce.
-    } else if(tpb_args->mode == 2) {
-        // BenchCompute mode
-    } else if(tpb_args->mode == 3) {
-        // BenchMemory mode
-    } else if(tpb_args->mode == 4) {
-        // BenchNetwork mode
-    } else if(tpb_args->mode == 5) {
-        // BenchIO mode
-    } else {
-        // Parse kernel list with tpb_argstr_token to get kernel count
-        err = tpb_argstr_token(tpb_args->kstr, &kargs_token);
-        if(err) {
-            return err;
-        }
-        
-        tpb_args->nkern = kargs_token.nkern;
-        tpb_argstr_token_free(&kargs_token);
-        
-        if(tpb_args->nkern == 0) {
-            return 0;
-        }
-        
-        tpb_args->klist = (int *)malloc(sizeof(int) * tpb_args->nkern);
-        if(tpb_args->klist == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        
-        err = tpb_parse_klist(tpb_args);
-        if(err) {
-            return err;
-        }
-        return 0;
-    }
-    return 0;
-}
-
 static int
 tpb_set_mode(tpb_args_t *args, const char *arg)
 {
@@ -779,28 +732,51 @@ tpb_parse_args( int argc,
                 return TPBE_CLI_ARG_FAIL;
             }
         }
+        // Parse kernel list and validate arguments for "run" action
+        tpb_kargs_token_t kargs_token;
+        
+        // Parse kernel list with tpb_argstr_token to get kernel count
+        err = tpb_argstr_token(tpb_args->kstr, &kargs_token);
+        if(err) {
+            return err;
+        }
+        
+        tpb_args->nkern = kargs_token.nkern;
+        tpb_argstr_token_free(&kargs_token);
+        
+        if(tpb_args->nkern == 0) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "No kernels specified. Use -k option.\n");
+            return TPBE_CLI_ARG_FAIL;
+        }
+        
+        tpb_args->klist = (int *)malloc(sizeof(int) * tpb_args->nkern);
+        if(tpb_args->klist == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        
+        err = tpb_parse_klist(tpb_args);
+        if(err) {
+            return err;
+        }
+        
+        // Validate and apply kernel-specific arguments (they override common args)
+        if(tpb_args->kargs_kernel.nkern > 0) {
+            for(int i = 0; i < tpb_args->nkern; i++) {
+                err = tpb_validate_kernel_args(&tpb_args->kargs_kernel, i, tpb_kargs);
+                if(err) {
+                    return err;
+                }
+            }
+        }
     } else if (strcmp(argv[1], "benchmark") == 0 ) {
+        // TODO: Implement benchmark action
     } else if (strcmp(argv[1], "list") == 0 ) {
+        // TODO: Implement list action
     } else {
         tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported action: %s. Please use one of actions:\n"
                     "run, benchmark, list, help.\n", argv[1]);
         tpb_print_help_total();
         return TPBE_CLI_ARG_FAIL;
-    }
-
-    err = tpb_get_kernel_info_list(tpb_args);
-    if(err) {
-        return err;
-    }
-    
-    // Validate and apply kernel-specific arguments (they override common args)
-    if(tpb_args->kargs_kernel.nkern > 0) {
-        for(int i = 0; i < tpb_args->nkern; i++) {
-            err = tpb_validate_kernel_args(&tpb_args->kargs_kernel, i, tpb_kargs);
-            if(err) {
-                return err;
-            }
-        }
     }
     
     return 0;
