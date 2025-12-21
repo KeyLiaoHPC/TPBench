@@ -680,7 +680,7 @@ tpb_parse_args( int argc,
         tpb_kargs->twarm = 100;
         tpb_kargs->memsize = 32;
         for (int i = 2; i < argc; i ++) {
-            if (strcmp(argv[i], "-k") == 0 || strcmp(argv[i], "--kernel_list") == 0) {
+            if (strcmp(argv[i], "-k") == 0 || strcmp(argv[i], "--kernel") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Option %s requires arguments.\n", argv[i]);
                     return TPBE_CLI_ARG_FAIL;

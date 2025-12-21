@@ -21,7 +21,7 @@
     "Options and explanation for each action:\n" \
     HLINE \
     "  run               Run one or more benchmark kernels.\n" \
-    "      -k, --kernel_list <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
+    "      -k, --kernel <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
     "                    Kernel list separated by comma. Each kernel can have\n" \
     "                    multiple kargs separated by colon. (e.g.\n" \
     "                    d_init:memsize=1024,triad:fp=fp64:memsize=1024)\n" \

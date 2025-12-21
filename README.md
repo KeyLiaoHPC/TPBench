@@ -59,7 +59,7 @@ For Armv8 architecture, TPBench provide a simple PMU kernel module to let you ac
 
   -d, --data_dir[=PATH]      Optional. Data directory. <br>
   -g, --group=group_list     Group list. (e.g. -g d_stream). <br>
-  -k, --kernel=kernel_list   Kernel list.(e.g. -k d_init,d_sum). <br>
+  -k, --kernel=kernel   Kernel list.(e.g. -k d_init,d_sum). <br>
   -L, --list                 List all group and kernels then exit. <br>
   -n, --ntest=# of test      Overall number of tests. <br>
   -s, --nkib=kib_size        Memory usage for a single test array, in KiB. <br>

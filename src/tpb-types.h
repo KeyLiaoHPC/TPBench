@@ -63,8 +63,9 @@ typedef struct tpb_kargs_token {
  * @brief tpbench run-time parameters
  */
 typedef struct tpb_args {
-    int mode; // [Optional] The flag for socre benchmarking.
-    char kstr[TPBM_CLI_STR_MAX_LEN], kargstr[TPBM_CLI_STR_MAX_LEN];
+    int mode; 
+    char kstr[TPBM_CLI_STR_MAX_LEN];
+    char kargstr[TPBM_CLI_STR_MAX_LEN];
     char data_dir[PATH_MAX]; // [Mandatory] group and kernels name
     char timer[TPBM_CLI_STR_MAX_LEN];
     int *klist; 
