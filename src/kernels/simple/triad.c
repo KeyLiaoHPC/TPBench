@@ -48,6 +48,12 @@
                             if((_A) == NULL) {                                  \
                                 return  TPBE_MALLOC_FAIL;                            \
                             }
+
+// Forward declarations
+int register_triad(tpb_kernel_t *kernel);
+int run_triad(void *args);
+int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
+
 // Parameter table
 typedef struct triad_args {
     int ntest;
@@ -75,30 +81,34 @@ register_triad(tpb_kernel_t *kernel)
     }
 
     // Set kernel name and description
-    kernel->kname = strdup("triad");
-    kernel->kdesc = strdup("STREAM Triad: a[i] = b[i] + s * c[i]");
+    kernel->info.kname = strdup("triad");
+    kernel->info.note = strdup("STREAM Triad: a[i] = b[i] + s * c[i]");
+    kernel->info.rid = 0;
+    kernel->info.nbyte = 24;
+    kernel->info.nop = 2;
     
     // Set metric-unit pair
-    kernel->metric_unit.metric = strdup("bandwidth");
-    kernel->metric_unit.unit = strdup("GB/s");
+    kernel->info.metric_unit.metric = strdup("bandwidth");
+    kernel->info.metric_unit.unit = strdup("GB/s");
     
     // Set up supported parameters
-    kernel->kargs_def.nkern = 1;
-    kernel->kargs_def.ntoken = (int *)malloc(sizeof(int));
-    kernel->kargs_def.ntoken[0] = 5;  // 5 supported parameters
+    kernel->info.kargs_def.nkern = 1;
+    kernel->info.kargs_def.ntoken = (int *)malloc(sizeof(int));
+    kernel->info.kargs_def.ntoken[0] = 5;  // 5 supported parameters
     
-    kernel->kargs_def.kname = (char **)malloc(sizeof(char *));
-    kernel->kargs_def.kname[0] = strdup("triad");
+    kernel->info.kargs_def.kname = (char **)malloc(sizeof(char *));
+    kernel->info.kargs_def.kname[0] = strdup("triad");
     
-    kernel->kargs_def.token = (char **)malloc(sizeof(char *) * 5);
-    kernel->kargs_def.token[0] = strdup("ntest=10=Number of test iterations");
-    kernel->kargs_def.token[1] = strdup("nskip=2=Number of initial iterations to skip");
-    kernel->kargs_def.token[2] = strdup("twarm=100=Warmup time in milliseconds");
-    kernel->kargs_def.token[3] = strdup("dtype=double=Data type (double, float)");
-    kernel->kargs_def.token[4] = strdup("memsize=32=Memory size in KiB");
+    kernel->info.kargs_def.token = (char **)malloc(sizeof(char *) * 5);
+    kernel->info.kargs_def.token[0] = strdup("ntest=10=Number of test iterations");
+    kernel->info.kargs_def.token[1] = strdup("nskip=2=Number of initial iterations to skip");
+    kernel->info.kargs_def.token[2] = strdup("twarm=100=Warmup time in milliseconds");
+    kernel->info.kargs_def.token[3] = strdup("dtype=double=Data type (double, float)");
+    kernel->info.kargs_def.token[4] = strdup("memsize=32=Memory size in KiB");
     
-    // Set run function
-    kernel->run = NULL;  // Will be set later
+    // Set function pointers
+    kernel->func.kfunc_register = NULL;  // Don't self-reference
+    kernel->func.kfunc_run = run_triad;
     
     return 0;
 }
@@ -112,7 +122,7 @@ run_triad(void *args)
 }
 
 int
-d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib, ...) {
+d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib) {
     int nsize, err;
     volatile double *a, *b, *c;
     register double s = 0.42;

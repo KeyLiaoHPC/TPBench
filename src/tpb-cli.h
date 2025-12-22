@@ -48,13 +48,13 @@ int tpb_parse_klist(tpb_args_t *tpb_args);
  * @param karg_token Pointer to token structure to fill
  * @return Error code (0 on success, negative on failure)
  */
-int tpb_argstr_token(const char *argstr, tpb_kargs_token_t *karg_token);
+int tpb_argstr_token(const char *argstr, tpb_k_arg_token_t *karg_token);
 
 /**
  * @brief Free memory allocated for kargs token structure.
  * @param karg_token Pointer to token structure to free
  */
-void tpb_argstr_token_free(tpb_kargs_token_t *karg_token);
+void tpb_argstr_token_free(tpb_k_arg_token_t *karg_token);
 
 /**
  * @brief Parse default kernel arguments string.
@@ -71,7 +71,7 @@ int tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs);
  * @param kargs_common Pointer to common kernel arguments to update
  * @return Error code (0 on success, error on unsupported kernel-specific arg)
  */
-int tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id, 
+int tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_id, 
                               tpb_kargs_common_t *kargs_common);
 
 /**

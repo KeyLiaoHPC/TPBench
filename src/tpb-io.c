@@ -162,13 +162,13 @@ tpb_print_help_total(void)
 
 void
 tpb_list(){
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernel and groups.\n");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Routine         NOTE\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Description\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     for(int i = 0 ; i < nkrout; i ++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-12s    %-12s    %s\n", 
-                   kern_info[i].kname, kern_info[i].rname, kern_info[i].note);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n", 
+                   kernel_all[i].info.kname, kernel_all[i].info.note);
     }
     tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 }

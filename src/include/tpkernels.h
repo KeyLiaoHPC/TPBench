@@ -31,24 +31,8 @@
 #include "../tpb-types.h"
 #include "../tpb-impl.h"
 
-// Kernel info type
-typedef struct {
-    char *kname; // Name of kernel
-    char *rname; // Name of routine
-    int rid; // kernel routine id
-    uint64_t nbyte; // bytes through core per iteration
-    uint64_t nop; // Arithmetic (FL)OPs per iteration.
-    int (*pfun)(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib); //var args for extra args
-    char *note;
-} tpb_kern_info_t;
-
-// Kernel declaration
-// id 0
-// int d_init(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
-// int d_sum(int ntest,    uint64_t *ns, uint64_t *cy, uint64_t kib);
-// int d_copy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
-// int d_update(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
-int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
+// Kernel function declarations
+int d_triad(struct tpb_timer *timer, int ntest, int64_t *time_arr, uint64_t kib);
 // int d_axpy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
 // int d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
 // int d_staxpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);

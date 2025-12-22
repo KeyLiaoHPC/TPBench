@@ -35,10 +35,10 @@ init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t
     if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
         for(int i = 0; i < args->nkern - 1; i ++){
-            sprintf(res->header, "%s,", strcat(res->header, kern_info[args->klist[i]].rname));
+            sprintf(res->header, "%s,", strcat(res->header, kernel_all[args->klist[i]].info.kname));
         }
         int i = args->nkern - 1;
-        sprintf(res->header, "%s", strcat(res->header, kern_info[args->klist[i]].rname));
+        sprintf(res->header, "%s", strcat(res->header, kernel_all[args->klist[i]].info.kname));
     }
     // print fname
     sprintf(res->fname, "%s-r%d_c%d-%s.csv", 
@@ -96,9 +96,9 @@ main(int argc, char **argv) {
 
     // print kernel list
     if(tpb_args.nkern) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine:\n");
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel list:\n");
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kern_info[tpb_args.klist[i]].rname);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_all[tpb_args.klist[i]].info.kname);
         }
     }
     
@@ -129,7 +129,7 @@ main(int argc, char **argv) {
         
         // Run kernels.
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel routine %s started.\n" HLINE, kern_info[tpb_args.klist[i]].rname);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, kernel_all[tpb_args.klist[i]].info.kname);
             err = tpb_run_kernel(tpb_args.klist[i], 
                                  &timer,
                                  tpb_kargs_common.ntest, 

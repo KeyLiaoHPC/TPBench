@@ -72,7 +72,7 @@ tpb_check_count(int *n, char *strarg)
 int
 tpb_parse_klist(tpb_args_t *tpb_args)
 {
-    tpb_kargs_token_t kargs_token;
+    tpb_k_arg_token_t kargs_token;
     int err;
     int matched;
 
@@ -94,9 +94,8 @@ tpb_parse_klist(tpb_args_t *tpb_args)
     for(int seg = 0; seg < kargs_token.nkern; seg++) {
         matched = 0;
         for(int rid = 0; rid < nkrout; rid++) {
-            // Check both kname and rname for compatibility
-            if(strcmp(kargs_token.kname[seg], kern_info[rid].kname) == 0 ||
-               strcmp(kargs_token.kname[seg], kern_info[rid].rname) == 0) {
+            // Check kernel name
+            if(strcmp(kargs_token.kname[seg], kernel_all[rid].info.kname) == 0) {
                 tpb_args->klist[seg] = rid;
                 matched = 1;
                 break;
@@ -110,7 +109,7 @@ tpb_parse_klist(tpb_args_t *tpb_args)
     }
 
     // Store kernel-specific arguments for later validation and application
-    memcpy(&tpb_args->kargs_kernel, &kargs_token, sizeof(tpb_kargs_token_t));
+    memcpy(&tpb_args->kargs_kernel, &kargs_token, sizeof(tpb_k_arg_token_t));
     
     return 0;
 }
@@ -145,7 +144,7 @@ tpb_trim_whitespace(char *str)
 }
 
 int
-tpb_argstr_token(const char *argstr, tpb_kargs_token_t *karg_token)
+tpb_argstr_token(const char *argstr, tpb_k_arg_token_t *karg_token)
 {
     char buf[TPBM_CLI_STR_MAX_LEN];
     char *saveptr_kern, *saveptr_arg;
@@ -358,7 +357,7 @@ tpb_argstr_token(const char *argstr, tpb_kargs_token_t *karg_token)
 }
 
 void
-tpb_argstr_token_free(tpb_kargs_token_t *karg_token)
+tpb_argstr_token_free(tpb_k_arg_token_t *karg_token)
 {
     int total_tokens;
 
@@ -405,7 +404,7 @@ tpb_argstr_token_free(tpb_kargs_token_t *karg_token)
 int
 tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
 {
-    tpb_kargs_token_t karg_token;
+    tpb_k_arg_token_t karg_token;
     int err;
     int total_tokens;
 
@@ -499,11 +498,11 @@ tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
 }
 
 int
-tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id, 
+tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_id, 
                          tpb_kargs_common_t *kargs_common)
 {
     tpb_kernel_t *kernel;
-    tpb_kargs_token_t *kargs_def;
+    tpb_k_arg_token_t *kargs_def;
     int token_start = 0;
     
     if(kernel_id < 0 || kernel_id >= nkern) {
@@ -511,7 +510,7 @@ tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id,
     }
     
     kernel = &kernel_all[kernel_id];
-    kargs_def = &kernel->kargs_def;
+    kargs_def = &kernel->info.kargs_def;
     
     // Calculate token start position for this kernel
     for(int i = 0; i < kernel_id; i++) {
@@ -596,7 +595,7 @@ tpb_validate_kernel_args(tpb_kargs_token_t *kargs_user, int kernel_id,
         if(!found) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                        "Error: Unsupported kernel argument '%s' for kernel '%s'.\n", 
-                       key, kernel->kname);
+                       key, kernel->info.kname);
             return TPBE_KERN_ARG_FAIL;
         }
     }
@@ -673,7 +672,7 @@ tpb_parse_args( int argc,
         strcpy(tpb_args->data_dir, "./data");
         tpb_args->kstr[0] = '\0';
         tpb_args->kargstr[0] = '\0';
-        memset(&tpb_args->kargs_kernel, 0, sizeof(tpb_kargs_token_t));
+        memset(&tpb_args->kargs_kernel, 0, sizeof(tpb_k_arg_token_t));
         tpb_set_timer("clock_gettime", tpb_args, timer);
         tpb_kargs->ntest = 10;
         tpb_kargs->nwarm = 2;
@@ -733,7 +732,7 @@ tpb_parse_args( int argc,
             }
         }
         // Parse kernel list and validate arguments for "run" action
-        tpb_kargs_token_t kargs_token;
+        tpb_k_arg_token_t kargs_token;
         
         // Parse kernel list with tpb_argstr_token to get kernel count
         err = tpb_argstr_token(tpb_args->kstr, &kargs_token);

@@ -52,12 +52,12 @@ typedef struct _tpb_error {
  *                        kname[0]=kernel name, 
  *                        token[j]="key=default_value=description"
  */
-typedef struct tpb_kargs_token {
+typedef struct tpb_k_arg_token {
     int nkern;
     int *ntoken;
     char **kname;
     char **token;
-} tpb_kargs_token_t;
+} tpb_k_arg_token_t;
 
 /**
  * @brief tpbench run-time parameters
@@ -71,31 +71,48 @@ typedef struct tpb_args {
     int *klist; 
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
-    tpb_kargs_token_t kargs_kernel;  // Kernel-specific arguments from -k
+    tpb_k_arg_token_t kargs_kernel;  // Kernel-specific arguments from -k
 } tpb_args_t;
 
 /**
  * @brief Metric-unit pair for performance reporting
  */
-typedef struct tpb_metric_unit {
+typedef struct tpb_k_metric {
     char *metric;  // e.g., "bandwidth", "throughput", "latency"
     char *unit;    // e.g., "GB/s", "GFLOPS", "ns"
-} tpb_metric_unit_t;
+} tpb_k_metric_t;
 
-typedef struct tpb_kinfo_dyn{
-    char *name; // Name of kernel
-    int (*reg_func);
-} tpb_kinfo_dyn_t;
+// Forward declarations
+struct tpb_kernel;
+struct tpb_timer;
+
+/**
+ * @brief Kernel function pointers
+ */
+typedef struct tpb_k_func {
+    int (*kfunc_register)(struct tpb_kernel *kernel);  // Registration function
+    int (*kfunc_run)(void *args);                       // Run function with arguments
+} tpb_k_func_t;
+
+/**
+ * @brief Static kernel information
+ */
+typedef struct tpb_k_static_info {
+    char *kname;                    // Kernel name
+    char *note;                     // Kernel description/notes
+    int rid;                        // Kernel routine id
+    uint64_t nbyte;                 // Bytes through core per iteration
+    uint64_t nop;                   // Arithmetic (FL)OPs per iteration
+    tpb_k_arg_token_t kargs_def;    // Supported parameters definition
+    tpb_k_metric_t metric_unit;     // Performance metric and unit
+} tpb_k_static_info_t;
 
 /**
  * @brief Kernel structure with metadata and function pointers
  */
 typedef struct tpb_kernel {
-    char *kname;                    // Kernel name
-    char *kdesc;                    // Kernel description
-    tpb_kargs_token_t kargs_def;    // Supported parameters definition
-    tpb_metric_unit_t metric_unit;  // Performance metric and unit
-    int (*run)(void *args);         // Run function with arguments
+    tpb_k_static_info_t info;       // Static kernel information
+    tpb_k_func_t func;              // Kernel functions
 } tpb_kernel_t;
 
 /**

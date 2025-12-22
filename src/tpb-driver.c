@@ -17,7 +17,6 @@
 int nkern = 0;
 int nkrout = 0;
 tpb_kernel_t *kernel_all = NULL;
-tpb_kern_info_t *kern_info = NULL;
 
 /**
  * @brief Add a kernel to the registry
@@ -76,22 +75,6 @@ tpb_get_kernel_info()
         return err;
     }
 
-    // Build kern_info array for compatibility
-    kern_info = (tpb_kern_info_t *)malloc(sizeof(tpb_kern_info_t) * nkern);
-    if(kern_info == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-
-    for(int i = 0; i < nkern; i++) {
-        kern_info[i].kname = kernel_all[i].kname;
-        kern_info[i].rname = kernel_all[i].kname;  // Same as kname
-        kern_info[i].rid = i;
-        kern_info[i].nbyte = 24;  // Will be set properly later
-        kern_info[i].nop = 2;
-        kern_info[i].pfun = d_triad;  // Temporary, will be updated
-        kern_info[i].note = kernel_all[i].kdesc;
-    }
-
     return 0;
 }
 
@@ -104,12 +87,12 @@ tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_
         return TPBE_KERN_NOT_FOUND;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s\n", kernel_all[id].kname);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", kernel_all[id].kdesc);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s\n", kernel_all[id].info.kname);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", kernel_all[id].info.note);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", ntest);
     tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %ld\n", nkib * 1024 / sizeof(double));
     
-    // For now, use d_triad directly
+    // Call d_triad directly (can be extended with a dispatch mechanism later)
     err = d_triad(timer, ntest, time_arr, nkib);
     
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);

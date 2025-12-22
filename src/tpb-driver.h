@@ -34,7 +34,6 @@
 // # of kernels, kernel routines, groups and group routines
 extern int nkern, nkrout;
 extern tpb_kernel_t *kernel_all;
-extern tpb_kern_info_t *kern_info;
 // granularity and tick of timer.
 // uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
 
