@@ -45,14 +45,18 @@ extern tpb_kernel_t *kernel_all;
 int tpb_get_kernel_info();
 
 /**
- * @brief 
- * @param id 
- * @param ntest 
- * @param time_arr 
- * @param nkib 
- * @return int 
+ * @brief Run a registered kernel
+ * @param id Kernel ID
+ * @param timer Timer structure
+ * @param ntest Number of tests
+ * @param time_arr Output array for timing results
+ * @param nkib Memory size in KiB
+ * @param kargs_kernel Kernel-specific arguments (can be NULL)
+ * @param kernel_idx Index of this kernel in the user's kernel list
+ * @return int Error code (0 on success)
  */
-int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib);
+int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib,
+                   tpb_k_arg_token_t *kargs_kernel, int kernel_idx);
 
 /**
  * @brief get error message according to error code
@@ -61,3 +65,59 @@ int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uin
  * @return char* reutrn buf.
  */
 char *tpb_geterr(const int err, char *buf);
+
+// === New Kernel Registration API ===
+/**
+ * @brief Register a new kernel with given name
+ * @param name Kernel name (must be unique)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_register(const char *name);
+
+/**
+ * @brief Set the description/note for the current kernel
+ * @param note Description string
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_set_note(const char *note);
+
+/**
+ * @brief Add a runtime parameter to the current kernel
+ * @param name Parameter name
+ * @param default_value Default value string
+ * @param description Parameter description
+ * @param dtype Parameter data type (source | check | type)
+ * @param ... Variable arguments for validation (range: min, max; list: count, array)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_add_parm(const char *name, const char *default_value, 
+                   const char *description, TPB_DTYPE dtype, ...);
+
+/**
+ * @brief Set the runner function for the current kernel
+ * @param runner Function pointer to kernel runner
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_add_runner(int (*runner)(tpb_rt_handle_t *handle));
+
+/**
+ * @brief Set the number of dimensions for the current kernel
+ * @param ndim Number of dimensions
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_set_dim(int ndim);
+
+/**
+ * @brief Set bytes per iteration for the current kernel
+ * @param nbyte Bytes through core per iteration
+ * @return 0 on success, error code otherwise
+ */
+int tpb_k_set_nbyte(uint64_t nbyte);
+
+/**
+ * @brief Get parameter value from runtime handle
+ * @param handle Runtime handle
+ * @param name Parameter name
+ * @return Pointer to parameter value, NULL if not found
+ */
+tpb_parm_value_t *tpb_rt_get_parm(tpb_rt_handle_t *handle, const char *name);

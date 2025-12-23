@@ -35,6 +35,7 @@
 #include "../../tpb-types.h"
 #include "../../tpb-impl.h"
 #include "../../tpb-stat.h"
+#include "../../tpb-driver.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"
@@ -51,74 +52,78 @@
 
 // Forward declarations
 int register_triad(tpb_kernel_t *kernel);
-int run_triad(void *args);
+int run_triad(tpb_rt_handle_t *handle);
 int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
-
-// Parameter table
-typedef struct triad_args {
-    int ntest;
-    int nskip;
-    int twarm;
-    char dtype[32];
-    uint64_t memsize;
-    double s;
-} triad_args_t;
-
-static triad_args_t triad_args_default = {
-    .ntest = 10,
-    .nskip = 2,
-    .twarm = 100,
-    .dtype = "double",
-    .memsize = 32,
-    .s = 0.42
-};
 
 int
 register_triad(tpb_kernel_t *kernel)
 {
-    if(kernel == NULL) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-
-    // Set kernel name and description
-    kernel->info.kname = strdup("triad");
-    kernel->info.note = strdup("STREAM Triad: a[i] = b[i] + s * c[i]");
-    kernel->info.rid = 0;
-    kernel->info.nbyte = 24;
-    kernel->info.nop = 2;
+    int err;
     
-    // Set metric-unit pair
-    kernel->info.metric_unit.metric = strdup("bandwidth");
-    kernel->info.metric_unit.unit = strdup("GB/s");
+    // Register kernel with name
+    err = tpb_k_register("triad");
+    if(err != 0) return err;
     
-    // Set up supported parameters
-    kernel->info.kargs_def.nkern = 1;
-    kernel->info.kargs_def.ntoken = (int *)malloc(sizeof(int));
-    kernel->info.kargs_def.ntoken[0] = 5;  // 5 supported parameters
+    // Set description
+    err = tpb_k_set_note("STREAM Triad: a[i] = b[i] + s * c[i]");
+    if(err != 0) return err;
     
-    kernel->info.kargs_def.kname = (char **)malloc(sizeof(char *));
-    kernel->info.kargs_def.kname[0] = strdup("triad");
+    // Add runtime parameters with validation
+    err = tpb_k_add_parm("ntest", "10", "Number of test iterations",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)1, (int64_t)100000);
+    if(err != 0) return err;
     
-    kernel->info.kargs_def.token = (char **)malloc(sizeof(char *) * 5);
-    kernel->info.kargs_def.token[0] = strdup("ntest=10=Number of test iterations");
-    kernel->info.kargs_def.token[1] = strdup("nskip=2=Number of initial iterations to skip");
-    kernel->info.kargs_def.token[2] = strdup("twarm=100=Warmup time in milliseconds");
-    kernel->info.kargs_def.token[3] = strdup("dtype=double=Data type (double, float)");
-    kernel->info.kargs_def.token[4] = strdup("memsize=32=Memory size in KiB");
+    err = tpb_k_add_parm("nskip", "2", "Number of initial iterations to skip",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)1000);
+    if(err != 0) return err;
     
-    // Set function pointers
-    kernel->func.kfunc_register = NULL;  // Don't self-reference
-    kernel->func.kfunc_run = run_triad;
+    err = tpb_k_add_parm("twarm", "100", "Warmup time in milliseconds",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)10000);
+    if(err != 0) return err;
+    
+    err = tpb_k_add_parm("memsize", "32", "Memory size in KiB",
+                         TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE,
+                         (uint64_t)1, (uint64_t)1048576);
+    if(err != 0) return err;
+    
+    err = tpb_k_add_parm("s", "0.42", "Scalar multiplier",
+                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
+    if(err != 0) return err;
+    
+    // Set runner function
+    err = tpb_k_add_runner(run_triad);
+    if(err != 0) return err;
+    
+    // Set dimension (1D timing array)
+    err = tpb_k_set_dim(1);
+    if(err != 0) return err;
+    
+    // Set bytes per iteration (24 bytes for triad: 3 arrays * 8 bytes)
+    err = tpb_k_set_nbyte(24);
+    if(err != 0) return err;
     
     return 0;
 }
 
 int
-run_triad(void *args)
+run_triad(tpb_rt_handle_t *handle)
 {
-    // Entry point for running triad kernel
-    // Will be implemented to call d_triad or other type-specific implementations
-    return 0;
+    if(handle == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+    
+    // Extract parameters from handle
+    tpb_parm_value_t *ntest_val = tpb_rt_get_parm(handle, "ntest");
+    tpb_parm_value_t *memsize_val = tpb_rt_get_parm(handle, "memsize");
+    
+    int ntest = (ntest_val != NULL) ? (int)ntest_val->i64 : 10;
+    uint64_t memsize = (memsize_val != NULL) ? memsize_val->u64 : 32;
+    
+    // Call the actual kernel implementation
+    return d_triad(handle->timer, ntest, handle->respack->time_arr, memsize);
 }
 
 int
@@ -240,10 +245,6 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib) {
         timer->tock(time_arr+i);
     }
     // kernel end
-
-    // overall result
-    int nskip = 1, freq=1;
-    dpipe_k0(time_arr, nskip, ntest, freq, 24, nsize);
     
     free((void *)a);
     free((void *)b);

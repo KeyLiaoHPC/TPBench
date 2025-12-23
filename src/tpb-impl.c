@@ -10,7 +10,7 @@
 static tpb_error_type tpb_errors[] = {
     {TPBE_SUCCESS,          TPBE_NOTE,  "Action successful."},
     {TPBE_EXIT_ON_HELP,     TPBE_FAIL,  "TPBench exits on help."},
-    {TPBE_CLI_ARG_FAIL,     TPBE_FAIL,  "Failed to parse TPbench CLI argument."},
+    {TPBE_CLI_FAIL,     TPBE_FAIL,  "Failed to parse TPbench CLI argument."},
     {TPBE_FILE_IO_FAIL,     TPBE_FAIL,  "File I/O failed."},
     {TPBE_MALLOC_FAIL,      TPBE_FAIL,  "Memory allocation failed."},
     {TPBE_MPI_FAIL,         TPBE_FAIL,  "MPI initialization failed."},

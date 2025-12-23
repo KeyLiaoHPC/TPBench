@@ -17,6 +17,7 @@
 #include "tpb-cli.h"
 #include "tpb-driver.h"
 #include "tpb-io.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
 
 #ifdef USE_MPI
@@ -121,21 +122,68 @@ main(int argc, char **argv) {
         err = init_res("kernels", "ns", hostname, &tpb_args, &time_arr);
         __tpbm_exit_on_error(err, "At main.c: init_res");
 
-        // allocate space for data
+        // Find maximum ntest among all kernels (for array allocation)
+        int max_ntest = tpb_kargs_common.ntest;
+        if(tpb_args.kargs_kernel.nkern > 0) {
+            int token_start = 0;
+            for(int i = 0; i < tpb_args.kargs_kernel.nkern; i++) {
+                for(int j = 0; j < tpb_args.kargs_kernel.ntoken[i]; j++) {
+                    char *tok = tpb_args.kargs_kernel.token[token_start + j];
+                    if(strncmp(tok, "ntest=", 6) == 0) {
+                        int ntest_val = atoi(tok + 6);
+                        if(ntest_val > max_ntest) max_ntest = ntest_val;
+                    }
+                }
+                token_start += tpb_args.kargs_kernel.ntoken[i];
+            }
+        }
+        
+        // allocate space for data using max_ntest
         time_arr.data = (int64_t **)malloc(tpb_args.nkern * sizeof(int64_t *));
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            time_arr.data[i] = (int64_t *)malloc(tpb_kargs_common.ntest * sizeof(int64_t));
+            time_arr.data[i] = (int64_t *)malloc(max_ntest * sizeof(int64_t));
         }
         
         // Run kernels.
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, kernel_all[tpb_args.klist[i]].info.kname);
-            err = tpb_run_kernel(tpb_args.klist[i], 
+            int kid = tpb_args.klist[i];
+            
+            // Extract kernel-specific ntest and memsize
+            int ntest = tpb_kargs_common.ntest;
+            uint64_t memsize = tpb_kargs_common.memsize;
+            
+            if(tpb_args.kargs_kernel.nkern > 0 && i < tpb_args.kargs_kernel.nkern) {
+                int token_start = 0;
+                for(int j = 0; j < i; j++) {
+                    token_start += tpb_args.kargs_kernel.ntoken[j];
+                }
+                
+                for(int j = 0; j < tpb_args.kargs_kernel.ntoken[i]; j++) {
+                    char *tok = tpb_args.kargs_kernel.token[token_start + j];
+                    if(strncmp(tok, "ntest=", 6) == 0) {
+                        ntest = atoi(tok + 6);
+                    } else if(strncmp(tok, "memsize=", 8) == 0) {
+                        memsize = (uint64_t)atoll(tok + 8);
+                    }
+                }
+            }
+            
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, kernel_all[kid].info.kname);
+            err = tpb_run_kernel(kid, 
                                  &timer,
-                                 tpb_kargs_common.ntest, 
+                                 ntest, 
                                  time_arr.data[i],
-                                 tpb_kargs_common.memsize);
+                                 memsize,
+                                 &tpb_args.kargs_kernel,
+                                 i);
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
+            
+            // Process and display statistics
+            int nskip = 1, freq = 1;
+            size_t nsize = memsize * 1024 / sizeof(double);
+            dpipe_k0(time_arr.data[i], nskip, ntest, freq, 
+                     kernel_all[kid].info.nbyte, nsize);
+            
             {
                 unsigned err_type = tpb_get_err_exit_flag(err);
                 tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Finished.\n");

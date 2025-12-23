@@ -17,9 +17,9 @@ extern int register_triad(tpb_kernel_t *kernel);
 
 /**
  * @brief Run triad kernel
- * @param args Pointer to arguments structure
+ * @param handle Runtime handle with parameters, timer, and result package
  * @return Error code (0 on success)
  */
-extern int run_triad(void *args);
+extern int run_triad(tpb_rt_handle_t *handle);
 
 #endif // #ifndef _KERNELS_H
