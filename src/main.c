@@ -77,8 +77,8 @@ main(int argc, char **argv) {
 #endif
     // init kernel, init tpbench arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
-    err = tpb_get_kernel_info();
-    __tpbm_exit_on_error(err, "At main.c: tpb_get_kernel_info");
+    err = tpb_register_kernel();
+    __tpbm_exit_on_error(err, "At main.c: tpb_register_kernel");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tpb_args, &tpb_kargs_common, &timer);
@@ -148,23 +148,15 @@ main(int argc, char **argv) {
         for(int i = 0; i < tpb_args.nkern; i ++) {
             int kid = tpb_args.klist[i];
             
-            // Extract kernel-specific ntest and memsize
+            // Extract ntest and memsize from pre-configured runtime parameters
             int ntest = tpb_kargs_common.ntest;
             uint64_t memsize = tpb_kargs_common.memsize;
             
-            if(tpb_args.kargs_kernel.nkern > 0 && i < tpb_args.kargs_kernel.nkern) {
-                int token_start = 0;
-                for(int j = 0; j < i; j++) {
-                    token_start += tpb_args.kargs_kernel.ntoken[j];
-                }
-                
-                for(int j = 0; j < tpb_args.kargs_kernel.ntoken[i]; j++) {
-                    char *tok = tpb_args.kargs_kernel.token[token_start + j];
-                    if(strncmp(tok, "ntest=", 6) == 0) {
-                        ntest = atoi(tok + 6);
-                    } else if(strncmp(tok, "memsize=", 8) == 0) {
-                        memsize = (uint64_t)atoll(tok + 8);
-                    }
+            for(int j = 0; j < tpb_args.kernel_nparms[i]; j++) {
+                if(strcmp(tpb_args.kernel_rt_parms[i][j].name, "ntest") == 0) {
+                    ntest = (int)tpb_args.kernel_rt_parms[i][j].value.i64;
+                } else if(strcmp(tpb_args.kernel_rt_parms[i][j].name, "memsize") == 0) {
+                    memsize = tpb_args.kernel_rt_parms[i][j].value.u64;
                 }
             }
             
@@ -174,8 +166,8 @@ main(int argc, char **argv) {
                                  ntest, 
                                  time_arr.data[i],
                                  memsize,
-                                 &tpb_args.kargs_kernel,
-                                 i);
+                                 tpb_args.kernel_rt_parms[i],
+                                 tpb_args.kernel_nparms[i]);
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
             
             // Process and display statistics

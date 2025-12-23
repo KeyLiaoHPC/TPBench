@@ -497,13 +497,102 @@ tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs)
     return 0;
 }
 
+/**
+ * @brief Check if value is within range [plims[0], plims[1]]
+ * @param parm Parameter structure with type and limits
+ * @param value Parsed value to check
+ * @return 0 on success, error code otherwise
+ */
+static int
+tpb_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+{
+    if(parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+    
+    uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
+    
+    if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
+        if(value->i64 < parm->plims[0].i64 || value->i64 > parm->plims[1].i64) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %lld out of range [%lld, %lld]\n",
+                      parm->name, (long long)value->i64, 
+                      (long long)parm->plims[0].i64, (long long)parm->plims[1].i64);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
+        if(value->u64 < parm->plims[0].u64 || value->u64 > parm->plims[1].u64) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %llu out of range [%llu, %llu]\n",
+                      parm->name, (unsigned long long)value->u64,
+                      (unsigned long long)parm->plims[0].u64, (unsigned long long)parm->plims[1].u64);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        if(value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %f out of range [%f, %f]\n",
+                      parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    }
+    
+    return 0;
+}
+
+/**
+ * @brief Check if value is in the list plims[0..nlims-1]
+ * @param parm Parameter structure with type and list
+ * @param value Parsed value to check
+ * @return 0 on success, error code otherwise
+ */
+static int
+tpb_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+{
+    if(parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+    
+    uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
+    
+    if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
+        for(int i = 0; i < parm->nlims; i++) {
+            if(value->i64 == parm->plims[i].i64) {
+                return 0;
+            }
+        }
+    } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
+        for(int i = 0; i < parm->nlims; i++) {
+            if(value->u64 == parm->plims[i].u64) {
+                return 0;
+            }
+        }
+    } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        for(int i = 0; i < parm->nlims; i++) {
+            if(value->f64 == parm->plims[i].f64) {
+                return 0;
+            }
+        }
+    } else if(type_code == TPB_STRING_T) {
+        for(int i = 0; i < parm->nlims; i++) {
+            if(strcmp(value->str, parm->plims[i].str) == 0) {
+                return 0;
+            }
+        }
+    }
+    
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value not in allowed list\n", parm->name);
+    return TPBE_KERN_ARG_FAIL;
+}
+
 int
-tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_idx, 
-                         tpb_kargs_common_t *kargs_common, int kernel_rid)
+tpb_check_kargs(tpb_k_arg_token_t *kargs_user, int kernel_idx, int kernel_rid,
+                tpb_rt_parm_t **rt_parms_out, int *nparms_out)
 {
     tpb_kernel_t *kernel;
     int token_start = 0;
-    
+    int err;
+    tpb_rt_parm_t *rt_parms;
     
     if(kernel_rid < 0 || kernel_rid >= nkern) {
         return TPBE_KERN_NOT_FOUND;
@@ -511,18 +600,32 @@ tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_idx,
     
     kernel = &kernel_all[kernel_rid];
     
+    // Create per-instance parameter array from kernel template
+    *nparms_out = kernel->info.nparms;
+    rt_parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * kernel->info.nparms);
+    if(rt_parms == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    
+    // Copy parameters with default values
+    for(int i = 0; i < kernel->info.nparms; i++) {
+        memcpy(&rt_parms[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
+        rt_parms[i].value = rt_parms[i].default_value;
+    }
+    
     // Calculate token start position for this kernel
     for(int i = 0; i < kernel_idx; i++) {
         token_start += kargs_user->ntoken[i];
     }
     
-    // Validate each user argument against supported parameters
+    // Parse, validate and apply each user argument to this instance
     for(int i = 0; i < kargs_user->ntoken[kernel_idx]; i++) {
         char token_buf[TPBM_CLI_STR_MAX_LEN];
         char *eq;
         char *key;
         char *value;
         int found = 0;
+        int parm_idx = -1;
         
         snprintf(token_buf, sizeof(token_buf), "%s", kargs_user->token[token_start + i]);
         eq = strchr(token_buf, '=');
@@ -531,6 +634,7 @@ tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_idx,
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                        "Invalid kernel arg \"%s\". Expected key=value.\n", 
                        kargs_user->token[token_start + i]);
+            free(rt_parms);
             return TPBE_KERN_ARG_FAIL;
         }
         
@@ -538,51 +642,57 @@ tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_idx,
         key = tpb_trim_whitespace(token_buf);
         value = tpb_trim_whitespace(eq + 1);
         
-        
-        // Check if this key is supported by the kernel using new parms structure
+        // Find parameter in this instance
         for(int j = 0; j < kernel->info.nparms; j++) {
-            if(strcmp(key, kernel->info.parms[j].name) == 0) {
+            if(strcmp(key, rt_parms[j].name) == 0) {
                 found = 1;
-                
-                // Apply the value to kargs_common if it's a common parameter
-                if(strcmp(key, "ntest") == 0) {
-                    if(!tpb_char_is_legal_int(1, INT_MAX, value)) {
-                        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid ntest value: %s\n", value);
-                        return TPBE_KERN_ARG_FAIL;
-                    }
-                    kargs_common->ntest = (int)strtol(value, NULL, 10);
-                } else if(strcmp(key, "nskip") == 0 || strcmp(key, "nwarm") == 0) {
-                    if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
-                        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid %s value: %s\n", key, value);
-                        return TPBE_KERN_ARG_FAIL;
-                    }
-                    kargs_common->nwarm = (int)strtol(value, NULL, 10);
-                } else if(strcmp(key, "twarm") == 0) {
-                    if(!tpb_char_is_legal_int(0, INT_MAX, value)) {
-                        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid twarm value: %s\n", value);
-                        return TPBE_KERN_ARG_FAIL;
-                    }
-                    kargs_common->twarm = (int)strtol(value, NULL, 10);
-                } else if(strcmp(key, "memsize") == 0) {
-                    if(!tpb_char_is_legal_int(1, INT64_MAX, value)) {
-                        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid memsize value: %s\n", value);
-                        return TPBE_KERN_ARG_FAIL;
-                    }
-                    kargs_common->memsize = (uint64_t)strtoll(value, NULL, 10);
-                }
-                // Note: kernel-specific parameters like 's' are not applied to kargs_common
+                parm_idx = j;
                 break;
             }
         }
         
         if(!found) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
-                       "Warning: Unsupported kernel argument '%s' for kernel '%s'. Ignoring.\n", 
+                       "Warning: Unsupported argument '%s' for kernel '%s'. Ignoring.\n", 
                        key, kernel->info.kname);
-            // Don't fail, just warn as per user requirements
+            continue;
         }
+        
+        // Parse value based on type
+        tpb_parm_value_t parsed_value;
+        uint32_t type_code = rt_parms[parm_idx].dtype & TPB_PARM_TYPE_MASK;
+        
+        if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
+            parsed_value.i64 = strtoll(value, NULL, 10);
+        } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
+            parsed_value.u64 = strtoull(value, NULL, 10);
+        } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+            parsed_value.f64 = strtod(value, NULL);
+        } else if(type_code == TPB_STRING_T) {
+            parsed_value.str = strdup(value);
+        }
+        
+        // Validate based on check mode
+        uint32_t check_mode = rt_parms[parm_idx].dtype & TPB_PARM_CHECK_MASK;
+        if(check_mode == TPB_PARM_RANGE) {
+            err = tpb_check_arg_range(&rt_parms[parm_idx], &parsed_value);
+            if(err != 0) {
+                free(rt_parms);
+                return err;
+            }
+        } else if(check_mode == TPB_PARM_LIST) {
+            err = tpb_check_arg_list(&rt_parms[parm_idx], &parsed_value);
+            if(err != 0) {
+                free(rt_parms);
+                return err;
+            }
+        }
+        
+        // Apply validated value to this instance's parameter
+        rt_parms[parm_idx].value = parsed_value;
     }
     
+    *rt_parms_out = rt_parms;
     return 0;
 }
 
@@ -830,10 +940,18 @@ tpb_parse_args( int argc,
         }
         
         
-        // Validate and apply kernel-specific arguments (they override common args)
+        // Allocate storage for per-instance runtime parameters
+        tpb_args->kernel_rt_parms = (tpb_rt_parm_t **)malloc(sizeof(tpb_rt_parm_t *) * tpb_args->nkern);
+        tpb_args->kernel_nparms = (int *)malloc(sizeof(int) * tpb_args->nkern);
+        if(tpb_args->kernel_rt_parms == NULL || tpb_args->kernel_nparms == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        
+        // Parse, validate and apply kernel-specific arguments for each instance
         if(tpb_args->kargs_kernel.nkern > 0) {
             for(int i = 0; i < tpb_args->nkern; i++) {
-                err = tpb_validate_kernel_args(&tpb_args->kargs_kernel, i, tpb_kargs, tpb_args->klist[i]);
+                err = tpb_check_kargs(&tpb_args->kargs_kernel, i, tpb_args->klist[i],
+                                      &tpb_args->kernel_rt_parms[i], &tpb_args->kernel_nparms[i]);
                 if(err) {
                     return err;
                 }

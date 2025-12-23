@@ -69,10 +69,10 @@ int tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs);
  * @param kargs_user Pointer to user kernel arguments token structure
  * @param kernel_id ID of the kernel to validate against
  * @param kargs_common Pointer to common kernel arguments to update
- * @return Error code (0 on success, error on unsupported kernel-specific arg)
+ * @return Error code (0 on success, error on validation failure)
  */
-int tpb_validate_kernel_args(tpb_k_arg_token_t *kargs_user, int kernel_idx, 
-                              tpb_kargs_common_t *kargs_common, int kernel_rid);
+int tpb_check_kargs(tpb_k_arg_token_t *kargs_user, int kernel_idx, int kernel_rid,
+                    tpb_rt_parm_t **rt_parms_out, int *nparms_out);
 
 /**
  * @brief Print help document and exit.

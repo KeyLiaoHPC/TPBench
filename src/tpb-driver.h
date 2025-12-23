@@ -29,20 +29,27 @@
 #include "tptimer.h"
 
 /**
- * Basic information of tpbench benchmarking sets, init by tpb_get_kernel_info().
+ * Basic information of tpbench benchmarking sets, init by tpb_register_kernel().
  */
 // # of kernels, kernel routines, groups and group routines
 extern int nkern, nkrout;
 extern tpb_kernel_t *kernel_all;
-// granularity and tick of timer.
-// uint64_t gran_ns, gran_cy, tick_ns, tick_cy;
 
+// Common parameters
+extern tpb_rt_parm_t *tpb_parms_common;
+extern int nparms_common;
 
 /**
- * @brief 
- * @return int 
+ * @brief Register common parameters
+ * @return Error code (0 on success)
  */
-int tpb_get_kernel_info();
+int tpb_register_common();
+
+/**
+ * @brief Register all kernels
+ * @return Error code (0 on success)
+ */
+int tpb_register_kernel();
 
 /**
  * @brief Run a registered kernel
@@ -51,12 +58,12 @@ int tpb_get_kernel_info();
  * @param ntest Number of tests
  * @param time_arr Output array for timing results
  * @param nkib Memory size in KiB
- * @param kargs_kernel Kernel-specific arguments (can be NULL)
- * @param kernel_idx Index of this kernel in the user's kernel list
+ * @param rt_parms Pre-configured runtime parameters for this instance
+ * @param nparms Number of parameters
  * @return int Error code (0 on success)
  */
 int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib,
-                   tpb_k_arg_token_t *kargs_kernel, int kernel_idx);
+                   tpb_rt_parm_t *rt_parms, int nparms);
 
 /**
  * @brief get error message according to error code

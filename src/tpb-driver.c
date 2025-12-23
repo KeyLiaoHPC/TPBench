@@ -22,6 +22,10 @@ tpb_kernel_t *kernel_all = NULL;
 // Current kernel being registered
 static tpb_kernel_t *current_kernel = NULL;
 
+// Common parameters applied to all kernels by default
+tpb_rt_parm_t *tpb_parms_common = NULL;
+int nparms_common = 0;
+
 /**
  * @brief Add a kernel to the registry
  * @param reg_func Function pointer to register the kernel
@@ -62,11 +66,73 @@ tpb_add_kernel(int (*reg_func)(tpb_kernel_t *))
 }
 
 /**
+ * @brief Register common parameters that apply to all kernels by default
+ * @return Error code (0 on success)
+ */
+int
+tpb_register_common()
+{
+    nparms_common = 4;
+    tpb_parms_common = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * nparms_common);
+    if(tpb_parms_common == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    
+    memset(tpb_parms_common, 0, sizeof(tpb_rt_parm_t) * nparms_common);
+    
+    // ntest: number of test iterations
+    tpb_parms_common[0].name = strdup("ntest");
+    tpb_parms_common[0].description = strdup("Number of test iterations");
+    tpb_parms_common[0].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    tpb_parms_common[0].default_value.i64 = 10;
+    tpb_parms_common[0].value.i64 = 10;
+    tpb_parms_common[0].nlims = 2;
+    tpb_parms_common[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    tpb_parms_common[0].plims[0].i64 = 1;
+    tpb_parms_common[0].plims[1].i64 = 100000;
+    
+    // nskip: number of initial iterations to skip
+    tpb_parms_common[1].name = strdup("nskip");
+    tpb_parms_common[1].description = strdup("Number of initial iterations to skip");
+    tpb_parms_common[1].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    tpb_parms_common[1].default_value.i64 = 2;
+    tpb_parms_common[1].value.i64 = 2;
+    tpb_parms_common[1].nlims = 2;
+    tpb_parms_common[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    tpb_parms_common[1].plims[0].i64 = 0;
+    tpb_parms_common[1].plims[1].i64 = 1000;
+    
+    // twarm: warmup time in milliseconds
+    tpb_parms_common[2].name = strdup("twarm");
+    tpb_parms_common[2].description = strdup("Warmup time in milliseconds");
+    tpb_parms_common[2].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    tpb_parms_common[2].default_value.i64 = 100;
+    tpb_parms_common[2].value.i64 = 100;
+    tpb_parms_common[2].nlims = 2;
+    tpb_parms_common[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    tpb_parms_common[2].plims[0].i64 = 0;
+    tpb_parms_common[2].plims[1].i64 = 10000;
+    
+    // memsize: memory size in KiB
+    tpb_parms_common[3].name = strdup("memsize");
+    tpb_parms_common[3].description = strdup("Memory size in KiB");
+    tpb_parms_common[3].dtype = TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE;
+    tpb_parms_common[3].default_value.u64 = 32;
+    tpb_parms_common[3].value.u64 = 32;
+    tpb_parms_common[3].nlims = 2;
+    tpb_parms_common[3].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    tpb_parms_common[3].plims[0].u64 = 1;
+    tpb_parms_common[3].plims[1].u64 = 1048576;
+    
+    return 0;
+}
+
+/**
  * @brief Initialize kernel registry by calling registration functions
  * @return Error code (0 on success)
  */
 int
-tpb_get_kernel_info()
+tpb_register_kernel()
 {
     int err;
     
@@ -77,6 +143,12 @@ tpb_get_kernel_info()
     if(kernel_all != NULL) {
         free(kernel_all);
         kernel_all = NULL;
+    }
+    
+    // Register common parameters
+    err = tpb_register_common();
+    if(err != 0) {
+        return err;
     }
     
     // Register triad kernel using new API
@@ -90,7 +162,7 @@ tpb_get_kernel_info()
 
 int
 tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib,
-               tpb_k_arg_token_t *kargs_kernel, int kernel_idx)
+               tpb_rt_parm_t *rt_parms, int nparms)
 {
     int err;
 
@@ -103,55 +175,12 @@ tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_
     tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", ntest);
     tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %ld\n", nkib * 1024 / sizeof(double));
     
-    // Prepare runtime handle
+    // Prepare runtime handle with pre-configured parameters from CLI
     tpb_rt_handle_t handle;
     tpb_respack_t respack;
     
-    // Copy parameter definitions to runtime parameters
-    handle.nparms = kernel_all[id].info.nparms;
-    handle.rt_parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * handle.nparms);
-    for(int i = 0; i < handle.nparms; i++) {
-        memcpy(&handle.rt_parms[i], &kernel_all[id].info.parms[i], sizeof(tpb_rt_parm_t));
-        // Set to default values initially
-        handle.rt_parms[i].value = handle.rt_parms[i].default_value;
-    }
-    
-    // Apply kernel-specific arguments if provided
-    if(kargs_kernel != NULL && kernel_idx >= 0 && kernel_idx < kargs_kernel->nkern) {
-        int token_start = 0;
-        for(int i = 0; i < kernel_idx; i++) {
-            token_start += kargs_kernel->ntoken[i];
-        }
-        
-        for(int i = 0; i < kargs_kernel->ntoken[kernel_idx]; i++) {
-            char token_buf[TPBM_CLI_STR_MAX_LEN];
-            snprintf(token_buf, sizeof(token_buf), "%s", kargs_kernel->token[token_start + i]);
-            char *eq = strchr(token_buf, '=');
-            if(eq) {
-                *eq = '\0';
-                char *key = token_buf;
-                char *value = eq + 1;
-                
-                // Find and update the parameter
-                for(int j = 0; j < handle.nparms; j++) {
-                    if(strcmp(handle.rt_parms[j].name, key) == 0) {
-                        // Parse and set the value based on type
-                        uint32_t type_code = handle.rt_parms[j].dtype & TPB_PARM_TYPE_MASK;
-                        if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
-                            handle.rt_parms[j].value.i64 = strtoll(value, NULL, 10);
-                        } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
-                            handle.rt_parms[j].value.u64 = strtoull(value, NULL, 10);
-                        } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
-                            handle.rt_parms[j].value.f64 = strtod(value, NULL);
-                        } else if(type_code == TPB_STRING_T) {
-                            handle.rt_parms[j].value.str = strdup(value);
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-    }
+    handle.nparms = nparms;
+    handle.rt_parms = rt_parms;
     
     // Set up result package
     respack.time_arr = time_arr;
@@ -165,8 +194,7 @@ tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_
     // Call kernel runner
     err = kernel_all[id].func.kfunc_run(&handle);
     
-    // Clean up
-    free(handle.rt_parms);
+    // Note: rt_parms is managed by caller (tpb_args), don't free here
     
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     return err;

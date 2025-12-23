@@ -73,6 +73,8 @@ typedef struct tpb_args {
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
     tpb_k_arg_token_t kargs_kernel;  // Kernel-specific arguments from -k
+    struct tpb_rt_parm **kernel_rt_parms;  // Runtime parameters for each kernel instance
+    int *kernel_nparms;  // Number of parameters for each kernel instance
 } tpb_args_t;
 
 /**
