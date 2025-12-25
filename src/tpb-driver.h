@@ -22,6 +22,7 @@
  * @date 2024-01-22
  */
 
+#include "tpb-types.h"
 #define _GNU_SOURCE
 
 #include "../tpb-impl.h"
@@ -98,7 +99,7 @@ int tpb_k_set_note(const char *note);
  * @return 0 on success, error code otherwise
  */
 int tpb_k_add_parm(const char *name, const char *default_value, 
-                   const char *description, TPB_DTYPE dtype, ...);
+                   const char *description, TPB_DTYPE_U64 dtype, ...);
 
 /**
  * @brief Set the runner function for the current kernel
@@ -120,6 +121,11 @@ int tpb_k_set_dim(int ndim);
  * @return 0 on success, error code otherwise
  */
 int tpb_k_set_nbyte(uint64_t nbyte);
+
+/**
+ * @brief Add axis for output data
+ */
+int tpb_k_add_axis(void *ptr, int cnt, TPB_DTYPE_U64, TPB_DTYPE_U64, char note[TPBM_CLI_STR_MAX_LEN]);
 
 /**
  * @brief Get parameter value from runtime handle

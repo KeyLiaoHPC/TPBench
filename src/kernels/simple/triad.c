@@ -104,6 +104,8 @@ register_triad(tpb_kernel_t *kernel)
     // Set bytes per iteration (24 bytes for triad: 3 arrays * 8 bytes)
     err = tpb_k_set_nbyte(24);
     if(err != 0) return err;
+
+    // Set output axis
     
     return 0;
 }

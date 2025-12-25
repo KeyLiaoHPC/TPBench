@@ -168,41 +168,129 @@ typedef struct tpb_timer {
 //   SS   = Parameter Source (bits 24-31)
 //   CC   = Check Mode (bits 16-23)
 //   TTTT = Type Code (bits 0-15)
-typedef uint64_t TPB_DTYPE;
+
+typedef uint64_t TPB_DTYPE_U64;
+typedef uint64_t TPB_MASK_U64;
 
 // Parameter source flags (bits 24-31)
-#define TPB_PARM_CLI        0x01000000  // Parameter can be set from CLI
-#define TPB_PARM_MACRO      0x02000000  // Parameter can be set from macro (future use)
-#define TPB_PARM_CONFIG     0x04000000  // Parameter can be set from config file (future use)
-#define TPB_PARM_ENV        0x08000000  // Parameter can be set from environment (future use)
+#define TPB_PARM_CLI        ((TPB_DTYPE_U64)0x01000000)  // Parameter from CLI
+#define TPB_PARM_MACRO      ((TPB_DTYPE_U64)0x02000000)  // Parameter from macro
+#define TPB_PARM_FILE       ((TPB_DTYPE_U64)0x04000000)  // Parameter from config file
+#define TPB_PARM_ENV        ((TPB_DTYPE_U64)0x08000000)  // Parameter from env var
 
 // Parameter validation/check mode flags (bits 16-23)
-#define TPB_PARM_NOCHECK    0x00000000  // No validation
-#define TPB_PARM_RANGE      0x00010000  // Check range [lo, hi]
-#define TPB_PARM_LIST       0x00020000  // Check against list (count, array)
-#define TPB_PARM_CUSTOM     0x00040000  // Custom validation function (future use)
+#define TPB_PARM_NOCHECK    ((TPB_DTYPE_U64)0x00000000)  // No check 
+#define TPB_PARM_RANGE      ((TPB_DTYPE_U64)0x00010000)  // Check range [lo, hi]
+#define TPB_PARM_LIST       ((TPB_DTYPE_U64)0x00020000)  // Check against list (count, *ptr)
+#define TPB_PARM_CUSTOM     ((TPB_DTYPE_U64)0x00040000)  // Custom check pfunc
 
 // Parameter type flags (bits 0-15) - Aligned with MPI_Datatype encoding
 // Type codes match MPI convention (lower 16 bits of MPI_* constants)
 // From tpb-mpi_stub.h: MPI_INT8_T=0x4c000137, etc.
-#define TPB_INT8_T          0x00000137  // int8_t - matches MPI_INT8_T
-#define TPB_INT16_T         0x00000238  // int16_t - matches MPI_INT16_T
-#define TPB_INT32_T         0x00000439  // int32_t - matches MPI_INT32_T
-#define TPB_INT64_T         0x0000083a  // int64_t - matches MPI_INT64_T
-#define TPB_UINT8_T         0x0000013b  // uint8_t - matches MPI_UINT8_T
-#define TPB_UINT16_T        0x0000023c  // uint16_t - matches MPI_UINT16_T
-#define TPB_UINT32_T        0x0000043d  // uint32_t - matches MPI_UINT32_T
-#define TPB_UINT64_T        0x0000083e  // uint64_t - matches MPI_UINT64_T
-#define TPB_FLOAT_T         0x0000040a  // float - matches MPI_FLOAT
-#define TPB_DOUBLE_T        0x0000080b  // double - matches MPI_DOUBLE
-#define TPB_LONG_DOUBLE_T   0x0000100c  // long double - matches MPI_LONG_DOUBLE
-#define TPB_CHAR_T          0x00000101  // char - matches MPI_CHAR
-#define TPB_STRING_T        0x00001000  // char* (string, TPBench extension)
+#define TPB_INT8_T          ((TPB_DTYPE_U64)0x00000137)
+#define TPB_INT16_T         ((TPB_DTYPE_U64)0x00000238)
+#define TPB_INT32_T         ((TPB_DTYPE_U64)0x00000439)
+#define TPB_INT64_T         ((TPB_DTYPE_U64)0x0000083a)
+#define TPB_UINT8_T         ((TPB_DTYPE_U64)0x0000013b)
+#define TPB_UINT16_T        ((TPB_DTYPE_U64)0x0000023c)
+#define TPB_UINT32_T        ((TPB_DTYPE_U64)0x0000043d)
+#define TPB_UINT64_T        ((TPB_DTYPE_U64)0x0000083e)
+#define TPB_FLOAT_T         ((TPB_DTYPE_U64)0x0000040a)
+#define TPB_DOUBLE_T        ((TPB_DTYPE_U64)0x0000080b)
+#define TPB_LONG_DOUBLE_T   ((TPB_DTYPE_U64)0x0000100c)
+#define TPB_CHAR_T          ((TPB_DTYPE_U64)0x00000101)
+#define TPB_STRING_T        ((TPB_DTYPE_U64)0x00001000)
 
 // Mask for extracting flags
-#define TPB_PARM_SOURCE_MASK    0xFF000000
-#define TPB_PARM_CHECK_MASK     0x00FF0000
-#define TPB_PARM_TYPE_MASK      0x0000FFFF
+#define TPB_PARM_SOURCE_MASK    ((TPB_MASK_U64)0xFF000000)  // Mask for parameter sources bit.
+#define TPB_PARM_CHECK_MASK     ((TPB_MASK_U64)0x00FF0000)  // Mask for parameter check modes.
+#define TPB_PARM_TYPE_MASK      ((TPB_MASK_U64)0x0000FFFF)  // Mask for parameter datatype.
+
+/* The common metric unit */
+// TPB_UNIT_MASK: The exponent to the base unit.
+// TPB_UBASE_MASK: Mask for conversion of current unit from the base.
+// TPB_UNIT_NAME_MASK: Mask for base name.
+// 0x00: Undefined.
+// 0x01: Data size
+// TPB_UNIT_KIND_MASK: Mask for base conversion.
+// 0x
+// TPB_UNIT_RESV_MASK: Reserved bits.
+#define TPB_URESV_MASK      ((TPB_MASK_U64)0xFF000000)
+#define TPB_UKIND_MASK      ((TPB_MASK_U64)0x00F00000)
+#define TPB_UKIND_UNDEF     ((TPB_MASK_U64)0x00000000)
+#define TPB_UKIND_TIME      ((TPB_MASK_U64)0x00100000)
+#define TPB_UKIND_VOL       ((TPB_MASK_U64)0x00200000)
+#define TPB_UKIND_OPS       ((TPB_MASK_U64)0x00300000)
+
+#define TPB_UNAME_MASK      ((TPB_MASK_U64)0x000FF000)
+#define TPB_UNAME_UNDEF     ((TPB_MASK_U64)0x00000000)
+#define TPB_UNAME_WALLTIME  (((TPB_MASK_U64)0x00001000) | TPB_UKIND_TIME)   // Wall-clock time
+#define TPB_UNAME_PHYSTIME  (((TPB_MASK_U64)0x00002000) | TPB_UKIND_TIME)   // Chip physical time
+#define TPB_UNAME_DATETIME  (((TPB_MASK_U64)0x00003000) | TPB_UKIND_TIME)   // Date time
+#define TPB_UNAME_DATASIZE  (((TPB_MASK_U64)0x00001000) | TPB_UKIND_VOL)    // Data size
+#define TPB_UNAME_OP        (((TPB_MASK_U64)0x00002000) | TPB_UKIND_VOL)    // Operation counts
+#define TPB_UNAME_GRIDSIZE  (((TPB_MASK_U64)0x00003000) | TPB_UKIND_VOL)    // The number of grids.
+#define TPB_UNAME_BITSIZE   (((TPB_MASK_U64)0x00004000) | TPB_UKIND_VOL)    // Binary bit size
+#define TPB_UNAME_OPS       (((TPB_MASK_U64)0x00001000) | TPB_UKIND_OPS)    // Operation per second
+#define TPB_UNAME_FLOPS     (((TPB_MASK_U64)0x00002000) | TPB_UKIND_OPS)    // Flop/s
+#define TPB_UNAME_TOKENPS   (((TPB_MASK_U64)0x00003000) | TPB_UKIND_OPS)    // Token per second
+
+#define TPB_UBASE_MASK      ((TPB_MASK_U64)0x00000F00)
+#define TPB_UBASE_UNDEF     ((TPB_MASK_U64)0x00000000)
+#define TPB_UBASE_BASE      ((TPB_MASK_U64)0x00000100)
+#define TPB_UBASE_BIN_EXP_P ((TPB_MASK_U64)0x00000200)
+#define TPB_UBASE_BIN_EXP_N ((TPB_MASK_U64)0x00000300)
+#define TPB_UBASE_BIN_MUL_P ((TPB_MASK_U64)0x00000400)
+#define TPB_UBASE_OCT_EXP_P ((TPB_MASK_U64)0x00000500)
+#define TPB_UBASE_OCT_EXP_N ((TPB_MASK_U64)0x00000600)
+#define TPB_UBASE_DEC_EXP_P ((TPB_MASK_U64)0x00000700)
+#define TPB_UBASE_DEC_EXP_N ((TPB_MASK_U64)0x00000800)
+#define TPB_UBASE_DEC_MUL_P ((TPB_MASK_U64)0x00000900)
+#define TPB_UBASE_HEX_EXP_P ((TPB_MASK_U64)0x00000a00)
+#define TPB_UBASE_HEX_EXP_N ((TPB_MASK_U64)0x00000b00)
+
+#define TPB_UNIT_MASK       ((TPB_MASK_U64)0x000000FF)
+#define TPB_UNIT_UNDEF      ((TPB_MASK_U64)0x000000FF)
+// Bit size
+#define TPB_UNIT_BIT       (((TPB_MASK_U64)0x00000000) | TPB_UNAME_BITSIZE | TPB_UBASE_BASE)
+// Data size
+#define TPB_UNIT_BYTE      (((TPB_MASK_U64)0x00000000) | TPB_UNAME_DATASIZE | TPB_UBASE_BASE)
+#define TPB_UNIT_KIB       (((TPB_MASK_U64)0x0000000a) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_MIB       (((TPB_MASK_U64)0x00000014) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_GIB       (((TPB_MASK_U64)0x0000001e) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_TIB       (((TPB_MASK_U64)0x00000028) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_PIB       (((TPB_MASK_U64)0x00000032) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_EIB       (((TPB_MASK_U64)0x0000003c) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_ZIB       (((TPB_MASK_U64)0x00000046) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_YIB       (((TPB_MASK_U64)0x00000050) | TPB_UNAME_DATASIZE | TPB_UBASE_BIN_EXP_P)
+#define TPB_UNIT_KB        (((TPB_MASK_U64)0x00000003) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_MB        (((TPB_MASK_U64)0x00000006) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_GB        (((TPB_MASK_U64)0x00000009) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_TB        (((TPB_MASK_U64)0x0000000c) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_PB        (((TPB_MASK_U64)0x0000000f) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_EB        (((TPB_MASK_U64)0x000000a2) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_ZB        (((TPB_MASK_U64)0x000000a5) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_YB        (((TPB_MASK_U64)0x000000a8) | TPB_UNAME_DATASIZE | TPB_UBASE_DEC_EXP_P)
+// Wall clock time based on nanosecond
+#define TPB_UNIT_NS        (((TPB_MASK_U64)0x00000000) | TPB_UNAME_WALLTIME | TPB_UBASE_BASE)
+#define TPB_UNIT_AS        (((TPB_MASK_U64)0x00000009) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_N)
+#define TPB_UNIT_FS        (((TPB_MASK_U64)0x00000006) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_N)
+#define TPB_UNIT_PS        (((TPB_MASK_U64)0x00000003) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_N)
+#define TPB_UNIT_US        (((TPB_MASK_U64)0x00000003) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_MS        (((TPB_MASK_U64)0x00000006) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_SS        (((TPB_MASK_U64)0x00000009) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_P)
+// Date time based on date second
+#define TPB_UNIT_SE        (((TPB_MASK_U64)0x00000000) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+// Float-point operation per second
+#define TPB_UNIT_FLOPS     (((TPB_MASK_U64)0x00000000) | TPB_UNAME_FLOPS | TPB_UBASE_BASE)
+#define TPB_UNIT_KFLOPS    (((TPB_MASK_U64)0x00000003) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_MFLOPS    (((TPB_MASK_U64)0x00000006) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_GFLOPS    (((TPB_MASK_U64)0x00000009) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_TFLOPS    (((TPB_MASK_U64)0x0000000c) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_PFLOPS    (((TPB_MASK_U64)0x0000000f) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_EFLOPS    (((TPB_MASK_U64)0x000000a2) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_ZFLOPS    (((TPB_MASK_U64)0x000000a5) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_YFLOPS    (((TPB_MASK_U64)0x000000a8) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
 
 /**
  * @brief Union for parameter values
@@ -222,7 +310,7 @@ typedef struct tpb_rt_parm {
     tpb_parm_value_t value;         // Parameter value
     tpb_parm_value_t default_value; // Default value
     char *description;              // Parameter description
-    TPB_DTYPE dtype;                // Data type with source, check, and type flags
+    TPB_DTYPE_U64 dtype;                // Data type with source, check, and type flags
     // For validation (range or list)
     int nlims;                      // Number of limit values (2 for range, n for list)
     tpb_parm_value_t *plims;        // Limit values: [lo, hi] for range, [v1, v2, ..., vn] for list
