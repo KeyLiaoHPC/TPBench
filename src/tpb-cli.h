@@ -17,61 +17,26 @@
  * @param argc Argument count from main()
  * @param argv Argument vector from main()
  * @param tpb_args CLI run-time args data structure
- * @param tpb_kargs_common CLI run-time args data structure
  * @param timer Pointer to timer data structure
  * @return Error code (0 on success)
  */
 int tpb_parse_args( int argc, 
                     char **argv, 
                     tpb_args_t *tpb_args, 
-                    tpb_kargs_common_t *tpb_kargs, 
                     tpb_timer_t *timer);
 
 /**
- * @brief Check syntax and count segments in kernel string.
- * @param n Pointer to store segment count
- * @param strarg Kernel string argument
- * @return Error code (0 on success)
- */
-int tpb_check_count(int *n, char *strarg);
-
-/**
- * @brief Parse kernel list string into kernel IDs.
- * @param tpb_args Pointer to argument data structure
- * @return Error code (0 on success)
- */
-int tpb_parse_klist(tpb_args_t *tpb_args);
-
-/**
- * @brief Tokenize argument string into key-value pairs.
- * @param argstr Argument string to parse
- * @param karg_token Pointer to token structure to fill
- * @return Error code (0 on success, negative on failure)
- */
-int tpb_argstr_token(const char *argstr, tpb_k_arg_token_t *karg_token);
-
-/**
- * @brief Free memory allocated for kargs token structure.
- * @param karg_token Pointer to token structure to free
- */
-void tpb_argstr_token_free(tpb_k_arg_token_t *karg_token);
-
-/**
- * @brief Parse default kernel arguments string.
- * @param tpb_args Pointer to argument structure containing kargstr
- * @param tpb_kargs_common Pointer to common kernel arguments
- * @return Error code (0 on success)
- */
-int tpb_parse_kargs_common(tpb_args_t *tpb_args, tpb_kargs_common_t *tpb_kargs);
-
-/**
  * @brief Validate kernel-specific arguments against supported parameters.
- * @param kargs_user Pointer to user kernel arguments token structure
- * @param kernel_id ID of the kernel to validate against
- * @param kargs_common Pointer to common kernel arguments to update
+ * @param common_tokens Common tokens parsed from CLI
+ * @param ncommon Number of common tokens
+ * @param kernel_tokens Kernel-specific tokens parsed from CLI
+ * @param nkernel Number of kernel-specific tokens
+ * @param kernel Pointer to kernel definition
  * @return Error code (0 on success, error on validation failure)
  */
-int tpb_check_kargs(tpb_k_arg_token_t *kargs_user, int kernel_idx, int kernel_rid,
+int tpb_check_kargs(char **common_tokens, int ncommon,
+                    char **kernel_tokens, int nkernel,
+                    tpb_kernel_t *kernel,
                     tpb_rt_parm_t **rt_parms_out, int *nparms_out);
 
 /**

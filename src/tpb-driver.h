@@ -36,10 +36,6 @@
 extern int nkern, nkrout;
 extern tpb_kernel_t *kernel_all;
 
-// Common parameters
-extern tpb_rt_parm_t *tpb_parms_common;
-extern int nparms_common;
-
 /**
  * @brief Register common parameters
  * @return Error code (0 on success)
@@ -51,6 +47,14 @@ int tpb_register_common();
  * @return Error code (0 on success)
  */
 int tpb_register_kernel();
+
+/**
+ * @brief Get a registered kernel by name
+ * @param name Kernel name
+ * @param kernel_out Pointer to receive kernel address
+ * @return 0 on success, error code otherwise
+ */
+int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
 
 /**
  * @brief Run a registered kernel

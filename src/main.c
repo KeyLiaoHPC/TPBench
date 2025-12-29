@@ -27,6 +27,8 @@
 struct tpmpi_info_t tpmpi_info;
 
 int init_res(char *prefix, char *posfix, char *host_dir, tpb_args_t *args, tpb_res_t *res);
+static int tpb_find_i64(const tpb_rt_parm_t *parms, int nparms, const char *name, int64_t *out);
+static int tpb_find_u64(const tpb_rt_parm_t *parms, int nparms, const char *name, uint64_t *out);
 
 // init result data structure
 int
@@ -52,6 +54,39 @@ init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t
     return 0;
 }
 
+static int
+tpb_find_i64(const tpb_rt_parm_t *parms, int nparms, const char *name, int64_t *out)
+{
+    if(parms == NULL || name == NULL || out == NULL) {
+        return 0;
+    }
+
+    for(int i = 0; i < nparms; i++) {
+        if(strcmp(parms[i].name, name) == 0) {
+            *out = parms[i].value.i64;
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int
+tpb_find_u64(const tpb_rt_parm_t *parms, int nparms, const char *name, uint64_t *out)
+{
+    if(parms == NULL || name == NULL || out == NULL) {
+        return 0;
+    }
+
+    for(int i = 0; i < nparms; i++) {
+        if(strcmp(parms[i].name, name) == 0) {
+            *out = parms[i].value.u64;
+            return 1;
+        }
+    }
+
+    return 0;
+}
 
 /**
  * @brief main entry of tpbench.x
@@ -61,7 +96,6 @@ main(int argc, char **argv) {
     // process info
     int err;
     tpb_args_t tpb_args;
-    tpb_kargs_common_t tpb_kargs_common;
     tpb_timer_t timer;
     char filename[1024], mydir[PATH_MAX], hostname[128]; 
     tpb_res_t time_arr, kib;
@@ -81,7 +115,7 @@ main(int argc, char **argv) {
     __tpbm_exit_on_error(err, "At main.c: tpb_register_kernel");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
-    err = tpb_parse_args(argc, argv, &tpb_args, &tpb_kargs_common, &timer);
+    err = tpb_parse_args(argc, argv, &tpb_args, &timer);
     if (err == TPBE_EXIT_ON_HELP) {
         goto MAIN_EXIT;
     } else {
@@ -103,7 +137,15 @@ main(int argc, char **argv) {
         }
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Each routine will be tested %d times.\n", tpb_kargs_common.ntest);
+    {
+        int64_t common_ntest = 10;
+        if(tpb_args.common_rt_parms != NULL) {
+            tpb_find_i64(tpb_args.common_rt_parms, tpb_args.common_nparms,
+                         "ntest", &common_ntest);
+        }
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "Each routine will be tested %d times.\n", (int)common_ntest);
+    }
 
 
     // create host dir
@@ -123,18 +165,21 @@ main(int argc, char **argv) {
         __tpbm_exit_on_error(err, "At main.c: init_res");
 
         // Find maximum ntest among all kernels (for array allocation)
-        int max_ntest = tpb_kargs_common.ntest;
-        if(tpb_args.kargs_kernel.nkern > 0) {
-            int token_start = 0;
-            for(int i = 0; i < tpb_args.kargs_kernel.nkern; i++) {
-                for(int j = 0; j < tpb_args.kargs_kernel.ntoken[i]; j++) {
-                    char *tok = tpb_args.kargs_kernel.token[token_start + j];
-                    if(strncmp(tok, "ntest=", 6) == 0) {
-                        int ntest_val = atoi(tok + 6);
-                        if(ntest_val > max_ntest) max_ntest = ntest_val;
-                    }
+        int max_ntest = 10;
+        if(tpb_args.common_rt_parms != NULL) {
+            int64_t common_ntest = 10;
+            if(tpb_find_i64(tpb_args.common_rt_parms, tpb_args.common_nparms,
+                            "ntest", &common_ntest)) {
+                max_ntest = (int)common_ntest;
+            }
+        }
+        for(int i = 0; i < tpb_args.nkern; i++) {
+            int64_t ntest_val = max_ntest;
+            if(tpb_find_i64(tpb_args.kernel_rt_parms[i], tpb_args.kernel_nparms[i],
+                            "ntest", &ntest_val)) {
+                if(ntest_val > max_ntest) {
+                    max_ntest = (int)ntest_val;
                 }
-                token_start += tpb_args.kargs_kernel.ntoken[i];
             }
         }
         
@@ -149,16 +194,28 @@ main(int argc, char **argv) {
             int kid = tpb_args.klist[i];
             
             // Extract ntest and memsize from pre-configured runtime parameters
-            int ntest = tpb_kargs_common.ntest;
-            uint64_t memsize = tpb_kargs_common.memsize;
-            
-            for(int j = 0; j < tpb_args.kernel_nparms[i]; j++) {
-                if(strcmp(tpb_args.kernel_rt_parms[i][j].name, "ntest") == 0) {
-                    ntest = (int)tpb_args.kernel_rt_parms[i][j].value.i64;
-                } else if(strcmp(tpb_args.kernel_rt_parms[i][j].name, "memsize") == 0) {
-                    memsize = tpb_args.kernel_rt_parms[i][j].value.u64;
+            int ntest = 10;
+            uint64_t memsize = 32;
+            if(tpb_args.common_rt_parms != NULL) {
+                int64_t common_ntest = ntest;
+                uint64_t common_memsize = memsize;
+                tpb_find_i64(tpb_args.common_rt_parms, tpb_args.common_nparms,
+                             "ntest", &common_ntest);
+                tpb_find_u64(tpb_args.common_rt_parms, tpb_args.common_nparms,
+                             "memsize", &common_memsize);
+                ntest = (int)common_ntest;
+                memsize = common_memsize;
+            }
+
+            {
+                int64_t ntest_val = ntest;
+                if(tpb_find_i64(tpb_args.kernel_rt_parms[i], tpb_args.kernel_nparms[i],
+                                "ntest", &ntest_val)) {
+                    ntest = (int)ntest_val;
                 }
             }
+            tpb_find_u64(tpb_args.kernel_rt_parms[i], tpb_args.kernel_nparms[i],
+                         "memsize", &memsize);
             
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, kernel_all[kid].info.kname);
             err = tpb_run_kernel(kid, 
@@ -183,7 +240,15 @@ main(int argc, char **argv) {
         }
 
         // Write raw data to csv files.
-        err = tpb_writecsv(time_arr.fpath, time_arr.data, tpb_kargs_common.ntest, tpb_args.nkern, time_arr.header);
+        {
+            int64_t common_ntest = 10;
+            if(tpb_args.common_rt_parms != NULL) {
+                tpb_find_i64(tpb_args.common_rt_parms, tpb_args.common_nparms,
+                             "ntest", &common_ntest);
+            }
+            err = tpb_writecsv(time_arr.fpath, time_arr.data,
+                               (int)common_ntest, tpb_args.nkern, time_arr.header);
+        }
         __tpbm_exit_on_error(err, "At main.c: tpb_writecsv");
         // Clean up
         for(int i = 0; i < tpb_args.nkern; i ++) {

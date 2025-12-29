@@ -23,8 +23,7 @@ tpb_kernel_t *kernel_all = NULL;
 static tpb_kernel_t *current_kernel = NULL;
 
 // Common parameters applied to all kernels by default
-tpb_rt_parm_t *tpb_parms_common = NULL;
-int nparms_common = 0;
+static tpb_kernel_t kernel_common;
 
 /**
  * @brief Add a kernel to the registry
@@ -72,57 +71,61 @@ tpb_add_kernel(int (*reg_func)(tpb_kernel_t *))
 int
 tpb_register_common()
 {
-    nparms_common = 4;
-    tpb_parms_common = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * nparms_common);
-    if(tpb_parms_common == NULL) {
+    memset(&kernel_common, 0, sizeof(tpb_kernel_t));
+    kernel_common.info.kname = strdup("tpb_common");
+    kernel_common.info.nparms = 4;
+    kernel_common.info.parms = (tpb_rt_parm_t *)malloc(
+        sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
+    if(kernel_common.info.parms == NULL) {
         return TPBE_MALLOC_FAIL;
     }
-    
-    memset(tpb_parms_common, 0, sizeof(tpb_rt_parm_t) * nparms_common);
+
+    memset(kernel_common.info.parms, 0,
+           sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
     
     // ntest: number of test iterations
-    tpb_parms_common[0].name = strdup("ntest");
-    tpb_parms_common[0].description = strdup("Number of test iterations");
-    tpb_parms_common[0].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    tpb_parms_common[0].default_value.i64 = 10;
-    tpb_parms_common[0].value.i64 = 10;
-    tpb_parms_common[0].nlims = 2;
-    tpb_parms_common[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    tpb_parms_common[0].plims[0].i64 = 1;
-    tpb_parms_common[0].plims[1].i64 = 100000;
+    kernel_common.info.parms[0].name = strdup("ntest");
+    kernel_common.info.parms[0].description = strdup("Number of test iterations");
+    kernel_common.info.parms[0].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[0].default_value.i64 = 10;
+    kernel_common.info.parms[0].value.i64 = 10;
+    kernel_common.info.parms[0].nlims = 2;
+    kernel_common.info.parms[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    kernel_common.info.parms[0].plims[0].i64 = 1;
+    kernel_common.info.parms[0].plims[1].i64 = 100000;
     
     // nskip: number of initial iterations to skip
-    tpb_parms_common[1].name = strdup("nskip");
-    tpb_parms_common[1].description = strdup("Number of initial iterations to skip");
-    tpb_parms_common[1].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    tpb_parms_common[1].default_value.i64 = 2;
-    tpb_parms_common[1].value.i64 = 2;
-    tpb_parms_common[1].nlims = 2;
-    tpb_parms_common[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    tpb_parms_common[1].plims[0].i64 = 0;
-    tpb_parms_common[1].plims[1].i64 = 1000;
+    kernel_common.info.parms[1].name = strdup("nskip");
+    kernel_common.info.parms[1].description = strdup("Number of initial iterations to skip");
+    kernel_common.info.parms[1].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[1].default_value.i64 = 2;
+    kernel_common.info.parms[1].value.i64 = 2;
+    kernel_common.info.parms[1].nlims = 2;
+    kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    kernel_common.info.parms[1].plims[0].i64 = 0;
+    kernel_common.info.parms[1].plims[1].i64 = 1000;
     
     // twarm: warmup time in milliseconds
-    tpb_parms_common[2].name = strdup("twarm");
-    tpb_parms_common[2].description = strdup("Warmup time in milliseconds");
-    tpb_parms_common[2].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    tpb_parms_common[2].default_value.i64 = 100;
-    tpb_parms_common[2].value.i64 = 100;
-    tpb_parms_common[2].nlims = 2;
-    tpb_parms_common[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    tpb_parms_common[2].plims[0].i64 = 0;
-    tpb_parms_common[2].plims[1].i64 = 10000;
+    kernel_common.info.parms[2].name = strdup("twarm");
+    kernel_common.info.parms[2].description = strdup("Warmup time in milliseconds");
+    kernel_common.info.parms[2].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[2].default_value.i64 = 100;
+    kernel_common.info.parms[2].value.i64 = 100;
+    kernel_common.info.parms[2].nlims = 2;
+    kernel_common.info.parms[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    kernel_common.info.parms[2].plims[0].i64 = 0;
+    kernel_common.info.parms[2].plims[1].i64 = 10000;
     
     // memsize: memory size in KiB
-    tpb_parms_common[3].name = strdup("memsize");
-    tpb_parms_common[3].description = strdup("Memory size in KiB");
-    tpb_parms_common[3].dtype = TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE;
-    tpb_parms_common[3].default_value.u64 = 32;
-    tpb_parms_common[3].value.u64 = 32;
-    tpb_parms_common[3].nlims = 2;
-    tpb_parms_common[3].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    tpb_parms_common[3].plims[0].u64 = 1;
-    tpb_parms_common[3].plims[1].u64 = 1048576;
+    kernel_common.info.parms[3].name = strdup("memsize");
+    kernel_common.info.parms[3].description = strdup("Memory size in KiB");
+    kernel_common.info.parms[3].dtype = TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[3].default_value.u64 = 32;
+    kernel_common.info.parms[3].value.u64 = 32;
+    kernel_common.info.parms[3].nlims = 2;
+    kernel_common.info.parms[3].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    kernel_common.info.parms[3].plims[0].u64 = 1;
+    kernel_common.info.parms[3].plims[1].u64 = 1048576;
     
     return 0;
 }
@@ -158,6 +161,30 @@ tpb_register_kernel()
     }
 
     return 0;
+}
+
+int
+tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
+{
+    if(name == NULL || kernel_out == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if(kernel_common.info.kname != NULL &&
+       strcmp(kernel_common.info.kname, name) == 0) {
+        *kernel_out = &kernel_common;
+        return 0;
+    }
+
+    for(int i = 0; i < nkern; i++) {
+        if(kernel_all[i].info.kname &&
+           strcmp(kernel_all[i].info.kname, name) == 0) {
+            *kernel_out = &kernel_all[i];
+            return 0;
+        }
+    }
+
+    return TPBE_KERN_NOT_FOUND;
 }
 
 int
@@ -311,7 +338,7 @@ tpb_k_set_note(const char *note)
  */
 int
 tpb_k_add_parm(const char *name, const char *default_value, 
-               const char *description, TPB_DTYPE dtype, ...)
+               const char *description, TPB_DTYPE_U64 dtype, ...)
 {
     if(current_kernel == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
