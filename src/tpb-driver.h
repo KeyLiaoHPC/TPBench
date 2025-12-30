@@ -59,16 +59,10 @@ int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
 /**
  * @brief Run a registered kernel
  * @param id Kernel ID
- * @param timer Timer structure
- * @param ntest Number of tests
- * @param time_arr Output array for timing results
- * @param nkib Memory size in KiB
- * @param rt_parms Pre-configured runtime parameters for this instance
- * @param nparms Number of parameters
+ * @param handle Runtime handle with timer, parms, and result package
  * @return int Error code (0 on success)
  */
-int tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib,
-                   tpb_rt_parm_t *rt_parms, int nparms);
+int tpb_run_kernel(int id, tpb_rt_handle_t *handle);
 
 /**
  * @brief get error message according to error code

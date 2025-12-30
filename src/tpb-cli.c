@@ -233,47 +233,6 @@ tpb_apply_karg_tokens(char **tokens, int ntokens,
 }
 
 static int
-tpb_build_common_rt_parms(tpb_kernel_t *kernel_common,
-                          char **common_tokens, int ncommon,
-                          tpb_rt_parm_t **rt_parms_out, int *nparms_out)
-{
-    tpb_rt_parm_t *rt_parms;
-    int err;
-
-    if(rt_parms_out == NULL || nparms_out == NULL) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-
-    if(kernel_common == NULL || kernel_common->info.nparms <= 0) {
-        *rt_parms_out = NULL;
-        *nparms_out = 0;
-        return 0;
-    }
-
-    rt_parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * kernel_common->info.nparms);
-    if(rt_parms == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-
-    for(int i = 0; i < kernel_common->info.nparms; i++) {
-        memcpy(&rt_parms[i], &kernel_common->info.parms[i], sizeof(tpb_rt_parm_t));
-        rt_parms[i].value = rt_parms[i].default_value;
-    }
-
-    err = tpb_apply_karg_tokens(common_tokens, ncommon, rt_parms,
-                                kernel_common->info.nparms,
-                                kernel_common->info.kname, 0);
-    if(err != 0) {
-        free(rt_parms);
-        return err;
-    }
-
-    *rt_parms_out = rt_parms;
-    *nparms_out = kernel_common->info.nparms;
-    return 0;
-}
-
-static int
 tpb_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
                    tpb_rt_parm_t **rt_parms_out, int *nparms_out)
 {
@@ -518,10 +477,7 @@ tpb_parse_args( int argc,
         tpb_args->nkern = 0;
         tpb_args->list_only_flag = 0;
         tpb_args->klist = NULL;
-        tpb_args->common_rt_parms = NULL;
-        tpb_args->common_nparms = 0;
-        tpb_args->kernel_rt_parms = NULL;
-        tpb_args->kernel_nparms = NULL;
+        tpb_args->kernel_handles = NULL;
         strcpy(tpb_args->data_dir, "./data");
         tpb_args->kstr[0] = '\0';
         tpb_args->kargstr[0] = '\0';
@@ -662,40 +618,33 @@ tpb_parse_args( int argc,
             tpb_args->klist[i] = rid;
         }
 
-        {
-            tpb_kernel_t *kernel_common = NULL;
-            if(tpb_get_kernel("tpb_common", &kernel_common) == 0) {
-                err = tpb_build_common_rt_parms(kernel_common,
-                                                common_tokens,
-                                                common_token_count,
-                                                &tpb_args->common_rt_parms,
-                                                &tpb_args->common_nparms);
-                if(err != 0) {
-                    ret = err;
-                    goto cleanup_tokens;
-                }
-            }
-        }
-
-        // Allocate storage for per-instance runtime parameters
-        tpb_args->kernel_rt_parms = (tpb_rt_parm_t **)malloc(sizeof(tpb_rt_parm_t *) * tpb_args->nkern);
-        tpb_args->kernel_nparms = (int *)malloc(sizeof(int) * tpb_args->nkern);
-        if(tpb_args->kernel_rt_parms == NULL || tpb_args->kernel_nparms == NULL) {
+        // Allocate storage for per-instance runtime handles
+        tpb_args->kernel_handles = (tpb_rt_handle_t *)malloc(sizeof(tpb_rt_handle_t) * tpb_args->nkern);
+        if(tpb_args->kernel_handles == NULL) {
             ret = TPBE_MALLOC_FAIL;
             goto cleanup_tokens;
         }
+        memset(tpb_args->kernel_handles, 0, sizeof(tpb_rt_handle_t) * tpb_args->nkern);
 
         // Parse, validate and apply kernel-specific arguments for each instance
         for(int i = 0; i < tpb_args->nkern; i++) {
+            tpb_rt_parm_t *rt_parms = NULL;
+            int nparms = 0;
+
             err = tpb_check_kargs(common_tokens, common_token_count,
                                   kernel_tokens[i], kernel_token_counts[i],
                                   kernel_defs[i],
-                                  &tpb_args->kernel_rt_parms[i],
-                                  &tpb_args->kernel_nparms[i]);
+                                  &rt_parms,
+                                  &nparms);
             if(err != 0) {
                 ret = err;
                 goto cleanup_tokens;
             }
+
+            tpb_args->kernel_handles[i].rt_parms = rt_parms;
+            tpb_args->kernel_handles[i].nparms = nparms;
+            tpb_args->kernel_handles[i].timer = timer;
+            tpb_args->kernel_handles[i].respack = NULL;
         }
 
 cleanup_tokens:
@@ -706,6 +655,13 @@ cleanup_tokens:
         tpb_free_tokens(common_tokens, common_token_count);
 
         if(ret != 0) {
+            if(tpb_args->kernel_handles != NULL) {
+                for(int i = 0; i < nkern_parsed; i++) {
+                    free(tpb_args->kernel_handles[i].rt_parms);
+                }
+                free(tpb_args->kernel_handles);
+                tpb_args->kernel_handles = NULL;
+            }
             return ret;
         }
 

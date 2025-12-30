@@ -167,22 +167,22 @@ typedef struct _tpb_error {
 } tpb_error_type;
 
 
+// Forward declaration for runtime handle in tpb_args_t.
+struct tpb_rt_handle;
+
 /**
  * @brief tpbench run-time parameters
  */
 typedef struct tpb_args {
-    int mode; 
+    int mode;
     char kstr[TPBM_CLI_STR_MAX_LEN];
     char kargstr[TPBM_CLI_STR_MAX_LEN];
     char data_dir[PATH_MAX]; // [Mandatory] group and kernels name
     char timer[TPBM_CLI_STR_MAX_LEN];
-    int *klist; 
+    int *klist;
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
-    struct tpb_rt_parm *common_rt_parms;  // Common runtime parameters
-    int common_nparms;
-    struct tpb_rt_parm **kernel_rt_parms;  // Runtime parameters for each kernel instance
-    int *kernel_nparms;  // Number of parameters for each kernel instance
+    struct tpb_rt_handle *kernel_handles;  // Runtime handles for each kernel instance
 } tpb_args_t;
 
 /**

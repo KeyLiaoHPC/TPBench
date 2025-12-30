@@ -188,8 +188,7 @@ tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
 }
 
 int
-tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t nkib,
-               tpb_rt_parm_t *rt_parms, int nparms)
+tpb_run_kernel(int id, tpb_rt_handle_t *handle)
 {
     int err;
 
@@ -197,31 +196,17 @@ tpb_run_kernel(int id, tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_
         return TPBE_KERN_NOT_FOUND;
     }
 
+    if(handle == NULL || handle->respack == NULL || handle->timer == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
     tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s\n", kernel_all[id].info.kname);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", kernel_all[id].info.note);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", ntest);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %ld\n", nkib * 1024 / sizeof(double));
-    
-    // Prepare runtime handle with pre-configured parameters from CLI
-    tpb_rt_handle_t handle;
-    tpb_respack_t respack;
-    
-    handle.nparms = nparms;
-    handle.rt_parms = rt_parms;
-    
-    // Set up result package
-    respack.time_arr = time_arr;
-    respack.ntest = ntest;
-    respack.nbyte = kernel_all[id].info.nbyte;
-    respack.nsize = nkib * 1024 / sizeof(double);
-    
-    handle.timer = timer;
-    handle.respack = &respack;
-    
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", handle->respack->ntest);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %ld\n", handle->respack->nsize);
+
     // Call kernel runner
-    err = kernel_all[id].func.kfunc_run(&handle);
-    
-    // Note: rt_parms is managed by caller (tpb_args), don't free here
+    err = kernel_all[id].func.kfunc_run(handle);
     
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     return err;
