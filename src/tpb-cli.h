@@ -17,13 +17,13 @@
  * @param argc Argument count from main()
  * @param argv Argument vector from main()
  * @param tpb_args CLI run-time args data structure
- * @param timer Pointer to timer data structure
+ * @param kernel_handles_out Pointer to runtime handle array (allocated by parser)
  * @return Error code (0 on success)
  */
 int tpb_parse_args( int argc, 
                     char **argv, 
                     tpb_args_t *tpb_args, 
-                    tpb_timer_t *timer);
+                    tpb_rt_handle_t **kernel_handles_out);
 
 /**
  * @brief Validate kernel-specific arguments against supported parameters.

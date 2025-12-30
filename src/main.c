@@ -26,28 +26,30 @@
 
 struct tpmpi_info_t tpmpi_info;
 
-int init_res(char *prefix, char *posfix, char *host_dir, tpb_args_t *args, tpb_res_t *res);
+int init_res(char *prefix, char *posfix, char *host_dir, const char *data_dir,
+             tpb_rt_handle_t *handles, int nkern, tpb_res_t *res);
 static int tpb_find_i64(const tpb_rt_parm_t *parms, int nparms, const char *name, int64_t *out);
 static int tpb_find_u64(const tpb_rt_parm_t *parms, int nparms, const char *name, uint64_t *out);
 
 // init result data structure
 int
-init_res(char *prefix, char *posfix, char *hostname, tpb_args_t *args, tpb_res_t *res) {
+init_res(char *prefix, char *posfix, char *hostname, const char *data_dir,
+         tpb_rt_handle_t *handles, int nkern, tpb_res_t *res) {
     res->header[0] = '\0';
 
     if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
-        for(int i = 0; i < args->nkern - 1; i ++){
-            sprintf(res->header, "%s,", strcat(res->header, kernel_all[args->klist[i]].info.kname));
+        for(int i = 0; i < nkern - 1; i ++){
+            sprintf(res->header, "%s,", strcat(res->header, handles[i].kinfo.kname));
         }
-        int i = args->nkern - 1;
-        sprintf(res->header, "%s", strcat(res->header, kernel_all[args->klist[i]].info.kname));
+        int i = nkern - 1;
+        sprintf(res->header, "%s", strcat(res->header, handles[i].kinfo.kname));
     }
     // print fname
     sprintf(res->fname, "%s-r%d_c%d-%s.csv", 
                   prefix, tpmpi_info.myrank, tpmpi_info.pcpu, posfix);
     // print fdir
-    sprintf(res->fdir, "%s/%s", args->data_dir, hostname);
+    sprintf(res->fdir, "%s/%s", data_dir, hostname);
     // print fpath
     sprintf(res->fpath, "%s/%s", res->fdir, res->fname);
     
@@ -96,7 +98,7 @@ main(int argc, char **argv) {
     // process info
     int err;
     tpb_args_t tpb_args;
-    tpb_timer_t timer;
+    tpb_rt_handle_t *kernel_handles = NULL;
     char filename[1024], mydir[PATH_MAX], hostname[128]; 
     tpb_res_t time_arr, kib;
 
@@ -115,7 +117,7 @@ main(int argc, char **argv) {
     __tpbm_exit_on_error(err, "At main.c: tpb_register_kernel");
     
     // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
-    err = tpb_parse_args(argc, argv, &tpb_args, &timer);
+    err = tpb_parse_args(argc, argv, &tpb_args, &kernel_handles);
     if (err == TPBE_EXIT_ON_HELP) {
         goto MAIN_EXIT;
     } else {
@@ -130,18 +132,18 @@ main(int argc, char **argv) {
     }
 
     // print kernel list
-    if(tpb_args.nkern) {
+    if(tpb_args.nkern && kernel_handles != NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel list:\n");
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_all[tpb_args.klist[i]].info.kname);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_handles[i].kinfo.kname);
         }
     }
     
     {
         int64_t common_ntest = 10;
-        if(tpb_args.nkern > 0 && tpb_args.kernel_handles != NULL) {
-            tpb_find_i64(tpb_args.kernel_handles[0].rt_parms,
-                         tpb_args.kernel_handles[0].nparms,
+        if(tpb_args.nkern > 0 && kernel_handles != NULL) {
+            tpb_find_i64(kernel_handles[0].rt_parms,
+                         kernel_handles[0].nparms,
                          "ntest", &common_ntest);
         }
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
@@ -162,15 +164,16 @@ main(int argc, char **argv) {
     // kernel benchmark
     if(tpb_args.nkern) {
         // Struct initialization
-        err = init_res("kernels", "ns", hostname, &tpb_args, &time_arr);
+        err = init_res("kernels", "ns", hostname, tpb_args.data_dir,
+                       kernel_handles, tpb_args.nkern, &time_arr);
         __tpbm_exit_on_error(err, "At main.c: init_res");
 
         // Find maximum ntest among all kernels (for array allocation)
         int max_ntest = 10;
         for(int i = 0; i < tpb_args.nkern; i++) {
             int64_t ntest_val = max_ntest;
-            if(tpb_find_i64(tpb_args.kernel_handles[i].rt_parms,
-                            tpb_args.kernel_handles[i].nparms,
+            if(tpb_find_i64(kernel_handles[i].rt_parms,
+                            kernel_handles[i].nparms,
                             "ntest", &ntest_val)) {
                 if(ntest_val > max_ntest) {
                     max_ntest = (int)ntest_val;
@@ -186,9 +189,7 @@ main(int argc, char **argv) {
         
         // Run kernels.
         for(int i = 0; i < tpb_args.nkern; i ++) {
-            int kid = tpb_args.klist[i];
-            
-            tpb_rt_handle_t *handle = &tpb_args.kernel_handles[i];
+            tpb_rt_handle_t *handle = &kernel_handles[i];
 
             // Extract ntest and memsize from pre-configured runtime parameters
             int ntest = 10;
@@ -205,21 +206,21 @@ main(int argc, char **argv) {
             tpb_respack_t respack;
             respack.time_arr = time_arr.data[i];
             respack.ntest = ntest;
-            respack.nbyte = kernel_all[kid].info.nbyte;
+            respack.nbyte = handle->kinfo.nbyte;
             respack.nsize = memsize * 1024 / sizeof(double);
 
-            handle->timer = &timer;
+            handle->timer = &tpb_args.timer;
             handle->respack = &respack;
             
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, kernel_all[kid].info.kname);
-            err = tpb_run_kernel(kid, handle);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, handle->kinfo.kname);
+            err = tpb_run_kernel(handle);
             __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
             
             // Process and display statistics
             int nskip = 1, freq = 1;
             size_t nsize = memsize * 1024 / sizeof(double);
             dpipe_k0(time_arr.data[i], nskip, ntest, freq, 
-                     kernel_all[kid].info.nbyte, nsize);
+                     handle->kinfo.nbyte, nsize);
             
             {
                 unsigned err_type = tpb_get_err_exit_flag(err);
@@ -230,9 +231,9 @@ main(int argc, char **argv) {
         // Write raw data to csv files.
         {
             int64_t common_ntest = 10;
-            if(tpb_args.nkern > 0 && tpb_args.kernel_handles != NULL) {
-                tpb_find_i64(tpb_args.kernel_handles[0].rt_parms,
-                             tpb_args.kernel_handles[0].nparms,
+            if(tpb_args.nkern > 0 && kernel_handles != NULL) {
+                tpb_find_i64(kernel_handles[0].rt_parms,
+                             kernel_handles[0].nparms,
                              "ntest", &common_ntest);
             }
             err = tpb_writecsv(time_arr.fpath, time_arr.data,

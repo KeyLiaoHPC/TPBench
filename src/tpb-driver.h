@@ -30,13 +30,6 @@
 #include "tptimer.h"
 
 /**
- * Basic information of tpbench benchmarking sets, init by tpb_register_kernel().
- */
-// # of kernels, kernel routines, groups and group routines
-extern int nkern, nkrout;
-extern tpb_kernel_t *kernel_all;
-
-/**
  * @brief Register common parameters
  * @return Error code (0 on success)
  */
@@ -49,6 +42,12 @@ int tpb_register_common();
 int tpb_register_kernel();
 
 /**
+ * @brief Get the number of registered kernels
+ * @return Kernel count
+ */
+int tpb_get_kernel_count(void);
+
+/**
  * @brief Get a registered kernel by name
  * @param name Kernel name
  * @param kernel_out Pointer to receive kernel address
@@ -57,12 +56,20 @@ int tpb_register_kernel();
 int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
 
 /**
+ * @brief Get a registered kernel by index
+ * @param idx Kernel index
+ * @param kernel_out Pointer to receive kernel address
+ * @return 0 on success, error code otherwise
+ */
+int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
+
+/**
  * @brief Run a registered kernel
  * @param id Kernel ID
- * @param handle Runtime handle with timer, parms, and result package
+ * @param handle Runtime handle with kernel info, timer, parms, and result package
  * @return int Error code (0 on success)
  */
-int tpb_run_kernel(int id, tpb_rt_handle_t *handle);
+int tpb_run_kernel(tpb_rt_handle_t *handle);
 
 /**
  * @brief get error message according to error code

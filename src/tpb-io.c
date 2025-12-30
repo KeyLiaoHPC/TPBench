@@ -162,13 +162,18 @@ tpb_print_help_total(void)
 
 void
 tpb_list(){
+    int nkern = tpb_get_kernel_count();
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Description\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-    for(int i = 0 ; i < nkrout; i ++) {
+    for(int i = 0 ; i < nkern; i ++) {
+        tpb_kernel_t *kernel = NULL;
+        if(tpb_get_kernel_by_index(i, &kernel) != 0) {
+            continue;
+        }
         tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n", 
-                   kernel_all[i].info.kname, kernel_all[i].info.note);
+                   kernel->info.kname, kernel->info.note);
     }
     tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 }

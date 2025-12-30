@@ -166,23 +166,23 @@ typedef struct _tpb_error {
     char err_msg[256];
 } tpb_error_type;
 
-
-// Forward declaration for runtime handle in tpb_args_t.
-struct tpb_rt_handle;
+typedef struct tpb_timer {
+    int (*init)(void);
+    int (*tick)(int64_t *ts);
+    int (*tock)(int64_t *ts);
+    void (*get_stamp)(int64_t *ts);
+} tpb_timer_t;
 
 /**
  * @brief tpbench run-time parameters
  */
 typedef struct tpb_args {
     int mode;
-    char kstr[TPBM_CLI_STR_MAX_LEN];
-    char kargstr[TPBM_CLI_STR_MAX_LEN];
     char data_dir[PATH_MAX]; // [Mandatory] group and kernels name
-    char timer[TPBM_CLI_STR_MAX_LEN];
-    int *klist;
+    char timer_name[TPBM_CLI_STR_MAX_LEN];
+    tpb_timer_t timer;
     int nkern;
     int list_only_flag; // [Optinal] flags for list mode and consecutive run
-    struct tpb_rt_handle *kernel_handles;  // Runtime handles for each kernel instance
 } tpb_args_t;
 
 /**
@@ -195,7 +195,6 @@ typedef struct tpb_k_metric {
 
 // Forward declarations
 struct tpb_kernel;
-struct tpb_timer;
 struct tpb_rt_handle;
 struct tpb_rt_parm;
 
@@ -213,7 +212,6 @@ typedef struct tpb_k_func {
 typedef struct tpb_k_static_info {
     char *kname;                    // Kernel name
     char *note;                     // Kernel description/notes
-    int rid;                        // Kernel routine id
     uint64_t nbyte;                 // Bytes through core per iteration
     uint64_t nop;                   // Arithmetic (FL)OPs per iteration
     tpb_k_metric_t metric_unit;     // Performance metric and unit
@@ -240,13 +238,6 @@ typedef struct tpb_res {
     char fpath[PATH_MAX];
     int64_t **data; //data[col][row], row for run id, col for different tests.
 } tpb_res_t;
-
-typedef struct tpb_timer {
-    int (*init)(void);
-    int (*tick)(int64_t *ts);
-    int (*tock)(int64_t *ts);
-    void (*get_stamp)(int64_t *ts);
-} tpb_timer_t; 
 
 // === Parameter Definition Type System ===
 // Type definition for parameter data types
@@ -295,6 +286,8 @@ typedef struct tpb_respack {
  * @brief Runtime handle passed to kernel runners
  */
 typedef struct tpb_rt_handle {
+    tpb_k_static_info_t kinfo;      // Kernel static info (shallow copy)
+    tpb_k_func_t kfunc;             // Kernel function pointers
     tpb_rt_parm_t *rt_parms;        // Array of runtime parameters
     int nparms;                     // Number of parameters
     tpb_timer_t *timer;             // Timer handle

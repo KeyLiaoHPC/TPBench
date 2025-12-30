@@ -15,9 +15,9 @@
 
 #define MAX_KERNELS 128
 
-int nkern = 0;
-int nkrout = 0;
-tpb_kernel_t *kernel_all = NULL;
+static int nkern = 0;
+static int nkrout = 0;
+static tpb_kernel_t *kernel_all = NULL;
 
 // Current kernel being registered
 static tpb_kernel_t *current_kernel = NULL;
@@ -188,28 +188,49 @@ tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
 }
 
 int
-tpb_run_kernel(int id, tpb_rt_handle_t *handle)
+tpb_run_kernel(tpb_rt_handle_t *handle)
 {
     int err;
-
-    if(id < 0 || id >= nkern) {
-        return TPBE_KERN_NOT_FOUND;
-    }
 
     if(handle == NULL || handle->respack == NULL || handle->timer == NULL) {
         return TPBE_KERN_ARG_FAIL;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s\n", kernel_all[id].info.kname);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", kernel_all[id].info.note);
+    if(handle->kfunc.kfunc_run == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Running Kernel %s\n", handle->kinfo.kname);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", handle->kinfo.note);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Number of tests: %d\n", handle->respack->ntest);
     tpb_printf(TPBM_PRTN_M_DIRECT, "# of Elements per Array: %ld\n", handle->respack->nsize);
 
     // Call kernel runner
-    err = kernel_all[id].func.kfunc_run(handle);
+    err = handle->kfunc.kfunc_run(handle);
     
     tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     return err;
+}
+
+int
+tpb_get_kernel_count(void)
+{
+    return nkern;
+}
+
+int
+tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
+{
+    if(kernel_out == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if(idx < 0 || idx >= nkern) {
+        return TPBE_KERN_NOT_FOUND;
+    }
+
+    *kernel_out = &kernel_all[idx];
+    return 0;
 }
 
 // === New Kernel Registration API Implementation ===

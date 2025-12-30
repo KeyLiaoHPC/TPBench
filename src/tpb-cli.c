@@ -432,20 +432,20 @@ tpb_set_mode(tpb_args_t *args, const char *arg)
 }
 
 static int
-tpb_set_timer(const char *arg, tpb_args_t *args, tpb_timer_t *timer)
+tpb_set_timer(const char *arg, tpb_args_t *args)
 {
     if(strcmp(arg, "clock_gettime") == 0) {
-        sprintf(args->timer, "clock_gettime");
-        timer->init = init_timer_clock_gettime;
-        timer->tick = tick_clock_gettime;
-        timer->tock = tock_clock_gettime;
-        timer->get_stamp = get_time_clock_gettime;
+        sprintf(args->timer_name, "clock_gettime");
+        args->timer.init = init_timer_clock_gettime;
+        args->timer.tick = tick_clock_gettime;
+        args->timer.tock = tock_clock_gettime;
+        args->timer.get_stamp = get_time_clock_gettime;
     } else if(strcmp(arg, "tsc_asym") == 0) {
-        sprintf(args->timer, "tsc_asym");
-        timer->init = init_timer_tsc_asym;
-        timer->tick = tick_tsc_asym;
-        timer->tock = tock_tsc_asym;
-        timer->get_stamp = get_time_tsc_asym;
+        sprintf(args->timer_name, "tsc_asym");
+        args->timer.init = init_timer_tsc_asym;
+        args->timer.tick = tick_tsc_asym;
+        args->timer.tock = tock_tsc_asym;
+        args->timer.get_stamp = get_time_tsc_asym;
     } else {
         return -1;
     }
@@ -456,10 +456,16 @@ int
 tpb_parse_args( int argc, 
                 char **argv, 
                 tpb_args_t *tpb_args, 
-                tpb_timer_t *timer)
+                tpb_rt_handle_t **kernel_handles_out)
 {
     int err = 0;
     int ret = 0;
+    tpb_rt_handle_t *kernel_handles = NULL;
+
+    if(kernel_handles_out == NULL) {
+        return TPBE_CLI_FAIL;
+    }
+    *kernel_handles_out = NULL;
 
     if(argc <= 1) {
         // No args.
@@ -476,12 +482,8 @@ tpb_parse_args( int argc,
         tpb_args->mode = 0;
         tpb_args->nkern = 0;
         tpb_args->list_only_flag = 0;
-        tpb_args->klist = NULL;
-        tpb_args->kernel_handles = NULL;
         strcpy(tpb_args->data_dir, "./data");
-        tpb_args->kstr[0] = '\0';
-        tpb_args->kargstr[0] = '\0';
-        tpb_set_timer("clock_gettime", tpb_args, timer);
+        tpb_set_timer("clock_gettime", tpb_args);
 
         // New parsing logic for -k/-K pairs
         #define MAX_KERNELS_CLI 128
@@ -569,7 +571,7 @@ tpb_parse_args( int argc,
                     ret = TPBE_CLI_FAIL;
                     goto cleanup_tokens;
                 }
-                err = tpb_set_timer(argv[++i], tpb_args, timer);
+                err = tpb_set_timer(argv[++i], tpb_args);
                 if (err) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
                     ret = TPBE_CLI_FAIL;
@@ -589,42 +591,24 @@ tpb_parse_args( int argc,
         }
 
         tpb_args->nkern = nkern_parsed;
-        tpb_args->klist = (int *)malloc(sizeof(int) * nkern_parsed);
-        if(tpb_args->klist == NULL) {
-            ret = TPBE_MALLOC_FAIL;
-            goto cleanup_tokens;
-        }
 
         // Match kernel names to registered kernels
         for(int i = 0; i < nkern_parsed; i++) {
-            int rid = -1;
             err = tpb_get_kernel(kernel_names[i], &kernel_defs[i]);
             if(err != 0) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel %s not found.\n", kernel_names[i]);
                 ret = TPBE_KERN_NOT_FOUND;
                 goto cleanup_tokens;
             }
-            for(int r = 0; r < nkern; r++) {
-                if(&kernel_all[r] == kernel_defs[i]) {
-                    rid = r;
-                    break;
-                }
-            }
-            if(rid < 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel %s not found.\n", kernel_names[i]);
-                ret = TPBE_KERN_NOT_FOUND;
-                goto cleanup_tokens;
-            }
-            tpb_args->klist[i] = rid;
         }
 
         // Allocate storage for per-instance runtime handles
-        tpb_args->kernel_handles = (tpb_rt_handle_t *)malloc(sizeof(tpb_rt_handle_t) * tpb_args->nkern);
-        if(tpb_args->kernel_handles == NULL) {
+        kernel_handles = (tpb_rt_handle_t *)malloc(sizeof(tpb_rt_handle_t) * tpb_args->nkern);
+        if(kernel_handles == NULL) {
             ret = TPBE_MALLOC_FAIL;
             goto cleanup_tokens;
         }
-        memset(tpb_args->kernel_handles, 0, sizeof(tpb_rt_handle_t) * tpb_args->nkern);
+        memset(kernel_handles, 0, sizeof(tpb_rt_handle_t) * tpb_args->nkern);
 
         // Parse, validate and apply kernel-specific arguments for each instance
         for(int i = 0; i < tpb_args->nkern; i++) {
@@ -641,10 +625,12 @@ tpb_parse_args( int argc,
                 goto cleanup_tokens;
             }
 
-            tpb_args->kernel_handles[i].rt_parms = rt_parms;
-            tpb_args->kernel_handles[i].nparms = nparms;
-            tpb_args->kernel_handles[i].timer = timer;
-            tpb_args->kernel_handles[i].respack = NULL;
+            kernel_handles[i].kinfo = kernel_defs[i]->info;
+            kernel_handles[i].kfunc = kernel_defs[i]->func;
+            kernel_handles[i].rt_parms = rt_parms;
+            kernel_handles[i].nparms = nparms;
+            kernel_handles[i].timer = NULL;
+            kernel_handles[i].respack = NULL;
         }
 
 cleanup_tokens:
@@ -655,14 +641,18 @@ cleanup_tokens:
         tpb_free_tokens(common_tokens, common_token_count);
 
         if(ret != 0) {
-            if(tpb_args->kernel_handles != NULL) {
+            if(kernel_handles != NULL) {
                 for(int i = 0; i < nkern_parsed; i++) {
-                    free(tpb_args->kernel_handles[i].rt_parms);
+                    free(kernel_handles[i].rt_parms);
                 }
-                free(tpb_args->kernel_handles);
-                tpb_args->kernel_handles = NULL;
+                free(kernel_handles);
+                kernel_handles = NULL;
             }
             return ret;
+        }
+
+        if(kernel_handles_out != NULL) {
+            *kernel_handles_out = kernel_handles;
         }
 
     } else if (strcmp(argv[1], "benchmark") == 0 ) {
