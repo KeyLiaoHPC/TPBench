@@ -124,12 +124,12 @@ tpb_unit_to_string(TPB_UNIT_T unit)
 
     /* FLOPS units */
     if (ukind == TPB_UKIND_OPS) {
-        if (unit == TPB_UNIT_FLOPS) return "FLOPS";
-        if (unit == TPB_UNIT_KFLOPS) return "KFLOPS";
-        if (unit == TPB_UNIT_MFLOPS) return "MFLOPS";
-        if (unit == TPB_UNIT_GFLOPS) return "GFLOPS";
-        if (unit == TPB_UNIT_TFLOPS) return "TFLOPS";
-        if (unit == TPB_UNIT_PFLOPS) return "PFLOPS";
+        if (unit == TPB_UNIT_FLOPS) return "FLOP/s";
+        if (unit == TPB_UNIT_KFLOPS) return "KFLOP/s";
+        if (unit == TPB_UNIT_MFLOPS) return "MFLOP/s";
+        if (unit == TPB_UNIT_GFLOPS) return "GFLOP/s";
+        if (unit == TPB_UNIT_TFLOPS) return "TFLOP/s";
+        if (unit == TPB_UNIT_PFLOPS) return "PFLOP/s";
         return "ops";
     }
 

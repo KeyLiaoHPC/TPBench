@@ -25,17 +25,25 @@
 #define TPBE_UNKN   0x30            // Tag: UNKN
 
 typedef uint64_t TPB_DTYPE;
-typedef uint64_t TPB_MASK_U64;
+typedef uint64_t TPB_MASK;
 typedef uint64_t TPB_UNIT_T;
 typedef uint32_t TPB_DTYPE_U32;
 
+// Mask for extracting flags
+// Type definition for parameter data types
+// Format: 0xSSCCTTTT where:
+//   SS   = Parameter Source (bits 24-31)
+//   CC   = Check Mode (bits 16-23)
+//   TTTT = Type Code (bits 0-15)
 // Parameter source flags (bits 24-31)
-#define TPB_PARM_CLI        ((TPB_DTYPE)0x01000000)  // Parameter from CLI
-#define TPB_PARM_MACRO      ((TPB_DTYPE)0x02000000)  // Parameter from macro
-#define TPB_PARM_FILE       ((TPB_DTYPE)0x04000000)  // Parameter from config file
-#define TPB_PARM_ENV        ((TPB_DTYPE)0x08000000)  // Parameter from env var
+#define TPB_PARM_SOURCE_MASK    ((TPB_MASK)0xFF000000)  // Mask for parameter sources bit.
+#define TPB_PARM_CLI            ((TPB_DTYPE)0x01000000)  // Parameter from CLI
+#define TPB_PARM_MACRO          ((TPB_DTYPE)0x02000000)  // Parameter from macro
+#define TPB_PARM_FILE           ((TPB_DTYPE)0x04000000)  // Parameter from config file
+#define TPB_PARM_ENV            ((TPB_DTYPE)0x08000000)  // Parameter from env var
 
 // Parameter validation/check mode flags (bits 16-23)
+#define TPB_PARM_CHECK_MASK ((TPB_MASK)0x00FF0000)  // Mask for parameter check modes.
 #define TPB_PARM_NOCHECK    ((TPB_DTYPE)0x00000000)  // No check 
 #define TPB_PARM_RANGE      ((TPB_DTYPE)0x00010000)  // Check range [lo, hi]
 #define TPB_PARM_LIST       ((TPB_DTYPE)0x00020000)  // Check against list (count, *ptr)
@@ -44,6 +52,7 @@ typedef uint32_t TPB_DTYPE_U32;
 // Parameter type flags (bits 0-15) - Aligned with MPI_Datatype encoding
 // Type codes match MPI convention (lower 16 bits of MPI_* constants)
 // From tpb-mpi_stub.h: MPI_INT8_T=0x4c000137, etc.
+#define TPB_PARM_TYPE_MASK  ((TPB_MASK)0x0000FFFF)  // Mask for parameter datatype.
 #define TPB_INT_T           ((TPB_DTYPE)0x00000405)
 #define TPB_INT8_T          ((TPB_DTYPE)0x00000137)
 #define TPB_INT16_T         ((TPB_DTYPE)0x00000238)
@@ -60,11 +69,6 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_STRING_T        ((TPB_DTYPE)0x00001000)
 #define TPB_DTYPE_TIMER_T   ((TPB_DTYPE)0x0000083F)
 
-// Mask for extracting flags
-#define TPB_PARM_SOURCE_MASK    ((TPB_MASK_U64)0xFF000000)  // Mask for parameter sources bit.
-#define TPB_PARM_CHECK_MASK     ((TPB_MASK_U64)0x00FF0000)  // Mask for parameter check modes.
-#define TPB_PARM_TYPE_MASK      ((TPB_MASK_U64)0x0000FFFF)  // Mask for parameter datatype.
-
 /* The common metric unit */
 // TPB_UNIT_MASK: The exponent to the base unit.
 // TPB_UBASE_MASK: Mask for conversion of current unit from the base.
@@ -74,6 +78,7 @@ typedef uint32_t TPB_DTYPE_U32;
 // TPB_UNIT_KIND_MASK: Mask for base conversion.
 // 0x
 // TPB_UNIT_RESV_MASK: Reserved bits.
+
 #define TPB_URESV_MASK      ((TPB_UNIT_T)0xFF000000)
 #define TPB_UKIND_MASK      ((TPB_UNIT_T)0x00F00000)
 #define TPB_UKIND_UNDEF     ((TPB_UNIT_T)0x00000000)
@@ -94,7 +99,8 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_UNAME_OPS       (((TPB_UNIT_T)0x00001000) | TPB_UKIND_OPS)    // Operation per second
 #define TPB_UNAME_FLOPS     (((TPB_UNIT_T)0x00002000) | TPB_UKIND_OPS)    // Flop/s
 #define TPB_UNAME_TOKENPS   (((TPB_UNIT_T)0x00003000) | TPB_UKIND_OPS)    // Token per second
-
+// TPB_UBASE_BASE: This is a base unit.
+// TPB_UBASE_<base_num>[BIN/DEC/...]_<convert_ops>[MUL/EXP]_<positive/nagative>[P/N]
 #define TPB_UBASE_MASK      ((TPB_UNIT_T)0x00000F00)
 #define TPB_UBASE_UNDEF     ((TPB_UNIT_T)0x00000000)
 #define TPB_UBASE_BASE      ((TPB_UNIT_T)0x00000100)
@@ -141,8 +147,21 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_UNIT_SS        (((TPB_UNIT_T)0x00000009) | TPB_UNAME_WALLTIME | TPB_UBASE_DEC_EXP_P)
 // Physical tick/cycle
 #define TPB_UNIT_CY        (((TPB_UNIT_T)0x00000000) | TPB_UNAME_PHYSTIME | TPB_UBASE_BASE)
-// Date time based on date second
-#define TPB_UNIT_SE        (((TPB_UNIT_T)0x00000000) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_KCY       (((TPB_UNIT_T)0x00000000) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_MCY       (((TPB_UNIT_T)0x00000006) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_GCY       (((TPB_UNIT_T)0x00000009) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_TCY       (((TPB_UNIT_T)0x0000000c) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_PCY       (((TPB_UNIT_T)0x0000000f) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_ECY       (((TPB_UNIT_T)0x000000a2) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_ZCY       (((TPB_UNIT_T)0x000000a5) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+#define TPB_UNIT_YCY       (((TPB_UNIT_T)0x000000a8) | TPB_UNAME_PHYSTIME | TPB_UBASE_DEC_EXP_P)
+// Date time no macro-defined convert
+#define TPB_UNIT_SEC       (((TPB_UNIT_T)0x00000000) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_MIN       (((TPB_UNIT_T)0x00000001) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_HOU       (((TPB_UNIT_T)0x00000002) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_DAY       (((TPB_UNIT_T)0x00000003) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_MON       (((TPB_UNIT_T)0x00000004) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
+#define TPB_UNIT_YEA       (((TPB_UNIT_T)0x00000005) | TPB_UNAME_DATETIME | TPB_UBASE_BASE)
 // Time unit set by the timer
 #define TPB_UNIT_TIMER     (((TPB_UNIT_T)0x00000000) | TPB_UNAME_UNKNTIME | TPB_UBASE_BASE)
 // Float-point operation per second
@@ -310,11 +329,6 @@ typedef struct tpb_res {
     int64_t **data; //data[col][row], row for run id, col for different tests.
 } tpb_res_t;
 
-// === Parameter Definition Type System ===
-// Type definition for parameter data types
-// Format: 0xSSCCTTTT where:
-//   SS   = Parameter Source (bits 24-31)
-//   CC   = Check Mode (bits 16-23)
-//   TTTT = Type Code (bits 0-15)
+
 
 #endif
