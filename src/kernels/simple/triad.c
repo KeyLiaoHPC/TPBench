@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <float.h>
 #include "tptimer.h"
 #include "tpmpi.h"
 #include "../../tpb-types.h"
@@ -51,81 +52,83 @@
                             }
 
 // Forward declarations
-int register_triad(tpb_kernel_t *kernel);
-int run_triad(tpb_rt_handle_t *handle);
+int register_triad(void);
+int run_triad(void);
 int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
 
 int
-register_triad(tpb_kernel_t *kernel)
+register_triad(void)
 {
     int err;
     
     // Register kernel with name
-    err = tpb_k_register("triad");
+    err = tpb_k_register("triad", "STREAM Triad: a[i] = b[i] + s * c[i]");
     if(err != 0) return err;
-    
-    // Set description
-    err = tpb_k_set_note("STREAM Triad: a[i] = b[i] + s * c[i]");
-    if(err != 0) return err;
-    
     // Add runtime parameters with validation
     err = tpb_k_add_parm("ntest", "10", "Number of test iterations",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if(err != 0) return err;
-    
     err = tpb_k_add_parm("nskip", "2", "Number of initial iterations to skip",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)1000);
     if(err != 0) return err;
-    
     err = tpb_k_add_parm("twarm", "100", "Warmup time in milliseconds",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)10000);
     if(err != 0) return err;
-    
     err = tpb_k_add_parm("memsize", "32", "Memory size in KiB",
-                         TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE,
-                         (uint64_t)1, (uint64_t)1048576);
+                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
+                         0.0009765625, DBL_MAX);
     if(err != 0) return err;
-    
     err = tpb_k_add_parm("s", "0.42", "Scalar multiplier",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
     if(err != 0) return err;
-    
-    // Set runner function
+    err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
+                           TPB_INT64_T, TPB_UNIT_TIMER);
+    if(err != 0) return err;
+    err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
+                           TPB_INT64_T, TPB_UNIT_TIMER);
+    if(err != 0) return err;
+    err = tpb_k_add_output("real_memsize", "Actual memory footprint of three triad arrays.",
+                           TPB_UINT64_T, TPB_UNIT_BYTE);
+    if(err != 0) return err;
+    // Set runner function.
     err = tpb_k_add_runner(run_triad);
     if(err != 0) return err;
-    
-    // Set dimension (1D timing array)
-    err = tpb_k_set_dim(1);
-    if(err != 0) return err;
-    
-    // Set bytes per iteration (24 bytes for triad: 3 arrays * 8 bytes)
-    err = tpb_k_set_nbyte(24);
-    if(err != 0) return err;
-
-    // Set output axis
     
     return 0;
 }
 
 int
-run_triad(tpb_rt_handle_t *handle)
+run_triad(void)
 {
-    if(handle == NULL) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-    
-    // Extract parameters from handle
-    tpb_parm_value_t *ntest_val = tpb_rt_get_parm(handle, "ntest");
-    tpb_parm_value_t *memsize_val = tpb_rt_get_parm(handle, "memsize");
-    
-    int ntest = (ntest_val != NULL) ? (int)ntest_val->i64 : 10;
-    uint64_t memsize = (memsize_val != NULL) ? memsize_val->u64 : 32;
-    
+    int tpberr;
+    // Input
+    int ntest;
+    tpb_timer_t *timer;
+    uint64_t memsize;
+    // Output
+    int64_t *tot_time = NULL;
+    int64_t *step_time = NULL;
+    uint64_t *real_memsize = NULL;
+
+    tpberr = tpb_k_get_timer(timer);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T ,(tpb_parm_value_t *)&ntest);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("memsize", TPB_UINT64_T ,(tpb_parm_value_t *)&memsize);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_alloc_output("tot_time", 1, (void *)tot_time);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_alloc_output("step_time", ntest, (void *)step_time);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_alloc_output("real_memsize", 1, (void *)real_memsize);
+
     // Call the actual kernel implementation
-    return d_triad(handle->timer, ntest, handle->respack->time_arr, memsize);
+    tpberr = d_triad(timer, ntest, step_time, memsize);
+
+    return tpberr;
 }
 
 int

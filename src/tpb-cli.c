@@ -28,6 +28,9 @@
 #include <unistd.h>
 #include <limits.h>
 #include <ctype.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <math.h>
 #include "tpb-cli.h"
 #include "timers/timers.h"
 #include "tpb-impl.h"
@@ -198,9 +201,9 @@ tpb_apply_karg_tokens(char **tokens, int ntokens,
             parsed_value.u64 = strtoull(value, NULL, 10);
         } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
             parsed_value.f64 = strtod(value, NULL);
-        } else if(type_code == TPB_STRING_T || type_code == TPB_CHAR_T) {
-            parsed_value.str = strdup(value);
-            if(parsed_value.str == NULL) {
+        } else if(type_code == TPB_CHAR_T) {
+            parsed_value.c = value[0];
+            if(parsed_value.c == '\0') {
                 return TPBE_MALLOC_FAIL;
             }
         } else {
@@ -211,17 +214,11 @@ tpb_apply_karg_tokens(char **tokens, int ntokens,
         if(check_mode == TPB_PARM_RANGE) {
             err = tpb_check_arg_range(&rt_parms[parm_idx], &parsed_value);
             if(err != 0) {
-                if(type_code == TPB_STRING_T || type_code == TPB_CHAR_T) {
-                    free(parsed_value.str);
-                }
                 return err;
             }
         } else if(check_mode == TPB_PARM_LIST) {
             err = tpb_check_arg_list(&rt_parms[parm_idx], &parsed_value);
             if(err != 0) {
-                if(type_code == TPB_STRING_T || type_code == TPB_CHAR_T) {
-                    free(parsed_value.str);
-                }
                 return err;
             }
         }
@@ -295,27 +292,41 @@ tpb_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
     
     uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
     
-    if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
+    if(type_code == TPB_INT_T || (type_code >= TPB_INT8_T && type_code <= TPB_INT64_T)) {
         if(value->i64 < parm->plims[0].i64 || value->i64 > parm->plims[1].i64) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
-                      "Parameter '%s' value %lld out of range [%lld, %lld]\n",
-                      parm->name, (long long)value->i64, 
-                      (long long)parm->plims[0].i64, (long long)parm->plims[1].i64);
+                      "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
+                      parm->name, value->i64, 
+                      parm->plims[0].i64, parm->plims[1].i64);
             return TPBE_KERN_ARG_FAIL;
         }
     } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
         if(value->u64 < parm->plims[0].u64 || value->u64 > parm->plims[1].u64) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
-                      "Parameter '%s' value %llu out of range [%llu, %llu]\n",
-                      parm->name, (unsigned long long)value->u64,
-                      (unsigned long long)parm->plims[0].u64, (unsigned long long)parm->plims[1].u64);
+                      "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
+                      parm->name, value->u64,
+                      parm->plims[0].u64, parm->plims[1].u64);
             return TPBE_KERN_ARG_FAIL;
         }
-    } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
-        if(value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
+    } else if(type_code == TPB_FLOAT_T) {
+        if(value->f32 < parm->plims[0].f32 || value->f32 > parm->plims[1].f32) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                       "Parameter '%s' value %f out of range [%f, %f]\n",
+                      parm->name, value->f32, parm->plims[0].f32, parm->plims[1].f32);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if(type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        if(value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %lf out of range [%lf, %lf]\n",
                       parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if(type_code == TPB_CHAR_T) {
+        if(value->c < parm->plims[0].c || value->c > parm->plims[1].c) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value '%c' out of range ['%c', '%c']\n",
+                      parm->name, value->c, parm->plims[0].c, parm->plims[1].c);
             return TPBE_KERN_ARG_FAIL;
         }
     }
@@ -338,33 +349,43 @@ tpb_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
     
     uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
     
-    if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
+    if(type_code == TPB_INT_T || (type_code >= TPB_INT8_T && type_code <= TPB_INT64_T)) {
         for(int i = 0; i < parm->nlims; i++) {
             if(value->i64 == parm->plims[i].i64) {
                 return 0;
             }
         }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRId64 " is not in list\n", parm->name, value->i64);
     } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
         for(int i = 0; i < parm->nlims; i++) {
             if(value->u64 == parm->plims[i].u64) {
                 return 0;
             }
         }
-    } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRIu64 " is not in list\n", parm->name, value->u64);
+    } else if(type_code == TPB_FLOAT_T) {
         for(int i = 0; i < parm->nlims; i++) {
-            if(value->f64 == parm->plims[i].f64) {
+            if(fabs(value->f32 - parm->plims[i].f32) < 1e-7) {
                 return 0;
             }
         }
-    } else if(type_code == TPB_STRING_T) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %f is not in list\n", parm->name, value->f32);
+    } else if(type_code == TPB_DOUBLE_T) {
         for(int i = 0; i < parm->nlims; i++) {
-            if(strcmp(value->str, parm->plims[i].str) == 0) {
+            if(fabs(value->f64 - parm->plims[i].f64) < 1e-15) {
                 return 0;
             }
         }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %lf is not in list\n", parm->name, value->f64);
+    } else if (type_code == TPB_CHAR_T) {
+        for (int i = 0; i < parm->nlims; i++) {
+            if (value->c == parm->plims[i].c) {
+                return 0;
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %c is not in list\n", parm->name, value->c);
     }
     
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value not in allowed list\n", parm->name);
     return TPBE_KERN_ARG_FAIL;
 }
 
@@ -394,7 +415,7 @@ tpb_check_kargs(char **common_tokens, int ncommon,
 
     err = tpb_apply_karg_tokens(common_tokens, ncommon,
                                 rt_parms, *nparms_out,
-                                kernel->info.kname, 0);
+                                kernel->info.name, 0);
     if(err != 0) {
         free(rt_parms);
         return err;
@@ -402,7 +423,7 @@ tpb_check_kargs(char **common_tokens, int ncommon,
 
     err = tpb_apply_karg_tokens(kernel_tokens, nkernel,
                                 rt_parms, *nparms_out,
-                                kernel->info.kname, 1);
+                                kernel->info.name, 1);
     if(err != 0) {
         free(rt_parms);
         return err;
@@ -432,16 +453,20 @@ tpb_set_mode(tpb_args_t *args, const char *arg)
 }
 
 static int
-tpb_set_timer(const char *arg, tpb_args_t *args)
+cli_set_timer(const char *arg, tpb_args_t *args)
 {
     if(strcmp(arg, "clock_gettime") == 0) {
         sprintf(args->timer_name, "clock_gettime");
+        sprintf(args->timer.name, "clock_gettime");
+        args->timer.unit = TPB_UNIT_NS;
         args->timer.init = init_timer_clock_gettime;
         args->timer.tick = tick_clock_gettime;
         args->timer.tock = tock_clock_gettime;
         args->timer.get_stamp = get_time_clock_gettime;
     } else if(strcmp(arg, "tsc_asym") == 0) {
         sprintf(args->timer_name, "tsc_asym");
+        sprintf(args->timer.name, "tsc_asym");
+        args->timer.unit = TPB_UNIT_CY;
         args->timer.init = init_timer_tsc_asym;
         args->timer.tick = tick_tsc_asym;
         args->timer.tock = tock_tsc_asym;
@@ -456,11 +481,11 @@ int
 tpb_parse_args( int argc, 
                 char **argv, 
                 tpb_args_t *tpb_args, 
-                tpb_rt_handle_t **kernel_handles_out)
+                tpb_k_rthdl_t **kernel_handles_out)
 {
     int err = 0;
     int ret = 0;
-    tpb_rt_handle_t *kernel_handles = NULL;
+    tpb_k_rthdl_t *kernel_handles = NULL;
 
     if(kernel_handles_out == NULL) {
         return TPBE_CLI_FAIL;
@@ -483,22 +508,21 @@ tpb_parse_args( int argc,
         tpb_args->nkern = 0;
         tpb_args->list_only_flag = 0;
         strcpy(tpb_args->data_dir, "./data");
-        tpb_set_timer("clock_gettime", tpb_args);
+        cli_set_timer("clock_gettime", tpb_args);
 
         // New parsing logic for -k/-K pairs
-        #define MAX_KERNELS_CLI 128
-        char *kernel_names[MAX_KERNELS_CLI];
-        char **kernel_tokens[MAX_KERNELS_CLI];
-        int kernel_token_counts[MAX_KERNELS_CLI];
-        int kernel_token_caps[MAX_KERNELS_CLI];
-        tpb_kernel_t *kernel_defs[MAX_KERNELS_CLI];
+        char *kernel_names[TPBM_CLI_K_MAX];
+        char **kernel_tokens[TPBM_CLI_K_MAX];
+        int kernel_token_counts[TPBM_CLI_K_MAX];
+        int kernel_token_caps[TPBM_CLI_K_MAX];
+        tpb_kernel_t *kernel_defs[TPBM_CLI_K_MAX];
         char **common_tokens = NULL;
         int common_token_count = 0;
         int common_token_cap = 0;
         int nkern_parsed = 0;
         int current_kernel = -1;  // -1 means no kernel yet (common args)
 
-        for(int i = 0; i < MAX_KERNELS_CLI; i++) {
+        for(int i = 0; i < TPBM_CLI_K_MAX; i++) {
             kernel_names[i] = NULL;
             kernel_tokens[i] = NULL;
             kernel_token_counts[i] = 0;
@@ -513,7 +537,7 @@ tpb_parse_args( int argc,
                     ret = TPBE_CLI_FAIL;
                     goto cleanup_tokens;
                 }
-                if(nkern_parsed >= MAX_KERNELS_CLI) {
+                if(nkern_parsed >= TPBM_CLI_K_MAX) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Too many kernels specified.\n");
                     ret = TPBE_CLI_FAIL;
                     goto cleanup_tokens;
@@ -571,7 +595,7 @@ tpb_parse_args( int argc,
                     ret = TPBE_CLI_FAIL;
                     goto cleanup_tokens;
                 }
-                err = tpb_set_timer(argv[++i], tpb_args);
+                err = cli_set_timer(argv[++i], tpb_args);
                 if (err) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
                     ret = TPBE_CLI_FAIL;
@@ -597,18 +621,18 @@ tpb_parse_args( int argc,
             err = tpb_get_kernel(kernel_names[i], &kernel_defs[i]);
             if(err != 0) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel %s not found.\n", kernel_names[i]);
-                ret = TPBE_KERN_NOT_FOUND;
+                ret = TPBE_LIST_NOT_FOUND;
                 goto cleanup_tokens;
             }
         }
 
         // Allocate storage for per-instance runtime handles
-        kernel_handles = (tpb_rt_handle_t *)malloc(sizeof(tpb_rt_handle_t) * tpb_args->nkern);
+        kernel_handles = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t) * tpb_args->nkern);
         if(kernel_handles == NULL) {
             ret = TPBE_MALLOC_FAIL;
             goto cleanup_tokens;
         }
-        memset(kernel_handles, 0, sizeof(tpb_rt_handle_t) * tpb_args->nkern);
+        memset(kernel_handles, 0, sizeof(tpb_k_rthdl_t) * tpb_args->nkern);
 
         // Parse, validate and apply kernel-specific arguments for each instance
         for(int i = 0; i < tpb_args->nkern; i++) {
@@ -625,12 +649,10 @@ tpb_parse_args( int argc,
                 goto cleanup_tokens;
             }
 
-            kernel_handles[i].kinfo = kernel_defs[i]->info;
-            kernel_handles[i].kfunc = kernel_defs[i]->func;
-            kernel_handles[i].rt_parms = rt_parms;
-            kernel_handles[i].nparms = nparms;
-            kernel_handles[i].timer = NULL;
-            kernel_handles[i].respack = NULL;
+            memcpy(&kernel_handles[i].kernel, kernel_defs[i], sizeof(tpb_kernel_t));
+            kernel_handles[i].argpack.args = rt_parms;
+            kernel_handles[i].argpack.n = nparms;
+            memset(&kernel_handles[i].respack, 0, sizeof(tpb_respack_t));
         }
 
 cleanup_tokens:
@@ -643,7 +665,7 @@ cleanup_tokens:
         if(ret != 0) {
             if(kernel_handles != NULL) {
                 for(int i = 0; i < nkern_parsed; i++) {
-                    free(kernel_handles[i].rt_parms);
+                    free(kernel_handles[i].argpack.args);
                 }
                 free(kernel_handles);
                 kernel_handles = NULL;

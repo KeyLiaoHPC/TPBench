@@ -23,7 +23,7 @@
 int tpb_parse_args( int argc, 
                     char **argv, 
                     tpb_args_t *tpb_args, 
-                    tpb_rt_handle_t **kernel_handles_out);
+                    tpb_k_rthdl_t **kernel_handles_out);
 
 /**
  * @brief Validate kernel-specific arguments against supported parameters.

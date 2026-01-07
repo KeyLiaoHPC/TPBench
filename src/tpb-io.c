@@ -173,7 +173,7 @@ tpb_list(){
             continue;
         }
         tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n", 
-                   kernel->info.kname, kernel->info.note);
+                   kernel->info.name, kernel->info.note);
     }
     tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 }

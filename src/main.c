@@ -27,23 +27,23 @@
 struct tpmpi_info_t tpmpi_info;
 
 int init_res(char *prefix, char *posfix, char *host_dir, const char *data_dir,
-             tpb_rt_handle_t *handles, int nkern, tpb_res_t *res);
+             tpb_k_rthdl_t *handles, int nkern, tpb_res_t *res);
 static int tpb_find_i64(const tpb_rt_parm_t *parms, int nparms, const char *name, int64_t *out);
 static int tpb_find_u64(const tpb_rt_parm_t *parms, int nparms, const char *name, uint64_t *out);
 
 // init result data structure
 int
 init_res(char *prefix, char *posfix, char *hostname, const char *data_dir,
-         tpb_rt_handle_t *handles, int nkern, tpb_res_t *res) {
+         tpb_k_rthdl_t *handles, int nkern, tpb_res_t *res) {
     res->header[0] = '\0';
 
     if(strcmp(prefix, "kernels") == 0) {
         // matched, header for kernel benchmark
         for(int i = 0; i < nkern - 1; i ++){
-            sprintf(res->header, "%s,", strcat(res->header, handles[i].kinfo.kname));
+            sprintf(res->header, "%s,", strcat(res->header, handles[i].kernel.info.name));
         }
         int i = nkern - 1;
-        sprintf(res->header, "%s", strcat(res->header, handles[i].kinfo.kname));
+        sprintf(res->header, "%s", strcat(res->header, handles[i].kernel.info.name));
     }
     // print fname
     sprintf(res->fname, "%s-r%d_c%d-%s.csv", 
@@ -98,9 +98,8 @@ main(int argc, char **argv) {
     // process info
     int err;
     tpb_args_t tpb_args;
-    tpb_rt_handle_t *kernel_handles = NULL;
+    tpb_k_rthdl_t *kernel_handles = NULL;
     char filename[1024], mydir[PATH_MAX], hostname[128]; 
-    tpb_res_t time_arr, kib;
 
     // Init process info
     err = tpmpi_init();
@@ -111,140 +110,87 @@ main(int argc, char **argv) {
 #else
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER "\n");
 #endif
-    // init kernel, init tpbench arguments
+    // init kernel and parse arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At main.c: tpb_register_kernel");
-    
-    // tpb_printf(0, 1, 1, "nkrout = %d, ngrout = %d", nkrout, ngrout);
     err = tpb_parse_args(argc, argv, &tpb_args, &kernel_handles);
     if (err == TPBE_EXIT_ON_HELP) {
         goto MAIN_EXIT;
     } else {
         __tpbm_exit_on_error(err, "At main.c: tpb_parse_args");
     }
-
-    // List only.
-    if(tpb_args.list_only_flag){
-        tpb_list();
-        tpmpi_exit();
-        exit(0);
-    }
-
-    // print kernel list
-    if(tpb_args.nkern && kernel_handles != NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel list:\n");
-        for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_handles[i].kinfo.kname);
+    if (tpb_args.nkern) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernels to run: "); 
+        for (int i = 0; i < tpb_args.nkern - 1; i ++) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s, ", kernel_handles[i].kernel.info.name);
         }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%s\n", kernel_handles[tpb_args.nkern-1].kernel.info.name);
     }
+    tpb_driver_set_timer(tpb_args.timer);
+
+    // // List only.
+    // if(tpb_args.list_only_flag){
+    //     tpb_list();
+    //     tpmpi_exit();
+    //     exit(0);
+    // }
+
+    // // print kernel list
+    // if(tpb_args.nkern && kernel_handles != NULL) {
+    //     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel list:\n");
+    //     for(int i = 0; i < tpb_args.nkern; i ++) {
+    //         tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_handles[i].kernel.info.name);
+    //     }
+    // }
     
-    {
-        int64_t common_ntest = 10;
-        if(tpb_args.nkern > 0 && kernel_handles != NULL) {
-            tpb_find_i64(kernel_handles[0].rt_parms,
-                         kernel_handles[0].nparms,
-                         "ntest", &common_ntest);
-        }
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-                   "Each routine will be tested %d times.\n", (int)common_ntest);
-    }
+    // // create host dir
+    // gethostname(hostname, 128);
+    // sprintf(mydir, "%s/%s", tpb_args.data_dir, hostname);
+    // err = tpb_mkdir(mydir);
+    // __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
+    // {
+    //     unsigned err_type = tpb_get_err_exit_flag(err);
+    //     tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s\n", mydir);
+    // }
 
+    // // kernel benchmark
+    // if(tpb_args.nkern) {
+    //     // Struct initialization
+    //     err = init_res("kernels", "ns", hostname, tpb_args.data_dir,
+    //                    kernel_handles, tpb_args.nkern, &time_arr);
+    //     __tpbm_exit_on_error(err, "At main.c: init_res");
 
-    // create host dir
-    gethostname(hostname, 128);
-    sprintf(mydir, "%s/%s", tpb_args.data_dir, hostname);
-    err = tpb_mkdir(mydir);
-    __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
-    {
-        unsigned err_type = tpb_get_err_exit_flag(err);
-        tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s\n", mydir);
-    }
-
-    // kernel benchmark
-    if(tpb_args.nkern) {
-        // Struct initialization
-        err = init_res("kernels", "ns", hostname, tpb_args.data_dir,
-                       kernel_handles, tpb_args.nkern, &time_arr);
-        __tpbm_exit_on_error(err, "At main.c: init_res");
-
-        // Find maximum ntest among all kernels (for array allocation)
-        int max_ntest = 10;
-        for(int i = 0; i < tpb_args.nkern; i++) {
-            int64_t ntest_val = max_ntest;
-            if(tpb_find_i64(kernel_handles[i].rt_parms,
-                            kernel_handles[i].nparms,
-                            "ntest", &ntest_val)) {
-                if(ntest_val > max_ntest) {
-                    max_ntest = (int)ntest_val;
-                }
-            }
-        }
+    //     // Find maximum ntest among all kernels (for array allocation)
+    //     int max_ntest = 10;
+    //     for(int i = 0; i < tpb_args.nkern; i++) {
+    //         int64_t ntest_val = max_ntest;
+    //         if(tpb_find_i64(kernel_handles[i].rt_parms,
+    //                         kernel_handles[i].nparms,
+    //                         "ntest", &ntest_val)) {
+    //             if(ntest_val > max_ntest) {
+    //                 max_ntest = (int)ntest_val;
+    //             }
+    //         }
+    //     }
         
-        // allocate space for data using max_ntest
-        time_arr.data = (int64_t **)malloc(tpb_args.nkern * sizeof(int64_t *));
-        for(int i = 0; i < tpb_args.nkern; i ++) {
-            time_arr.data[i] = (int64_t *)malloc(max_ntest * sizeof(int64_t));
-        }
-        
+    //     // allocate space for data using max_ntest
+    //     time_arr.data = (int64_t **)malloc(tpb_args.nkern * sizeof(int64_t *));
+    //     for(int i = 0; i < tpb_args.nkern; i ++) {
+    //         time_arr.data[i] = (int64_t *)malloc(max_ntest * sizeof(int64_t));
+    //     }
         // Run kernels.
-        for(int i = 0; i < tpb_args.nkern; i ++) {
-            tpb_rt_handle_t *handle = &kernel_handles[i];
+    for(int i = 0; i < tpb_args.nkern; i ++) {
+        tpb_k_rthdl_t *handle = &kernel_handles[i];
 
-            // Extract ntest and memsize from pre-configured runtime parameters
-            int ntest = 10;
-            uint64_t memsize = 32;
-            {
-                int64_t ntest_val = ntest;
-                if(tpb_find_i64(handle->rt_parms, handle->nparms,
-                                "ntest", &ntest_val)) {
-                    ntest = (int)ntest_val;
-                }
-            }
-            tpb_find_u64(handle->rt_parms, handle->nparms, "memsize", &memsize);
+        // run
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, handle->kernel.info.name);
+        err = tpb_run_kernel(handle);
+        __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
+        // report to stdout
 
-            tpb_respack_t respack;
-            respack.time_arr = time_arr.data[i];
-            respack.ntest = ntest;
-            respack.nbyte = handle->kinfo.nbyte;
-            respack.nsize = memsize * 1024 / sizeof(double);
-
-            handle->timer = &tpb_args.timer;
-            handle->respack = &respack;
-            
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, handle->kinfo.kname);
-            err = tpb_run_kernel(handle);
-            __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
-            
-            // Process and display statistics
-            int nskip = 1, freq = 1;
-            size_t nsize = memsize * 1024 / sizeof(double);
-            dpipe_k0(time_arr.data[i], nskip, ntest, freq, 
-                     handle->kinfo.nbyte, nsize);
-            
-            {
-                unsigned err_type = tpb_get_err_exit_flag(err);
-                tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Finished.\n");
-            }
-        }
-
-        // Write raw data to csv files.
-        {
-            int64_t common_ntest = 10;
-            if(tpb_args.nkern > 0 && kernel_handles != NULL) {
-                tpb_find_i64(kernel_handles[0].rt_parms,
-                             kernel_handles[0].nparms,
-                             "ntest", &common_ntest);
-            }
-            err = tpb_writecsv(time_arr.fpath, time_arr.data,
-                               (int)common_ntest, tpb_args.nkern, time_arr.header);
-        }
-        __tpbm_exit_on_error(err, "At main.c: tpb_writecsv");
         // Clean up
-        for(int i = 0; i < tpb_args.nkern; i ++) {
-            free(time_arr.data[i]);
-        }
-        free(time_arr.data);
+        tpb_clean_output(handle);
     }
     
     // end of benchmark

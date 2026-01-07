@@ -30,6 +30,11 @@
 #include "tptimer.h"
 
 /**
+ * @brief Set timer function for the whole driver.
+ */
+int tpb_driver_set_timer(tpb_timer_t timer); 
+
+/**
  * @brief Register common parameters
  * @return Error code (0 on success)
  */
@@ -69,73 +74,111 @@ int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
  * @param handle Runtime handle with kernel info, timer, parms, and result package
  * @return int Error code (0 on success)
  */
-int tpb_run_kernel(tpb_rt_handle_t *handle);
-
-/**
- * @brief get error message according to error code
- * @param err  error code
- * @param buf  error message buffer, 31 characters.
- * @return char* reutrn buf.
- */
-char *tpb_geterr(const int err, char *buf);
+int tpb_run_kernel(tpb_k_rthdl_t *handle);
 
 // === New Kernel Registration API ===
 /**
- * @brief Register a new kernel with given name
+ * @brief Register a new kernel with given a name and description.
  * @param name Kernel name (must be unique)
  * @return 0 on success, error code otherwise
  */
-int tpb_k_register(const char *name);
-
-/**
- * @brief Set the description/note for the current kernel
- * @param note Description string
- * @return 0 on success, error code otherwise
- */
-int tpb_k_set_note(const char *note);
+int tpb_k_register(const char *name, const char *note);
 
 /**
  * @brief Add a runtime parameter to the current kernel
- * @param name Parameter name
- * @param default_value Default value string
- * @param description Parameter description
- * @param dtype Parameter data type (source | check | type)
- * @param ... Variable arguments for validation (range: min, max; list: count, array)
+ * 
+ * This function defines a parameter for the kernel that can be set at runtime
+ * through CLI arguments or other configuration methods.
+ * 
+ * The dtype parameter uses a 32-bit encoding: 0xSSCCTTTT
+ *   - SS (bits 24-31): Parameter Source flags
+ *   - CC (bits 16-23): Check/Validation mode flags
+ *   - TTTT (bits 0-15): Type code (MPI-compatible)
+ * 
+ * @param name Parameter name (used for CLI argument matching)
+ * @param default_value String representation of default value
+ * @param description Human-readable parameter description
+ * @param dtype Combined data type: source | check | type
+ *              Source: TPB_PARM_CLI, TPB_PARM_MACRO, TPB_PARM_CONFIG, TPB_PARM_ENV
+ *              Type: TPB_INT8_T, TPB_INT16_T, TPB_INT32_T, TPB_INT64_T,
+ *                    TPB_UINT8_T, TPB_UINT16_T, TPB_UINT32_T, TPB_UINT64_T,
+ *                    TPB_FLOAT_T, TPB_DOUBLE_T, TPB_LONG_DOUBLE_T,
+ *                    TPB_STRING_T, TPB_CHAR_T
+ *              Validation: TPB_PARM_NOCHECK, TPB_PARM_RANGE, TPB_PARM_LIST, TPB_PARM_CUSTOM
+ * @param ... Variable arguments based on validation mode:
+ *            - TPB_PARM_RANGE: Two args (lo, hi) for range [lo, hi]
+ *                For signed int types: int64_t lo, int64_t hi
+ *                For unsigned int types: uint64_t lo, uint64_t hi
+ *                For float types: double lo, double hi
+ *            - TPB_PARM_LIST: Two args (n, plist) for list validation
+ *                n: int (number of valid values)
+ *                plist: pointer to array of valid values (type must match parameter type)
+ *            - TPB_PARM_NOCHECK: No additional arguments
+ * 
  * @return 0 on success, error code otherwise
+ * 
+ * @example
+ *   // Range check for integer
+ *   tpb_k_add_parm("ntest", "10", "Number of tests",
+ *                  TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+ *                  (int64_t)1, (int64_t)10000);
+ * 
+ *   // List check for string
+ *   const char *dtypes[] = {"float", "double", "int"};
+ *   tpb_k_add_parm("dtype", "double", "Data type",
+ *                  TPB_PARM_CLI | TPB_STRING_T | TPB_PARM_LIST,
+ *                  3, dtypes);
+ * 
+ *   // No check for double
+ *   tpb_k_add_parm("epsilon", "1e-6", "Convergence threshold",
+ *                  TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
  */
 int tpb_k_add_parm(const char *name, const char *default_value, 
-                   const char *description, TPB_DTYPE_U64 dtype, ...);
+                   const char *description, TPB_DTYPE dtype, ...);
 
 /**
  * @brief Set the runner function for the current kernel
  * @param runner Function pointer to kernel runner
  * @return 0 on success, error code otherwise
  */
-int tpb_k_add_runner(int (*runner)(tpb_rt_handle_t *handle));
+int tpb_k_add_runner(int (*runner)(void));
 
 /**
- * @brief Set the number of dimensions for the current kernel
- * @param ndim Number of dimensions
- * @return 0 on success, error code otherwise
+ * @brief Register a new output data definition
  */
-int tpb_k_set_dim(int ndim);
+int tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit);
 
 /**
- * @brief Set bytes per iteration for the current kernel
- * @param nbyte Bytes through core per iteration
- * @return 0 on success, error code otherwise
- */
-int tpb_k_set_nbyte(uint64_t nbyte);
-
-/**
- * @brief Add axis for output data
- */
-int tpb_k_add_axis(void *ptr, int cnt, TPB_DTYPE_U64, TPB_DTYPE_U64, char note[TPBM_CLI_STR_MAX_LEN]);
-
-/**
- * @brief Get parameter value from runtime handle
+ * @brief Get argument value from runtime handle
  * @param handle Runtime handle
  * @param name Parameter name
  * @return Pointer to parameter value, NULL if not found
  */
-tpb_parm_value_t *tpb_rt_get_parm(tpb_rt_handle_t *handle, const char *name);
+int tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr);
+
+/**
+ * @brief Get timer function
+ */
+int tpb_k_get_timer(tpb_timer_t *);
+
+/**
+ * @brief Allocating memory for output data in the TPB framework, return the pointer.
+ * @param name The name of a output variable.
+ * @param n The number of elements with 'dtype' defined in tpb_k_add_output
+ * @param ptr Pointer to the header of allocated memory, NULL if failed.
+ * @return 0 if successful, otherwise error code. 
+ */
+int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
+
+
+
+/**
+ * @brief Clean up and free memory allocated for output data in the kernel runtime handle.
+ *
+ * This function releases all dynamic allocations made for output variables managed
+ * by the given kernel runtime handle, ensuring no memory leaks after a kernel execution.
+ *
+ * @param handle Pointer to the kernel runtime handle .
+ * @return 0 on successful cleanup, or an error code if any issues occurred.
+ */
+int tpb_clean_output(tpb_k_rthdl_t *handle);
