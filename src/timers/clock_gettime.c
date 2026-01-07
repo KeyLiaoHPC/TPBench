@@ -10,8 +10,6 @@
 #include <stdint.h>
 #include <unistd.h>
 
-static int64_t ts0;
-
 int
 init_timer_clock_gettime(void)
 {
@@ -19,39 +17,28 @@ init_timer_clock_gettime(void)
     return 0;
 }
 
-int
+void
 tick_clock_gettime(int64_t *ts)
 {
     struct timespec tv;
 
     clock_gettime(CLOCK_MONOTONIC, &tv);
-    ts0 = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec);
-    if (ts) *ts = ts0;
-
-    return 0;
+    if (ts) *ts = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec);
 }
 
-int
+void
 tock_clock_gettime(int64_t *ts)
 {
     struct timespec tv;
-    register int64_t ts1;
-
     clock_gettime(CLOCK_MONOTONIC, &tv);
-    ts1 = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec);
-    if (ts1 > ts0) *ts = ts1 - ts0;
-
-    return 0;
+    if (ts) *ts = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec) - *ts;
 }
 
 void
 get_time_clock_gettime(int64_t *ts)
 {
     struct timespec tv;
-
     clock_gettime(CLOCK_MONOTONIC, &tv);
-    *ts = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec);
-
-    return;
+    if (ts) *ts = (int64_t)(tv.tv_sec * 1000000000LL + tv.tv_nsec);
 }
  

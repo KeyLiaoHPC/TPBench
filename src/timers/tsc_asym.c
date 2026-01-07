@@ -7,7 +7,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 
-static int64_t ts0;
+/* Convert uint64_t to int64_t using range mapping: val + INT64_MIN */
+#define U64_TO_I64(val) ((int64_t)((val) + (uint64_t)INT64_MIN))
 
 int
 init_timer_tsc_asym(void)
@@ -19,6 +20,7 @@ int
 tick_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
+    uint64_t raw;
 
     __asm__ volatile (  "CPUID" "\n\t"
                         "RDTSC" "\n\t"
@@ -27,8 +29,8 @@ tick_tsc_asym(int64_t *ts)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    ts0 = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl);
-    if (ts) *ts = ts0;
+    raw = ((uint64_t)ch << 32) | (uint64_t)cl;
+    if (ts) *ts = U64_TO_I64(raw);
 
     return 0;
 }
@@ -37,8 +39,9 @@ int
 tock_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
+    uint64_t raw;
 
-    *ts = 0;
+    *((int64_t *)ts) = 0;
     __asm__ volatile (  "RDTSCP" "\n\t"
                         "mov %%edx, %0" "\n\t"
                         "mov %%eax, %1" "\n\t"
@@ -46,7 +49,7 @@ tock_tsc_asym(int64_t *ts)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    *ts = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl) - ts0;
+    if (ts) *ts -= U64_TO_I64(raw);
 
     return 0;
 }
@@ -55,6 +58,7 @@ void
 get_time_tsc_asym(int64_t *ts)
 {
     unsigned ch, cl;
+    uint64_t raw;
 
     __asm__ volatile (  "CPUID" "\n\t"
                         "RDTSC" "\n\t"
@@ -64,5 +68,6 @@ get_time_tsc_asym(int64_t *ts)
                         : "=r" (ch), "=r" (cl)
                         :
                         : "%rax", "%rbx", "%rcx", "%rdx");
-    *ts = (int64_t)(((uint64_t)ch << 32) | (uint64_t)cl);
+    raw = ((uint64_t)ch << 32) | (uint64_t)cl;
+    if (ts) *ts = U64_TO_I64(raw);
 }

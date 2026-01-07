@@ -33,6 +33,9 @@ static tpb_respack_t *kernel_respacks = NULL;
 int
 tpb_driver_set_timer(tpb_timer_t timer_in)
 {
+    snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "%s", timer_in.name);
+    timer.unit = timer_in.unit;
+    timer.dtype = timer_in.dtype;
     timer.init = timer_in.init;
     timer.tick = timer_in.tick;
     timer.tock = timer_in.tock;
@@ -185,6 +188,11 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
                            sizeof(tpb_k_output_t));
                     hdl->respack.outputs[j].p = NULL;
                     hdl->respack.outputs[j].n = 0;
+
+                    /* Resolve TPB_UNIT_TIMER: use the timer's unit */
+                    if (src->outputs[j].unit == TPB_UNIT_TIMER) {
+                        hdl->respack.outputs[j].unit = timer.unit;
+                    }
                 }
             }
             break;
@@ -324,10 +332,16 @@ tpb_k_add_parm(const char *name, const char *default_value,
     
     snprintf(parm->name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(parm->note, TPBM_NOTE_STR_MAX_LEN, "%s", note);
-    parm->dtype = dtype;
     
-    // Extract type code from dtype
+    // Handle TPB_DTYPE_TIMER_T: use the timer's dtype
     uint32_t type_code = (uint32_t)(dtype & TPB_PARM_TYPE_MASK);
+    if (type_code == (TPB_DTYPE_TIMER_T & TPB_PARM_TYPE_MASK)) {
+        // Replace TIMER_T with the actual timer dtype, preserving source and check flags
+        parm->dtype = (dtype & ~TPB_PARM_TYPE_MASK) | (timer.dtype & TPB_PARM_TYPE_MASK);
+        type_code = (uint32_t)(timer.dtype & TPB_PARM_TYPE_MASK);
+    } else {
+        parm->dtype = dtype;
+    }
     va_list args;
     va_start(args, dtype);
     
@@ -500,7 +514,6 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
 
     /* Add to the current kernel's respack (stored in kernel_respacks) */
     tpb_respack_t *respack = &kernel_respacks[tpb_driver_nkern];
-
     /* Reallocate outputs array to add new output */
     int new_n = respack->n + 1;
     respack->outputs = (tpb_k_output_t *)realloc(respack->outputs,
@@ -508,13 +521,16 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
     if (respack->outputs == NULL) {
         return TPBE_MALLOC_FAIL;
     }
-
-    /* Add output definition */
+    /* Add output definition - store original dtype/unit, resolve at runtime */
     tpb_k_output_t *out = &respack->outputs[respack->n];
     memset(out, 0, sizeof(tpb_k_output_t));
     snprintf(out->name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(out->note, TPBM_NOTE_STR_MAX_LEN, "%s", note);
-    out->dtype = dtype;
+    if ((uint32_t)(dtype & TPB_PARM_TYPE_MASK) == (TPB_DTYPE_TIMER_T & TPB_PARM_TYPE_MASK)) {
+        out->dtype = TPB_INT64_T;
+    } else {
+        out->dtype = dtype;
+    }
     out->unit = unit;
     out->n = 0;
     out->p = NULL;
@@ -537,6 +553,7 @@ tpb_k_get_timer(tpb_timer_t *timer_out)
     timer_out->get_stamp = timer.get_stamp;
     snprintf(timer_out->name, TPBM_NAME_STR_MAX_LEN, "%s", timer.name);
     timer_out->unit = timer.unit;
+    timer_out->dtype = timer.dtype;
 
     return 0;
 }
@@ -627,7 +644,9 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
                     elem_size = sizeof(char *);
                     break;
                 default:
-                    tpb_printf(TPBM_PRTN_M_DIRECT, "DTYPE 0x%08llx is not supported.", dtype);
+                    tpb_printf(TPBM_PRTN_M_DIRECT, 
+                               "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
+                               dtype);
                     return TPBE_LIST_NOT_FOUND;
             }
 

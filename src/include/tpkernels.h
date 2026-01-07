@@ -32,7 +32,7 @@
 #include "../tpb-impl.h"
 
 // Kernel function declarations
-int d_triad(struct tpb_timer *timer, int ntest, int64_t *time_arr, uint64_t kib);
+// int d_triad(struct tpb_timer *timer, int ntest, int64_t *time_arr, uint64_t kib);
 // int d_axpy(int ntest,   uint64_t *ns, uint64_t *cy, uint64_t kib);
 // int d_striad(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);
 // int d_staxpy(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib);

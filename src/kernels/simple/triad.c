@@ -24,6 +24,7 @@
  * =================================================================================
  */
 
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -54,7 +55,7 @@
 // Forward declarations
 int register_triad(void);
 int run_triad(void);
-int d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib);
+int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize);
 
 int
 register_triad(void)
@@ -85,10 +86,10 @@ register_triad(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
     if(err != 0) return err;
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
-                           TPB_INT64_T, TPB_UNIT_TIMER);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER);
     if(err != 0) return err;
     err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
-                           TPB_INT64_T, TPB_UNIT_TIMER);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER);
     if(err != 0) return err;
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three triad arrays.",
                            TPB_UINT64_T, TPB_UNIT_BYTE);
@@ -107,17 +108,17 @@ run_triad(void)
     /* Input */
     int ntest;
     tpb_timer_t timer;
-    uint64_t memsize;
+    double memsize;
     /* Output */
-    int64_t *tot_time = NULL;
-    int64_t *step_time = NULL;
+    void *tot_time = NULL;
+    void *step_time = NULL;
     uint64_t *real_memsize = NULL;
 
     tpberr = tpb_k_get_timer(&timer);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("memsize", TPB_UINT64_T, (void *)&memsize);
+    tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("tot_time", 1, &tot_time);
     if (tpberr) return tpberr;
@@ -127,23 +128,25 @@ run_triad(void)
     if (tpberr) return tpberr;
 
     /* Call the actual kernel implementation */
-    tpberr = d_triad(&timer, ntest, step_time, memsize);
+    tpberr = d_triad(&timer, ntest, memsize, tot_time, step_time, real_memsize);
 
     return tpberr;
 }
 
 int
-d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib) {
+d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize) {
     int nsize, err;
     volatile double *a, *b, *c;
     register double s = 0.42;
+    uint64_t t0, t1;
 
 #ifdef KP_SVE
     svfloat64_t tmp;
     uint64_t vec_len = svlen_f64(tmp);
 #endif 
 
-    nsize = kib * 1024 / sizeof(double);
+    nsize = (int)(kib * 1024 / sizeof(double) / 3);
+    *real_memsize = nsize * 3;
 
 #ifdef AVX512
     nsize = ((nsize + 7) / 8) * 8;
@@ -210,9 +213,10 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib) {
     timer->init();
 
     // kernel start
+    timer->tick(tot_time);
     for(int i = 0; i < ntest; i ++){
         tpmpi_dbarrier();
-        timer->tick(NULL);
+        timer->tick(step_time + i);
 #ifdef KP_SVE
         #pragma omp parallel for shared(a, b, c, s, nsize)
         for (int j = 0; j < nsize; j += vec_len) {
@@ -248,8 +252,9 @@ d_triad(tpb_timer_t *timer, int ntest, int64_t *time_arr, uint64_t kib) {
         }
 #endif
         #pragma omp barrier
-        timer->tock(time_arr+i);
+        timer->tock(step_time+i);
     }
+    timer->tock(tot_time);
     // kernel end
     
     free((void *)a);

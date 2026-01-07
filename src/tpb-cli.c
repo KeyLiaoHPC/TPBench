@@ -469,6 +469,7 @@ cli_set_timer(const char *arg, tpb_args_t *args)
         sprintf(args->timer_name, "clock_gettime");
         sprintf(args->timer.name, "clock_gettime");
         args->timer.unit = TPB_UNIT_NS;
+        args->timer.dtype = TPB_INT64_T;
         args->timer.init = init_timer_clock_gettime;
         args->timer.tick = tick_clock_gettime;
         args->timer.tock = tock_clock_gettime;
@@ -477,6 +478,7 @@ cli_set_timer(const char *arg, tpb_args_t *args)
         sprintf(args->timer_name, "tsc_asym");
         sprintf(args->timer.name, "tsc_asym");
         args->timer.unit = TPB_UNIT_CY;
+        args->timer.dtype = TPB_INT64_T;
         args->timer.init = init_timer_tsc_asym;
         args->timer.tick = tick_tsc_asym;
         args->timer.tock = tock_tsc_asym;

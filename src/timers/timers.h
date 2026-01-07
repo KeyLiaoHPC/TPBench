@@ -12,16 +12,16 @@
     TPB_TIMER_COUNT
  };
  
- int init_timer_clock_gettime(void);
- int tick_clock_gettime(int64_t *ts);
- int tock_clock_gettime(int64_t *ts);
- void get_time_clock_gettime(int64_t *ts);
- 
- #ifdef __x86_64__
- int init_timer_tsc_asym(void);
- int tick_tsc_asym(int64_t *ts);
- int tock_tsc_asym(int64_t *ts);
- void get_time_tsc_asym(int64_t *ts);
- #endif 
+int init_timer_clock_gettime(void);
+void tick_clock_gettime(int64_t *ts);
+void tock_clock_gettime(int64_t *ts);
+void get_time_clock_gettime(int64_t *ts);
+
+#ifdef __x86_64__
+int init_timer_tsc_asym(void);
+void tick_tsc_asym(int64_t *ts);
+void tock_tsc_asym(int64_t *ts);
+void get_time_tsc_asym(int64_t *ts);
+#endif 
  
  #endif

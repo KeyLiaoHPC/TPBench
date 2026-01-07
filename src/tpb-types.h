@@ -58,6 +58,7 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_LONG_DOUBLE_T   ((TPB_DTYPE)0x0000100c)
 #define TPB_CHAR_T          ((TPB_DTYPE)0x00000101)
 #define TPB_STRING_T        ((TPB_DTYPE)0x00001000)
+#define TPB_DTYPE_TIMER_T   ((TPB_DTYPE)0x0000083F)
 
 // Mask for extracting flags
 #define TPB_PARM_SOURCE_MASK    ((TPB_MASK_U64)0xFF000000)  // Mask for parameter sources bit.
@@ -183,9 +184,10 @@ typedef struct _tpb_error {
 typedef struct tpb_timer {
     char name[TPBM_NAME_STR_MAX_LEN];
     TPB_UNIT_T unit;
+    TPB_DTYPE dtype;
     int (*init)(void);
-    int (*tick)(int64_t *ts);
-    int (*tock)(int64_t *ts);
+    void (*tick)(int64_t *ts);
+    void (*tock)(int64_t *ts);
     void (*get_stamp)(int64_t *ts);
 } tpb_timer_t;
 
