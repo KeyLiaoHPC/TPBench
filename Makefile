@@ -18,7 +18,7 @@ tpbench.x:	main.c tpmpi.c tpb-driver.c cli_parser.c tpio.c tpb-stat.c tplog.c in
 			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
 
 tpbcgt.x:	main.c tpmpi.c tpb-driver.c tpb-cli.c tpb-io.c tpb-stat.c triad.c clock_gettime.c tsc_asym.c tpb-impl.c
-			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
+			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^ -lm
 
 test: test.x
 test.x: test.c init.c staxpy.c striad.c sum.c triad.c update.c \

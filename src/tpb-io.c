@@ -31,11 +31,157 @@
 #include <string.h>
 #include <stdarg.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <errno.h>
 #include <inttypes.h>
 #include "tpb-io.h"
 #include "tpb-stat.h"
 #include "tpb-driver.h"
+
+/* === CLI Output Format Controller (file-scoped) === */
+
+/**
+ * @brief CLI output format configuration structure.
+ *        Controls terminal output formatting for kernel results.
+ */
+typedef struct tpb_cliout_format {
+    int max_col;          /* Maximum terminal columns before wrapping */
+    double *qtiles;       /* Array of quantile positions */
+    size_t nq;            /* Number of quantiles */
+    int initialized;      /* Initialization flag */
+} tpb_cliout_format_t;
+
+/* Default quantile positions */
+static double tpb_default_qtiles[] = {0.05, 0.25, 0.50, 0.75, 0.95};
+
+/* Static format controller instance */
+static tpb_cliout_format_t tpb_cliout_fmt = {
+    .max_col = 85,
+    .qtiles = tpb_default_qtiles,
+    .nq = 5,
+    .initialized = 0
+};
+
+/**
+ * @brief Initialize the CLI output format controller.
+ *        Gets terminal width via ioctl if available.
+ */
+static void
+tpb_cliout_init(void)
+{
+    if (tpb_cliout_fmt.initialized) {
+        return;
+    }
+
+    /* Try to get actual terminal width */
+    struct winsize ws;
+    if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
+        tpb_cliout_fmt.max_col = ws.ws_col;
+    }
+    /* Keep default (85) if ioctl fails */
+
+    tpb_cliout_fmt.initialized = 1;
+}
+
+/**
+ * @brief Convert TPB_UNIT_T to human-readable string.
+ * @param unit The unit code.
+ * @return Pointer to static string representation.
+ */
+static const char *
+tpb_unit_to_string(TPB_UNIT_T unit)
+{
+    /* Extract unit kind directly from unit */
+    TPB_UNIT_T ukind = unit & TPB_UKIND_MASK;
+
+    /* Time units */
+    if (ukind == TPB_UKIND_TIME) {
+        if (unit == TPB_UNIT_NS) return "ns";
+        if (unit == TPB_UNIT_US) return "us";
+        if (unit == TPB_UNIT_MS) return "ms";
+        if (unit == TPB_UNIT_SS) return "s";
+        if (unit == TPB_UNIT_PS) return "ps";
+        if (unit == TPB_UNIT_FS) return "fs";
+        if (unit == TPB_UNIT_CY) return "cycles";
+        if (unit == TPB_UNIT_TIMER) return "timer_unit";
+        return "time";
+    }
+
+    /* Data size units */
+    if (ukind == TPB_UKIND_VOL) {
+        if (unit == TPB_UNIT_BYTE) return "B";
+        if (unit == TPB_UNIT_KIB) return "KiB";
+        if (unit == TPB_UNIT_MIB) return "MiB";
+        if (unit == TPB_UNIT_GIB) return "GiB";
+        if (unit == TPB_UNIT_TIB) return "TiB";
+        if (unit == TPB_UNIT_KB) return "KB";
+        if (unit == TPB_UNIT_MB) return "MB";
+        if (unit == TPB_UNIT_GB) return "GB";
+        if (unit == TPB_UNIT_TB) return "TB";
+        if (unit == TPB_UNIT_BIT) return "bit";
+        return "data_size";
+    }
+
+    /* FLOPS units */
+    if (ukind == TPB_UKIND_OPS) {
+        if (unit == TPB_UNIT_FLOPS) return "FLOPS";
+        if (unit == TPB_UNIT_KFLOPS) return "KFLOPS";
+        if (unit == TPB_UNIT_MFLOPS) return "MFLOPS";
+        if (unit == TPB_UNIT_GFLOPS) return "GFLOPS";
+        if (unit == TPB_UNIT_TFLOPS) return "TFLOPS";
+        if (unit == TPB_UNIT_PFLOPS) return "PFLOPS";
+        return "ops";
+    }
+
+    return "unknown";
+}
+
+/**
+ * @brief Print a dynamic-width double horizontal line.
+ * @param width The target width in characters.
+ */
+static void
+tpb_print_dhline(int width)
+{
+    for (int i = 0; i < width; i++) {
+        putchar('=');
+    }
+    putchar('\n');
+}
+
+/**
+ * @brief Format and print a parameter value based on its dtype.
+ * @param parm Pointer to the runtime parameter.
+ * @param buf Output buffer.
+ * @param bufsize Buffer size.
+ * @return Number of characters written.
+ */
+static int
+tpb_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
+{
+    TPB_DTYPE type_only = parm->dtype & TPB_PARM_TYPE_MASK;
+
+    switch (type_only) {
+    case TPB_INT_T:
+    case TPB_INT32_T:
+        return snprintf(buf, bufsize, "%s=%d", parm->name, (int)parm->value.i64);
+    case TPB_INT8_T:
+    case TPB_INT16_T:
+    case TPB_INT64_T:
+        return snprintf(buf, bufsize, "%s=%ld", parm->name, (long)parm->value.i64);
+    case TPB_UINT8_T:
+    case TPB_UINT16_T:
+    case TPB_UINT32_T:
+    case TPB_UINT64_T:
+        return snprintf(buf, bufsize, "%s=%lu", parm->name, (unsigned long)parm->value.u64);
+    case TPB_FLOAT_T:
+        return snprintf(buf, bufsize, "%s=%.6g", parm->name, (double)parm->value.f32);
+    case TPB_DOUBLE_T:
+        return snprintf(buf, bufsize, "%s=%.6g", parm->name, parm->value.f64);
+    default:
+        return snprintf(buf, bufsize, "%s=?", parm->name);
+    }
+}
 
 int
 tpb_mkdir(char *path) {
@@ -316,4 +462,131 @@ int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, in
     free(headers);
 
     return 0;
+}
+
+int
+tpb_report_args_cli(tpb_k_rthdl_t *handle)
+{
+    if (handle == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* Initialize format controller on first call */
+    tpb_cliout_init();
+
+    int max_col = tpb_cliout_fmt.max_col;
+
+    /* Print header line */
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
+
+    /* Kernel Name - do not wrap even if over max_col */
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
+
+    /* Run-time parameter settings - wrap at max_col */
+    if (handle->argpack.n > 0 && handle->argpack.args != NULL) {
+        const char *prefix = "Run-time parameter settings: ";
+        int prefix_len = (int)strlen(prefix);
+        int cur_col = 0;
+
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%s", prefix);
+        cur_col = prefix_len;
+
+        for (int i = 0; i < handle->argpack.n; i++) {
+            char parm_buf[256];
+            int parm_len = tpb_format_parm_value(&handle->argpack.args[i], parm_buf, sizeof(parm_buf));
+
+            /* Add separator */
+            const char *sep = (i < handle->argpack.n - 1) ? ", " : "";
+            int sep_len = (int)strlen(sep);
+            int total_len = parm_len + sep_len;
+
+            /* Check if we need to wrap */
+            if (cur_col + total_len > max_col && cur_col > prefix_len) {
+                tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+                /* Print continuation indent */
+                char indent[256];
+                memset(indent, ' ', prefix_len);
+                indent[prefix_len] = '\0';
+                tpb_printf(TPBM_PRTN_M_DIRECT, "%s", indent);
+                cur_col = prefix_len;
+            }
+
+            tpb_printf(TPBM_PRTN_M_DIRECT, "%s%s", parm_buf, sep);
+            cur_col += total_len;
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+    }
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
+
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_report_result_cli(tpb_k_rthdl_t *handle)
+{
+    if (handle == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* Initialize format controller on first call */
+    tpb_cliout_init();
+
+    double *qtiles = tpb_cliout_fmt.qtiles;
+    size_t nq = tpb_cliout_fmt.nq;
+
+    /* Test results section */
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Test results:\n");
+
+    /* Allocate quantile output array */
+    double *qout = (double *)malloc(nq * sizeof(double));
+    if (qout == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Process each output */
+    for (int i = 0; i < handle->respack.n; i++) {
+        tpb_k_output_t *out = &handle->respack.outputs[i];
+
+        /* Skip if output data is NULL */
+        if (out->p == NULL) {
+            continue;
+        }
+
+        /* Print metrics name */
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Metrics: %s\n", out->name);
+
+        /* Print unit */
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Units: %s\n", tpb_unit_to_string(out->unit));
+
+        /* Calculate and print mean */
+        double mean_val = 0.0;
+        int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
+        if (err == TPBE_SUCCESS) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Results mean: %.6g\n", mean_val);
+        } else {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Results mean: N/A\n");
+        }
+
+        /* Calculate and print quantiles - do not wrap */
+        err = tpb_stat_qtile_1d(out->p, (size_t)out->n, out->dtype, qtiles, nq, qout);
+        if (err == TPBE_SUCCESS) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Results Quantile: ");
+            for (size_t q = 0; q < nq; q++) {
+                if (q > 0) {
+                    tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+                }
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Q%.2f=%.6g", qtiles[q], qout[q]);
+            }
+            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+        } else {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Results Quantile: N/A\n");
+        }
+    }
+
+    free(qout);
+
+    /* Print footer line */
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
+
+    return TPBE_SUCCESS;
 }

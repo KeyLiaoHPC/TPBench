@@ -104,12 +104,12 @@ main(int argc, char **argv) {
     // Init process info
     err = tpmpi_init();
     __tpbm_exit_on_error(err, "At main.c: tpmpi_init");
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 #ifdef USE_MPI
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench-MPI v" VER "\n");
 #else
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER "\n");
 #endif
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE"\n");
     // init kernel and parse arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
@@ -129,72 +129,20 @@ main(int argc, char **argv) {
     }
     tpb_driver_set_timer(tpb_args.timer);
 
-    // // List only.
-    // if(tpb_args.list_only_flag){
-    //     tpb_list();
-    //     tpmpi_exit();
-    //     exit(0);
-    // }
-
-    // // print kernel list
-    // if(tpb_args.nkern && kernel_handles != NULL) {
-    //     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel list:\n");
-    //     for(int i = 0; i < tpb_args.nkern; i ++) {
-    //         tpb_printf(TPBM_PRTN_M_DIRECT, "%s, \n", kernel_handles[i].kernel.info.name);
-    //     }
-    // }
-    
-    // // create host dir
-    // gethostname(hostname, 128);
-    // sprintf(mydir, "%s/%s", tpb_args.data_dir, hostname);
-    // err = tpb_mkdir(mydir);
-    // __tpbm_exit_on_error(err, "At main.c: tpb_mkdir");
-    // {
-    //     unsigned err_type = tpb_get_err_exit_flag(err);
-    //     tpb_printf(TPBM_PRTN_M_TSTAG | err_type, "Host dir %s\n", mydir);
-    // }
-
-    // // kernel benchmark
-    // if(tpb_args.nkern) {
-    //     // Struct initialization
-    //     err = init_res("kernels", "ns", hostname, tpb_args.data_dir,
-    //                    kernel_handles, tpb_args.nkern, &time_arr);
-    //     __tpbm_exit_on_error(err, "At main.c: init_res");
-
-    //     // Find maximum ntest among all kernels (for array allocation)
-    //     int max_ntest = 10;
-    //     for(int i = 0; i < tpb_args.nkern; i++) {
-    //         int64_t ntest_val = max_ntest;
-    //         if(tpb_find_i64(kernel_handles[i].rt_parms,
-    //                         kernel_handles[i].nparms,
-    //                         "ntest", &ntest_val)) {
-    //             if(ntest_val > max_ntest) {
-    //                 max_ntest = (int)ntest_val;
-    //             }
-    //         }
-    //     }
-        
-    //     // allocate space for data using max_ntest
-    //     time_arr.data = (int64_t **)malloc(tpb_args.nkern * sizeof(int64_t *));
-    //     for(int i = 0; i < tpb_args.nkern; i ++) {
-    //         time_arr.data[i] = (int64_t *)malloc(max_ntest * sizeof(int64_t));
-    //     }
-        // Run kernels.
-    for(int i = 0; i < tpb_args.nkern; i ++) {
+    for (int i = 0; i < tpb_args.nkern; i++) {
         tpb_k_rthdl_t *handle = &kernel_handles[i];
 
-        // run
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n" HLINE, handle->kernel.info.name);
+        /* Run kernel (includes reporting) */
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n", handle->kernel.info.name);
         err = tpb_run_kernel(handle);
         __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
-        // report to stdout
 
-        // Clean up
+        /* Clean up */
         tpb_clean_output(handle);
     }
     
     // end of benchmark
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "\nTPBench finished.\n" DHLINE);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
 
 MAIN_EXIT:
     tpmpi_exit();

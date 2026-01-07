@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <ctype.h>
+#include <math.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <math.h>
@@ -195,15 +196,18 @@ tpb_apply_karg_tokens(char **tokens, int ntokens,
         }
 
         uint32_t type_code = rt_parms[parm_idx].dtype & TPB_PARM_TYPE_MASK;
-        if(type_code >= TPB_INT8_T && type_code <= TPB_INT64_T) {
-            parsed_value.i64 = strtoll(value, NULL, 10);
-        } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
-            parsed_value.u64 = strtoull(value, NULL, 10);
-        } else if(type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        /* Check float/double types first (type codes overlap with int range numerically) */
+        if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
             parsed_value.f64 = strtod(value, NULL);
-        } else if(type_code == TPB_CHAR_T) {
+        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+            parsed_value.i64 = strtoll(value, NULL, 10);
+        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+            parsed_value.u64 = strtoull(value, NULL, 10);
+        } else if (type_code == TPB_CHAR_T) {
             parsed_value.c = value[0];
-            if(parsed_value.c == '\0') {
+            if (parsed_value.c == '\0') {
                 return TPBE_MALLOC_FAIL;
             }
         } else {
@@ -286,44 +290,47 @@ tpb_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
 static int
 tpb_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
-    if(parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
+    if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
         return TPBE_KERN_ARG_FAIL;
     }
     
     uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
     
-    if(type_code == TPB_INT_T || (type_code >= TPB_INT8_T && type_code <= TPB_INT64_T)) {
-        if(value->i64 < parm->plims[0].i64 || value->i64 > parm->plims[1].i64) {
+    /* Check float/double types first (type codes overlap with uint range numerically) */
+    if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        if (value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %lf out of range [%lf, %lf]\n",
+                      parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if (type_code == TPB_FLOAT_T) {
+        if (value->f32 < parm->plims[0].f32 || value->f32 > parm->plims[1].f32) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, 
+                      "Parameter '%s' value %f out of range [%f, %f]\n",
+                      parm->name, value->f32, parm->plims[0].f32, parm->plims[1].f32);
+            return TPBE_KERN_ARG_FAIL;
+        }
+    } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+               type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+        if (value->i64 < parm->plims[0].i64 || value->i64 > parm->plims[1].i64) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                       "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
                       parm->name, value->i64, 
                       parm->plims[0].i64, parm->plims[1].i64);
             return TPBE_KERN_ARG_FAIL;
         }
-    } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
-        if(value->u64 < parm->plims[0].u64 || value->u64 > parm->plims[1].u64) {
+    } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+               type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+        if (value->u64 < parm->plims[0].u64 || value->u64 > parm->plims[1].u64) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                       "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
                       parm->name, value->u64,
                       parm->plims[0].u64, parm->plims[1].u64);
             return TPBE_KERN_ARG_FAIL;
         }
-    } else if(type_code == TPB_FLOAT_T) {
-        if(value->f32 < parm->plims[0].f32 || value->f32 > parm->plims[1].f32) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, 
-                      "Parameter '%s' value %f out of range [%f, %f]\n",
-                      parm->name, value->f32, parm->plims[0].f32, parm->plims[1].f32);
-            return TPBE_KERN_ARG_FAIL;
-        }
-    } else if(type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
-        if(value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, 
-                      "Parameter '%s' value %lf out of range [%lf, %lf]\n",
-                      parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
-            return TPBE_KERN_ARG_FAIL;
-        }
-    } else if(type_code == TPB_CHAR_T) {
-        if(value->c < parm->plims[0].c || value->c > parm->plims[1].c) {
+    } else if (type_code == TPB_CHAR_T) {
+        if (value->c < parm->plims[0].c || value->c > parm->plims[1].c) {
             tpb_printf(TPBM_PRTN_M_DIRECT, 
                       "Parameter '%s' value '%c' out of range ['%c', '%c']\n",
                       parm->name, value->c, parm->plims[0].c, parm->plims[1].c);
@@ -343,40 +350,43 @@ tpb_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 static int
 tpb_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
-    if(parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
+    if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
         return TPBE_KERN_ARG_FAIL;
     }
     
     uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
     
-    if(type_code == TPB_INT_T || (type_code >= TPB_INT8_T && type_code <= TPB_INT64_T)) {
-        for(int i = 0; i < parm->nlims; i++) {
-            if(value->i64 == parm->plims[i].i64) {
-                return 0;
-            }
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRId64 " is not in list\n", parm->name, value->i64);
-    } else if(type_code >= TPB_UINT8_T && type_code <= TPB_UINT64_T) {
-        for(int i = 0; i < parm->nlims; i++) {
-            if(value->u64 == parm->plims[i].u64) {
-                return 0;
-            }
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRIu64 " is not in list\n", parm->name, value->u64);
-    } else if(type_code == TPB_FLOAT_T) {
-        for(int i = 0; i < parm->nlims; i++) {
-            if(fabs(value->f32 - parm->plims[i].f32) < 1e-7) {
-                return 0;
-            }
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %f is not in list\n", parm->name, value->f32);
-    } else if(type_code == TPB_DOUBLE_T) {
-        for(int i = 0; i < parm->nlims; i++) {
-            if(fabs(value->f64 - parm->plims[i].f64) < 1e-15) {
+    /* Check float/double types first (type codes overlap with uint range numerically) */
+    if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        for (int i = 0; i < parm->nlims; i++) {
+            if (fabs(value->f64 - parm->plims[i].f64) < 1e-15) {
                 return 0;
             }
         }
         tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %lf is not in list\n", parm->name, value->f64);
+    } else if (type_code == TPB_FLOAT_T) {
+        for (int i = 0; i < parm->nlims; i++) {
+            if (fabs(value->f32 - parm->plims[i].f32) < 1e-7) {
+                return 0;
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %f is not in list\n", parm->name, value->f32);
+    } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+               type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+        for (int i = 0; i < parm->nlims; i++) {
+            if (value->i64 == parm->plims[i].i64) {
+                return 0;
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRId64 " is not in list\n", parm->name, value->i64);
+    } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+               type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+        for (int i = 0; i < parm->nlims; i++) {
+            if (value->u64 == parm->plims[i].u64) {
+                return 0;
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Parameter '%s' value %" PRIu64 " is not in list\n", parm->name, value->u64);
     } else if (type_code == TPB_CHAR_T) {
         for (int i = 0; i < parm->nlims; i++) {
             if (value->c == parm->plims[i].c) {
@@ -652,7 +662,9 @@ tpb_parse_args( int argc,
             memcpy(&kernel_handles[i].kernel, kernel_defs[i], sizeof(tpb_kernel_t));
             kernel_handles[i].argpack.args = rt_parms;
             kernel_handles[i].argpack.n = nparms;
-            memset(&kernel_handles[i].respack, 0, sizeof(tpb_respack_t));
+            /* Initialize empty respack - outputs will be added at runtime by kernel */
+            kernel_handles[i].respack.n = 0;
+            kernel_handles[i].respack.outputs = NULL;
         }
 
 cleanup_tokens:

@@ -104,29 +104,30 @@ int
 run_triad(void)
 {
     int tpberr;
-    // Input
+    /* Input */
     int ntest;
-    tpb_timer_t *timer;
+    tpb_timer_t timer;
     uint64_t memsize;
-    // Output
+    /* Output */
     int64_t *tot_time = NULL;
     int64_t *step_time = NULL;
     uint64_t *real_memsize = NULL;
 
-    tpberr = tpb_k_get_timer(timer);
+    tpberr = tpb_k_get_timer(&timer);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T ,(tpb_parm_value_t *)&ntest);
+    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("memsize", TPB_UINT64_T ,(tpb_parm_value_t *)&memsize);
+    tpberr = tpb_k_get_arg("memsize", TPB_UINT64_T, (void *)&memsize);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("tot_time", 1, (void *)tot_time);
+    tpberr = tpb_k_alloc_output("tot_time", 1, &tot_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("step_time", ntest, (void *)step_time);
+    tpberr = tpb_k_alloc_output("step_time", ntest, &step_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_memsize", 1, (void *)real_memsize);
+    tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
+    if (tpberr) return tpberr;
 
-    // Call the actual kernel implementation
-    tpberr = d_triad(timer, ntest, step_time, memsize);
+    /* Call the actual kernel implementation */
+    tpberr = d_triad(&timer, ntest, step_time, memsize);
 
     return tpberr;
 }

@@ -144,7 +144,18 @@ int tpb_k_add_parm(const char *name, const char *default_value,
 int tpb_k_add_runner(int (*runner)(void));
 
 /**
- * @brief Register a new output data definition
+ * @brief Register a new output data definition for the current kernel.
+ *
+ * This function must be called during kernel registration (after tpb_k_register,
+ * before tpb_k_add_runner) to define output metrics. The output definitions are
+ * stored and later copied to the runtime handle's respack when tpb_run_kernel
+ * is called.
+ *
+ * @param name   Output name (used to look up when allocating/reporting).
+ * @param note   Human-readable description.
+ * @param dtype  Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.).
+ * @param unit   Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.).
+ * @return 0 on success, error code otherwise.
  */
 int tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit);
 

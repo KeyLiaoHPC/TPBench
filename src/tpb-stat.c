@@ -16,44 +16,221 @@
  * this program. If not, see https://www.gnu.org/licenses/.
  * =================================================================================
  * @file tpb-stat.c
- * @version 0.3
- * @brief factory of benchmarking data
+ * @version 0.4
+ * @brief Statistics and data processing functions for TPBench.
+ *        Provides generic statistics operations (quantile, mean, min, max) that
+ *        support multiple data types via TPB_DTYPE.
  * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
  * @date 2024-01-27
  */
 #include <stdlib.h>
+#include <stdio.h>
 #include "tpb-stat.h"
 #include "tpb-io.h"
-#include "stdio.h"
 
-
-int qsort_ascend(const void * a, const void * b) {
-    if( *(double *)a < *(double *)b ) {
+/**
+ * @brief Comparison function for qsort (ascending order, double).
+ */
+static int
+qsort_ascend(const void *a, const void *b)
+{
+    if (*(double *)a < *(double *)b) {
         return -1;
     }
-    return  *(double *)a > *(double *)b;
+    return *(double *)a > *(double *)b;
 }
 
+/**
+ * @brief Check if a TPB_DTYPE is a supported numeric type.
+ * @param dtype The data type to check.
+ * @return 1 if supported, 0 otherwise.
+ */
+static int
+tpb_stat_dtype_supported(TPB_DTYPE dtype)
+{
+    TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
+    switch (type_only) {
+    case TPB_INT_T:
+    case TPB_INT8_T:
+    case TPB_INT16_T:
+    case TPB_INT32_T:
+    case TPB_INT64_T:
+    case TPB_UINT8_T:
+    case TPB_UINT16_T:
+    case TPB_UINT32_T:
+    case TPB_UINT64_T:
+    case TPB_FLOAT_T:
+    case TPB_DOUBLE_T:
+        return 1;
+    default:
+        return 0;
+    }
+}
 
-// calculate mean, min, max, quantile in a n-item 1d fp64 array
+/**
+ * @brief Get a single element from a generic array as double.
+ * @param arr   Pointer to the array.
+ * @param idx   Index of the element to retrieve.
+ * @param dtype Data type of the array elements.
+ * @return The element cast to double.
+ */
+static double
+tpb_stat_get_element(void *arr, size_t idx, TPB_DTYPE dtype)
+{
+    TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
+    switch (type_only) {
+    case TPB_INT_T:
+        return (double)((int *)arr)[idx];
+    case TPB_INT8_T:
+        return (double)((int8_t *)arr)[idx];
+    case TPB_INT16_T:
+        return (double)((int16_t *)arr)[idx];
+    case TPB_INT32_T:
+        return (double)((int32_t *)arr)[idx];
+    case TPB_INT64_T:
+        return (double)((int64_t *)arr)[idx];
+    case TPB_UINT8_T:
+        return (double)((uint8_t *)arr)[idx];
+    case TPB_UINT16_T:
+        return (double)((uint16_t *)arr)[idx];
+    case TPB_UINT32_T:
+        return (double)((uint32_t *)arr)[idx];
+    case TPB_UINT64_T:
+        return (double)((uint64_t *)arr)[idx];
+    case TPB_FLOAT_T:
+        return (double)((float *)arr)[idx];
+    case TPB_DOUBLE_T:
+        return ((double *)arr)[idx];
+    default:
+        return 0.0;
+    }
+}
+
 int
-calc_quant(double *data, int nitem, __ovl_t *res) {
-    int i05, i25, i50, i75, i95;
-    size_t ndata;
-    double sum = 0;
-    double ovl_byte, mind, maxd, meand, d25, d50, d75;
+tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
+                  double *qarr, size_t nq, double *qout)
+{
+    if (arr == NULL || qarr == NULL || qout == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
 
-    for(int i = 0; i < nitem; i ++) {
+    if (!tpb_stat_dtype_supported(dtype)) {
+        return TPBE_DTYPE_NOT_SUPPORTED;
+    }
+
+    /* Allocate temporary double array for sorting */
+    double *tmp = (double *)malloc(narr * sizeof(double));
+    if (tmp == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Copy and cast elements to double */
+    for (size_t i = 0; i < narr; i++) {
+        tmp[i] = tpb_stat_get_element(arr, i, dtype);
+    }
+
+    /* Sort the temporary array */
+    qsort(tmp, narr, sizeof(double), qsort_ascend);
+
+    /* Calculate quantile values */
+    for (size_t i = 0; i < nq; i++) {
+        /* Round down index: idx = (int)(q * narr) */
+        size_t idx = (size_t)(qarr[i] * (double)narr);
+        /* Clamp to valid range [0, narr-1] */
+        if (idx >= narr) {
+            idx = narr - 1;
+        }
+        qout[i] = tmp[idx];
+    }
+
+    free(tmp);
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_stat_mean(void *arr, size_t narr, TPB_DTYPE dtype, double *mean_out)
+{
+    if (arr == NULL || mean_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (!tpb_stat_dtype_supported(dtype)) {
+        return TPBE_DTYPE_NOT_SUPPORTED;
+    }
+
+    double sum = 0.0;
+    for (size_t i = 0; i < narr; i++) {
+        sum += tpb_stat_get_element(arr, i, dtype);
+    }
+
+    *mean_out = sum / (double)narr;
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_stat_max(void *arr, size_t narr, TPB_DTYPE dtype, double *max_out)
+{
+    if (arr == NULL || max_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (!tpb_stat_dtype_supported(dtype)) {
+        return TPBE_DTYPE_NOT_SUPPORTED;
+    }
+
+    double max_val = tpb_stat_get_element(arr, 0, dtype);
+    for (size_t i = 1; i < narr; i++) {
+        double val = tpb_stat_get_element(arr, i, dtype);
+        if (val > max_val) {
+            max_val = val;
+        }
+    }
+
+    *max_out = max_val;
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out)
+{
+    if (arr == NULL || min_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (!tpb_stat_dtype_supported(dtype)) {
+        return TPBE_DTYPE_NOT_SUPPORTED;
+    }
+
+    double min_val = tpb_stat_get_element(arr, 0, dtype);
+    for (size_t i = 1; i < narr; i++) {
+        double val = tpb_stat_get_element(arr, i, dtype);
+        if (val < min_val) {
+            min_val = val;
+        }
+    }
+
+    *min_out = min_val;
+    return TPBE_SUCCESS;
+}
+
+/* === Legacy functions (kept for backward compatibility) === */
+
+int
+calc_quant(double *data, int nitem, __ovl_t *res)
+{
+    int i05, i25, i50, i75, i95;
+    double sum = 0;
+
+    for (int i = 0; i < nitem; i++) {
         sum += data[i];
-        // printf("%f\n", data[i]);
     }
     qsort((void *)data, nitem, sizeof(double), qsort_ascend);
 
-    i05 = 0.05 * nitem;
-    i25 = 0.25 * nitem;
-    i50 = 0.5 * nitem;
-    i75 = 0.75 * nitem;
-    i95 = 0.95 * nitem;
+    i05 = (int)(0.05 * nitem);
+    i25 = (int)(0.25 * nitem);
+    i50 = (int)(0.5 * nitem);
+    i75 = (int)(0.75 * nitem);
+    i95 = (int)(0.95 * nitem);
     res->meantp = sum / nitem;
     res->min = data[0];
     res->tp05 = data[i05];
@@ -66,42 +243,51 @@ calc_quant(double *data, int nitem, __ovl_t *res) {
     return 0;
 }
 
-// calculate task volumn per time unit. (e.g. MB/s, Bytes/cy, etc.)
 int
-calc_rate_quant(int64_t *raw, int nitem, double volume, double s, __ovl_t *res) {
-    double rate[nitem];
+calc_rate_quant(int64_t *raw, int nitem, double volume, double s, __ovl_t *res)
+{
+    double *rate = (double *)malloc(nitem * sizeof(double));
+    if (rate == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
 
-    for(int i = 0; i < nitem; i ++) {
-        rate[i] = s * volume / (double)raw[i]; // scale_factor * volumne / total_time
+    for (int i = 0; i < nitem; i++) {
+        rate[i] = s * volume / (double)raw[i];
     }
     calc_quant(rate, nitem, res);
 
+    free(rate);
     return 0;
 }
 
-// calculate period per task volumne unit. (e.g. sec/iter, cy/iter, etc.)
 int
-calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res) {
-    double period[nitem];
+calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *res)
+{
+    double *period = (double *)malloc(nitem * sizeof(double));
+    if (period == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
 
-    for(int i = 0; i < nitem; i ++) {
-        period[i] = s * (double)raw[i] / volume; // scale_factor * total_time / volumne
+    for (int i = 0; i < nitem; i++) {
+        period[i] = s * (double)raw[i] / volume;
     }
 
     calc_quant(period, nitem, res);
 
+    free(period);
     return 0;
 }
 
 int
-dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t niter) {
+dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t niter)
+{
     __ovl_t res;
 
     tpb_printf(TPBM_PRTN_M_DIRECT, OVL_QUANT_HEADER "\n");
-    // MB/s
+    /* MB/s */
     calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n", 
-           res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
+               res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
 
     return 0;
 }
