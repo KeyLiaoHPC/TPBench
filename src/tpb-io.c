@@ -457,10 +457,8 @@ tpb_report_args_cli(tpb_k_rthdl_t *handle)
 
     int max_col = tpb_cliout_fmt.max_col;
 
-    /* Print header line */
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
-
     /* Kernel Name - do not wrap even if over max_col */
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
@@ -497,7 +495,6 @@ tpb_report_args_cli(tpb_k_rthdl_t *handle)
         }
         tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
     }
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
 
     return TPBE_SUCCESS;
 }
@@ -520,6 +517,7 @@ tpb_report_result_cli(tpb_k_rthdl_t *handle)
     int same_unit = tpb_cliout_fmt.castctrl_same_unit;
 
     /* Test results section */
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Test results:\n");
 
     /* Allocate quantile output array */

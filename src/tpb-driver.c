@@ -172,6 +172,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     }
     current_rthdl = hdl;
 
+
     /* Initialize handle's respack from kernel's registered outputs */
     for (int i = 0; i < tpb_driver_nkern; i++) {
         if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {

@@ -129,11 +129,15 @@ main(int argc, char **argv) {
     }
     tpb_driver_set_timer(tpb_args.timer);
 
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE"\n");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start driver runner.\n");
     for (int i = 0; i < tpb_args.nkern; i++) {
         tpb_k_rthdl_t *handle = &kernel_handles[i];
 
         /* Run kernel (includes reporting) */
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n", handle->kernel.info.name);
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d\n", i);
         err = tpb_run_kernel(handle);
         __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
 
