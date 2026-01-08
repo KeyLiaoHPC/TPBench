@@ -47,7 +47,7 @@
 #include <immintrin.h>
 #endif
 
-#define MALLOC(_A, _NSIZE)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NSIZE);   \
+#define MALLOC(_A, _NARR)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NARR);   \
                             if((_A) == NULL) {                                  \
                                 return  TPBE_MALLOC_FAIL;                            \
                             }
@@ -135,7 +135,7 @@ run_triad(void)
 
 int
 d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize) {
-    int nsize, err;
+    int narr, err;
     volatile double *a, *b, *c;
     register double s = 0.42;
     uint64_t t0, t1;
@@ -145,20 +145,20 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
     uint64_t vec_len = svlen_f64(tmp);
 #endif 
 
-    nsize = (int)(kib * 1024 / sizeof(double) / 3);
-    *real_memsize = nsize * 3;
+    narr = (int)(kib * 1024 / sizeof(double) / 3);
+    *real_memsize = narr * sizeof(double) * 3;
 
 #ifdef AVX512
-    nsize = ((nsize + 7) / 8) * 8;
+    narr = ((narr + 7) / 8) * 8;
 #elif defined(AVX2)
-    nsize = ((nsize + 3) / 4) * 4;
+    narr = ((narr + 3) / 4) * 4;
 #endif
 
-    MALLOC(a, nsize);
-    MALLOC(b, nsize);
-    MALLOC(c, nsize);
+    MALLOC(a, narr);
+    MALLOC(b, narr);
+    MALLOC(c, narr);
 
-    for(int i = 0; i < nsize; i ++) {
+    for(int i = 0; i < narr; i ++) {
         a[i] = 1.0;//s;
         b[i] = 2.0;//s;// + i;
         c[i] = 3.0;//s;//i;
@@ -173,9 +173,9 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
     wns1 = wns0 + 1e9;
     while(wns0 < wns1) {
 #ifdef KP_SVE
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += vec_len) {
-            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, narr);
             svfloat64_t vec_b = svld1_f64(predicate, b + j);
             svfloat64_t vec_c = svld1_f64(predicate, c + j);
 
@@ -183,8 +183,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             svst1_f64(predicate, a + j, vec_a);
         }
 #elif defined(AVX512)
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += 8) {
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += 8) {
             __m512d v_b = _mm512_load_pd(b + j);
             __m512d v_c = _mm512_load_pd(c + j);
             __m512d v_s = _mm512_set1_pd(s);
@@ -192,8 +192,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             _mm512_store_pd(a + j, v_a);
         }
 #elif defined(AVX2)
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += 4) {
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += 4) {
             __m256d v_b = _mm256_load_pd(b + j);
             __m256d v_c = _mm256_load_pd(c + j);
             __m256d v_s = _mm256_set1_pd(s);
@@ -201,8 +201,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             _mm256_store_pd(a + j, v_a);
         }
 #else
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for(int j = 0; j < nsize; j ++){
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for(int j = 0; j < narr; j ++){
             a[j] = b[j] + s * c[j];
         }
 #endif
@@ -218,9 +218,9 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
         tpmpi_dbarrier();
         timer->tick(step_time + i);
 #ifdef KP_SVE
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += vec_len) {
-            svbool_t predicate = svwhilelt_b64_s32(j, nsize);
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += vec_len) {
+            svbool_t predicate = svwhilelt_b64_s32(j, narr);
             svfloat64_t vec_b = svld1_f64(predicate, b + j);
             svfloat64_t vec_c = svld1_f64(predicate, c + j);
 
@@ -228,8 +228,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             svst1_f64(predicate, a + j, vec_a);
         }
 #elif defined(AVX512)
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += 8) {
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += 8) {
             __m512d v_b = _mm512_load_pd(b + j);
             __m512d v_c = _mm512_load_pd(c + j);
             __m512d v_s = _mm512_set1_pd(s);
@@ -237,8 +237,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             _mm512_store_pd(a + j, v_a);
         }
 #elif defined(AVX2)
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for (int j = 0; j < nsize; j += 4) {
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for (int j = 0; j < narr; j += 4) {
             __m256d v_b = _mm256_load_pd(b + j);
             __m256d v_c = _mm256_load_pd(c + j);
             __m256d v_s = _mm256_set1_pd(s);
@@ -246,8 +246,8 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
             _mm256_store_pd(a + j, v_a);
         }
 #else
-        #pragma omp parallel for shared(a, b, c, s, nsize)
-        for(int j = 0; j < nsize; j ++){
+        #pragma omp parallel for shared(a, b, c, s, narr)
+        for(int j = 0; j < narr; j ++){
             a[j] = b[j] + s * c[j];
         }
 #endif
