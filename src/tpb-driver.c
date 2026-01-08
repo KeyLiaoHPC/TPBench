@@ -300,8 +300,8 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
 
 
 int
-tpb_k_add_parm(const char *name, const char *default_value, 
-               const char *note, TPB_DTYPE dtype, ...)
+tpb_k_add_parm(const char *name, const char *note,
+               const char *default_value, TPB_DTYPE dtype, ...)
 {
     int tpberr = 0;
     int nparms;

@@ -119,22 +119,22 @@ int tpb_k_register(const char *name, const char *note);
  * 
  * @example
  *   // Range check for integer
- *   tpb_k_add_parm("ntest", "10", "Number of tests",
+ *   tpb_k_add_parm("ntest", "Number of tests", "10",
  *                  TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
  *                  (int64_t)1, (int64_t)10000);
  * 
  *   // List check for string
  *   const char *dtypes[] = {"float", "double", "int"};
- *   tpb_k_add_parm("dtype", "double", "Data type",
+ *   tpb_k_add_parm("dtype", "Data type", "double",
  *                  TPB_PARM_CLI | TPB_STRING_T | TPB_PARM_LIST,
  *                  3, dtypes);
  * 
  *   // No check for double
- *   tpb_k_add_parm("epsilon", "1e-6", "Convergence threshold",
+ *   tpb_k_add_parm("epsilon", "Convergence threshold", "1e-6",
  *                  TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
  */
-int tpb_k_add_parm(const char *name, const char *default_value, 
-                   const char *description, TPB_DTYPE dtype, ...);
+int tpb_k_add_parm(const char *name, const char *note,
+                   const char *default_value, TPB_DTYPE dtype, ...);
 
 /**
  * @brief Set the runner function for the current kernel

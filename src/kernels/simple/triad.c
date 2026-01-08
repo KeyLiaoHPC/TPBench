@@ -36,7 +36,6 @@
 #include "tpmpi.h"
 #include "../../tpb-types.h"
 #include "../../tpb-impl.h"
-#include "../../tpb-stat.h"
 #include "../../tpb-driver.h"
 
 #ifdef KP_SVE
@@ -66,23 +65,23 @@ register_triad(void)
     err = tpb_k_register("triad", "STREAM Triad: a[i] = b[i] + s * c[i]");
     if(err != 0) return err;
     // Add runtime parameters with validation
-    err = tpb_k_add_parm("ntest", "10", "Number of test iterations",
+    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if(err != 0) return err;
-    err = tpb_k_add_parm("nskip", "2", "Number of initial iterations to skip",
+    err = tpb_k_add_parm("nskip", "Number of initial iterations to skip", "2",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)1000);
     if(err != 0) return err;
-    err = tpb_k_add_parm("twarm", "100", "Warmup time in milliseconds",
+    err = tpb_k_add_parm("twarm", "Warmup time in milliseconds", "100",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)10000);
     if(err != 0) return err;
-    err = tpb_k_add_parm("memsize", "32", "Memory size in KiB",
+    err = tpb_k_add_parm("memsize", "Memory size in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if(err != 0) return err;
-    err = tpb_k_add_parm("s", "0.42", "Scalar multiplier",
+    err = tpb_k_add_parm("s", "Scalar multiplier", "0.42",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
     if(err != 0) return err;
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
