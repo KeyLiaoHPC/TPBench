@@ -237,7 +237,8 @@ enum _tpb_errno {
     TPBE_LIST_NOT_FOUND,
     TPBE_LIST_DUP,
     TPBE_NULLPTR_ARG,
-    TPBE_DTYPE_NOT_SUPPORTED
+    TPBE_DTYPE_NOT_SUPPORTED,
+    TPBE_ILLEGAL_CALL
 };
 typedef enum _tpb_errno tpb_errno_t;
 typedef struct _tpb_error {
@@ -327,10 +328,11 @@ typedef struct tpb_argpack {
  * @brief Static kernel information
  */
 typedef struct tpb_k_static_info {
-    char name[TPBM_NAME_STR_MAX_LEN];  // Kernel name
-    char note[TPBM_NOTE_STR_MAX_LEN];  // Kernel description/notes
-    int nparms;                     // Number of parameters
-    tpb_rt_parm_t *parms;      // Runtime parameter definitions
+    char name[TPBM_NAME_STR_MAX_LEN];   // Kernel name
+    char note[TPBM_NOTE_STR_MAX_LEN];   // Kernel description/notes
+    int nparms, nouts;                   // Number of parameters
+    tpb_rt_parm_t *parms;               // Runtime parameter definitions
+    tpb_k_output_t *outs;            // Static result definitions
 } tpb_k_static_info_t;
 
 /**

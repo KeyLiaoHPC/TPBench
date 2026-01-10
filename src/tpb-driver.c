@@ -27,9 +27,6 @@ static tpb_k_rthdl_t *current_rthdl = NULL;
 static tpb_kernel_t kernel_common;
 static tpb_timer_t timer;
 
-/* Output definitions stored during kernel registration (parallel to kernel_all) */
-static tpb_respack_t *kernel_respacks = NULL;
-
 int
 tpb_driver_set_timer(tpb_timer_t timer_in)
 {
@@ -118,6 +115,8 @@ tpb_register_kernel()
 {
     int err;
 
+    // Initialize current handle to null
+    current_rthdl = NULL;
     tpb_driver_nkern = 0; 
     // Free any existing kernel array
     if(kernel_all != NULL) {
@@ -176,22 +175,23 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     /* Initialize handle's respack from kernel's registered outputs */
     for (int i = 0; i < tpb_driver_nkern; i++) {
         if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {
-            tpb_respack_t *src = &kernel_respacks[i];
-            if (src->n > 0 && src->outputs != NULL) {
-                hdl->respack.n = src->n;
+            int nouts = kernel_all[i].info.nouts;
+            tpb_k_output_t *src_outs = kernel_all[i].info.outs;
+            if (nouts > 0 && src_outs != NULL) {
+                hdl->respack.n = nouts;
                 hdl->respack.outputs = (tpb_k_output_t *)malloc(
-                    sizeof(tpb_k_output_t) * src->n);
+                    sizeof(tpb_k_output_t) * nouts);
                 if (hdl->respack.outputs == NULL) {
                     return TPBE_MALLOC_FAIL;
                 }
-                for (int j = 0; j < src->n; j++) {
-                    memcpy(&hdl->respack.outputs[j], &src->outputs[j],
+                for (int j = 0; j < nouts; j++) {
+                    memcpy(&hdl->respack.outputs[j], &src_outs[j],
                            sizeof(tpb_k_output_t));
                     hdl->respack.outputs[j].p = NULL;
                     hdl->respack.outputs[j].n = 0;
 
                     /* Resolve TPB_UNIT_TIMER: use the timer's unit */
-                    if (src->outputs[j].unit == TPB_UNIT_TIMER) {
+                    if (src_outs[j].unit == TPB_UNIT_TIMER) {
                         hdl->respack.outputs[j].unit = timer.unit;
                     }
                 }
@@ -220,6 +220,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
             /* FAIL case - return immediately */
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed: %s\n",
                        hdl->kernel.info.name, tpb_get_err_msg(err));
+            current_rthdl = NULL;
             return err;
         }
     }
@@ -228,7 +229,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     tpb_report_result_cli(hdl);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s finished successfully.\n",
                hdl->kernel.info.name);
-
+    current_rthdl = NULL;
     return err;
 }
 
@@ -277,15 +278,6 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
         return TPBE_MALLOC_FAIL;
     }
 
-    /* Reallocate kernel respacks array */
-    kernel_respacks = (tpb_respack_t *)realloc(kernel_respacks,
-                      sizeof(tpb_respack_t) * (tpb_driver_nkern + 1));
-    if (kernel_respacks == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-    kernel_respacks[tpb_driver_nkern].n = 0;
-    kernel_respacks[tpb_driver_nkern].outputs = NULL;
-    
     /* Initialize new kernel */
     current_kernel = &kernel_all[tpb_driver_nkern];
     memset(current_kernel, 0, sizeof(tpb_kernel_t));
@@ -294,6 +286,8 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     sprintf(current_kernel->info.note, "%s", note);
     current_kernel->info.nparms = 0;
     current_kernel->info.parms = NULL;
+    current_kernel->info.nouts = 0;
+    current_kernel->info.outs = NULL;
     
     return 0;
 }
@@ -311,6 +305,11 @@ tpb_k_add_parm(const char *name, const char *note,
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
                   "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
+    }
+    if (current_rthdl != NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                  "tpb_k_add_parm cannot be called during kernel execution.\n");
+        return TPBE_ILLEGAL_CALL;
     }
     if (name == NULL || default_value == NULL || note == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -504,26 +503,41 @@ tpb_k_add_runner(int (*runner)(void))
 int
 tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit)
 {
-    if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "No kernel registered. Call tpb_k_register first.\n");
-        return TPBE_KERN_ARG_FAIL;
-    }
     if (name == NULL || note == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
-    /* Add to the current kernel's respack (stored in kernel_respacks) */
-    tpb_respack_t *respack = &kernel_respacks[tpb_driver_nkern];
-    /* Reallocate outputs array to add new output */
-    int new_n = respack->n + 1;
-    respack->outputs = (tpb_k_output_t *)realloc(respack->outputs,
-                       sizeof(tpb_k_output_t) * new_n);
-    if (respack->outputs == NULL) {
-        return TPBE_MALLOC_FAIL;
+    tpb_k_output_t *out = NULL;
+
+    if (current_rthdl != NULL) {
+        /* Runtime context: add output to handle's respack */
+        tpb_respack_t *respack = &current_rthdl->respack;
+        int new_n = respack->n + 1;
+        respack->outputs = (tpb_k_output_t *)realloc(respack->outputs,
+                           sizeof(tpb_k_output_t) * new_n);
+        if (respack->outputs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        out = &respack->outputs[respack->n];
+        respack->n = new_n;
+    } else {
+        /* Registration context: add output to kernel's info.outs */
+        if (current_kernel == NULL) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "No kernel registered. Call tpb_k_register first.\n");
+            return TPBE_KERN_ARG_FAIL;
+        }
+        int new_n = current_kernel->info.nouts + 1;
+        current_kernel->info.outs = (tpb_k_output_t *)realloc(current_kernel->info.outs,
+                                    sizeof(tpb_k_output_t) * new_n);
+        if (current_kernel->info.outs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        out = &current_kernel->info.outs[current_kernel->info.nouts];
+        current_kernel->info.nouts = new_n;
     }
+
     /* Add output definition - store original dtype/unit, resolve at runtime */
-    tpb_k_output_t *out = &respack->outputs[respack->n];
     memset(out, 0, sizeof(tpb_k_output_t));
     snprintf(out->name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(out->note, TPBM_NOTE_STR_MAX_LEN, "%s", note);
@@ -535,8 +549,6 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
     out->unit = unit;
     out->n = 0;
     out->p = NULL;
-
-    respack->n = new_n;
 
     return 0;
 }

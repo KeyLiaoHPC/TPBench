@@ -20,7 +20,8 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_LIST_NOT_FOUND,   TPBE_FAIL,  "Element is not found in the list."},
     {TPBE_LIST_DUP,         TPBE_FAIL,  "Duplicated element."},
     {TPBE_NULLPTR_ARG,      TPBE_FAIL,  "Empty input pointer."},
-    {TPBE_DTYPE_NOT_SUPPORTED, TPBE_FAIL, "Datatype not supported."}
+    {TPBE_DTYPE_NOT_SUPPORTED, TPBE_FAIL, "Datatype not supported."},
+    {TPBE_ILLEGAL_CALL, TPBE_FAIL, "Illegal call."}
 };
 
 int tpb_get_err_exit_flag(int err) {

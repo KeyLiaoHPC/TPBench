@@ -17,7 +17,6 @@
 #include "tpb-cli.h"
 #include "tpb-driver.h"
 #include "tpb-io.h"
-#include "tpb-stat.h"
 #include "tpmpi.h"
 
 #ifdef USE_MPI
