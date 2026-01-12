@@ -51,7 +51,7 @@ double tpb_unit_get_scale(TPB_UNIT_T unit);
  *   - TPB_UNAME_OPS:      Cast via DEC_EXP (op/s->Kop/s...)
  *   - TPB_UNAME_TOKENPS:  Cast via DEC_EXP (token/s->Ktoken/s...)
  *   - TPB_UNAME_TPS:      Cast via DEC_EXP (tps->Ktps...)
- *   - TPB_UNAME_UNKNTIME: No casting
+ *   - TPB_UNAME_TIMERTIME: No casting
  *   - TPB_UNAME_GRIDSIZE: No casting
  *
  * @param arr          Input array (any TPB_DTYPE)

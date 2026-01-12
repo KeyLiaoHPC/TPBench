@@ -83,9 +83,9 @@ tpb_cliout_init(void)
  * @brief Extract UNAME+UKIND from a unit for grouping purposes.
  */
 static inline TPB_UNIT_T
-get_uname_kind(TPB_UNIT_T unit)
+get_uname(TPB_UNIT_T unit)
 {
-    return unit & (TPB_UNAME_MASK | TPB_UKIND_MASK);
+    return unit & TPB_UNAME_MASK;
 }
 
 /**
@@ -446,7 +446,7 @@ int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, in
 }
 
 int
-tpb_report_args_cli(tpb_k_rthdl_t *handle)
+tpb_cliout_args(tpb_k_rthdl_t *handle)
 {
     if (handle == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -458,7 +458,7 @@ tpb_report_args_cli(tpb_k_rthdl_t *handle)
     int max_col = tpb_cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n## Input:\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
@@ -500,7 +500,7 @@ tpb_report_args_cli(tpb_k_rthdl_t *handle)
 }
 
 int
-tpb_report_result_cli(tpb_k_rthdl_t *handle)
+tpb_cliout_results(tpb_k_rthdl_t *handle)
 {
     if (handle == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -517,8 +517,7 @@ tpb_report_result_cli(tpb_k_rthdl_t *handle)
     int same_unit = tpb_cliout_fmt.castctrl_same_unit;
 
     /* Test results section */
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Test results:\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n## Output:\n");
 
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));
@@ -544,7 +543,7 @@ tpb_report_result_cli(tpb_k_rthdl_t *handle)
                 continue;
             }
 
-            TPB_UNIT_T uname = get_uname_kind(out->unit);
+            TPB_UNIT_T uname = get_uname(out->unit);
 
             /* Find or create group for this UNAME */
             int gidx = -1;
@@ -602,7 +601,7 @@ tpb_report_result_cli(tpb_k_rthdl_t *handle)
         }
 
         /* Print metrics name */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Metrics: %s\n", out->name);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "### Metrics: %s\n", out->name);
 
         /* Calculate mean */
         double mean_val = 0.0;
@@ -645,7 +644,7 @@ tpb_report_result_cli(tpb_k_rthdl_t *handle)
             use_scientific = 1;
         } else if (same_unit) {
             /* Use pre-computed group target unit */
-            TPB_UNIT_T uname = get_uname_kind(out->unit);
+            TPB_UNIT_T uname = get_uname(out->unit);
             TPB_UNIT_T target_unit = out->unit;
 
             /* Find group target */

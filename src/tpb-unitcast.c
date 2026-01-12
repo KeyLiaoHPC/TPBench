@@ -496,6 +496,18 @@ tpb_unit_to_string(TPB_UNIT_T unit)
     if (unit == TPB_UNIT_ECY) return "Ecy";
     if (unit == TPB_UNIT_ZCY) return "Zcy";
     if (unit == TPB_UNIT_YCY) return "Ycy";
+
+    /* PHYSTIME units */
+    if (unit == TPB_UNIT_TICK) return "tick";
+    if (unit == TPB_UNIT_KTICK) return "Ktick";
+    if (unit == TPB_UNIT_MTICK) return "Mtick";
+    if (unit == TPB_UNIT_GTICK) return "Gtick";
+    if (unit == TPB_UNIT_TTICK) return "Ttick";
+    if (unit == TPB_UNIT_PTICK) return "Ptick";
+    if (unit == TPB_UNIT_ETICK) return "Etick";
+    if (unit == TPB_UNIT_ZTICK) return "Ztick";
+    if (unit == TPB_UNIT_YTICK) return "Ytick";
+    
     if (unit == TPB_UNIT_TIMER) return "timer_unit";
 
     /* DATETIME units */
@@ -560,6 +572,75 @@ tpb_unit_to_string(TPB_UNIT_T unit)
     if (unit == TPB_UNIT_ETPS) return "Etps";
     if (unit == TPB_UNIT_ZTPS) return "Ztps";
     if (unit == TPB_UNIT_YTPS) return "Ytps";
+
+    /* Bit per second units */
+    if (unit == TPB_UNIT_BITPS) return "bit/s";
+    if (unit == TPB_UNIT_BYTEPS) return "B/s";
+    if (unit == TPB_UNIT_KIBPS) return "KiB/s";
+    if (unit == TPB_UNIT_MIBPS) return "MiB/s";
+    if (unit == TPB_UNIT_GIBPS) return "GiB/s";
+    if (unit == TPB_UNIT_TIBPS) return "TiB/s";
+    if (unit == TPB_UNIT_PIBPS) return "PiB/s";
+    if (unit == TPB_UNIT_EIBPS) return "EiB/s";
+    if (unit == TPB_UNIT_ZIBPS) return "ZiB/s";
+    if (unit == TPB_UNIT_YIBPS) return "YiB/s";
+
+    /* Byte per second units */
+    if (unit == TPB_UNIT_BPS) return "B/s";
+    if (unit == TPB_UNIT_KBPS) return "KB/s";
+    if (unit == TPB_UNIT_MBPS) return "MB/s";
+    if (unit == TPB_UNIT_GBPS) return "GB/s";
+    if (unit == TPB_UNIT_TBPS) return "TB/s";
+    if (unit == TPB_UNIT_PBPS) return "PB/s";
+    if (unit == TPB_UNIT_EBPS) return "EB/s";
+    if (unit == TPB_UNIT_ZBPS) return "ZB/s";
+    if (unit == TPB_UNIT_YBPS) return "YB/s";
+
+    /* Bit per second units */
+    if (unit == TPB_UNIT_BITPCY) return "bit/cy";
+    if (unit == TPB_UNIT_BYTEPCY) return "B/cy";
+    if (unit == TPB_UNIT_KIBPCY) return "KiB/cy";
+    if (unit == TPB_UNIT_MIBPCY) return "MiB/cy";
+    if (unit == TPB_UNIT_GIBPCY) return "GiB/cy";
+    if (unit == TPB_UNIT_TIBPCY) return "TiB/cy";
+    if (unit == TPB_UNIT_PIBPCY) return "PiB/cy";
+    if (unit == TPB_UNIT_EIBPCY) return "EiB/cy";
+    if (unit == TPB_UNIT_ZIBPCY) return "ZiB/cy";
+    if (unit == TPB_UNIT_YIBPCY) return "YiB/cy";
+
+    /* Byte per second units */
+    if (unit == TPB_UNIT_BPCY) return "B/cy";
+    if (unit == TPB_UNIT_KBPCY) return "KB/cy";
+    if (unit == TPB_UNIT_MBPCY) return "MB/cy";
+    if (unit == TPB_UNIT_GBPCY) return "GB/cy";
+    if (unit == TPB_UNIT_TBPCY) return "TB/cy";
+    if (unit == TPB_UNIT_PBPCY) return "PB/cy";
+    if (unit == TPB_UNIT_EBPCY) return "EB/cy";
+    if (unit == TPB_UNIT_ZBPCY) return "ZB/cy";
+    if (unit == TPB_UNIT_YBPCY) return "YB/cy";
+
+    /* Bit per second units */
+    if (unit == TPB_UNIT_BITPTICK) return "bit/tick";
+    if (unit == TPB_UNIT_BYTEPTICK) return "B/tick";
+    if (unit == TPB_UNIT_KIBPTICK) return "KiB/tick";
+    if (unit == TPB_UNIT_MIBPTICK) return "MiB/tick";
+    if (unit == TPB_UNIT_GIBPTICK) return "GiB/tick";
+    if (unit == TPB_UNIT_TIBPTICK) return "TiB/tick";
+    if (unit == TPB_UNIT_PIBPTICK) return "PiB/tick";
+    if (unit == TPB_UNIT_EIBPTICK) return "EiB/tick";
+    if (unit == TPB_UNIT_ZIBPTICK) return "ZiB/tick";
+    if (unit == TPB_UNIT_YIBPTICK) return "YiB/tick";
+
+    /* Byte per second units */
+    if (unit == TPB_UNIT_BPTICK) return "B/tick";
+    if (unit == TPB_UNIT_KBPTICK) return "KB/tick";
+    if (unit == TPB_UNIT_MBPTICK) return "MB/tick";
+    if (unit == TPB_UNIT_GBPTICK) return "GB/tick";
+    if (unit == TPB_UNIT_TBPTICK) return "TB/tick";
+    if (unit == TPB_UNIT_PBPTICK) return "PB/tick";
+    if (unit == TPB_UNIT_EBPTICK) return "EB/tick";
+    if (unit == TPB_UNIT_ZBPTICK) return "ZB/tick";
+    if (unit == TPB_UNIT_YBPTICK) return "YB/tick";
 
     return "unknown";
 }

@@ -466,7 +466,6 @@ static int
 cli_set_timer(const char *arg, tpb_args_t *args)
 {
     if(strcmp(arg, "clock_gettime") == 0) {
-        sprintf(args->timer_name, "clock_gettime");
         sprintf(args->timer.name, "clock_gettime");
         args->timer.unit = TPB_UNIT_NS;
         args->timer.dtype = TPB_INT64_T;
@@ -475,7 +474,6 @@ cli_set_timer(const char *arg, tpb_args_t *args)
         args->timer.tock = tock_clock_gettime;
         args->timer.get_stamp = get_time_clock_gettime;
     } else if(strcmp(arg, "tsc_asym") == 0) {
-        sprintf(args->timer_name, "tsc_asym");
         sprintf(args->timer.name, "tsc_asym");
         args->timer.unit = TPB_UNIT_CY;
         args->timer.dtype = TPB_INT64_T;

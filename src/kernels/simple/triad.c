@@ -54,7 +54,7 @@
 // Forward declarations
 int register_triad(void);
 int run_triad(void);
-int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize);
+int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw);
 
 int
 register_triad(void)
@@ -85,13 +85,13 @@ register_triad(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
     if(err != 0) return err;
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
     err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three triad arrays.",
-                           TPB_UINT64_T, TPB_UNIT_BYTE);
+                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT );
     if(err != 0) return err;
     // Set runner function.
     err = tpb_k_add_runner(run_triad);
@@ -106,12 +106,14 @@ run_triad(void)
     int tpberr;
     /* Input */
     int ntest;
+    TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
     double memsize;
     /* Output */
     void *tot_time = NULL;
     void *step_time = NULL;
     uint64_t *real_memsize = NULL;
+    double *bw = NULL;
 
     tpberr = tpb_k_get_timer(&timer);
     if (tpberr) return tpberr;
@@ -125,15 +127,30 @@ run_triad(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
     if (tpberr) return tpberr;
+    tpb_uname = timer.unit & TPB_UNAME_MASK;
+    if (tpb_uname == TPB_UNAME_WALLTIME) {
+        tpb_k_add_output("bw_walltime", "Measured sustainable memory bandwidth in decimal based MB/s.", 
+                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+        tpberr = tpb_k_alloc_output("bw_walltime", ntest, &bw);
+        if (tpberr) return tpberr;
+    } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
+        tpb_k_add_output("bw_phystime", "Measured sustainable memory bandwidth in binay based Byte/cy.", 
+                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+        tpberr = tpb_k_alloc_output("bw_phystime", ntest, &bw);
+        if (tpberr) return tpberr;
+    } else {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel triad: unknown timer unit name %llx", tpb_uname);
+        return TPBE_KERN_ARG_FAIL;
+    }
 
     /* Call the actual kernel implementation */
-    tpberr = d_triad(&timer, ntest, memsize, tot_time, step_time, real_memsize);
+    tpberr = d_triad(&timer, ntest, memsize, tot_time, step_time, real_memsize, bw);
 
     return tpberr;
 }
 
 int
-d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize) {
+d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw) {
     int narr, err;
     volatile double *a, *b, *c;
     register double s = 0.42;
@@ -254,6 +271,9 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
         timer->tock(step_time+i);
     }
     timer->tock(tot_time);
+    for (int i = 0; i < ntest; i ++) {
+        bw[i] = ((double)(*real_memsize) * 1e-6)  / ((double)(step_time[i]) * 1e-9);
+    }
     // kernel end
     
     free((void *)a);

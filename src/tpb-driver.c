@@ -207,7 +207,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
 
     /* Print running message and kernel arguments */
     tpb_printf(TPBM_PRTN_M_TSTAG, "Running Kernel %s\n", hdl->kernel.info.name);
-    tpb_report_args_cli(hdl);
+    tpb_cliout_args(hdl);
 
     /* Call kernel runner */
     err = hdl->kernel.func.k_run();
@@ -226,7 +226,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     }
 
     /* Print results and success message */
-    tpb_report_result_cli(hdl);
+    tpb_cliout_results(hdl);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s finished successfully.\n",
                hdl->kernel.info.name);
     current_rthdl = NULL;
@@ -642,13 +642,15 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
                     break;
                 case TPB_INT32_T:
                 case TPB_UINT32_T:
-                case TPB_FLOAT_T:
                     elem_size = 4;
+                    break;
+                case TPB_FLOAT_T:
+                    elem_size = sizeof(float);
                     break;
                 case TPB_INT64_T:
                 case TPB_UINT64_T:
                 case TPB_DOUBLE_T:
-                    elem_size = 8;
+                    elem_size = sizeof(double);
                     break;
                 case TPB_LONG_DOUBLE_T:
                     elem_size = sizeof(long double);

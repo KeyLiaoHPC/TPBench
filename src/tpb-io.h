@@ -104,11 +104,12 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
 int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);
 
 /**
- * @brief Report kernel arguments to the command-line interface.
+ * @brief Output kernel arguments to the command-line interface.
  *
  * This function prints the kernel name and runtime parameter settings.
  * Output format:
- *   ================================================================================
+ *   ---
+ *   ## Input:
  *   Kernel Name: triad
  *   Run-time parameter settings: ntest=100, memsize=2560, ...
  *
@@ -116,24 +117,21 @@ int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, in
  * @return          TPBE_SUCCESS (0) on success.
  *                  TPBE_NULLPTR_ARG if handle is NULL.
  */
-int tpb_report_args_cli(tpb_k_rthdl_t *handle);
+int tpb_cliout_args(tpb_k_rthdl_t *handle);
 
 /**
- * @brief Report kernel execution results to the command-line interface.
+ * @brief Output kernel execution results to the command-line interface.
  *
- * This function prints test results including:
- * - For each output with non-NULL data: metric name, unit, mean value, and quantiles
+ * This function prints test results based on the output shape attribute:
+ * - SHAPE_POINT: Single value
+ * - SHAPE_1D: Mean and quantiles
+ * - SHAPE_2D+: Warning with mean fallback
  *
- * Output format:
- *   Test results:
- *   Metrics: step_time
- *   Units: ns
- *   Results mean: 12345.67
- *   Results Quantile: Q0.05=123, Q0.25=456, Q0.50=789, Q0.75=1011, Q0.95=1234
- *   ================================================================================
+ * Casting is controlled per-output via TPB_UATTR_CAST_Y/N in the unit field.
+ * Units with the same UNAME share a cached target unit for consistency.
  *
  * @param handle    Pointer to the kernel runtime handle.
  * @return          TPBE_SUCCESS (0) on success.
  *                  TPBE_NULLPTR_ARG if handle is NULL.
  */
-int tpb_report_result_cli(tpb_k_rthdl_t *handle);
+int tpb_cliout_results(tpb_k_rthdl_t *handle);
