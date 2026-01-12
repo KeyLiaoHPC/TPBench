@@ -1,6 +1,12 @@
-#include <stddef.h>
+/**
+ * @file tpb-mpi_stub.h
+ * @brief MPI-3 stub header for building TPBench without MPI.
+ */
+
 #ifndef TPB_MPI_STUB_H
 #define TPB_MPI_STUB_H
+
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -227,7 +233,7 @@ typedef struct MPI_Status {
 #define MPI_MODE_NOPRECEDE  8192
 #define MPI_MODE_NOSUCCEED 16384
 
-/* ================ MPI-3 Function Declarations ================ */
+/* MPI-3 Function Declarations */
 
 /* Initialization and Finalization */
 int MPI_Init(int *argc, char ***argv);
@@ -782,4 +788,3 @@ int MPI_Op_free(MPI_Op *op);
 #endif
 
 #endif /* TPB_MPI_STUB_H */
-

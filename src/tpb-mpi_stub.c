@@ -1,11 +1,6 @@
 /*
- * tpb-mpi_stub.c - MPI-3 Stub Implementation
- * 
- * This file provides empty stub implementations of MPI-3 functions
- * for building TPBench without an actual MPI implementation.
- * 
- * All functions return MPI_SUCCESS and set reasonable default values
- * for a single-process environment (rank=0, size=1).
+ * tpb-mpi_stub.c
+ * MPI-3 stub implementation for building TPBench without MPI.
  */
 #include <string.h>
 #include <time.h>

@@ -1,30 +1,14 @@
 /**
- * =================================================================================
- * TPBench - A throughputs benchmarking tool for high-performance computing
- * 
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- *  terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * =================================================================================
  * @file tpb-driver.h
- * @version 0.3
- * @brief Header for tpb-driver library 
- * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2024-01-22
+ * @brief Header for tpb-driver library.
  */
 
-#include "tpb-types.h"
+#ifndef TPB_DRIVER_H
+#define TPB_DRIVER_H
+
 #define _GNU_SOURCE
 
+#include "tpb-types.h"
 #include "../tpb-impl.h"
 #include "tpkernels.h"
 #include "tptimer.h"
@@ -76,7 +60,8 @@ int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
  */
 int tpb_run_kernel(tpb_k_rthdl_t *handle);
 
-// === New Kernel Registration API ===
+/* Kernel Registration API */
+
 /**
  * @brief Register a new kernel with given a name and description.
  * @param name Kernel name (must be unique)
@@ -181,8 +166,6 @@ int tpb_k_get_timer(tpb_timer_t *);
  */
 int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
 
-
-
 /**
  * @brief Clean up and free memory allocated for output data in the kernel runtime handle.
  *
@@ -193,3 +176,5 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
  * @return 0 on successful cleanup, or an error code if any issues occurred.
  */
 int tpb_clean_output(tpb_k_rthdl_t *handle);
+
+#endif /* TPB_DRIVER_H */

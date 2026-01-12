@@ -1,24 +1,6 @@
-/**
- * =================================================================================
- * TPBench - A throughputs benchmarking tool for high-performance computing
- *
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- *
- * This program is free software: you can redistribute it and/or modify it under
- * the terms of the GNU General Public License as published by the Free Software
- * Foundation, either version 3 of the License, or (at your option) any later
- * version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with
- * this program. If not, see https://www.gnu.org/licenses/.
- * =================================================================================
- * @file tpb-unitcast.c
- * @brief Unit casting implementation for converting benchmark results to
- *        human-readable units.
- * @author Key Liao (keyliaohpc@gmail.com)
+/*
+ * tpb-unitcast.c
+ * Unit casting implementation for converting benchmark results to human-readable units.
  */
 
 #include <stdio.h>
@@ -29,9 +11,35 @@
 #include "tpb-types.h"
 #include "tpb-stat.h"
 
-/* ============================================================================
- * Unit Progression Tables
- * ============================================================================ */
+/* Local Function Prototypes */
+
+/* Get element from array as double, based on dtype */
+static double get_as_double(void *arr, int idx, TPB_DTYPE dtype);
+
+/* Extract unit name from unit code */
+static inline TPB_UNIT_T extract_uname(TPB_UNIT_T unit);
+
+/* Extract unit kind from unit code */
+static inline TPB_UNIT_T extract_ukind(TPB_UNIT_T unit);
+
+/* Extract base type from unit code */
+static inline uint32_t extract_ubase(TPB_UNIT_T unit);
+
+/* Find target unit index in table based on minimum value (EXP-based units) */
+static int find_target_unit_exp(const TPB_UNIT_T *table, int len,
+                                double min_in_base, int sigbit);
+
+/* Find target unit index for MUL-based units */
+static int find_target_unit_mul(const TPB_UNIT_T *table, int len,
+                                double min_in_base, int sigbit);
+
+/* Check if unit belongs to a specific table */
+static int unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len);
+
+/* Select unit table based on unit value */
+static int select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len);
+
+/* Unit Progression Tables */
 
 /* BITSIZE (binary): BIT -> BYTE -> KiB -> MiB -> GiB -> TiB -> PIB -> EiB */
 static const TPB_UNIT_T bitsize_bin[] = {
@@ -102,13 +110,9 @@ static const TPB_UNIT_T tps_dec[] = {
 };
 static const int tps_dec_len = 9;
 
-/* ============================================================================
- * Helper Functions
- * ============================================================================ */
+/* Helper Functions */
 
-/**
- * @brief Get element from array as double, based on dtype.
- */
+/* Get element from array as double, based on dtype */
 static double
 get_as_double(void *arr, int idx, TPB_DTYPE dtype)
 {
@@ -141,36 +145,25 @@ get_as_double(void *arr, int idx, TPB_DTYPE dtype)
     }
 }
 
-/**
- * @brief Extract unit name from unit code.
- */
 static inline TPB_UNIT_T
 extract_uname(TPB_UNIT_T unit)
 {
     return (unit & TPB_UNAME_MASK) >> 36;
 }
 
-/**
- * @brief Extract unit kind from unit code.
- */
 static inline TPB_UNIT_T
 extract_ukind(TPB_UNIT_T unit)
 {
     return (unit & TPB_UKIND_MASK) >> 44;
 }
 
-/**
- * @brief Extract base type from unit code.
- */
 static inline uint32_t
 extract_ubase(TPB_UNIT_T unit)
 {
     return (uint32_t)((unit >> 32) & 0xF);
 }
 
-/* ============================================================================
- * Scale Factor Calculation
- * ============================================================================ */
+/* Scale Factor Calculation */
 
 double
 tpb_unit_get_scale(TPB_UNIT_T unit)
@@ -206,16 +199,11 @@ tpb_unit_get_scale(TPB_UNIT_T unit)
     }
 }
 
-/* ============================================================================
- * Unit Casting
- * ============================================================================ */
+/* Unit Casting */
 
-/**
- * @brief Find target unit index in table based on minimum value and sigbit.
- *
- * For EXP-based units, find the largest unit where the scaled value
- * has <= sigbit significant figures.
- */
+/* Find target unit index in table based on minimum value and sigbit.
+   For EXP-based units, find the largest unit where the scaled value
+   has <= sigbit significant figures. */
 static int
 find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
@@ -242,11 +230,8 @@ find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int s
     return target_idx;
 }
 
-/**
- * @brief Find target unit index for MUL-based units (DATETIME).
- *
- * Find the largest unit where scaled value >= 1.
- */
+/* Find target unit index for MUL-based units (DATETIME).
+   Find the largest unit where scaled value >= 1. */
 static int
 find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
@@ -273,9 +258,7 @@ find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int s
     return target_idx;
 }
 
-/**
- * @brief Check if unit belongs to a specific table by searching for it.
- */
+/* Check if unit belongs to a specific table by searching for it */
 static int
 unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len)
 {
@@ -287,11 +270,8 @@ unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len)
     return 0;
 }
 
-/**
- * @brief Select unit table based on unit value.
- *
- * Check unit membership by searching each table directly.
- */
+/* Select unit table based on unit value.
+   Check unit membership by searching each table directly. */
 static int
 select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len)
 {
@@ -501,9 +481,7 @@ tpb_format_value(double value, char *buf, size_t bufsize,
     return snprintf(buf, bufsize, "%.*f", dec_digits, value);
 }
 
-/* ============================================================================
- * Unit to String Conversion
- * ============================================================================ */
+/* Unit to String Conversion */
 
 const char *
 tpb_unit_to_string(TPB_UNIT_T unit)

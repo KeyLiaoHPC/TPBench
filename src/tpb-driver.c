@@ -1,6 +1,6 @@
 /*
- * @file tpb-driver.c
- * @brief Main entry of benchmarking kernels.
+ * tpb-driver.c
+ * Main entry of benchmarking kernels.
  */
 
 #include <stdint.h>
@@ -16,15 +16,12 @@
 #include "tpb-types.h"
 #include "kernels/kernels.h"
 
-/* Internal status */
-static uint64_t tpb_driver_nkern = 0;
-static tpb_kernel_t *kernel_all = NULL;
-/* Current kernel being registered */
-static tpb_kernel_t *current_kernel = NULL;
-/* Current runtime handle being tested */
-static tpb_k_rthdl_t *current_rthdl = NULL;
-/* Common parameters applied to all kernels by default */
-static tpb_kernel_t kernel_common;
+/* Module-level state variables */
+static uint64_t tpb_driver_nkern = 0;  // number of registered kernels
+static tpb_kernel_t *kernel_all = NULL;  // array of all kernels
+static tpb_kernel_t *current_kernel = NULL;  // kernel being registered
+static tpb_k_rthdl_t *current_rthdl = NULL;  // runtime handle being tested
+static tpb_kernel_t kernel_common;  // common parameters for all kernels
 static tpb_timer_t timer;
 
 int
@@ -41,25 +38,22 @@ tpb_driver_set_timer(tpb_timer_t timer_in)
     return 0;
 }
 
-/**
- * @brief Register common parameters that apply to all kernels by default
- * @return Error code (0 on success)
- */
+/* Register common parameters that apply to all kernels by default */
 int
 tpb_register_common()
 {
     memset(&kernel_common, 0, sizeof(tpb_kernel_t));
     kernel_common.info.nparms = 4;
     kernel_common.info.parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
-    if(kernel_common.info.parms == NULL) {
+    if (kernel_common.info.parms == NULL) {
         return TPBE_MALLOC_FAIL;
     }
     sprintf(kernel_common.info.name, "tpb_common");
 
     memset(kernel_common.info.parms, 0,
            sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
-    
-    // ntest: number of test iterations
+
+    /* ntest: number of test iterations */
     snprintf(kernel_common.info.parms[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
     snprintf(kernel_common.info.parms[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
     kernel_common.info.parms[0].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
@@ -69,8 +63,8 @@ tpb_register_common()
     kernel_common.info.parms[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
     kernel_common.info.parms[0].plims[0].i64 = 1;
     kernel_common.info.parms[0].plims[1].i64 = 100000;
-    
-    // nskip: number of initial iterations to skip
+
+    /* nskip: number of initial iterations to skip */
     snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "nskip");
     snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Number of initial iterations to skip");
     kernel_common.info.parms[1].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
@@ -80,8 +74,8 @@ tpb_register_common()
     kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
     kernel_common.info.parms[1].plims[0].i64 = 0;
     kernel_common.info.parms[1].plims[1].i64 = 1000;
-    
-    // twarm: warmup time in milliseconds
+
+    /* twarm: warmup time in milliseconds */
     snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "twarm");
     snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Warmup time in milliseconds");
     kernel_common.info.parms[2].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
@@ -91,8 +85,8 @@ tpb_register_common()
     kernel_common.info.parms[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
     kernel_common.info.parms[2].plims[0].i64 = 0;
     kernel_common.info.parms[2].plims[1].i64 = 10000;
-    
-    // memsize: memory size in KiB
+
+    /* memsize: memory size in KiB */
     snprintf(kernel_common.info.parms[3].name, TPBM_NAME_STR_MAX_LEN, "memsize");
     snprintf(kernel_common.info.parms[3].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
     kernel_common.info.parms[3].dtype = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
@@ -102,37 +96,35 @@ tpb_register_common()
     kernel_common.info.parms[3].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
     kernel_common.info.parms[3].plims[0].f64 = 0.0009765625;
     kernel_common.info.parms[3].plims[1].f64 = DBL_MAX;
-    
+
     return 0;
 }
 
-/**
- * @brief Initialize kernel registry by calling registration functions
- * @return Error code (0 on success)
- */
+/* Initialize kernel registry by calling registration functions */
 int
 tpb_register_kernel()
 {
     int err;
 
-    // Initialize current handle to null
+    /* Initialize current handle to null */
     current_rthdl = NULL;
-    tpb_driver_nkern = 0; 
-    // Free any existing kernel array
-    if(kernel_all != NULL) {
+    tpb_driver_nkern = 0;
+
+    /* Free any existing kernel array */
+    if (kernel_all != NULL) {
         free(kernel_all);
         kernel_all = NULL;
     }
-    
-    // Register common parameters
+
+    /* Register common parameters */
     err = tpb_register_common();
-    if(err != 0) {
+    if (err != 0) {
         return err;
     }
-    
-    // Register triad kernel using new API
+
+    /* Register triad kernel using new API */
     err = register_triad();
-    if(err != 0) {
+    if (err != 0) {
         return err;
     }
 
@@ -142,7 +134,7 @@ tpb_register_kernel()
 int
 tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
 {
-    if(name == NULL || kernel_out == NULL) {
+    if (name == NULL || kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
     }
 
@@ -151,8 +143,8 @@ tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
         return 0;
     }
 
-    for(int i = 0; i < tpb_driver_nkern; i++) {
-        if(strcmp(kernel_all[i].info.name, name) == 0) {
+    for (int i = 0; i < tpb_driver_nkern; i++) {
+        if (strcmp(kernel_all[i].info.name, name) == 0) {
             *kernel_out = &kernel_all[i];
             return 0;
         }
@@ -244,11 +236,11 @@ tpb_get_kernel_count(void)
 int
 tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 {
-    if(kernel_out == NULL) {
+    if (kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
     }
 
-    if(idx < 0 || idx >= tpb_driver_nkern) {
+    if (idx < 0 || idx >= tpb_driver_nkern) {
         return TPBE_LIST_NOT_FOUND;
     }
 
@@ -302,15 +294,15 @@ tpb_k_add_parm(const char *name, const char *note,
     int tpberr = 0;
     int nparms;
     tpb_rt_parm_t *parm;
-    
+
     if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
-                  "No kernel registered. Call tpb_k_register first.\n");
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
     }
     if (current_rthdl != NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                  "tpb_k_add_parm cannot be called during kernel execution.\n");
+                   "tpb_k_add_parm cannot be called during kernel execution.\n");
         return TPBE_ILLEGAL_CALL;
     }
     if (name == NULL || default_value == NULL || note == NULL) {
@@ -320,25 +312,25 @@ tpb_k_add_parm(const char *name, const char *note,
     nparms = current_kernel->info.nparms;
 
     /* Reallocate parameter array */
-    current_kernel->info.parms = (tpb_rt_parm_t *)realloc(current_kernel->info.parms, 
+    current_kernel->info.parms = (tpb_rt_parm_t *)realloc(current_kernel->info.parms,
                                                           sizeof(tpb_rt_parm_t) * (nparms + 1));
     if (current_kernel->info.parms == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
-                  "At tpb_k_add_parm: Failed to realloc for %s.\n", name);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "At tpb_k_add_parm: Failed to realloc for %s.\n", name);
         return TPBE_MALLOC_FAIL;
     }
 
     /* Get pointer AFTER realloc (memory may have moved) */
     parm = &current_kernel->info.parms[nparms];
     memset(parm, 0, sizeof(tpb_rt_parm_t));
-    
+
     snprintf(parm->name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(parm->note, TPBM_NOTE_STR_MAX_LEN, "%s", note);
-    
-    // Handle TPB_DTYPE_TIMER_T: use the timer's dtype
+
+    /* Handle TPB_DTYPE_TIMER_T: use the timer's dtype */
     uint32_t type_code = (uint32_t)(dtype & TPB_PARM_TYPE_MASK);
     if (type_code == (TPB_DTYPE_TIMER_T & TPB_PARM_TYPE_MASK)) {
-        // Replace TIMER_T with the actual timer dtype, preserving source and check flags
+        /* Replace TIMER_T with the actual timer dtype, preserving source and check flags */
         parm->dtype = (dtype & ~TPB_PARM_TYPE_MASK) | (timer.dtype & TPB_PARM_TYPE_MASK);
         type_code = (uint32_t)(timer.dtype & TPB_PARM_TYPE_MASK);
     } else {
@@ -346,9 +338,9 @@ tpb_k_add_parm(const char *name, const char *note,
     }
     va_list args;
     va_start(args, dtype);
-    
-    // Parse default value based on type
-    switch(type_code) {
+
+    /* Parse default value based on type */
+    switch (type_code) {
         case TPB_INT_T:
         case TPB_INT8_T:
         case TPB_INT16_T:
@@ -433,16 +425,16 @@ tpb_k_add_parm(const char *name, const char *note,
                 return TPBE_KERN_ARG_FAIL;
             }
         } else {
-            // Empty
+            /* Empty */
         }
     } else if (check_mode == TPB_PARM_LIST) {
         /* List validation: (n, plist) */
         parm->nlims = va_arg(args, int);
-        
+
         /* Allocate and copy list values based on type */
         parm->plims = (tpb_parm_value_t *)malloc(
             sizeof(tpb_parm_value_t) * parm->nlims);
-        
+
         /* Check float/double types first (type codes overlap with int/uint numerically) */
         if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
             double *src = va_arg(args, double *);
@@ -578,12 +570,12 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
 {
     int tpberr;
 
-    if(current_rthdl == NULL || name == NULL) {
+    if (current_rthdl == NULL || name == NULL) {
         return TPBE_NULLPTR_ARG;
     }
-    
-    for(int i = 0; i < current_rthdl->argpack.n; i++) {
-        if(strcmp(current_rthdl->argpack.args[i].name, name) == 0) {
+
+    for (int i = 0; i < current_rthdl->argpack.n; i++) {
+        if (strcmp(current_rthdl->argpack.args[i].name, name) == 0) {
             switch (dtype & TPB_PARM_TYPE_MASK) {
                 case TPB_INT_T:
                     *((int *)argptr) = (int)current_rthdl->argpack.args[i].value.i64;
@@ -604,14 +596,14 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
                     *((char *)argptr) = current_rthdl->argpack.args[i].value.c;
                     break;
                 default:
-                    // Unknown type, return not found
+                    /* Unknown type, return not found */
                     tpb_printf(TPBM_PRTN_M_DIRECT, "DTYPE 0x%08llx is not supported.", dtype);
                     return TPBE_LIST_NOT_FOUND;
             }
             return 0;
         }
     }
-    
+
     return TPBE_LIST_NOT_FOUND;
 }
 
@@ -621,19 +613,19 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
     int tpberr = 0;
     size_t elem_size = 0;
 
-    if(current_rthdl == NULL || name == NULL || ptr == NULL) {
+    if (current_rthdl == NULL || name == NULL || ptr == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
-    for(int i = 0; i < current_rthdl->respack.n; i++) {
+    for (int i = 0; i < current_rthdl->respack.n; i++) {
         if ((current_rthdl->respack.outputs[i].unit & TPB_UNAME_MASK) == TPB_UNAME_TIMERTIME) {
             current_rthdl->respack.outputs[i].unit = timer.unit;
         }
     }
 
-    for(int i = 0; i < current_rthdl->respack.n; i++) {
-        if(strcmp(current_rthdl->respack.outputs[i].name, name) == 0) {
-            // Determine element size based on dtype
+    for (int i = 0; i < current_rthdl->respack.n; i++) {
+        if (strcmp(current_rthdl->respack.outputs[i].name, name) == 0) {
+            /* Determine element size based on dtype */
             TPB_DTYPE dtype = current_rthdl->respack.outputs[i].dtype;
             switch (dtype & TPB_PARM_TYPE_MASK) {
                 case TPB_INT_T:
@@ -667,20 +659,20 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
                     elem_size = sizeof(char *);
                     break;
                 default:
-                    tpb_printf(TPBM_PRTN_M_DIRECT, 
+                    tpb_printf(TPBM_PRTN_M_DIRECT,
                                "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
                                dtype);
                     return TPBE_LIST_NOT_FOUND;
             }
 
-            // Allocate memory for output data
+            /* Allocate memory for output data */
             current_rthdl->respack.outputs[i].p = malloc(n * elem_size);
-            if(current_rthdl->respack.outputs[i].p == NULL) {
+            if (current_rthdl->respack.outputs[i].p == NULL) {
                 return TPBE_MALLOC_FAIL;
             }
             current_rthdl->respack.outputs[i].n = n;
 
-            // Return pointer to caller
+            /* Return pointer to caller */
             *((void **)ptr) = current_rthdl->respack.outputs[i].p;
             return 0;
         }

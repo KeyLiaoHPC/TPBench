@@ -1,7 +1,11 @@
 /**
- * @file tpb_io.h
+ * @file tpb-io.h
  * @brief Header for handling input/output of tpbench.
  */
+
+#ifndef TPB_IO_H
+#define TPB_IO_H
+
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
@@ -42,96 +46,83 @@
     "                    of an object then exit.\n" \
     HLINE \
     "  help              Print help message for an object and exit.\n" \
-    DHLINE 
-
-
-/**
-* @brief 
-*/
-void tpb_list();
+    DHLINE
 
 /**
-* @brief 
-* @param dirpath 
-* @return int 
-*/
+ * @brief List all registered kernels.
+ */
+void tpb_list(void);
+
+/**
+ * @brief Create a directory recursively.
+ * @param dirpath Path to the directory.
+ * @return 0 on success, -1 on error.
+ */
 int tpb_mkdir(char *dirpath);
 
 /**
-* @brief TPBench format stdout module. Return error level according to error number. 
-*        Print message if tpmpi_info.myrank == 0. Output syntax:
-*        YYYY-mm-dd HH:MM:SS [TAG ] *msg
-* @param mode_bit   Mode bit, including message header type, error header type. 
-* @param fmt        Formats characters.
-* @param ...        Varargs for fmt printf.
-*/
+ * @brief TPBench format stdout module.
+ *
+ * Print message if tpmpi_info.myrank == 0.
+ * Output syntax: YYYY-mm-dd HH:MM:SS [TAG] *msg
+ *
+ * @param mode_bit Mode bit for message and error header type.
+ * @param fmt Format string.
+ * @param ... Varargs for fmt printf.
+ */
 void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 /**
-* @brief Print overall help message.
-*/
+ * @brief Print overall help message.
+ */
 void tpb_print_help_total(void);
 
 /**
-* @brief write 2d data with header into a csv file.
-* @param path 
-* @param data 
-* @param nrow 
-* @param ncol 
-* @param header 
-* @return int 
-*/
+ * @brief Write 2D data with header into a csv file.
+ * @param path File path.
+ * @param data 2D data array [col][row].
+ * @param nrow Number of rows.
+ * @param ncol Number of columns.
+ * @param header CSV header string.
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 
-
-int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, int nskip, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);
-
-/***
- * Log every step's performance data into a csv file
- * the csv file will be named as "np${rank_size}_kernelname_ntest_N{N}.csv"
- * the csv headers are "rank0" ~ "rank${rank_size-1}"
- * each row is the performance data of a step
- * @param ns: the time data of each step
- * @param cy: the cycle data of each step
- * @param kernel_name: the name of the kernel
- * @param ntest: the number of steps
- * @param nepoch: the number of epochs
- * @param N: the matrix size
- * @param Nr: the number of rows to allreduce
- * @param skip_comp: whether to skip the computation
- * @return void
+/**
+ * @brief Report performance results with quantile statistics.
  */
-int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm);
+int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time,
+                       int nskip, int ntest, int nepoch, int N, int Nr,
+                       int skip_comp, int skip_comm);
+
+/**
+ * @brief Log every step's performance data into a csv file.
+ *
+ * The csv file will be named as "np${rank_size}_kernelname_ntest_N{N}.csv"
+ */
+int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name,
+                  int ntest, int nepoch, int N, int Nr,
+                  int skip_comp, int skip_comm);
 
 /**
  * @brief Output kernel arguments to the command-line interface.
  *
  * This function prints the kernel name and runtime parameter settings.
- * Output format:
- *   ---
- *   ## Input:
- *   Kernel Name: triad
- *   Run-time parameter settings: ntest=100, memsize=2560, ...
  *
- * @param handle    Pointer to the kernel runtime handle.
- * @return          TPBE_SUCCESS (0) on success.
- *                  TPBE_NULLPTR_ARG if handle is NULL.
+ * @param handle Pointer to the kernel runtime handle.
+ * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
  */
 int tpb_cliout_args(tpb_k_rthdl_t *handle);
 
 /**
  * @brief Output kernel execution results to the command-line interface.
  *
- * This function prints test results based on the output shape attribute:
- * - SHAPE_POINT: Single value
- * - SHAPE_1D: Mean and quantiles
- * - SHAPE_2D+: Warning with mean fallback
- *
+ * This function prints test results based on the output shape attribute.
  * Casting is controlled per-output via TPB_UATTR_CAST_Y/N in the unit field.
- * Units with the same UNAME share a cached target unit for consistency.
  *
- * @param handle    Pointer to the kernel runtime handle.
- * @return          TPBE_SUCCESS (0) on success.
- *                  TPBE_NULLPTR_ARG if handle is NULL.
+ * @param handle Pointer to the kernel runtime handle.
+ * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
  */
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
+
+#endif /* TPB_IO_H */

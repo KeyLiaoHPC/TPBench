@@ -1,28 +1,8 @@
 /*
- * =================================================================================
- * TPBench - A high-precision throughputs benchmarking tool for scientific computing
- * 
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- *  terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * 
- * =================================================================================
- * tpio.c
- * Description: some accessory functions. 
- * Author: Key Liao
- * Modified: May. 9th, 2024
- * Email: keyliaohpc@gmail.com
- * =================================================================================
+ * tpb-io.c
+ * I/O and CLI output functions for TPBench.
  */
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,63 +21,70 @@
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
 
-/* Default quantile positions */
-static double tpb_default_qtiles[] = {0.05, 0.25, 0.50, 0.75, 0.95};
+/* Local Function Prototypes */
 
-/* Static format controller instance */
-static tpb_cliout_format_t tpb_cliout_fmt = {
+/* Initialize CLI output format controller, gets terminal width via ioctl */
+static void init_cliout(void);
+
+/* Extract UNAME+UKIND from a unit for grouping purposes */
+static inline TPB_UNIT_T get_uname(TPB_UNIT_T unit);
+
+/* Format a value with exactly sigbit significant figures */
+static int format_sigfig(double value, char *buf, size_t bufsize, int sigbit);
+
+/* Print a dynamic-width double horizontal line */
+static void print_dhline(int width);
+
+/* Format and print a parameter value based on its dtype */
+static int format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize);
+
+/* Transpose a 2D array */
+static void transpose(uint64_t *out, uint64_t **in, int m, int n);
+
+/* Module-level state */
+static double default_qtiles[] = {0.05, 0.25, 0.50, 0.75, 0.95};
+static tpb_cliout_format_t cliout_fmt = {
     .max_col = 85,
-    .qtiles = tpb_default_qtiles,
+    .qtiles = default_qtiles,
     .nq = 5,
     .initialized = 0
 };
 
-/**
- * @brief Initialize the CLI output format controller.
- *        Gets terminal width via ioctl if available.
- */
+#define MAX_UNAME_GROUPS 32
+
+/* Local Function Implementations */
+
 static void
-tpb_cliout_init(void)
+init_cliout(void)
 {
-    if (tpb_cliout_fmt.initialized) {
+    if (cliout_fmt.initialized) {
         return;
     }
 
     /* Try to get actual terminal width */
     struct winsize ws;
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 0) {
-        tpb_cliout_fmt.max_col = ws.ws_col;
+        cliout_fmt.max_col = ws.ws_col;
     }
     /* Keep default (85) if ioctl fails */
 
-    tpb_cliout_fmt.sigbit = 5;
-    tpb_cliout_fmt.intbit = 1;
-    tpb_cliout_fmt.initialized = 1;
+    cliout_fmt.sigbit = 5;
+    cliout_fmt.intbit = 1;
+    cliout_fmt.initialized = 1;
 }
 
-/* tpb_unit_to_string() is now defined in tpb-unitcast.c */
-
-/**
- * @brief Extract UNAME+UKIND from a unit for grouping purposes.
- */
 static inline TPB_UNIT_T
 get_uname(TPB_UNIT_T unit)
 {
     return unit & TPB_UNAME_MASK;
 }
 
-/**
- * @brief Format a value with exactly sigbit significant figures (no trailing zero trimming).
- * @param value  The value to format.
- * @param buf    Output buffer.
- * @param bufsize Buffer size.
- * @param sigbit Number of significant figures.
- * @return Number of characters written.
- */
 static int
-tpb_format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
+format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
 {
-    if (bufsize == 0) return 0;
+    if (bufsize == 0) {
+        return 0;
+    }
     if (value == 0.0) {
         return snprintf(buf, bufsize, "0.%0*d", sigbit - 1, 0);
     }
@@ -113,14 +100,8 @@ tpb_format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
     return snprintf(buf, bufsize, "%.*f", decimals, value);
 }
 
-#define MAX_UNAME_GROUPS 32
-
-/**
- * @brief Print a dynamic-width double horizontal line.
- * @param width The target width in characters.
- */
 static void
-tpb_print_dhline(int width)
+print_dhline(int width)
 {
     for (int i = 0; i < width; i++) {
         putchar('=');
@@ -128,15 +109,8 @@ tpb_print_dhline(int width)
     putchar('\n');
 }
 
-/**
- * @brief Format and print a parameter value based on its dtype.
- * @param parm Pointer to the runtime parameter.
- * @param buf Output buffer.
- * @param bufsize Buffer size.
- * @return Number of characters written.
- */
 static int
-tpb_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
+format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
 {
     TPB_DTYPE type_only = parm->dtype & TPB_PARM_TYPE_MASK;
 
@@ -162,69 +136,83 @@ tpb_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
     }
 }
 
+static void
+transpose(uint64_t *out, uint64_t **in, int m, int n)
+{
+    for (int j = 0; j < n; j++) {
+        for (int i = 0; i < m; i++) {
+            out[j * m + i] = in[i][j];
+        }
+    }
+}
+
+/* Public Function Implementations */
+
 int
-tpb_mkdir(char *path) {
-
-
+tpb_mkdir(char *path)
+{
     int err;
     const size_t len = strlen(path);
     char _path[PATH_MAX];
-    char *p; 
+    char *p;
 
     errno = 0;
 
-    // Copy string so its mutable
-    if(len > sizeof(_path)-1) {
+    /* Copy string so its mutable */
+    if (len > sizeof(_path) - 1) {
         errno = ENAMETOOLONG;
-        return -1; 
-    }   
+        return -1;
+    }
     strcpy(_path, path);
 
-    // Iterate the string
-    for(p = _path + 1; *p; p++) {
+    /* Iterate the string */
+    for (p = _path + 1; *p; p++) {
         if (*p == '/') {
-            // Temporarily truncate 
+            /* Temporarily truncate */
             *p = '\0';
 
-            if(mkdir(_path, S_IRWXU) != 0) {
-                if(errno != EEXIST)
-                    return -1; 
+            if (mkdir(_path, S_IRWXU) != 0) {
+                if (errno != EEXIST) {
+                    return -1;
+                }
             }
 
             *p = '/';
         }
-    }   
+    }
 
-    if(mkdir(_path, S_IRWXU) != 0){
-        if(errno != EEXIST)
-            return -1; 
-    }   
+    if (mkdir(_path, S_IRWXU) != 0) {
+        if (errno != EEXIST) {
+            return -1;
+        }
+    }
     return 0;
 }
 
 
 int
-tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
+tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header)
+{
 #ifdef TPM_NO_RAW_DATA
     return 0;
 #else
     int err, i, j;
-    FILE *fp;    
+    FILE *fp;
 
     fp = fopen(path, "w");
-    if(fp == NULL) {
+    if (fp == NULL) {
         return TPBE_FILE_IO_FAIL;
     }
     if (header != NULL && strlen(header) > 0) {
         fprintf(fp, "%s\n", header);
     }
 
-    // data[col][row], for kernel benchmark
-    for(i = 0; i < nrow; i ++) {
-        for(j = 0; j < ncol - 1; j ++) {
+    /* data[col][row], for kernel benchmark */
+    for (i = 0; i < nrow; i++) {
+        for (j = 0; j < ncol - 1; j++) {
             fprintf(fp, "%"PRId64",", data[j][i]);
         }
-        fprintf(fp, "%"PRId64"\n", data[ncol-1][i]);
+        fprintf(fp, "%"PRId64"\n", data[ncol - 1][i]);
     }
     fflush(fp);
     fclose(fp);
@@ -233,25 +221,26 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header) {
 #endif
 }
 
-// tpbench printf wrapper. 
+/* TPBench printf wrapper */
 void
-tpb_printf(uint64_t mode_bit, char *fmt, ...) {
+tpb_printf(uint64_t mode_bit, char *fmt, ...)
+{
     uint64_t print_mode = mode_bit & 0x0F;
     uint64_t tag_mode = mode_bit & 0xF0;
     const char *tag = "NOTE";
 
-    if(tag_mode == TPBE_WARN) {
+    if (tag_mode == TPBE_WARN) {
         tag = "WARN";
-    } else if(tag_mode == TPBE_FAIL) {
+    } else if (tag_mode == TPBE_FAIL) {
         tag = "FAIL";
-    } else if(tag_mode == TPBE_UNKN) {
+    } else if (tag_mode == TPBE_UNKN) {
         tag = "UNKN";
     }
 
-    // print splitter directly.
-    if(print_mode == TPBM_PRTN_M_DIRECT &&
-       (strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0)) {
-        if(tpmpi_info.myrank == 0) {
+    /* Print splitter directly */
+    if (print_mode == TPBM_PRTN_M_DIRECT &&
+        (strcmp(fmt, HLINE) == 0 || strcmp(fmt, DHLINE) == 0)) {
+        if (tpmpi_info.myrank == 0) {
             printf("%s", fmt);
         }
         return;
@@ -260,19 +249,19 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
-    if(print_mode == TPBM_PRTN_M_DIRECT) {
+    if (print_mode == TPBM_PRTN_M_DIRECT) {
         vprintf(fmt, args);
         va_end(args);
         return;
     }
-    if(print_mode & TPBM_PRTN_M_TS) {
+    if (print_mode & TPBM_PRTN_M_TS) {
         time_t t = time(0);
         struct tm* lt = localtime(&t);
         printf("%04d-%02d-%02d %02d:%02d:%02d ",
                lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
                lt->tm_hour, lt->tm_min, lt->tm_sec);
     }
-    if(print_mode & TPBM_PRTN_M_TAG) {
+    if (print_mode & TPBM_PRTN_M_TAG) {
         printf("[%s] ", tag);
     }
     vprintf(fmt, args);
@@ -286,33 +275,30 @@ tpb_print_help_total(void)
 }
 
 void
-tpb_list(){
+tpb_list()
+{
     int nkern = tpb_get_kernel_count();
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Description\n");
-    for(int i = 0 ; i < nkern; i ++) {
+    for (int i = 0; i < nkern; i++) {
         tpb_kernel_t *kernel = NULL;
-        if(tpb_get_kernel_by_index(i, &kernel) != 0) {
+        if (tpb_get_kernel_by_index(i, &kernel) != 0) {
             continue;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n", 
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n",
                    kernel->info.name, kernel->info.note);
     }
 }
 
-static void transpose(uint64_t *out, uint64_t **in, int m, int n) {
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < m; i++) {
-            out[j * m + i] = in[i][j];
-        }
-    }
-}
-
-int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, int nskip, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm) {
+int
+report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time,
+                   int nskip, int ntest, int nepoch, int N, int Nr,
+                   int skip_comp, int skip_comm)
+{
     __ovl_t res;
 
-    uint64_t* nst = (uint64_t *) malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
-    uint64_t* cyt = (uint64_t *) malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
+    uint64_t *nst = (uint64_t *)malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
+    uint64_t *cyt = (uint64_t *)malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
     transpose(nst, ns, ntest, nepoch);
     transpose(cyt, cy, ntest, nepoch);
 
@@ -324,7 +310,7 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
     offset += sprintf(&buf[offset], OVL_QUANT_HEADER_EXT);
 
     if (!skip_comp) {
-        calc_rate_quant(&nst[0 * ntest + nskip], ntest - nskip, 2.0*N*N*N, 1, &res);
+        calc_rate_quant(&nst[0 * ntest + nskip], ntest - nskip, 2.0 * N * N * N, 1, &res);
         offset += sprintf(&buf[offset], "GEMM(GFLOPS)   %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
             res.meantp, res.min, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95, res.max);
 
@@ -333,24 +319,25 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
             res.meantp, res.min, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95, res.max);
     }
 
-    if (!skip_comm){
+    if (!skip_comm) {
         calc_period_quant(&nst[1 * ntest + nskip], ntest - nskip, 1, 1e-3, &res);
         offset += sprintf(&buf[offset], "comm(us)       %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
-                res.meantp, res.min, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95, res.max);
+            res.meantp, res.min, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95, res.max);
     }
-    // gather output to rank 0 to avoid message interleaving among ranks
+
+    /* Gather output to rank 0 to avoid message interleaving among ranks */
     char *gather_buf;
     if (tpmpi_info.myrank == 0) {
-        gather_buf = (char *) malloc(BUFLEN * tpmpi_info.nrank);
+        gather_buf = (char *)malloc(BUFLEN * tpmpi_info.nrank);
     }
 #ifdef USE_MPI
     MPI_Gather(buf, BUFLEN, MPI_CHAR, gather_buf, BUFLEN, MPI_CHAR, 0, MPI_COMM_WORLD);
 #endif
     if (tpmpi_info.myrank == 0) {
         for (int i = 0; i < tpmpi_info.nrank; i++) {
-                printf(gather_buf + i * BUFLEN);
+            printf(gather_buf + i * BUFLEN);
         }
-        double total_time = (double) total_wall_time * 1e-3;
+        double total_time = (double)total_wall_time * 1e-3;
         printf("\nTotal Wall Time(us): %-12.3f", total_time);
         free(gather_buf);
     }
@@ -360,51 +347,43 @@ int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time, i
 }
 
 
-/***
- * Log every step's performance data into a csv file
- * the csv file will be named as "np${rank_size}_kernelname_ntest_N{N}.csv"
- * the csv headers are "rank0" ~ "rank${rank_size-1}"
- * each row is the performance data of a step
- * @param ns: the time data of each step
- * @param cy: the cycle data of each step
- * @param kernel_name: the name of the kernel
- * @param ntest: the number of steps
- * @param nepoch: the number of epochs
- * @param N: the matrix size
- * @param Nr: the number of rows to allreduce
- * @param skip_comp: whether to skip the computation
- * @return void
- */
-int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, int nepoch, int N, int Nr, int skip_comp, int skip_comm) {
+/* Log every step's performance data into a csv file.
+   The csv file will be named as "np${rank_size}_kernelname_ntest_N{N}.csv" */
+int
+log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest,
+              int nepoch, int N, int Nr, int skip_comp, int skip_comm)
+{
     int err = 0;
     const int BUFLEN = (ntest + 1) * 20;
     char *headers = malloc(BUFLEN);
     char filename[4][100];
     char filedir[16] = "./result/log/";
     char filepath[4][120];
-    uint64_t* nst = (uint64_t *) malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
-    uint64_t* cyt = (uint64_t *) malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
+    uint64_t *nst = (uint64_t *)malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
+    uint64_t *cyt = (uint64_t *)malloc(sizeof(uint64_t) * ntest * (nepoch + 1));
 
     char *tpbench_run_mode = getenv("TPBENCH_RUN_MODE");
     char run_mode[24];
     if (tpbench_run_mode != NULL) {
         strcpy(run_mode, tpbench_run_mode);
     } else {
-        if(skip_comp) {
+        if (skip_comp) {
             strcpy(run_mode, "commonly");
-        } else {   
+        } else {
             strcpy(run_mode, "compcomm");
-        } 
+        }
     }
 
-    sprintf(filename[0], "np%d-%s-%s-GEMM(ns)-ntest%d-N%d-Nr%d.csv", tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
-    sprintf(filename[1], "np%d-%s-%s-comm(ns)-ntest%d-N%d-Nr%d.csv", tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
-    sprintf(filename[2], "np%d-%s-%s-GEMM(cy)-ntest%d-N%d-Nr%d.csv", tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
+    sprintf(filename[0], "np%d-%s-%s-GEMM(ns)-ntest%d-N%d-Nr%d.csv",
+            tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
+    sprintf(filename[1], "np%d-%s-%s-comm(ns)-ntest%d-N%d-Nr%d.csv",
+            tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
+    sprintf(filename[2], "np%d-%s-%s-GEMM(cy)-ntest%d-N%d-Nr%d.csv",
+            tpmpi_info.nrank, kernel_name, run_mode, ntest, N, Nr);
 
     strcpy(filepath[0], filedir);
     strcpy(filepath[1], filedir);
     strcpy(filepath[2], filedir);
-
 
     strcat(filepath[0], filename[0]);
     strcat(filepath[1], filename[1]);
@@ -412,27 +391,33 @@ int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name, int ntest, in
 
     tpb_mkdir(filedir);
 
-    sprintf(headers , "rank, step0");
-    #ifdef USE_MPI
+    sprintf(headers, "rank, step0");
+#ifdef USE_MPI
     for (int i = 1; i < ntest; i++) {
         sprintf(headers + strlen(headers), ", step%d", i);
     }
-    #endif
+#endif
 
     transpose(nst, ns, ntest, nepoch);
     transpose(cyt, cy, ntest, nepoch);
 
-    if (skip_comp == 0){
+    if (skip_comp == 0) {
         err = tpmpi_writecsv(filepath[0], nst, ntest, headers);
-        if (err) return err;
+        if (err) {
+            return err;
+        }
         err = tpmpi_writecsv(filepath[2], cyt, ntest, headers);
-        if (err) return err;
+        if (err) {
+            return err;
+        }
     }
     if (skip_comm == 0) {
         err = tpmpi_writecsv(filepath[1], &nst[ntest], ntest, headers);
-        if (err) return err;
+        if (err) {
+            return err;
+        }
     }
-    
+
     free(nst);
     free(cyt);
     free(headers);
@@ -448,9 +433,9 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     }
 
     /* Initialize format controller on first call */
-    tpb_cliout_init();
+    init_cliout();
 
-    int max_col = tpb_cliout_fmt.max_col;
+    int max_col = cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
     tpb_printf(TPBM_PRTN_M_DIRECT, "## Input:  \n");
@@ -467,7 +452,8 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
 
         for (int i = 0; i < handle->argpack.n; i++) {
             char parm_buf[256];
-            int parm_len = tpb_format_parm_value(&handle->argpack.args[i], parm_buf, sizeof(parm_buf));
+            int parm_len = format_parm_value(&handle->argpack.args[i],
+                                             parm_buf, sizeof(parm_buf));
 
             /* Add separator */
             const char *sep = (i < handle->argpack.n - 1) ? ", " : "";
@@ -502,12 +488,12 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     }
 
     /* Initialize format controller on first call */
-    tpb_cliout_init();
+    init_cliout();
 
-    double *qtiles = tpb_cliout_fmt.qtiles;
-    size_t nq = tpb_cliout_fmt.nq;
-    int sigbit = tpb_cliout_fmt.sigbit;
-    int intbit = tpb_cliout_fmt.intbit;
+    double *qtiles = cliout_fmt.qtiles;
+    size_t nq = cliout_fmt.nq;
+    int sigbit = cliout_fmt.sigbit;
+    int intbit = cliout_fmt.intbit;
 
     /* Test results section */
     tpb_printf(TPBM_PRTN_M_DIRECT, "## Output:  \n");
@@ -518,9 +504,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         return TPBE_MALLOC_FAIL;
     }
 
-    /* ===================================================================
-     * Pass 1: Build UNAME groups for cast-enabled outputs
-     * =================================================================== */
+    /* Pass 1: Build UNAME groups for cast-enabled outputs */
     TPB_UNIT_T group_unames[MAX_UNAME_GROUPS];
     TPB_UNIT_T group_targets[MAX_UNAME_GROUPS];
     TPB_UNIT_T group_orig_units[MAX_UNAME_GROUPS];
@@ -584,9 +568,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         }
     }
 
-    /* ===================================================================
-     * Pass 2: Print each output based on shape
-     * =================================================================== */
+    /* Pass 2: Print each output based on shape */
     for (int i = 0; i < handle->respack.n; i++) {
         tpb_k_output_t *out = &handle->respack.outputs[i];
 

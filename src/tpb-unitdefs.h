@@ -1,28 +1,25 @@
-/** 
+/**
  * @file tpb-unitdefs.h
- * Macros for defining and controling the units of arguments, parameters and metrics.
+ * @brief Macros for defining and controlling units of arguments, parameters and metrics.
  */
+
+#ifndef TPB_UNITDEFS_H
+#define TPB_UNITDEFS_H
 
 #include <stdint.h>
 #include <inttypes.h>
 
 typedef uint64_t TPB_UNIT_T;
 
-/* === Common Metric Unit Encoding (TPB_UNIT_T - 64-bit) ===
+/*
+ * Common Metric Unit Encoding (TPB_UNIT_T - 64-bit)
+ *
  * Bit layout (from LSB to MSB):
  *   Bits 0-31  (0x00000000FFFFFFFF): Exponent OR Multiplier value
  *   Bits 32-35 (0x0000000F00000000): Base type (EXP vs MUL, BIN/DEC/OCT/HEX, P/N)
  *   Bits 36-43 (0x00000FF000000000): Unit name identifier
  *   Bits 44-47 (0x0000F00000000000): Unit kind (TIME, VOL, OPS)
  *   Bits 48-63 (0xFFFF000000000000): Attribution control bits
- *      Bit 48: 1 for allowing unit casting, 0 for fixed unit without casting.
- *      Bit 49-51: Output data shape
- *          000: Single-point data;
- *          001: 1-D array;
- *          010: 2-D array;
- *          011: 3-D array;
- *          100: 4-D array;
- *      Bit 52-63: Reserved
  *
  * Value interpretation by base type:
  *   - *_EXP_P: scale = base^value (positive exponent)
@@ -30,7 +27,7 @@ typedef uint64_t TPB_UNIT_T;
  *   - *_MUL_P: scale = value (direct multiplier)
  */
 
-// All shifts below 32 are safe, but those >= 32 must use 1ULL for portability!
+/* All shifts below 32 are safe, but those >= 32 must use 1ULL for portability! */
 #define TPB_UATTR_MASK               ((TPB_UNIT_T)0xFFFF000000000000)
 #define TPB_UATTR_CAST_MASK          ((TPB_UNIT_T)(1ULL << 48)) 
 #define TPB_UATTR_CAST_Y             ((TPB_UNIT_T)(1ULL << 48))
@@ -262,3 +259,5 @@ typedef uint64_t TPB_UNIT_T;
 #define TPB_UNIT_EBPTICK   (((TPB_UNIT_T)18) | TPB_UNAME_DATAPTICK | TPB_UBASE_DEC_EXP_P)
 #define TPB_UNIT_ZBPTICK   (((TPB_UNIT_T)21) | TPB_UNAME_DATAPTICK | TPB_UBASE_DEC_EXP_P)
 #define TPB_UNIT_YBPTICK   (((TPB_UNIT_T)24) | TPB_UNAME_DATAPTICK | TPB_UBASE_DEC_EXP_P)
+
+#endif /* TPB_UNITDEFS_H */

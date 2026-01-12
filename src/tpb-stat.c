@@ -1,38 +1,28 @@
-/**
- * =================================================================================
- * TPBench - A throughputs benchmarking tool for high-performance computing
- * 
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- *  terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * =================================================================================
- * @file tpb-stat.c
- * @version 0.4
- * @brief Statistics and data processing functions for TPBench.
- *        Provides generic statistics operations (quantile, mean, min, max) that
- *        support multiple data types via TPB_DTYPE.
- * @author Key Liao (keyliaohpc@gmail.com, keyliao@sjtu.edu.cn)
- * @date 2024-01-27
+/*
+ * tpb-stat.c
+ * Statistics and data processing functions for TPBench.
  */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include "tpb-stat.h"
 #include "tpb-io.h"
 
-/**
- * @brief Comparison function for qsort (ascending order, double).
- */
+/* Local Function Prototypes */
+
+/* Comparison function for qsort (ascending order, double) */
+static int compare_ascend(const void *a, const void *b);
+
+/* Check if a TPB_DTYPE is a supported numeric type */
+static int check_dtype_support(TPB_DTYPE dtype);
+
+/* Get a single element from a generic array as double */
+static double get_element(void *arr, size_t idx, TPB_DTYPE dtype);
+
+/* Local Function Implementations */
+
 static int
-qsort_ascend(const void *a, const void *b)
+compare_ascend(const void *a, const void *b)
 {
     if (*(double *)a < *(double *)b) {
         return -1;
@@ -40,13 +30,8 @@ qsort_ascend(const void *a, const void *b)
     return *(double *)a > *(double *)b;
 }
 
-/**
- * @brief Check if a TPB_DTYPE is a supported numeric type.
- * @param dtype The data type to check.
- * @return 1 if supported, 0 otherwise.
- */
 static int
-tpb_stat_dtype_supported(TPB_DTYPE dtype)
+check_dtype_support(TPB_DTYPE dtype)
 {
     TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
     switch (type_only) {
@@ -67,15 +52,8 @@ tpb_stat_dtype_supported(TPB_DTYPE dtype)
     }
 }
 
-/**
- * @brief Get a single element from a generic array as double.
- * @param arr   Pointer to the array.
- * @param idx   Index of the element to retrieve.
- * @param dtype Data type of the array elements.
- * @return The element cast to double.
- */
 static double
-tpb_stat_get_element(void *arr, size_t idx, TPB_DTYPE dtype)
+get_element(void *arr, size_t idx, TPB_DTYPE dtype)
 {
     TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
     switch (type_only) {
@@ -106,6 +84,8 @@ tpb_stat_get_element(void *arr, size_t idx, TPB_DTYPE dtype)
     }
 }
 
+/* Public Function Implementations */
+
 int
 tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
                   double *qarr, size_t nq, double *qout)
@@ -114,7 +94,7 @@ tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!tpb_stat_dtype_supported(dtype)) {
+    if (!check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
@@ -126,11 +106,11 @@ tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
 
     /* Copy and cast elements to double */
     for (size_t i = 0; i < narr; i++) {
-        tmp[i] = tpb_stat_get_element(arr, i, dtype);
+        tmp[i] = get_element(arr, i, dtype);
     }
 
     /* Sort the temporary array */
-    qsort(tmp, narr, sizeof(double), qsort_ascend);
+    qsort(tmp, narr, sizeof(double), compare_ascend);
 
     /* Calculate quantile values */
     for (size_t i = 0; i < nq; i++) {
@@ -154,13 +134,13 @@ tpb_stat_mean(void *arr, size_t narr, TPB_DTYPE dtype, double *mean_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!tpb_stat_dtype_supported(dtype)) {
+    if (!check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
     double sum = 0.0;
     for (size_t i = 0; i < narr; i++) {
-        sum += tpb_stat_get_element(arr, i, dtype);
+        sum += get_element(arr, i, dtype);
     }
 
     *mean_out = sum / (double)narr;
@@ -174,13 +154,13 @@ tpb_stat_max(void *arr, size_t narr, TPB_DTYPE dtype, double *max_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!tpb_stat_dtype_supported(dtype)) {
+    if (!check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
-    double max_val = tpb_stat_get_element(arr, 0, dtype);
+    double max_val = get_element(arr, 0, dtype);
     for (size_t i = 1; i < narr; i++) {
-        double val = tpb_stat_get_element(arr, i, dtype);
+        double val = get_element(arr, i, dtype);
         if (val > max_val) {
             max_val = val;
         }
@@ -197,13 +177,13 @@ tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!tpb_stat_dtype_supported(dtype)) {
+    if (!check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
-    double min_val = tpb_stat_get_element(arr, 0, dtype);
+    double min_val = get_element(arr, 0, dtype);
     for (size_t i = 1; i < narr; i++) {
-        double val = tpb_stat_get_element(arr, i, dtype);
+        double val = get_element(arr, i, dtype);
         if (val < min_val) {
             min_val = val;
         }
@@ -213,7 +193,7 @@ tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out)
     return TPBE_SUCCESS;
 }
 
-/* === Legacy functions (kept for backward compatibility) === */
+/* Legacy functions (kept for backward compatibility) */
 
 int
 calc_quant(double *data, int nitem, __ovl_t *res)
@@ -224,7 +204,7 @@ calc_quant(double *data, int nitem, __ovl_t *res)
     for (int i = 0; i < nitem; i++) {
         sum += data[i];
     }
-    qsort((void *)data, nitem, sizeof(double), qsort_ascend);
+    qsort((void *)data, nitem, sizeof(double), compare_ascend);
 
     i05 = (int)(0.05 * nitem);
     i25 = (int)(0.25 * nitem);
@@ -286,7 +266,8 @@ dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t n
     tpb_printf(TPBM_PRTN_M_DIRECT, OVL_QUANT_HEADER "\n");
     /* MB/s */
     calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+               "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
                res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
 
     return 0;
