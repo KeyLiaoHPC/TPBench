@@ -190,9 +190,11 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
                     hdl->respack.outputs[j].p = NULL;
                     hdl->respack.outputs[j].n = 0;
 
-                    /* Resolve TPB_UNIT_TIMER: use the timer's unit */
-                    if (src_outs[j].unit == TPB_UNIT_TIMER) {
-                        hdl->respack.outputs[j].unit = timer.unit;
+                    /* Resolve TPB_UNIT_TIMER: use the timer's unit, preserve attributes */
+                    TPB_UNIT_T base_unit = src_outs[j].unit & ~TPB_UATTR_MASK;
+                    if (base_unit == TPB_UNIT_TIMER) {
+                        TPB_UNIT_T attrs = src_outs[j].unit & TPB_UATTR_MASK;
+                        hdl->respack.outputs[j].unit = timer.unit | attrs;
                     }
                 }
             }
