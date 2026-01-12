@@ -624,6 +624,12 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
     }
 
     for(int i = 0; i < current_rthdl->respack.n; i++) {
+        if ((current_rthdl->respack.outputs[i].unit & TPB_UNAME_MASK) == TPB_UNAME_TIMERTIME) {
+            current_rthdl->respack.outputs[i].unit = timer.unit;
+        }
+    }
+
+    for(int i = 0; i < current_rthdl->respack.n; i++) {
         if(strcmp(current_rthdl->respack.outputs[i].name, name) == 0) {
             // Determine element size based on dtype
             TPB_DTYPE dtype = current_rthdl->respack.outputs[i].dtype;

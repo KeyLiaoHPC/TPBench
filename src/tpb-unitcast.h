@@ -78,11 +78,33 @@ int tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
  * @param buf          Output buffer
  * @param bufsize      Buffer size
  * @param sigbit       Total significant figures
- * @param decbit       Decimal places in mantissa
+ * @param intbit       Integer digits before decimal point
  * @return             Number of characters written
  */
 int tpb_format_scientific(double value, char *buf, size_t bufsize,
-                          int sigbit, int decbit);
+                          int sigbit, int intbit);
+
+/**
+ * @brief Format value according to sigbit/intbit rules.
+ *
+ * Formatting behavior based on sigbit and intbit:
+ *   - sigbit>0, intbit>0: Format as XXX.YYY with intbit integer digits,
+ *                         sigbit-intbit decimal digits. Use scientific
+ *                         notation if value exceeds intbit integer digits.
+ *   - sigbit>0, intbit<=0: Format as 0.XXXXXeE (all sigbit digits after decimal)
+ *   - sigbit<=0, intbit>0: No sig check, limit to intbit integer digits,
+ *                          use scientific notation if overflow.
+ *   - sigbit<=0, intbit<=0: No formatting, print original value as-is.
+ *
+ * @param value        The value to format
+ * @param buf          Output buffer
+ * @param bufsize      Buffer size
+ * @param sigbit       Total significant figures (0 or negative = no limit)
+ * @param intbit       Integer digits before decimal (0 or negative = no limit)
+ * @return             Number of characters written
+ */
+int tpb_format_value(double value, char *buf, size_t bufsize,
+                     int sigbit, int intbit);
 
 /**
  * @brief Convert TPB_UNIT_T to human-readable string.

@@ -426,25 +426,79 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
     return TPBE_SUCCESS;
 }
 
-/* ============================================================================
- * Scientific Notation Formatting
- * ============================================================================ */
-
 int
 tpb_format_scientific(double value, char *buf, size_t bufsize,
-                      int sigbit, int decbit)
+                      int sigbit, int intbit)
 {
     if (buf == NULL || bufsize == 0) {
         return 0;
     }
 
-    /* Calculate precision: sigbit total figures, with decbit integer part */
-    int precision = sigbit - decbit;
+    /* Calculate precision: sigbit total figures, with intbit integer part */
+    int precision = sigbit - intbit;
     if (precision < 0) {
         precision = 0;
     }
 
     return snprintf(buf, bufsize, "%.*E", precision, value);
+}
+
+int
+tpb_format_value(double value, char *buf, size_t bufsize,
+                 int sigbit, int intbit)
+{
+    if (buf == NULL || bufsize == 0) {
+        return 0;
+    }
+
+    /* Case 4: sigbit<=0 && intbit<=0 - No formatting, print as-is */
+    if (sigbit <= 0 && intbit <= 0) {
+        return snprintf(buf, bufsize, "%g", value);
+    }
+
+    /* Handle zero specially */
+    if (value == 0.0) {
+        if (sigbit > 0) {
+            return snprintf(buf, bufsize, "0.%0*d", sigbit - 1, 0);
+        }
+        return snprintf(buf, bufsize, "0");
+    }
+
+    double absval = fabs(value);
+    int value_int_digits = (absval >= 1.0) ? (int)floor(log10(absval)) + 1 : 0;
+
+    /* Case 2: sigbit>0 && intbit<=0 - Format as 0.XXXXXeE */
+    if (sigbit > 0 && intbit <= 0) {
+        /* All sigbit digits after decimal point */
+        return snprintf(buf, bufsize, "%.*e", sigbit - 1, value);
+    }
+
+    /* Case 3: sigbit<=0 && intbit>0 - Limit integer digits only */
+    if (sigbit <= 0 && intbit > 0) {
+        if (value_int_digits > intbit) {
+            /* Exceeds intbit, use scientific notation */
+            int exp_adjust = value_int_digits - intbit;
+            double mantissa = value / pow(10.0, exp_adjust);
+            return snprintf(buf, bufsize, "%.6gE%d", mantissa, exp_adjust);
+        }
+        return snprintf(buf, bufsize, "%g", value);
+    }
+
+    /* Case 1: sigbit>0 && intbit>0 - Format as XXX.YYY */
+    int dec_digits = sigbit - intbit;
+    if (dec_digits < 0) {
+        dec_digits = 0;
+    }
+
+    if (value_int_digits > intbit) {
+        /* Exceeds intbit integer digits, use XXX.YYYE format */
+        int exp_adjust = value_int_digits - intbit;
+        double mantissa = value / pow(10.0, exp_adjust);
+        return snprintf(buf, bufsize, "%.*fE%d", dec_digits, mantissa, exp_adjust);
+    }
+
+    /* Normal formatting with sigbit significant figures */
+    return snprintf(buf, bufsize, "%.*f", dec_digits, value);
 }
 
 /* ============================================================================

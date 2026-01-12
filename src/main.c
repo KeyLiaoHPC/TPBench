@@ -108,7 +108,6 @@ main(int argc, char **argv) {
 #else
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" VER "\n");
 #endif
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE"\n");
     // init kernel and parse arguments
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
@@ -135,8 +134,7 @@ main(int argc, char **argv) {
 
         /* Run kernel (includes reporting) */
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n", handle->kernel.info.name);
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d\n", i);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i + 1, tpb_args.nkern);
         err = tpb_run_kernel(handle);
         __tpbm_exit_on_error(err, "At main.c: tpb_run_kernel");
 

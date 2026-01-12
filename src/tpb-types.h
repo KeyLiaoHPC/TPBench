@@ -234,9 +234,7 @@ typedef struct tpb_cliout_format {
     int max_col;            /* Maximum terminal columns before wrapping */
     size_t nq;              /* Number of quantiles */
     double *qtiles;         /* Array of quantile positions */
-    int sigbit, decbit;     /* Significant bit for unit conversion */
-    int castctrl_autocast;  /* If number with more than dec bit should be casted. */
-    int castctrl_same_unit; /* Casting to the same unit for the same UNAME */
+    int sigbit, intbit;     /* sigbit=significant figures, intbit=integer digits */
     int initialized;        /* Initialization flag */
 } tpb_cliout_format_t;
 

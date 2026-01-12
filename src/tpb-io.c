@@ -71,10 +71,8 @@ tpb_cliout_init(void)
     /* Keep default (85) if ioctl fails */
 
     tpb_cliout_fmt.sigbit = 5;
-    tpb_cliout_fmt.decbit = 3;
+    tpb_cliout_fmt.intbit = 1;
     tpb_cliout_fmt.initialized = 1;
-    tpb_cliout_fmt.castctrl_autocast = 1;
-    tpb_cliout_fmt.castctrl_same_unit = 1;
 }
 
 /* tpb_unit_to_string() is now defined in tpb-unitcast.c */
@@ -291,9 +289,7 @@ void
 tpb_list(){
     int nkern = tpb_get_kernel_count();
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Description\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
     for(int i = 0 ; i < nkern; i ++) {
         tpb_kernel_t *kernel = NULL;
         if(tpb_get_kernel_by_index(i, &kernel) != 0) {
@@ -302,7 +298,6 @@ tpb_list(){
         tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n", 
                    kernel->info.name, kernel->info.note);
     }
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE);
 }
 
 static void transpose(uint64_t *out, uint64_t **in, int m, int n) {
@@ -458,7 +453,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     int max_col = tpb_cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n## Input:\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Input:  \n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
@@ -512,12 +507,10 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     double *qtiles = tpb_cliout_fmt.qtiles;
     size_t nq = tpb_cliout_fmt.nq;
     int sigbit = tpb_cliout_fmt.sigbit;
-    int decbit = tpb_cliout_fmt.decbit;
-    int autocast = tpb_cliout_fmt.castctrl_autocast;
-    int same_unit = tpb_cliout_fmt.castctrl_same_unit;
+    int intbit = tpb_cliout_fmt.intbit;
 
     /* Test results section */
-    tpb_printf(TPBM_PRTN_M_DIRECT, HLINE"\n## Output:\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Output:  \n");
 
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));
@@ -526,71 +519,73 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     }
 
     /* ===================================================================
-     * UNAME grouping for castctrl_same_unit
+     * Pass 1: Build UNAME groups for cast-enabled outputs
      * =================================================================== */
     TPB_UNIT_T group_unames[MAX_UNAME_GROUPS];
     TPB_UNIT_T group_targets[MAX_UNAME_GROUPS];
-    TPB_UNIT_T group_orig_units[MAX_UNAME_GROUPS];  /* Original unit for scale */
+    TPB_UNIT_T group_orig_units[MAX_UNAME_GROUPS];
+    double group_mins[MAX_UNAME_GROUPS];
     int ngroups = 0;
 
-    if (autocast && same_unit) {
-        /* Pass 1: Identify unique UNAMEs and find global minimum per group */
-        double group_mins[MAX_UNAME_GROUPS];
-
-        for (int i = 0; i < handle->respack.n; i++) {
-            tpb_k_output_t *out = &handle->respack.outputs[i];
-            if (out->p == NULL || out->n <= 0) {
-                continue;
-            }
-
-            TPB_UNIT_T uname = get_uname(out->unit);
-
-            /* Find or create group for this UNAME */
-            int gidx = -1;
-            for (int g = 0; g < ngroups; g++) {
-                if (group_unames[g] == uname) {
-                    gidx = g;
-                    break;
-                }
-            }
-            if (gidx < 0 && ngroups < MAX_UNAME_GROUPS) {
-                gidx = ngroups++;
-                group_unames[gidx] = uname;
-                group_mins[gidx] = 1e308;  /* Large initial value */
-                group_orig_units[gidx] = out->unit;  /* Store first unit seen */
-            }
-
-            if (gidx >= 0) {
-                /* Find minimum value in this output's raw data */
-                double out_min = 0.0;
-                if (tpb_stat_min(out->p, (size_t)out->n, out->dtype, &out_min) == TPBE_SUCCESS) {
-                    double abs_min = fabs(out_min);
-                    if (abs_min > 0 && abs_min < group_mins[gidx]) {
-                        group_mins[gidx] = abs_min;
-                    }
-                }
-            }
+    for (int i = 0; i < handle->respack.n; i++) {
+        tpb_k_output_t *out = &handle->respack.outputs[i];
+        if (out->p == NULL || out->n <= 0) {
+            continue;
         }
 
-        /* Determine target unit for each group using the group minimum */
-        for (int g = 0; g < ngroups; g++) {
-            double min_arr[1] = { group_mins[g] };
-            double cast_arr[1];
-            TPB_UNIT_T target_unit = group_orig_units[g];
+        /* Check if cast is enabled for this output */
+        int cast_enabled = (out->unit & TPB_UATTR_CAST_MASK) == TPB_UATTR_CAST_Y;
+        if (!cast_enabled) {
+            continue;
+        }
 
-            int ret = tpb_cast_unit(min_arr, 1, TPB_DOUBLE_T,
-                                    group_orig_units[g], &target_unit, cast_arr,
-                                    sigbit, decbit);
-            if (ret == TPBE_SUCCESS) {
-                group_targets[g] = target_unit;
-            } else {
-                group_targets[g] = group_orig_units[g];  /* Fallback */
+        TPB_UNIT_T uname = get_uname(out->unit);
+
+        /* Find or create group for this UNAME */
+        int gidx = -1;
+        for (int g = 0; g < ngroups; g++) {
+            if (group_unames[g] == uname) {
+                gidx = g;
+                break;
+            }
+        }
+        if (gidx < 0 && ngroups < MAX_UNAME_GROUPS) {
+            gidx = ngroups++;
+            group_unames[gidx] = uname;
+            group_mins[gidx] = 1e308;
+            group_orig_units[gidx] = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
+        }
+
+        if (gidx >= 0) {
+            /* Find minimum value in this output's raw data */
+            double out_min = 0.0;
+            if (tpb_stat_min(out->p, (size_t)out->n, out->dtype, &out_min) == TPBE_SUCCESS) {
+                double abs_min = fabs(out_min);
+                if (abs_min > 0 && abs_min < group_mins[gidx]) {
+                    group_mins[gidx] = abs_min;
+                }
             }
         }
     }
 
+    /* Determine target unit for each group using the group minimum */
+    for (int g = 0; g < ngroups; g++) {
+        double min_arr[1] = { group_mins[g] };
+        double cast_arr[1];
+        TPB_UNIT_T target_unit = group_orig_units[g];
+
+        int ret = tpb_cast_unit(min_arr, 1, TPB_DOUBLE_T,
+                                group_orig_units[g], &target_unit, cast_arr,
+                                sigbit, intbit);
+        if (ret == TPBE_SUCCESS) {
+            group_targets[g] = target_unit;
+        } else {
+            group_targets[g] = group_orig_units[g];
+        }
+    }
+
     /* ===================================================================
-     * Pass 2: Print each output
+     * Pass 2: Print each output based on shape
      * =================================================================== */
     for (int i = 0; i < handle->respack.n; i++) {
         tpb_k_output_t *out = &handle->respack.outputs[i];
@@ -600,94 +595,22 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             continue;
         }
 
+        /* Extract shape and cast control from unit */
+        TPB_UNIT_T shape = out->unit & TPB_UATTR_SHAPE_MASK;
+        int cast_enabled = (out->unit & TPB_UATTR_CAST_MASK) == TPB_UATTR_CAST_Y;
+        TPB_UNIT_T base_unit = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
+
         /* Print metrics name */
         tpb_printf(TPBM_PRTN_M_DIRECT, "### Metrics: %s\n", out->name);
 
-        /* Calculate mean */
-        double mean_val = 0.0;
-        int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
-        if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Units: %s\n", tpb_unit_to_string(out->unit));
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Results mean: N/A\n");
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Results Quantile: N/A\n");
-            continue;
-        }
-
-        /* Calculate quantiles */
-        err = tpb_stat_qtile_1d(out->p, (size_t)out->n, out->dtype, qtiles, nq, qout);
-        if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Units: %s\n", tpb_unit_to_string(out->unit));
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Results mean: %.6g\n", mean_val);
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Results Quantile: N/A\n");
-            continue;
-        }
-
-        /* Combine mean and quantiles */
-        size_t combined_n = nq + 1;
-        double *combined = (double *)malloc(combined_n * sizeof(double));
-        if (combined == NULL) {
-            free(qout);
-            return TPBE_MALLOC_FAIL;
-        }
-        combined[0] = mean_val;
-        for (size_t j = 0; j < nq; j++) {
-            combined[j + 1] = qout[j];
-        }
-
-        TPB_UNIT_T display_unit = out->unit;
-        double *display_vals = combined;
-        double *scaled_vals = NULL;
-        int use_scientific = 0;
-
-        if (!autocast) {
-            /* No casting - use original values with scientific notation */
-            use_scientific = 1;
-        } else if (same_unit) {
-            /* Use pre-computed group target unit */
+        /* Determine display unit */
+        TPB_UNIT_T display_unit = base_unit;
+        if (cast_enabled) {
             TPB_UNIT_T uname = get_uname(out->unit);
-            TPB_UNIT_T target_unit = out->unit;
-
-            /* Find group target */
             for (int g = 0; g < ngroups; g++) {
                 if (group_unames[g] == uname) {
-                    target_unit = group_targets[g];
+                    display_unit = group_targets[g];
                     break;
-                }
-            }
-
-            display_unit = target_unit;
-
-            /* Scale values to target unit */
-            if (target_unit != out->unit) {
-                scaled_vals = (double *)malloc(combined_n * sizeof(double));
-                if (scaled_vals != NULL) {
-                    double current_scale = tpb_unit_get_scale(out->unit);
-                    double target_scale = tpb_unit_get_scale(target_unit);
-                    for (size_t k = 0; k < combined_n; k++) {
-                        double val_in_base = combined[k] * current_scale;
-                        scaled_vals[k] = val_in_base / target_scale;
-                    }
-                    display_vals = scaled_vals;
-                }
-            } else {
-                use_scientific = 1;  /* Same unit, use scientific notation */
-            }
-        } else {
-            /* Per-output casting (original behavior) */
-            scaled_vals = (double *)malloc(combined_n * sizeof(double));
-            if (scaled_vals != NULL) {
-                int ret = tpb_cast_unit(combined, (int)combined_n, TPB_DOUBLE_T,
-                                        out->unit, &display_unit, scaled_vals,
-                                        sigbit, decbit);
-                if (ret == TPBE_SUCCESS) {
-                    display_vals = scaled_vals;
-                    if (display_unit == out->unit) {
-                        use_scientific = 1;
-                    }
-                } else {
-                    use_scientific = 1;
-                    free(scaled_vals);
-                    scaled_vals = NULL;
                 }
             }
         }
@@ -695,38 +618,103 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         /* Print unit */
         tpb_printf(TPBM_PRTN_M_DIRECT, "Units: %s\n", tpb_unit_to_string(display_unit));
 
-        /* Print mean */
-        {
-            char buf[64];
-            if (use_scientific) {
-                tpb_format_scientific(display_vals[0], buf, sizeof(buf), sigbit, decbit);
-            } else {
-                tpb_format_sigfig(display_vals[0], buf, sizeof(buf), sigbit);
+        /* Handle output based on shape */
+        if (shape == TPB_UATTR_SHAPE_POINT) {
+            /* Single-point data */
+            double value = 0.0;
+            int err = tpb_stat_mean(out->p, 1, out->dtype, &value);
+            if (err != TPBE_SUCCESS) {
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result value: N/A\n");
+                continue;
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Results mean: %s\n", buf);
-        }
 
-        /* Print quantiles */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Results Quantile: ");
-        for (size_t q = 0; q < nq; q++) {
-            char buf[64];
-            if (q > 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+            /* Scale value if cast enabled and units differ */
+            if (cast_enabled && display_unit != base_unit) {
+                double current_scale = tpb_unit_get_scale(base_unit);
+                double target_scale = tpb_unit_get_scale(display_unit);
+                value = (value * current_scale) / target_scale;
             }
-            if (use_scientific) {
-                tpb_format_scientific(display_vals[q + 1], buf, sizeof(buf), sigbit, decbit);
-            } else {
-                tpb_format_sigfig(display_vals[q + 1], buf, sizeof(buf), sigbit);
-            }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Q%.2f=%s", qtiles[q], buf);
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
 
-        /* Cleanup */
-        if (scaled_vals != NULL) {
-            free(scaled_vals);
+            char buf[64];
+            tpb_format_value(value, buf, sizeof(buf), sigbit, intbit);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Result value: %s\n", buf);
+
+        } else if (shape == TPB_UATTR_SHAPE_1D) {
+            /* 1D array - calculate mean and quantiles */
+            double mean_val = 0.0;
+            int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
+            if (err != TPBE_SUCCESS) {
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: N/A\n");
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: N/A\n");
+                continue;
+            }
+
+            /* Calculate quantiles */
+            err = tpb_stat_qtile_1d(out->p, (size_t)out->n, out->dtype, qtiles, nq, qout);
+            if (err != TPBE_SUCCESS) {
+                /* Scale and format mean */
+                if (cast_enabled && display_unit != base_unit) {
+                    double current_scale = tpb_unit_get_scale(base_unit);
+                    double target_scale = tpb_unit_get_scale(display_unit);
+                    mean_val = (mean_val * current_scale) / target_scale;
+                }
+                char buf[64];
+                tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: N/A\n");
+                continue;
+            }
+
+            /* Scale values if cast enabled and units differ */
+            if (cast_enabled && display_unit != base_unit) {
+                double current_scale = tpb_unit_get_scale(base_unit);
+                double target_scale = tpb_unit_get_scale(display_unit);
+                mean_val = (mean_val * current_scale) / target_scale;
+                for (size_t q = 0; q < nq; q++) {
+                    qout[q] = (qout[q] * current_scale) / target_scale;
+                }
+            }
+
+            /* Print mean */
+            char buf[64];
+            tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
+
+            /* Print quantiles */
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: ");
+            for (size_t q = 0; q < nq; q++) {
+                if (q > 0) {
+                    tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+                }
+                tpb_format_value(qout[q], buf, sizeof(buf), sigbit, intbit);
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Q%.2f=%s", qtiles[q], buf);
+            }
+            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+
+        } else {
+            /* 2D+ arrays - warn and treat as 1D */
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Multi-dimension array not supported by CLI output\n");
+
+            /* Calculate mean of all elements as fallback */
+            double mean_val = 0.0;
+            int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
+            if (err != TPBE_SUCCESS) {
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: N/A\n");
+                continue;
+            }
+
+            /* Scale value if cast enabled and units differ */
+            if (cast_enabled && display_unit != base_unit) {
+                double current_scale = tpb_unit_get_scale(base_unit);
+                double target_scale = tpb_unit_get_scale(display_unit);
+                mean_val = (mean_val * current_scale) / target_scale;
+            }
+
+            char buf[64];
+            tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
         }
-        free(combined);
     }
 
     free(qout);
