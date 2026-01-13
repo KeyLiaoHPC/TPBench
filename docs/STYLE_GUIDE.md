@@ -69,7 +69,36 @@ Use Doxygen-compatible comments:
 int tpb_register_kernel(const char *name, tpb_k_func *funcs);
 ```
 
-## 4. Comment Styles
+## 4. Struct Member Documentation
+
+### Format
+For struct members, use Doxygen's inline member documentation style with `/**<` placed after the member:
+
+```c
+struct tpb_timer {
+    uint64_t start;     /**< Start time value */
+    uint64_t end;       /**< End time value */
+    double resolution;  /**< Timer resolution in seconds */
+    int type;           /**< Timer type identifier */
+};
+```
+
+### Guidelines
+- Place the `/**<` comment immediately after the member declaration
+- Use a single space between the member and the comment
+- Provide a brief but descriptive explanation of the member's purpose
+- Align comments when documenting multiple members in a struct
+
+```c
+/* Correct - aligned comments */
+struct example {
+    int count;      /**< Number of items */
+    char *name;     /**< Item name string */
+    double value;   /**< Numeric value */
+};
+```
+
+## 5. Comment Styles
 
 ### Block Comments
 Use `/* */` for code block comments, even for single-line comments:
@@ -111,7 +140,7 @@ double cumulative_error;
 /* Section Header */
 ```
 
-## 5. Line Length
+## 6. Line Length
 
 ### General Rule
 Keep lines within 85 columns.
@@ -128,7 +157,7 @@ The following may exceed 85 columns:
 #define TPB_UNAME_FLOPS (((TPB_UNIT_T)0x0000002000000000) | TPB_UKIND_VOLPTIME)
 ```
 
-## 6. Alignment of Block Macros and Multi-line Comments
+## 7. Alignment of Block Macros and Multi-line Comments
 
 ### Rule
 Always align the start of key definitions of block macros and multi-line consecutive comments to the next tab stop after the longest column of the line block.
@@ -154,7 +183,7 @@ For consecutive multi-line comments, align the comment text to the next tab stop
 /* Configure callback handlers */
 ```
 
-## 7. File Headers
+## 8. File Headers
 
 ### Format
 Each file should have a minimal header with filename and description:
@@ -187,7 +216,7 @@ For header files (*.h) - include Doxygen tags:
 - Do NOT include author/date information
 - Do NOT include old comment history
 
-## 8. Function Implementations
+## 9. Function Implementations
 
 ### Format
 ```c
@@ -210,7 +239,7 @@ tpb_register_kernel(const char *name, tpb_k_func *funcs)
 }
 ```
 
-## 9. Function Calls
+## 10. Function Calls
 
 ### Basic Format
 ```c
@@ -246,7 +275,7 @@ function_name(
 function_name();
 ```
 
-## 10. Control Structures
+## 11. Control Structures
 
 ### Format
 Use space between keyword and parenthesis, space before opening brace:
@@ -272,7 +301,7 @@ while (condition) {
 - Closing brace on its own line
 - `else` on the same line as the closing brace
 
-## 11. Include Guards
+## 12. Include Guards
 
 All header files must have include guards:
 
@@ -285,13 +314,13 @@ All header files must have include guards:
 #endif /* TPB_FILENAME_H */
 ```
 
-## 12. Indentation
+## 13. Indentation
 
 - Use 4 spaces for indentation
 - Do NOT use tabs
 - Align continuation lines appropriately
 
-## 13. Section Comments
+## 14. Section Comments
 
 Use simple `/* Section Name */` comments to delineate code sections:
 
