@@ -551,7 +551,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tpb_args,
         }
 
         for (int i = 2; i < argc; i++) {
-            if (strcmp(argv[i], "-k") == 0 || strcmp(argv[i], "--kernel") == 0) {
+            if (strcmp(argv[i], "--kernel") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT,
                                "Option %s requires arguments.\n", argv[i]);
@@ -570,7 +570,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tpb_args,
                 }
                 current_kernel = nkern_parsed;
                 nkern_parsed++;
-            } else if (strcmp(argv[i], "-K") == 0 || strcmp(argv[i], "--kargs") == 0) {
+            } else if (strcmp(argv[i], "--kargs") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT,
                                "Option %s requires arguments.\n", argv[i]);
@@ -599,7 +599,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tpb_args,
                         goto cleanup_tokens;
                     }
                 }
-            } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--data_path") == 0) {
+            } else if (strcmp(argv[i], "--workdir") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT,
                                "Option %s requires an argument.\n", argv[i]);
@@ -612,7 +612,7 @@ tpb_parse_args(int argc, char **argv, tpb_args_t *tpb_args,
                     goto cleanup_tokens;
                 }
                 sprintf(tpb_args->data_dir, "%s", argv[++i]);
-            } else if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "--timer") == 0) {
+            } else if (strcmp(argv[i], "--timer") == 0) {
                 if (i + 1 >= argc) {
                     tpb_printf(TPBM_PRTN_M_DIRECT,
                                "Option %s requires arguments.\n", argv[i]);

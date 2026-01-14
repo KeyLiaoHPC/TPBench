@@ -438,7 +438,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     int max_col = cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Input:  \n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Input info  \n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
@@ -496,7 +496,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     int intbit = cliout_fmt.intbit;
 
     /* Test results section */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Output:  \n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Output  \n");
 
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));

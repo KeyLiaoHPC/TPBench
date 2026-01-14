@@ -1,3 +1,3 @@
 #!/bin/sh
 CC=gcc
-CFLAGS=-O3 -fno-builtin 
+CFLAGS=-O3 -fopenmp -fno-builtin 

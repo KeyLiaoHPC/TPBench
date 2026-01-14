@@ -204,6 +204,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     tpb_cliout_args(hdl);
 
     /* Call kernel runner */
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
     err = hdl->kernel.func.k_run();
     if (err) {
         if (tpb_get_err_exit_flag(err) == TPBE_WARN) {

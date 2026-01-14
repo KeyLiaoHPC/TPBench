@@ -51,39 +51,34 @@
                                 return  TPBE_MALLOC_FAIL;                            \
                             }
 
+static double epsilon = 1.e-8;
+
 // Forward declarations
 int register_triad(void);
 int run_triad(void);
-int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw);
+static int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw);
+static int check_d_triad(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
 int
 register_triad(void)
 {
     int err;
     
-    // Register kernel with name
+    /* Register to TPBench */
     err = tpb_k_register("triad", "STREAM Triad: a[i] = b[i] + s * c[i]");
     if(err != 0) return err;
-    // Add runtime parameters with validation
+
+    /* Kernel input parameters */
     err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
-    if(err != 0) return err;
-    err = tpb_k_add_parm("nskip", "Number of initial iterations to skip", "2",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)1000);
-    if(err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warmup time in milliseconds", "100",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)10000);
     if(err != 0) return err;
     err = tpb_k_add_parm("memsize", "Memory size in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if(err != 0) return err;
-    err = tpb_k_add_parm("s", "Scalar multiplier", "0.42",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
-    if(err != 0) return err;
+
+    /* Kernel outputs */
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
@@ -115,18 +110,25 @@ run_triad(void)
     uint64_t *real_memsize = NULL;
     double *bw = NULL;
 
+    /* Get timer */
     tpberr = tpb_k_get_timer(&timer);
     if (tpberr) return tpberr;
+
+    /* Get arguments by names */
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
     if (tpberr) return tpberr;
+
+    /* Malloc callbacks for kernel's outputs */
     tpberr = tpb_k_alloc_output("tot_time", 1, &tot_time);
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("step_time", ntest, &step_time);
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
     if (tpberr) return tpberr;
+
+    /* Measured data throughput rate is a derived metrics, adding at run-time */
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
         tpb_k_add_output("bw_walltime", "Measured sustainable memory bandwidth in decimal based MB/s.", 
@@ -149,18 +151,18 @@ run_triad(void)
     return tpberr;
 }
 
-int
+static int
 d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw) {
     int narr, err;
-    volatile double *a, *b, *c;
-    register double s = 0.42;
+    double *a, *b, *c;
+    double s = 0.42;
     uint64_t t0, t1;
 
 #ifdef KP_SVE
     svfloat64_t tmp;
     uint64_t vec_len = svlen_f64(tmp);
 #endif 
-
+    err = 0;
     narr = (int)(kib * 1024 / sizeof(double) / 3);
     *real_memsize = narr * sizeof(double) * 3;
 
@@ -274,10 +276,35 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
     for (int i = 0; i < ntest; i ++) {
         bw[i] = ((double)(*real_memsize) * 1e-6)  / ((double)(step_time[i]) * 1e-9);
     }
+    /* Verify results. */
+    double errval;
+    err = check_d_triad(narr, ntest, a, b, c, s, epsilon, &errval);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Triad error: %lf\n", errval);
     // kernel end
     
     free((void *)a);
     free((void *)b);
     free((void *)c);
+    return err;
+}
+
+static int 
+check_d_triad(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval)
+{
+    double a0 = 1.0;
+    double b0 = 2.0;
+    double c0 = 3.0;
+
+    for (int i = 0; i < ntest; i++) {
+        a0 = b0 + s * c0;
+    }
+
+    *errval = 0;
+    for (int i = 0; i < narr; i ++) {
+        *errval += (a[i] - a0) > 0 ? (a[i] - a0): (a0 - a[i]);
+    }
+
+    if (*errval > epsilon) return TPBE_KERN_VERIFY_FAIL;
+
     return 0;
 }
