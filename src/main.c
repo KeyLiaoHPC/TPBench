@@ -23,8 +23,6 @@
 #include "mpi.h"
 #endif
 
-struct tpmpi_info_t tpmpi_info;
-
 int init_res(char *prefix, char *posfix, char *host_dir, const char *data_dir,
              tpb_k_rthdl_t *handles, int nkern, tpb_res_t *res);
 static int tpb_find_i64(const tpb_rt_parm_t *parms, int nparms, const char *name, int64_t *out);

@@ -31,6 +31,8 @@
 #include "tpmpi.h"
 #include "../tpb-impl.h"
 
+struct tpmpi_info_t tpmpi_info;
+
 int
 tpmpi_init() {
     int err;

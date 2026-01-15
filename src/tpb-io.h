@@ -19,41 +19,39 @@
 #define HLINE  "---"
 
 #define TPBM_HELP_DOC_TOTAL \
-    DHLINE \
-    "tpb-cli is the command-line interface of the active launcher of TPBench.\n" \
-    "Usage: tpbench <action> <option>\n" \
+    "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
+    "Usage: tpbcli <action> <option>\n" \
     "Action: run, benchmark, list, help\n" \
     "Options and explanation for each action:\n" \
-    HLINE \
     "    run: Run one or more benchmark kernels.\n" \
-    "        --kernel    <kernel1>:[[kargs0_0]:...:[kargs0_n]],<kernel2>:...\n" \
-    "                    Kernel list separated by comma. Each kernel can have\n" \
+    "        --kernel    <kernel_name>\n" \
+    "                    Mandatory. Kernel list separated by comma. Each kernel can have\n" \
     "                    multiple kargs separated by colon. (e.g.\n" \
     "                    d_init:memsize=1024,triad:fp=fp64:memsize=1024)\n" \
     "                    Use 'help <kernel>' for available options of a kernel.\n" \
     "        --kargs     <key>=<value>\n" \
-    "                    Default kernel run-time arguments.\n" \
+    "                    Optional. Default kernel run-time arguments.\n" \
     "                    Use 'help kargs' for supported keys and values.\n" \
-    "        --kargs_dim Create one or more dimensional" \
+    "        --kargs_dim \n" \
+    "                    Optional. Create one or more dimensional arguments, and TPBench will \n" \
+    "                    execute the kernel with arguments along the designated dimension. If \n" \
+    "                    " \
     "        --workdir   <PATH> (Default: $CWD/workspace)\n" \
-    "                    Path to the directory of the workspace. \n" \
+    "                    Optional. Path to the directory of the workspace. \n" \
     "        --outdir    <PATH> (Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
-    "                    Path to the data directory of the current test. \n" \
-    "        --timer     <timer_name>\n" \
-    "                    Timer name. Supported: clock_gettime (default),\n" \
-    "                    tsc_asym.\n" \
+    "                    Optional.Path to the data directory of the current test. \n" \
+    "        --timer     <timer_name> (Optional, default: clock_gettime)\n" \
+    "                    Optional. Timer name. Supported: clock_gettime, tsc_asym.\n" \
     "        -l          List available kernels.\n" \
-    "        -h, --help  Print usages of the `tpb-cli run` subcommand.\n" \
-    HLINE \
+    "        -h, --help  Print usages of the `tpbcli run` subcommand.\n" \
     "    benchmark: Run predefined benchmark suites.\n" \
-    "        --workdir   <PATH> (Default: $CWD/workspace)\n" \
+    "        --suite     <PATH> (Default: $CWD/workspace)\n" \
+    "        --workdir   <PATH> (Optional. Default: $CWD/workspace)\n" \
     "                    Path to the directory of the workspace. \n" \
-    "        --outdir    <PATH> (Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
+    "        --outdir    <PATH> (Optional. Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
     "                    Path to the data directory of the current test. \n" \
-    "        -h, --help  Print usages of the `tpb-cli benchmark` subcommand.\n" \
-    HLINE \
+    "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
     "    help: Print help message for an object and exit.\n" \
-    DHLINE
 
 /**
  * @brief List all registered kernels.

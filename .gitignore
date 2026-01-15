@@ -33,3 +33,10 @@ __pycache__/
 *.mod.o.cmd
 *.mod.o.o
 *.mod.o.o.cmd
+
+# Ignore CMake temporary files
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake

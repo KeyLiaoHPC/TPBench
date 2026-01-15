@@ -100,7 +100,7 @@ tpb_register_common()
     return 0;
 }
 
-/* Initialize kernel registry by calling registration functions */
+/* Initialize kernel registry and common parameters. */
 int
 tpb_register_kernel()
 {
@@ -122,12 +122,7 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Register triad kernel using new API */
-    err = register_triad();
-    if (err != 0) {
-        return err;
-    }
-
+    /* Kernel registrations are handled by the caller. */
     return 0;
 }
 

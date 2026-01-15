@@ -1,30 +1,21 @@
-#!/bin/sh
+.PHONY: all configure libtpbench libtriad tpbcli clean
 
-include setup/Make.${SETUP}
+BUILD_DIR ?= build
+BUILD_TYPE ?= Release
 
-TP_DIR = $(PWD)
-SRC = $(TP_DIR)/src
-KERNELS = $(SRC)/kernels
-GROUPS = $(SRC)/groups
-TIMERS = $(SRC)/timers
-INC = $(SRC)/include
-VPATH = $(SRC):$(KERNELS):$(KERNELS)/asm:$(KERNELS)/blas1:$(KERNELS)/simple:${KERNELS}/stencil2d:${KERNELS}/blas3:$(GROUPS):$(TIMERS)
+all: libtpbench tpbcli
 
-.PHONY: clean test 
+configure:
+	cmake -S . -B $(BUILD_DIR) -DCMAKE_BUILD_TYPE=$(BUILD_TYPE)
 
-tpbench.x:	main.c tpmpi.c tpb-driver.c cli_parser.c tpio.c tpb-stat.c tplog.c init.c staxpy.c striad.c sum.c triad.c \
-			update.c axpy.c copy.c scale.c cli_parser.c stream.c stream_verbose.c tl_cgw.c jacobi5p.c mulldr.c \
-			fmaldr.c rtriad.c gemm_bcast.c gemm_allreduce.c jacobi2d5p_sendrecv.c
-			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^
+libtpbench: configure
+	cmake --build $(BUILD_DIR) --target tpbench
 
-tpbcgt.x:	main.c tpmpi.c tpb-driver.c tpb-cli.c tpb-io.c tpb-stat.c tpb-unitcast.c triad.c clock_gettime.c tsc_asym.c tpb-impl.c
-			$(CC) $(CFLAGS) $(TPBFLAGS) -I$(INC) -o $@ $^ -lm
+libtriad: configure
+	cmake --build $(BUILD_DIR) --target triad
 
-test: test.x
-test.x: test.c init.c staxpy.c striad.c sum.c triad.c update.c \
-		axpy.c copy.c scale.c cli_parser.c
-		$(CC) -g $(CFLAGS) -I$(INC) -o $@ $^
+tpbcli: configure
+	cmake --build $(BUILD_DIR) --target tpbcli
 
 clean:
-	rm -f *.x *.o
-
+	rm -rf $(BUILD_DIR)

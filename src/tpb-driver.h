@@ -25,7 +25,7 @@ int tpb_driver_set_timer(tpb_timer_t timer);
 int tpb_register_common();
 
 /**
- * @brief Register all kernels
+ * @brief Initialize kernel registry and register common parameters.
  * @return Error code (0 on success)
  */
 int tpb_register_kernel();
