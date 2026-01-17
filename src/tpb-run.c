@@ -13,7 +13,6 @@
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
-#include "tpmpi.h"
 #include "kernels/kernels.h"
 
 int
@@ -23,7 +22,6 @@ tpb_run(int argc, char **argv)
     tpb_args_t tpb_args;
     tpb_k_rthdl_t *kernel_handles = NULL;
 
-    err = tpmpi_init();
     __tpbm_exit_on_error(err, "At tpb-run.c: tpmpi_init");
 #ifdef USE_MPI
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench-MPI v" TPB_VER "\n");
@@ -81,6 +79,5 @@ RUN_EXIT:
         free(kernel_handles);
     }
 
-    tpmpi_exit();
     return err;
 }

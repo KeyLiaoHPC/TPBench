@@ -13,7 +13,6 @@
 #include <stdint.h>
 #include <limits.h>
 #include "tpb-types.h"
-#include "tpmpi.h"
 
 #define DHLINE "==="
 #define HLINE  "---"

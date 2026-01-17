@@ -32,8 +32,6 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
-#include "tptimer.h"
-#include "tpmpi.h"
 #include "../../tpb-types.h"
 #include "../../tpb-impl.h"
 #include "../../tpb-driver.h"
@@ -233,7 +231,6 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *s
     // kernel start
     timer->tick(tot_time);
     for(int i = 0; i < ntest; i ++){
-        tpmpi_dbarrier();
         timer->tick(step_time + i);
 #ifdef KP_SVE
         #pragma omp parallel for shared(a, b, c, s, narr)

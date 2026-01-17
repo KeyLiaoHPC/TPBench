@@ -16,7 +16,6 @@ set(TPB_SOURCES
     src/tpb-stat.c
     src/tpb-unitcast.c
     src/tpb-impl.c
-    src/tpmpi.c
     src/tpb-cli-parse.c
 )
 

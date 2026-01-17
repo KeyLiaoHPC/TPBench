@@ -8,7 +8,6 @@
 #include "tpb-driver.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
-#include "tpmpi.h"
 #include "kernels/kernels.h"
 
 static int
@@ -16,7 +15,6 @@ tpb_list_action(void)
 {
     int err;
 
-    err = tpmpi_init();
     if (err != 0) {
         return err;
     }
@@ -30,7 +28,6 @@ tpb_list_action(void)
         tpb_list();
     }
 
-    tpmpi_exit();
     return err;
 }
 

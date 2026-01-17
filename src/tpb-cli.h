@@ -10,7 +10,6 @@
 #include <ctype.h>
 #include <stdint.h>
 #include "tpb-types.h"
-#include "tpb-impl.h"
 
 /**
  * @brief Parse command line arguments.

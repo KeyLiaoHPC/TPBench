@@ -10,8 +10,6 @@
 
 #include "tpb-types.h"
 #include "../tpb-impl.h"
-#include "tpkernels.h"
-#include "tptimer.h"
 
 /**
  * @brief Set timer function for the whole driver.
