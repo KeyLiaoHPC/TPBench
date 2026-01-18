@@ -28,13 +28,13 @@ tpbcli <subcommand> <options>
 
 ### 2.2.1 基础格式
 
-`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。
+`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。
 ``` bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
 [--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kmpiargs-dims <opts>]]
 ```
-在上述命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。
+
 
 ### 2.2.2 运行基础评测
 
@@ -44,7 +44,9 @@ tpbcli run <tpbench_options> <default_args> \
 
 语法：`--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
 
-对于一个 `--kernel` 定义，`--kargs`、`--kenvs` 和 `--kmpiargs` 可以出现多次，但是带有后缀 `_dim` 的选项只能出现一次。当同一参数名在一个 `--kernel` 定义后出现多次时，TPBench 将使用最后一次出现的值。相似地，如果 `--kernel <foo>` 后的 `--kargs` 定义与默认参数设置重复，那么 `<foo>` 将使用其作用域中最后一次出现的参数。例如，以下三条指令的作用是一样的。
+对于一个 `--kernel` 定义，`--kargs`、`--kenvs` 和 `--kmpiargs` 可以出现多次，但是带有后缀 `_dim` 的选项只能出现一次（见2.2.3节）。当同一参数名在一个 `--kernel` 定义后出现多次时，TPBench 将使用最后一次出现的值。
+
+参数选项（`--kargs`、`--kenvs`和`--kmpiargs`）接受一个使用逗号分隔的字符串列表，每个列表元素的格式为`<key>=<value>`。一个参数选项后可以存在多个上述键值对，表示将内核中变量名为“\<key\>”的参数设置为“\<value\>”。TPBench解析选项设置，并检查参数的合法性。若对于一轮测试来说，命令行中出现了多次带有相同参数名的设置，那么优先级由高到低为：可变参数>内核参数>默认参数，优先级更高的参数设置将覆盖低优先级参数。对于一个名为“foo”的内核，`--kernel foo` 后的 `--kargs` 定义与默认参数设置重复，那么 `<foo>` 将使用其作用域中最后一次出现的参数。因此，以下三条指令的作用是一样的。
 
 ```
 $ tpbcli --kargs memsize=128,ntest=100 --kernel triad
@@ -53,6 +55,7 @@ $ tpbcli --kernel triad \
          --kargs memsize=128 \
          --kargs ntest=100
 ```
+
 
 需要注意，默认参数集或输入参数并不总是能被原样采用，主要有2个原因：1）参数处理由评测内核定义；2）评测内核不一定支持所有默认参数名。以总内存容量（`memsize=128`）为例，使用 `double` 精度时，triad 计算（`a_i=b_i+s*c_i`）会为每个数组开辟 5461 个 double 变量所需内存（128/3*1024/sizeof(double)，下取整），实际的总内存容量为 **131064 Bytes**，而不是 **131072 Bytes**。因此，在每轮测试结束后，评测内核实际使用的参数将被输出至终端，用户应当以此作为评测内核的实际输入参数。
 

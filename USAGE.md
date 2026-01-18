@@ -49,7 +49,9 @@ In the command format above, all angle bracket `<>` options must be replaced wit
 
 Syntax: `--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
 
-For one `--kernel` definition, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times. Options with suffix `_dim` can only appear once. When same parameter name appears multiple times after one `--kernel` definition, TPBench uses the last occurrence. Similarly, if `--kargs` definition after `--kernel <foo>` duplicates default parameter settings, `<foo>` uses the last occurrence in its scope. For example, the following three commands have the same effect.
+For one `--kernel` definition, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times. Options with suffix `_dim` can only appear once (see section 2.2.3). When same parameter name appears multiple times after one `--kernel` definition, TPBench uses the last occurrence.
+
+Parameter options (`--kargs`, `--kenvs`, and `--kmpiargs`) accept a comma-separated string list, with each element in the format `<key>=<value>`. Multiple such key-value pairs can follow a parameter option, indicating that the variable named "<key>" in the kernel should be set to "<value>". TPBench parses the option settings and checks the parameter legality. If multiple settings with the same parameter name appear in the command line for one test, the priority from high to low is: variable parameters > kernel parameters > default parameters, with higher-priority parameter settings overriding lower-priority ones. For a kernel named "foo", if `--kargs` definition after `--kernel foo` duplicates default parameter settings, `<foo>` will use the last occurrence in its scope. Therefore, the following three commands have the same effect.
 
 ```
 $ tpbcli --kargs memsize=128,ntest=100 --kernel triad
