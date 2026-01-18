@@ -4,7 +4,6 @@
  */
 
 #define _GNU_SOURCE
-#define TPB_VER "0.71"
 
 #include <stdlib.h>
 #include "tpb-launch.h"
@@ -13,27 +12,17 @@
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
-#include "kernels/kernels.h"
 
 int
 tpb_run(int argc, char **argv)
 {
-    int err;
+    int err = 0;
     tpb_args_t tpb_args;
     tpb_k_rthdl_t *kernel_handles = NULL;
-
-    __tpbm_exit_on_error(err, "At tpb-run.c: tpmpi_init");
-#ifdef USE_MPI
-    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench-MPI v" TPB_VER "\n");
-#else
-    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v" TPB_VER "\n");
-#endif
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At tpb-run.c: tpb_register_kernel");
-    err = register_triad();
-    __tpbm_exit_on_error(err, "At tpb-run.c: register_triad");
 
     err = tpb_parse_args(argc, argv, &tpb_args, &kernel_handles);
     if (err == TPBE_EXIT_ON_HELP) {
@@ -81,3 +70,4 @@ RUN_EXIT:
 
     return err;
 }
+

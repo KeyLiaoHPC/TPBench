@@ -122,7 +122,12 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Kernel registrations are handled by the caller. */
+    /* Register all available kernels */
+    err = register_triad();
+    if (err != 0) {
+        return err;
+    }
+
     return 0;
 }
 

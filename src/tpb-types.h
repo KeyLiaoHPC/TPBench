@@ -5,6 +5,7 @@
 
 #ifndef TPB_TYPES_H
 #define TPB_TYPES_H
+#define TPB_VERSION 0.8
 
 #include <limits.h>
 #include <linux/limits.h>

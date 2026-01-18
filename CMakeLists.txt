@@ -46,6 +46,7 @@ add_executable(tpbcli
     src/tpb-help.c
     src/tpb-run.c
     src/tpb-benchmark.c
+    src/tpb-list.c
 )
 target_include_directories(tpbcli PRIVATE src src/include)
 target_link_libraries(tpbcli PRIVATE tpbench triad m)

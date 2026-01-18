@@ -93,22 +93,6 @@ void tpb_print_help_total(void);
 int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 
 /**
- * @brief Report performance results with quantile statistics.
- */
-int report_performance(uint64_t **ns, uint64_t **cy, uint64_t total_wall_time,
-                       int nskip, int ntest, int nepoch, int N, int Nr,
-                       int skip_comp, int skip_comm);
-
-/**
- * @brief Log every step's performance data into a csv file.
- *
- * The csv file will be named as "np${rank_size}_kernelname_ntest_N{N}.csv"
- */
-int log_step_info(uint64_t **ns, uint64_t **cy, char *kernel_name,
-                  int ntest, int nepoch, int N, int Nr,
-                  int skip_comp, int skip_comm);
-
-/**
  * @brief Output kernel arguments to the command-line interface.
  *
  * This function prints the kernel name and runtime parameter settings.
