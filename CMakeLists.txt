@@ -16,7 +16,6 @@ set(TPB_SOURCES
     src/tpb-stat.c
     src/tpb-unitcast.c
     src/tpb-impl.c
-    src/tpb-cli-parse.c
 )
 
 # Timer-related sources
@@ -41,12 +40,12 @@ target_link_libraries(triad PRIVATE tpbench m)
 
 # Main CLI executable and subcommands
 add_executable(tpbcli
-    src/tpb-cli.c
-    src/tpb-launch.c
-    src/tpb-help.c
-    src/tpb-run.c
-    src/tpb-benchmark.c
-    src/tpb-list.c
+    src/tpbcli.c
+    src/tpbcli-run.c
+    src/tpbcli-list.c
+    src/tpbcli-benchmark.c
+    src/tpbcli-help.c
+    src/tpb-argp.c  # Argument parser infrastructure
 )
 target_include_directories(tpbcli PRIVATE src src/include)
 target_link_libraries(tpbcli PRIVATE tpbench triad m)
