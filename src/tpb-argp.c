@@ -491,8 +491,8 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
             return TPBE_KERN_ARG_FAIL;
         }
 
-        /* Use tpb_driver_set_karg to set the argument for current handle */
-        err = tpb_driver_set_karg(NULL, key, value);
+        /* Use tpb_driver_set_hdl_karg to set the argument for current handle */
+        err = tpb_driver_set_hdl_karg(key, value);
         if (err != 0) {
             return err;
         }

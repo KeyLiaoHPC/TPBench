@@ -47,13 +47,12 @@ int tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
                              void **v, TPB_DTYPE *dtype);
 
 /**
- * @brief Set kernel argument value.
- * @param kernel_name Kernel name (NULL for current handle)
+ * @brief Set kernel argument value for current handle.
  * @param parm_name Parameter name
  * @param v Pointer to value to set
  * @return 0 on success, error code otherwise.
  */
-int tpb_driver_set_karg(const char *kernel_name, const char *parm_name, void *v);
+int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
 
 /**
  * @brief Add a handle for a kernel by name.

@@ -183,21 +183,9 @@ tpb_register_kernel()
     /* Copy kernel_common info to pseudo handle */
     memcpy(&handle_list[0].kernel, &kernel_common, sizeof(tpb_kernel_t));
 
-    /* Build argpack from kernel_common's parms */
-    int nparms = kernel_common.info.nparms;
-    if (nparms > 0 && kernel_common.info.parms != NULL) {
-        handle_list[0].argpack.n = nparms;
-        handle_list[0].argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * nparms);
-        if (handle_list[0].argpack.args == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        for (int i = 0; i < nparms; i++) {
-            memcpy(&handle_list[0].argpack.args[i], &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
-        }
-    } else {
-        handle_list[0].argpack.n = 0;
-        handle_list[0].argpack.args = NULL;
-    }
+    /* Set pseudo handle's argpack parameter count to 0 */
+    handle_list[0].argpack.n = 0;
+    handle_list[0].argpack.args = NULL;
 
     handle_list[0].respack.n = 0;
     handle_list[0].respack.outputs = NULL;
@@ -243,7 +231,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
     current_rthdl = hdl;
 
 
-    /* Initialize handle's respack from kernel's registered outputs */
+    /* Initialize handle\'s respack from kernel\'s registered outputs */
     for (int i = 0; i < tpb_driver_nkern; i++) {
         if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {
             int nouts = kernel_all[i].info.nouts;
@@ -261,7 +249,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
                     hdl->respack.outputs[j].p = NULL;
                     hdl->respack.outputs[j].n = 0;
 
-                    /* Resolve TPB_UNIT_TIMER: use the timer's unit, preserve attributes */
+                    /* Resolve TPB_UNIT_TIMER: use the timer\'s unit, preserve attributes */
                     TPB_UNIT_T base_unit = src_outs[j].unit & ~TPB_UATTR_MASK;
                     if (base_unit == TPB_UNIT_TIMER) {
                         TPB_UNIT_T attrs = src_outs[j].unit & TPB_UATTR_MASK;
@@ -310,7 +298,7 @@ tpb_run_kernel(tpb_k_rthdl_t *hdl)
 int
 tpb_get_kernel_count(void)
 {
-    return tpb_driver_nkern; 
+    return tpb_driver_nkern;
 }
 
 int
@@ -339,7 +327,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     for (int i = 0; i < tpb_driver_nkern; i++) {
         if (strcmp(kernel_all[i].info.name, name) == 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
-                      "At tpb_k_register: Kernel name '%s' already registered\n", name);
+                      "At tpb_k_register: Kernel name \'%s\' already registered\n", name);
             return TPBE_LIST_DUP;
         }
     }
@@ -407,7 +395,7 @@ tpb_k_add_parm(const char *name, const char *note,
     snprintf(parm->name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(parm->note, TPBM_NOTE_STR_MAX_LEN, "%s", note);
 
-    /* Handle TPB_DTYPE_TIMER_T: use the timer's dtype */
+    /* Handle TPB_DTYPE_TIMER_T: use the timer\'s dtype */
     uint32_t type_code = (uint32_t)(dtype & TPB_PARM_TYPE_MASK);
     if (type_code == (TPB_DTYPE_TIMER_T & TPB_PARM_TYPE_MASK)) {
         /* Replace TIMER_T with the actual timer dtype, preserving source and check flags */
@@ -584,7 +572,7 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
     tpb_k_output_t *out = NULL;
 
     if (current_rthdl != NULL) {
-        /* Runtime context: add output to handle's respack */
+        /* Runtime context: add output to handle\'s respack */
         tpb_respack_t *respack = &current_rthdl->respack;
         int new_n = respack->n + 1;
         respack->outputs = (tpb_k_output_t *)realloc(respack->outputs,
@@ -595,7 +583,7 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
         out = &respack->outputs[respack->n];
         respack->n = new_n;
     } else {
-        /* Registration context: add output to kernel's info.outs */
+        /* Registration context: add output to kernel\'s info.outs */
         if (current_kernel == NULL) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                        "No kernel registered. Call tpb_k_register first.\n");
@@ -800,7 +788,7 @@ tpb_driver_add_handle(const char *kernel_name)
     err = tpb_get_kernel(kernel_name, &kernel);
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "Kernel '%s' not found.\n", kernel_name);
+                   "Kernel \'%s\' not found.\n", kernel_name);
         return TPBE_KERNEL_NE_FAIL;
     }
 
@@ -819,68 +807,33 @@ tpb_driver_add_handle(const char *kernel_name)
     /* Copy kernel info */
     memcpy(&hdl->kernel, kernel, sizeof(tpb_kernel_t));
 
-    /* Build argpack: combine kernel parms with _tpb_common parms */
+    /* Build argpack: inherit kernel's default values, then apply common parameters from pseudo handle */
     int k_nparms = kernel->info.nparms;
-    int c_nparms = kernel_common.info.nparms;
-    int total_parms = k_nparms;
 
-    /* Count unique parms from kernel_common not in kernel */
-    for (int i = 0; i < c_nparms; i++) {
-        int found = 0;
-        for (int j = 0; j < k_nparms; j++) {
-            if (strcmp(kernel->info.parms[j].name, kernel_common.info.parms[i].name) == 0) {
-                found = 1;
-                break;
-            }
-        }
-        if (!found) {
-            total_parms++;
-        }
-    }
-
-    if (total_parms > 0) {
-        hdl->argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * total_parms);
+    if (k_nparms > 0) {
+        hdl->argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * k_nparms);
         if (hdl->argpack.args == NULL) {
             return TPBE_MALLOC_FAIL;
         }
-        hdl->argpack.n = 0;
+        hdl->argpack.n = k_nparms;
 
-        /* Copy kernel-specific parms first */
+        /* Step 1: Copy kernel-specific parameters with their default values */
         for (int i = 0; i < k_nparms; i++) {
-            memcpy(&hdl->argpack.args[hdl->argpack.n], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
-            /* Use value from pseudo handle (_tpb_common) if available */
-            if (handle_list != NULL && nhdl > 0) {
+            memcpy(&hdl->argpack.args[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
+            /* Set value to default_value */
+            hdl->argpack.args[i].value = kernel->info.parms[i].default_value;
+        }
+
+        /* Step 2: Check each argument's name and set common argument from pseudo handle */
+        if (handle_list != NULL && nhdl > 0) {
+            for (int i = 0; i < hdl->argpack.n; i++) {
                 for (int j = 0; j < handle_list[0].argpack.n; j++) {
-                    if (strcmp(handle_list[0].argpack.args[j].name, kernel->info.parms[i].name) == 0) {
-                        hdl->argpack.args[hdl->argpack.n].value = handle_list[0].argpack.args[j].value;
+                    if (strcmp(hdl->argpack.args[i].name, handle_list[0].argpack.args[j].name) == 0) {
+                        /* Apply value from pseudo handle (_tpb_common) */
+                        hdl->argpack.args[i].value = handle_list[0].argpack.args[j].value;
                         break;
                     }
                 }
-            }
-            hdl->argpack.n++;
-        }
-
-        /* Copy common parms not in kernel */
-        for (int i = 0; i < c_nparms; i++) {
-            int found = 0;
-            for (int j = 0; j < k_nparms; j++) {
-                if (strcmp(kernel->info.parms[j].name, kernel_common.info.parms[i].name) == 0) {
-                    found = 1;
-                    break;
-                }
-            }
-            if (!found) {
-                memcpy(&hdl->argpack.args[hdl->argpack.n], &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
-                /* Use value from pseudo handle if available */
-                if (handle_list != NULL && nhdl > 0) {
-                    for (int j = 0; j < handle_list[0].argpack.n; j++) {
-                        if (strcmp(handle_list[0].argpack.args[j].name, kernel_common.info.parms[i].name) == 0) {
-                            hdl->argpack.args[hdl->argpack.n].value = handle_list[0].argpack.args[j].value;
-                            break;
-                        }
-                    }
-                }
-                hdl->argpack.n++;
             }
         }
     } else {
@@ -951,46 +904,64 @@ tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
 }
 
 int
-tpb_driver_set_karg(const char *kernel_name, const char *parm_name, void *v)
+tpb_driver_set_hdl_karg(const char *parm_name, void *v)
 {
     if (parm_name == NULL || v == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
+    /* Check if handle_list or current handle is NULL */
+    if (handle_list == NULL || current_rthdl == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "In tpb_driver_set_hdl_karg: Empty kernel running list.\n");
+        return TPBE_ILLEGAL_CALL;
+    }
+
+    /* Check if parameter exists in current handle */
     tpb_rt_parm_t *parm = NULL;
-
-    if (kernel_name != NULL) {
-        /* Set in registered kernel's static info */
-        tpb_kernel_t *kernel = NULL;
-        int err = tpb_get_kernel(kernel_name, &kernel);
-        if (err != 0) {
-            return TPBE_KERNEL_NE_FAIL;
+    for (int i = 0; i < current_rthdl->argpack.n; i++) {
+        if (strcmp(current_rthdl->argpack.args[i].name, parm_name) == 0) {
+            parm = &current_rthdl->argpack.args[i];
+            break;
         }
+    }
 
-        for (int i = 0; i < kernel->info.nparms; i++) {
-            if (strcmp(kernel->info.parms[i].name, parm_name) == 0) {
-                parm = &kernel->info.parms[i];
+    if (parm != NULL) {
+        /* Parameter found in current handle, set the value */
+    } else if (strcmp(current_rthdl->kernel.info.name, "_tpb_common") == 0) {
+        /* Parameter not found but kernel is _tpb_common, search in kernel info and add */
+        for (int i = 0; i < kernel_common.info.nparms; i++) {
+            if (strcmp(kernel_common.info.parms[i].name, parm_name) == 0) {
+                /* Reallocate argpack to add new parameter */
+                int new_n = current_rthdl->argpack.n + 1;
+                tpb_rt_parm_t *new_args = (tpb_rt_parm_t *)realloc(
+                    current_rthdl->argpack.args,
+                    sizeof(tpb_rt_parm_t) * new_n);
+                if (new_args == NULL) {
+                    return TPBE_MALLOC_FAIL;
+                }
+                current_rthdl->argpack.args = new_args;
+                
+                /* Copy parameter from kernel_common */
+                memcpy(&current_rthdl->argpack.args[current_rthdl->argpack.n],
+                       &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
+                
+                parm = &current_rthdl->argpack.args[current_rthdl->argpack.n];
+                current_rthdl->argpack.n = new_n;
                 break;
             }
         }
+        
         if (parm == NULL) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Parameter '%s' is not existed as a common parameter.\n", parm_name);
             return TPBE_KARG_NE_FAIL;
         }
     } else {
-        /* Set in current_rthdl */
-        if (current_rthdl == NULL) {
-            return TPBE_NULLPTR_ARG;
-        }
-
-        for (int i = 0; i < current_rthdl->argpack.n; i++) {
-            if (strcmp(current_rthdl->argpack.args[i].name, parm_name) == 0) {
-                parm = &current_rthdl->argpack.args[i];
-                break;
-            }
-        }
-        if (parm == NULL) {
-            return TPBE_KARG_NE_FAIL;
-        }
+        /* Parameter not found and kernel is not _tpb_common */
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Parameter '%s' is not existed in the kernel.\n", parm_name);
+        return TPBE_KARG_NE_FAIL;
     }
 
     /* Parse value based on type */
