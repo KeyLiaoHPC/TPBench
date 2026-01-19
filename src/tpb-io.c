@@ -112,7 +112,7 @@ print_dhline(int width)
 static int
 format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
 {
-    TPB_DTYPE type_only = parm->dtype & TPB_PARM_TYPE_MASK;
+    TPB_DTYPE type_only = parm->ctrlbits & TPB_PARM_TYPE_MASK;
 
     switch (type_only) {
     case TPB_INT_T:

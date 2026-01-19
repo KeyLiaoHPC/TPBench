@@ -14,7 +14,60 @@
 /**
  * @brief Set timer function for the whole driver.
  */
-int tpb_driver_set_timer(tpb_timer_t timer); 
+int tpb_driver_set_timer(tpb_timer_t timer);
+
+/**
+ * @brief Get timer function for the driver.
+ * @param timer Non-NULL pointer to receive timer via value-copy.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_get_timer(tpb_timer_t *timer);
+
+/**
+ * @brief Get number of registered kernels.
+ * @return Number of registered kernels.
+ */
+int tpb_driver_get_nkern(void);
+
+/**
+ * @brief Get number of handles.
+ * @return Number of handles.
+ */
+int tpb_driver_get_nhdl(void);
+
+/**
+ * @brief Get kernel parameter pointer and type.
+ * @param kernel_name Kernel name (NULL for current handle)
+ * @param parm_name Parameter name
+ * @param v Output pointer to parameter value (can be NULL)
+ * @param dtype Output for parameter dtype (can be NULL)
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
+                             void **v, TPB_DTYPE *dtype);
+
+/**
+ * @brief Set kernel argument value.
+ * @param kernel_name Kernel name (NULL for current handle)
+ * @param parm_name Parameter name
+ * @param v Pointer to value to set
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_karg(const char *kernel_name, const char *parm_name, void *v);
+
+/**
+ * @brief Add a handle for a kernel by name.
+ * Creates handle, sets current_rthdl internally, increments nhdl.
+ * @param kernel_name Kernel name to create handle for.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_add_handle(const char *kernel_name);
+
+/**
+ * @brief Run all handles starting from index 1.
+ * @return 0 on success, error code on first failure.
+ */
+int tpb_driver_run_all(void);
 
 /**
  * @brief Register common parameters

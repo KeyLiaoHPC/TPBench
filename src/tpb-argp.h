@@ -51,4 +51,14 @@ int tpb_check_kargs(char **common_tokens, int ncommon,
                     tpb_kernel_t *kernel,
                     tpb_rt_parm_t **rt_parms_out, int *nparms_out);
 
+/**
+ * @brief Parse comma-separated key=value string and set kernel arguments.
+ * @param nchar Number of characters in tokstr (unused, for compatibility).
+ * @param tokstr Comma-separated key=value string.
+ * @param narg Pointer to argument counter. If not NULL, initialized to 1 and
+ *             incremented for each token processed.
+ * @return 0 on success, error code on failure. Increments *narg for each token.
+ */
+int tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg);
+
 #endif /* TPB_ARGP_H */

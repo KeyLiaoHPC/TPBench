@@ -24,6 +24,12 @@ static tpb_k_rthdl_t *current_rthdl = NULL;  // runtime handle being tested
 static tpb_kernel_t kernel_common;  // common parameters for all kernels
 static tpb_timer_t timer;
 
+/* Handle management state */
+static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
+static int nhdl = 0;                       // number of handles
+static int ihdl = -1;                      // current handle index
+static int timer_set = 0;                  // flag to track if timer is set
+
 int
 tpb_driver_set_timer(tpb_timer_t timer_in)
 {
@@ -34,8 +40,39 @@ tpb_driver_set_timer(tpb_timer_t timer_in)
     timer.tick = timer_in.tick;
     timer.tock = timer_in.tock;
     timer.get_stamp = timer_in.get_stamp;
+    timer_set = 1;
 
     return 0;
+}
+
+int
+tpb_driver_get_timer(tpb_timer_t *timer_out)
+{
+    if (timer_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    snprintf(timer_out->name, TPBM_NAME_STR_MAX_LEN, "%s", timer.name);
+    timer_out->unit = timer.unit;
+    timer_out->dtype = timer.dtype;
+    timer_out->init = timer.init;
+    timer_out->tick = timer.tick;
+    timer_out->tock = timer.tock;
+    timer_out->get_stamp = timer.get_stamp;
+
+    return 0;
+}
+
+int
+tpb_driver_get_nkern(void)
+{
+    return (int)tpb_driver_nkern;
+}
+
+int
+tpb_driver_get_nhdl(void)
+{
+    return nhdl;
 }
 
 /* Register common parameters that apply to all kernels by default */
@@ -48,7 +85,7 @@ tpb_register_common()
     if (kernel_common.info.parms == NULL) {
         return TPBE_MALLOC_FAIL;
     }
-    sprintf(kernel_common.info.name, "tpb_common");
+    sprintf(kernel_common.info.name, "_tpb_common");
 
     memset(kernel_common.info.parms, 0,
            sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
@@ -56,7 +93,7 @@ tpb_register_common()
     /* ntest: number of test iterations */
     snprintf(kernel_common.info.parms[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
     snprintf(kernel_common.info.parms[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
-    kernel_common.info.parms[0].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.parms[0].default_value.i64 = 10;
     kernel_common.info.parms[0].value.i64 = 10;
     kernel_common.info.parms[0].nlims = 2;
@@ -67,7 +104,7 @@ tpb_register_common()
     /* nskip: number of initial iterations to skip */
     snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "nskip");
     snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Number of initial iterations to skip");
-    kernel_common.info.parms[1].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.parms[1].default_value.i64 = 2;
     kernel_common.info.parms[1].value.i64 = 2;
     kernel_common.info.parms[1].nlims = 2;
@@ -78,7 +115,7 @@ tpb_register_common()
     /* twarm: warmup time in milliseconds */
     snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "twarm");
     snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Warmup time in milliseconds");
-    kernel_common.info.parms[2].dtype = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[2].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.parms[2].default_value.i64 = 100;
     kernel_common.info.parms[2].value.i64 = 100;
     kernel_common.info.parms[2].nlims = 2;
@@ -89,7 +126,7 @@ tpb_register_common()
     /* memsize: memory size in KiB */
     snprintf(kernel_common.info.parms[3].name, TPBM_NAME_STR_MAX_LEN, "memsize");
     snprintf(kernel_common.info.parms[3].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
-    kernel_common.info.parms[3].dtype = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
+    kernel_common.info.parms[3].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
     kernel_common.info.parms[3].default_value.u64 = 32;
     kernel_common.info.parms[3].value.u64 = 32;
     kernel_common.info.parms[3].nlims = 2;
@@ -116,6 +153,14 @@ tpb_register_kernel()
         kernel_all = NULL;
     }
 
+    /* Free any existing handle list */
+    if (handle_list != NULL) {
+        free(handle_list);
+        handle_list = NULL;
+    }
+    nhdl = 0;
+    ihdl = -1;
+
     /* Register common parameters */
     err = tpb_register_common();
     if (err != 0) {
@@ -127,6 +172,40 @@ tpb_register_kernel()
     if (err != 0) {
         return err;
     }
+
+    /* Create pseudo handle (ihdl=0) for _tpb_common */
+    handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));
+    if (handle_list == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    memset(&handle_list[0], 0, sizeof(tpb_k_rthdl_t));
+
+    /* Copy kernel_common info to pseudo handle */
+    memcpy(&handle_list[0].kernel, &kernel_common, sizeof(tpb_kernel_t));
+
+    /* Build argpack from kernel_common's parms */
+    int nparms = kernel_common.info.nparms;
+    if (nparms > 0 && kernel_common.info.parms != NULL) {
+        handle_list[0].argpack.n = nparms;
+        handle_list[0].argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * nparms);
+        if (handle_list[0].argpack.args == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        for (int i = 0; i < nparms; i++) {
+            memcpy(&handle_list[0].argpack.args[i], &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
+        }
+    } else {
+        handle_list[0].argpack.n = 0;
+        handle_list[0].argpack.args = NULL;
+    }
+
+    handle_list[0].respack.n = 0;
+    handle_list[0].respack.outputs = NULL;
+
+    nhdl = 1;
+    ihdl = 0;
+    current_rthdl = &handle_list[0];
+    current_kernel = &kernel_common;
 
     return 0;
 }
@@ -332,10 +411,10 @@ tpb_k_add_parm(const char *name, const char *note,
     uint32_t type_code = (uint32_t)(dtype & TPB_PARM_TYPE_MASK);
     if (type_code == (TPB_DTYPE_TIMER_T & TPB_PARM_TYPE_MASK)) {
         /* Replace TIMER_T with the actual timer dtype, preserving source and check flags */
-        parm->dtype = (dtype & ~TPB_PARM_TYPE_MASK) | (timer.dtype & TPB_PARM_TYPE_MASK);
+        parm->ctrlbits = (dtype & ~TPB_PARM_TYPE_MASK) | (timer.dtype & TPB_PARM_TYPE_MASK);
         type_code = (uint32_t)(timer.dtype & TPB_PARM_TYPE_MASK);
     } else {
-        parm->dtype = dtype;
+        parm->ctrlbits = dtype;
     }
     va_list args;
     va_start(args, dtype);
@@ -704,5 +783,307 @@ tpb_clean_output(tpb_k_rthdl_t *hdl)
     }
     hdl->respack.n = 0;
 
+    return 0;
+}
+
+int
+tpb_driver_add_handle(const char *kernel_name)
+{
+    tpb_kernel_t *kernel = NULL;
+    int err;
+
+    if (kernel_name == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* Lookup kernel by name */
+    err = tpb_get_kernel(kernel_name, &kernel);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Kernel '%s' not found.\n", kernel_name);
+        return TPBE_KERNEL_NE_FAIL;
+    }
+
+    /* Reallocate handle_list */
+    tpb_k_rthdl_t *new_list = (tpb_k_rthdl_t *)realloc(handle_list,
+                                                        sizeof(tpb_k_rthdl_t) * (nhdl + 1));
+    if (new_list == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    handle_list = new_list;
+
+    /* Initialize new handle */
+    tpb_k_rthdl_t *hdl = &handle_list[nhdl];
+    memset(hdl, 0, sizeof(tpb_k_rthdl_t));
+
+    /* Copy kernel info */
+    memcpy(&hdl->kernel, kernel, sizeof(tpb_kernel_t));
+
+    /* Build argpack: combine kernel parms with _tpb_common parms */
+    int k_nparms = kernel->info.nparms;
+    int c_nparms = kernel_common.info.nparms;
+    int total_parms = k_nparms;
+
+    /* Count unique parms from kernel_common not in kernel */
+    for (int i = 0; i < c_nparms; i++) {
+        int found = 0;
+        for (int j = 0; j < k_nparms; j++) {
+            if (strcmp(kernel->info.parms[j].name, kernel_common.info.parms[i].name) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            total_parms++;
+        }
+    }
+
+    if (total_parms > 0) {
+        hdl->argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * total_parms);
+        if (hdl->argpack.args == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        hdl->argpack.n = 0;
+
+        /* Copy kernel-specific parms first */
+        for (int i = 0; i < k_nparms; i++) {
+            memcpy(&hdl->argpack.args[hdl->argpack.n], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
+            /* Use value from pseudo handle (_tpb_common) if available */
+            if (handle_list != NULL && nhdl > 0) {
+                for (int j = 0; j < handle_list[0].argpack.n; j++) {
+                    if (strcmp(handle_list[0].argpack.args[j].name, kernel->info.parms[i].name) == 0) {
+                        hdl->argpack.args[hdl->argpack.n].value = handle_list[0].argpack.args[j].value;
+                        break;
+                    }
+                }
+            }
+            hdl->argpack.n++;
+        }
+
+        /* Copy common parms not in kernel */
+        for (int i = 0; i < c_nparms; i++) {
+            int found = 0;
+            for (int j = 0; j < k_nparms; j++) {
+                if (strcmp(kernel->info.parms[j].name, kernel_common.info.parms[i].name) == 0) {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found) {
+                memcpy(&hdl->argpack.args[hdl->argpack.n], &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
+                /* Use value from pseudo handle if available */
+                if (handle_list != NULL && nhdl > 0) {
+                    for (int j = 0; j < handle_list[0].argpack.n; j++) {
+                        if (strcmp(handle_list[0].argpack.args[j].name, kernel_common.info.parms[i].name) == 0) {
+                            hdl->argpack.args[hdl->argpack.n].value = handle_list[0].argpack.args[j].value;
+                            break;
+                        }
+                    }
+                }
+                hdl->argpack.n++;
+            }
+        }
+    } else {
+        hdl->argpack.n = 0;
+        hdl->argpack.args = NULL;
+    }
+
+    hdl->respack.n = 0;
+    hdl->respack.outputs = NULL;
+
+    /* Set ihdl = nhdl, then increment nhdl */
+    ihdl = nhdl;
+    nhdl++;
+
+    /* Set current_rthdl to newly created handle */
+    current_rthdl = hdl;
+
+    return 0;
+}
+
+int
+tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
+                         void **v, TPB_DTYPE *dtype)
+{
+    if (parm_name == NULL) {
+        return TPBE_KARG_NE_FAIL;
+    }
+
+    if (kernel_name != NULL) {
+        /* Search in registered kernel */
+        tpb_kernel_t *kernel = NULL;
+        int err = tpb_get_kernel(kernel_name, &kernel);
+        if (err != 0) {
+            return TPBE_KERNEL_NE_FAIL;
+        }
+
+        for (int i = 0; i < kernel->info.nparms; i++) {
+            if (strcmp(kernel->info.parms[i].name, parm_name) == 0) {
+                if (v != NULL) {
+                    *v = &kernel->info.parms[i].value;
+                }
+                if (dtype != NULL) {
+                    *dtype = kernel->info.parms[i].ctrlbits;
+                }
+                return 0;
+            }
+        }
+        return TPBE_KARG_NE_FAIL;
+    } else {
+        /* Search in current_rthdl */
+        if (current_rthdl == NULL) {
+            return TPBE_NULLPTR_ARG;
+        }
+
+        for (int i = 0; i < current_rthdl->argpack.n; i++) {
+            if (strcmp(current_rthdl->argpack.args[i].name, parm_name) == 0) {
+                if (v != NULL) {
+                    *v = &current_rthdl->argpack.args[i].value;
+                }
+                if (dtype != NULL) {
+                    *dtype = current_rthdl->argpack.args[i].ctrlbits;
+                }
+                return 0;
+            }
+        }
+        return TPBE_KARG_NE_FAIL;
+    }
+}
+
+int
+tpb_driver_set_karg(const char *kernel_name, const char *parm_name, void *v)
+{
+    if (parm_name == NULL || v == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    tpb_rt_parm_t *parm = NULL;
+
+    if (kernel_name != NULL) {
+        /* Set in registered kernel's static info */
+        tpb_kernel_t *kernel = NULL;
+        int err = tpb_get_kernel(kernel_name, &kernel);
+        if (err != 0) {
+            return TPBE_KERNEL_NE_FAIL;
+        }
+
+        for (int i = 0; i < kernel->info.nparms; i++) {
+            if (strcmp(kernel->info.parms[i].name, parm_name) == 0) {
+                parm = &kernel->info.parms[i];
+                break;
+            }
+        }
+        if (parm == NULL) {
+            return TPBE_KARG_NE_FAIL;
+        }
+    } else {
+        /* Set in current_rthdl */
+        if (current_rthdl == NULL) {
+            return TPBE_NULLPTR_ARG;
+        }
+
+        for (int i = 0; i < current_rthdl->argpack.n; i++) {
+            if (strcmp(current_rthdl->argpack.args[i].name, parm_name) == 0) {
+                parm = &current_rthdl->argpack.args[i];
+                break;
+            }
+        }
+        if (parm == NULL) {
+            return TPBE_KARG_NE_FAIL;
+        }
+    }
+
+    /* Parse value based on type */
+    uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
+    tpb_parm_value_t parsed_value;
+    char *value_str = (char *)v;
+
+    if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+        parsed_value.f64 = strtod(value_str, NULL);
+    } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+               type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+        parsed_value.i64 = strtoll(value_str, NULL, 10);
+    } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+               type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+        parsed_value.u64 = strtoull(value_str, NULL, 10);
+    } else if (type_code == TPB_CHAR_T) {
+        parsed_value.c = value_str[0];
+    } else {
+        return TPBE_DTYPE_NOT_SUPPORTED;
+    }
+
+    /* Validate using TPB_PARM_CHECK_MASK */
+    uint32_t check_mode = parm->ctrlbits & TPB_PARM_CHECK_MASK;
+    if (check_mode == TPB_PARM_RANGE && parm->plims != NULL && parm->nlims == 2) {
+        if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+            if (parsed_value.f64 < parm->plims[0].f64 || parsed_value.f64 > parm->plims[1].f64) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Parameter '%s' value %lf out of range [%lf, %lf]\n",
+                           parm->name, parsed_value.f64, parm->plims[0].f64, parm->plims[1].f64);
+                return TPBE_KERN_ARG_FAIL;
+            }
+        } else if (type_code == TPB_FLOAT_T) {
+            if (parsed_value.f32 < parm->plims[0].f32 || parsed_value.f32 > parm->plims[1].f32) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Parameter '%s' value %f out of range [%f, %f]\n",
+                           parm->name, parsed_value.f32, parm->plims[0].f32, parm->plims[1].f32);
+                return TPBE_KERN_ARG_FAIL;
+            }
+        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+            if (parsed_value.i64 < parm->plims[0].i64 || parsed_value.i64 > parm->plims[1].i64) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
+                           parm->name, parsed_value.i64, parm->plims[0].i64, parm->plims[1].i64);
+                return TPBE_KERN_ARG_FAIL;
+            }
+        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+            if (parsed_value.u64 < parm->plims[0].u64 || parsed_value.u64 > parm->plims[1].u64) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
+                           parm->name, parsed_value.u64, parm->plims[0].u64, parm->plims[1].u64);
+                return TPBE_KERN_ARG_FAIL;
+            }
+        }
+    }
+
+    parm->value = parsed_value;
+    return 0;
+}
+
+int
+tpb_driver_run_all(void)
+{
+    int err = 0;
+
+    if (handle_list == NULL || nhdl <= 1) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, "No kernels to run.\n");
+        return 0;
+    }
+
+    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start driver runner.\n");
+
+    /* Loop from ihdl=1 to nhdl-1 (skip pseudo handle at index 0) */
+    for (int i = 1; i < nhdl; i++) {
+        tpb_k_rthdl_t *handle = &handle_list[i];
+
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
+                   handle->kernel.info.name);
+        /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
+        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i, nhdl - 1);
+
+        err = tpb_run_kernel(handle);
+        if (err != 0) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed.\n",
+                       handle->kernel.info.name);
+            return err;
+        }
+
+        tpb_clean_output(handle);
+    }
+
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
     return 0;
 }

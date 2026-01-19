@@ -203,7 +203,7 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
             continue;
         }
 
-        uint32_t type_code = rt_parms[parm_idx].dtype & TPB_PARM_TYPE_MASK;
+        uint32_t type_code = rt_parms[parm_idx].ctrlbits & TPB_PARM_TYPE_MASK;
         /* Check float/double types first (type codes overlap with int range numerically) */
         if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
             parsed_value.f64 = strtod(value, NULL);
@@ -222,7 +222,7 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
             return TPBE_KERN_ARG_FAIL;
         }
 
-        uint32_t check_mode = rt_parms[parm_idx].dtype & TPB_PARM_CHECK_MASK;
+        uint32_t check_mode = rt_parms[parm_idx].ctrlbits & TPB_PARM_CHECK_MASK;
         if (check_mode == TPB_PARM_RANGE) {
             err = check_arg_range(&rt_parms[parm_idx], &parsed_value);
             if (err != 0) {
@@ -297,7 +297,7 @@ check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
         return TPBE_KERN_ARG_FAIL;
     }
 
-    uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
+    uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
 
     /* Check float/double types first (type codes overlap with uint range numerically) */
     if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
@@ -350,7 +350,7 @@ check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
         return TPBE_KERN_ARG_FAIL;
     }
 
-    uint32_t type_code = parm->dtype & TPB_PARM_TYPE_MASK;
+    uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
 
     /* Check float/double types first (type codes overlap with uint range numerically) */
     if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
@@ -416,7 +416,7 @@ tpb_check_kargs(char **common_tokens, int ncommon,
         return TPBE_KERN_ARG_FAIL;
     }
 
-    err = tpb_get_kernel("tpb_common", &kernel_common);
+    err = tpb_get_kernel("_tpb_common", &kernel_common);
     if (err != 0) {
         kernel_common = NULL;
     }
@@ -443,5 +443,66 @@ tpb_check_kargs(char **common_tokens, int ncommon,
     }
 
     *rt_parms_out = rt_parms;
+    return 0;
+}
+
+int
+tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
+{
+    char *saveptr;
+    char *token;
+    char buf[TPBM_CLI_STR_MAX_LEN];
+    int err;
+
+    (void)nchar;  /* Unused parameter */
+
+    if (tokstr == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (narg != NULL) {
+        *narg = 1;  /* Initialize to 1 as per specification */
+    }
+
+    snprintf(buf, sizeof(buf), "%s", tokstr);
+    token = strtok_r(buf, ",", &saveptr);
+
+    while (token != NULL) {
+        char *trimmed = trim_whitespace(token);
+        if (trimmed == NULL || *trimmed == '\0') {
+            return TPBE_CLI_FAIL;
+        }
+
+        /* Parse key=value */
+        char *eq = strchr(trimmed, '=');
+        if (eq == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                       "Invalid kernel arg \"%s\". Expected key=value.\n", trimmed);
+            return TPBE_KERN_ARG_FAIL;
+        }
+
+        *eq = '\0';
+        char *key = trim_whitespace(trimmed);
+        char *value = trim_whitespace(eq + 1);
+
+        if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                       "Invalid kernel arg. Empty key or value detected.\n");
+            return TPBE_KERN_ARG_FAIL;
+        }
+
+        /* Use tpb_driver_set_karg to set the argument for current handle */
+        err = tpb_driver_set_karg(NULL, key, value);
+        if (err != 0) {
+            return err;
+        }
+
+        if (narg != NULL) {
+            (*narg)++;
+        }
+
+        token = strtok_r(NULL, ",", &saveptr);
+    }
+
     return 0;
 }

@@ -97,7 +97,9 @@ enum _tpb_errno {
     TPBE_LIST_DUP,
     TPBE_NULLPTR_ARG,
     TPBE_DTYPE_NOT_SUPPORTED,
-    TPBE_ILLEGAL_CALL
+    TPBE_ILLEGAL_CALL,
+    TPBE_KERNEL_NE_FAIL,    // Kernel not exist
+    TPBE_KARG_NE_FAIL       // Kernel argument not exist
 };
 typedef enum _tpb_errno tpb_errno_t;
 
@@ -120,11 +122,8 @@ typedef struct tpb_timer {
 
 /** @brief TPBench run-time parameters */
 typedef struct tpb_args {
-    int mode;
-    char data_dir[PATH_MAX];
     tpb_timer_t timer;
     int nkern;
-    int list_only_flag;
 } tpb_args_t;
 
 /** @brief Metric-unit pair for performance reporting */
@@ -148,7 +147,7 @@ typedef struct tpb_rt_parm {
     char note[TPBM_NOTE_STR_MAX_LEN];
     tpb_parm_value_t value;
     tpb_parm_value_t default_value;
-    TPB_DTYPE dtype;
+    TPB_DTYPE ctrlbits;  // TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK
     int nlims;
     tpb_parm_value_t *plims;
 } tpb_rt_parm_t;
