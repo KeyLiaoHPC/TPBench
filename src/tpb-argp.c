@@ -506,3 +506,37 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
 
     return 0;
 }
+
+int
+tpb_argp_set_timer(const char *timer_name)
+{
+    tpb_timer_t timer;
+
+    if (timer_name == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    memset(&timer, 0, sizeof(tpb_timer_t));
+
+    if (strcmp(timer_name, "clock_gettime") == 0) {
+        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "clock_gettime");
+        timer.unit = TPB_UNIT_NS;
+        timer.dtype = TPB_INT64_T;
+        timer.init = init_timer_clock_gettime;
+        timer.tick = tick_clock_gettime;
+        timer.tock = tock_clock_gettime;
+        timer.get_stamp = get_time_clock_gettime;
+    } else if (strcmp(timer_name, "tsc_asym") == 0) {
+        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "tsc_asym");
+        timer.unit = TPB_UNIT_CY;
+        timer.dtype = TPB_INT64_T;
+        timer.init = init_timer_tsc_asym;
+        timer.tick = tick_tsc_asym;
+        timer.tock = tock_tsc_asym;
+        timer.get_stamp = get_time_tsc_asym;
+    } else {
+        return TPBE_CLI_FAIL;
+    }
+
+    return tpb_driver_set_timer(timer);
+}

@@ -61,4 +61,11 @@ int tpb_check_kargs(char **common_tokens, int ncommon,
  */
 int tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg);
 
+/**
+ * @brief Set the timer for the driver by name.
+ * @param timer_name Timer name ("clock_gettime", "tsc_asym").
+ * @return 0 on success, error code on failure.
+ */
+int tpb_argp_set_timer(const char *timer_name);
+
 #endif /* TPB_ARGP_H */

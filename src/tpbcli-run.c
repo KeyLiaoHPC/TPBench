@@ -18,43 +18,10 @@
 
 /* Local Function Prototypes */
 
-/* Set timer in driver from CLI argument */
-static int set_driver_timer(const char *arg);
-
 /* Parse run-specific arguments */
 static int parse_run(int argc, char **argv);
 
 /* Local Function Implementations */
-
-static int
-set_driver_timer(const char *arg)
-{
-    tpb_timer_t timer;
-
-    memset(&timer, 0, sizeof(tpb_timer_t));
-
-    if (strcmp(arg, "clock_gettime") == 0) {
-        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "clock_gettime");
-        timer.unit = TPB_UNIT_NS;
-        timer.dtype = TPB_INT64_T;
-        timer.init = init_timer_clock_gettime;
-        timer.tick = tick_clock_gettime;
-        timer.tock = tock_clock_gettime;
-        timer.get_stamp = get_time_clock_gettime;
-    } else if (strcmp(arg, "tsc_asym") == 0) {
-        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "tsc_asym");
-        timer.unit = TPB_UNIT_CY;
-        timer.dtype = TPB_INT64_T;
-        timer.init = init_timer_tsc_asym;
-        timer.tick = tick_tsc_asym;
-        timer.tock = tock_tsc_asym;
-        timer.get_stamp = get_time_tsc_asym;
-    } else {
-        return -1;
-    }
-
-    return tpb_driver_set_timer(timer);
-}
 
 static int
 parse_run(int argc, char **argv)
@@ -63,7 +30,7 @@ parse_run(int argc, char **argv)
     int nkern_parsed = 0;
 
     /* Set default timer */
-    err = set_driver_timer("clock_gettime");
+    err = tpb_argp_set_timer("clock_gettime");
     if (err != 0) {
         return err;
     }
@@ -105,7 +72,7 @@ parse_run(int argc, char **argv)
                 return TPBE_CLI_FAIL;
             }
             i++;
-            err = set_driver_timer(argv[i]);
+            err = tpb_argp_set_timer(argv[i]);
             if (err != 0) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
                 return TPBE_CLI_FAIL;
