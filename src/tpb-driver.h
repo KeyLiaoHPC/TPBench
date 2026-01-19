@@ -217,14 +217,16 @@ int tpb_k_get_timer(tpb_timer_t *);
 int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
 
 /**
- * @brief Clean up and free memory allocated for output data in the kernel runtime handle.
+ * @brief Clean up and free all memory in the kernel runtime handle.
  *
- * This function releases all dynamic allocations made for output variables managed
- * by the given kernel runtime handle, ensuring no memory leaks after a kernel execution.
+ * This function releases all dynamic allocations made for output variables and
+ * kernel arguments managed by the given kernel runtime handle, ensuring no memory
+ * leaks after a kernel execution. It frees respack outputs and argpack arguments,
+ * and sets all pointers to NULL.
  *
  * @param handle Pointer to the kernel runtime handle .
  * @return 0 on successful cleanup, or an error code if any issues occurred.
  */
-int tpb_clean_output(tpb_k_rthdl_t *handle);
+int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
 
 #endif /* TPB_DRIVER_H */

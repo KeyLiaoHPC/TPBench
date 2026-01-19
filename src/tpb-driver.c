@@ -750,7 +750,7 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 }
 
 int
-tpb_clean_output(tpb_k_rthdl_t *hdl)
+tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
 {
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -770,6 +770,13 @@ tpb_clean_output(tpb_k_rthdl_t *hdl)
         hdl->respack.outputs = NULL;
     }
     hdl->respack.n = 0;
+
+    /* Free argpack.args (allocated per handle during tpb_driver_add_handle) */
+    if (hdl->argpack.args != NULL) {
+        free(hdl->argpack.args);
+        hdl->argpack.args = NULL;
+    }
+    hdl->argpack.n = 0;
 
     return 0;
 }
@@ -1052,7 +1059,7 @@ tpb_driver_run_all(void)
             return err;
         }
 
-        tpb_clean_output(handle);
+        tpb_driver_clean_handle(handle);
     }
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
