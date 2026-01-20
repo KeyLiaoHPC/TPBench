@@ -8,6 +8,16 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Set default optimization to -O2
 add_compile_options(-O2)
 
+# Set output directories for build artifacts
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+# Set install directories
+set(CMAKE_INSTALL_BINDIR bin)
+set(CMAKE_INSTALL_LIBDIR lib)
+set(CMAKE_INSTALL_INCLUDEDIR include)
+
 
 # Main TPBench sources
 set(TPB_SOURCES
@@ -49,3 +59,15 @@ add_executable(tpbcli
 )
 target_include_directories(tpbcli PRIVATE src src/include)
 target_link_libraries(tpbcli PRIVATE tpbench triad m)
+
+# Install targets
+install(TARGETS tpbench triad
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+install(TARGETS tpbcli
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Install public headers
+install(DIRECTORY src/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
