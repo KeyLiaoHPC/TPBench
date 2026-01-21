@@ -18,6 +18,15 @@ set(CMAKE_INSTALL_BINDIR bin)
 set(CMAKE_INSTALL_LIBDIR lib)
 set(CMAKE_INSTALL_INCLUDEDIR include)
 
+# TPB_DIR option for kernel discovery
+# If not set, defaults to CMAKE_BINARY_DIR (build directory)
+set(TPB_DIR "" CACHE STRING "TPBench installation directory for kernel discovery")
+if(TPB_DIR STREQUAL "")
+    set(TPB_DIR_RESOLVED "${CMAKE_BINARY_DIR}")
+else()
+    set(TPB_DIR_RESOLVED "${TPB_DIR}")
+endif()
+message(STATUS "TPB_DIR resolved to: ${TPB_DIR_RESOLVED}")
 
 # Main TPBench sources
 set(TPB_SOURCES
@@ -27,6 +36,7 @@ set(TPB_SOURCES
     src/tpb-unitcast.c
     src/tpb-impl.c
     src/tpb-argp.c
+    src/tpb-dynloader.c
 )
 
 # Timer-related sources
@@ -42,12 +52,13 @@ endif()
 # Shared library for core TPBench implementation
 add_library(tpbench SHARED ${TPB_SOURCES} ${TPB_TIMER_SOURCES})
 target_include_directories(tpbench PUBLIC src src/include)
-target_link_libraries(tpbench PUBLIC m)
+target_link_libraries(tpbench PUBLIC m dl)
+target_compile_definitions(tpbench PRIVATE TPB_DIR="${TPB_DIR_RESOLVED}")
 
-# Triad kernel as shared library
-add_library(triad SHARED src/kernels/simple/tpbk_triad.c)
-target_include_directories(triad PRIVATE src src/include)
-target_link_libraries(triad PRIVATE tpbench m)
+# Triad kernel as shared library (renamed to tpbk_triad for PLI consistency)
+add_library(tpbk_triad SHARED src/kernels/simple/tpbk_triad.c)
+target_include_directories(tpbk_triad PRIVATE src src/include)
+target_link_libraries(tpbk_triad PRIVATE tpbench m)
 
 # Stream kernel as shared library
 add_library(tpbk_stream SHARED src/kernels/simple/tpbk_stream.c)
@@ -63,14 +74,23 @@ add_executable(tpbcli
     src/tpbcli-help.c
 )
 target_include_directories(tpbcli PRIVATE src src/include)
-target_link_libraries(tpbcli PRIVATE tpbench triad tpbk_stream m)
+target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream m)
+
+# PLI Executables (.tpbx) for triad and stream kernels
+add_executable(tpbk_triad.tpbx src/kernels/simple/tpbk_triad_main.c)
+target_include_directories(tpbk_triad.tpbx PRIVATE src src/include)
+target_link_libraries(tpbk_triad.tpbx PRIVATE tpbench tpbk_triad m)
+
+add_executable(tpbk_stream.tpbx src/kernels/simple/tpbk_stream_main.c)
+target_include_directories(tpbk_stream.tpbx PRIVATE src src/include)
+target_link_libraries(tpbk_stream.tpbx PRIVATE tpbench tpbk_stream m)
 
 # Install targets
-install(TARGETS tpbench triad tpbk_stream
+install(TARGETS tpbench tpbk_triad tpbk_stream
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-install(TARGETS tpbcli
+install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install public headers

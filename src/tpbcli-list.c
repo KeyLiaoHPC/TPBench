@@ -4,11 +4,13 @@
  */
 
 #include <stdlib.h>
+#include <string.h>
 #include "tpbcli-list.h"
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
+#include "kernels/kernels.h"
 
 /* Local Function Prototypes */
 
@@ -20,13 +22,19 @@ static int parse_list(int argc, char **argv);
 static int
 parse_list(int argc, char **argv)
 {
-    /* Currently list has no specific options, but we keep the structure
-     * for potential future expansion */
+    /* Default is PLI mode */
+    int mode = TPB_INTEG_MODE_PLI;
 
-    if (argc > 2) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Warning: list command takes no arguments.\n");
+    /* Scan for -P or -F switches */
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "-P") == 0) {
+            mode = TPB_INTEG_MODE_PLI;
+        } else if (strcmp(argv[i], "-F") == 0) {
+            mode = TPB_INTEG_MODE_FLI;
+        }
     }
 
+    tpb_driver_set_integ_mode(mode);
     return 0;
 }
 
@@ -44,6 +52,17 @@ tpbcli_list(int argc, char **argv)
 
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At tpbcli-list.c: tpb_register_kernel");
+
+    /* For FLI mode, register the statically linked kernels */
+    int mode = tpb_driver_get_integ_mode();
+    if (mode == TPB_INTEG_MODE_FLI) {
+        tpb_driver_enable_kernel_reg();
+        err = register_triad();
+        __tpbm_exit_on_error(err, "At tpbcli-list.c: register_triad");
+        err = register_stream();
+        __tpbm_exit_on_error(err, "At tpbcli-list.c: register_stream");
+        tpb_driver_disable_kernel_reg();
+    }
 
     if (err == 0) {
         tpb_list();

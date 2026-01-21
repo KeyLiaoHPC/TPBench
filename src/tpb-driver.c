@@ -10,11 +10,15 @@
 #include <string.h>
 #include <stdarg.h>
 #include <float.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <linux/limits.h>
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
-#include "kernels/kernels.h"
+#include "tpb-dynloader.h"
+#include "tpb-argp.h"
 
 /* Module-level state variables */
 static uint64_t tpb_driver_nkern = 0;  // number of registered kernels
@@ -29,6 +33,9 @@ static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
 static int nhdl = 0;                       // number of handles
 static int ihdl = -1;                      // current handle index
 static int timer_set = 0;                  // flag to track if timer is set
+
+/* Integration mode: PLI (default) or FLI */
+static int integration_mode = TPB_INTEG_MODE_PLI;
 
 int
 tpb_driver_set_timer(tpb_timer_t timer_in)
@@ -167,15 +174,15 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Register all available kernels */
-    err = register_triad();
-    if (err != 0) {
-        return err;
+    /* Register kernels based on integration mode */
+    if (integration_mode == TPB_INTEG_MODE_PLI) {
+        /* PLI mode: dynamically scan for kernels */
+        err = tpb_dynloader_scan();
+        if (err != 0) {
+            return err;
+        }
     }
-    err = register_stream();
-    if (err != 0) {
-        return err;
-    }
+    /* FLI mode: kernels are registered by tpbcli after this call */
 
     /* Create pseudo handle (ihdl=0) for _tpb_common */
     handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));
@@ -804,6 +811,15 @@ tpb_driver_add_handle(const char *kernel_name)
         return TPBE_KERNEL_NE_FAIL;
     }
 
+    /* For PLI kernels, check that both .so and .tpbx exist */
+    if ((kernel->info.kctrl & TPB_KTYPE_MASK) == TPB_KTYPE_PLI) {
+        if (!tpb_dynloader_is_complete(kernel_name)) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Incomplete kernel: '%s' (missing .tpbx executable)\n", kernel_name);
+            return TPBE_KERNEL_INCOMPLETE;
+        }
+    }
+
     /* Reallocate handle_list */
     tpb_k_rthdl_t *new_list = (tpb_k_rthdl_t *)realloc(handle_list,
                                                         sizeof(tpb_k_rthdl_t) * (nhdl + 1));
@@ -1035,6 +1051,114 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
     return 0;
 }
 
+/* Run a PLI kernel via fork/exec */
+static int
+tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
+{
+    char *exec_path;
+    char **argv;
+    int argc;
+    pid_t pid;
+    int status;
+    char value_buf[256];
+
+    if (hdl == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* Get executable path */
+    exec_path = (char *)tpb_dynloader_get_exec_path(hdl->kernel.info.name);
+    if (exec_path == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Incomplete kernel: '%s'\n", hdl->kernel.info.name);
+        return TPBE_KERNEL_INCOMPLETE;
+    }
+
+    /* Build argv: [exec_path, timer_name, param1, param2, ..., NULL] */
+    argc = 2 + hdl->argpack.n;  /* exec_path + timer_name + params */
+    argv = (char **)malloc(sizeof(char *) * (argc + 1));
+    if (argv == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    argv[0] = exec_path;
+    argv[1] = timer.name;
+
+    /* Add parameter values in registration order */
+    for (int i = 0; i < hdl->argpack.n; i++) {
+        tpb_rt_parm_t *parm = &hdl->argpack.args[i];
+        uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
+
+        if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+            snprintf(value_buf, sizeof(value_buf), "%.15g", parm->value.f64);
+        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+            snprintf(value_buf, sizeof(value_buf), "%" PRId64, parm->value.i64);
+        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+            snprintf(value_buf, sizeof(value_buf), "%" PRIu64, parm->value.u64);
+        } else if (type_code == TPB_CHAR_T) {
+            snprintf(value_buf, sizeof(value_buf), "%c", parm->value.c);
+        } else {
+            snprintf(value_buf, sizeof(value_buf), "0");
+        }
+        argv[2 + i] = strdup(value_buf);
+    }
+    argv[argc] = NULL;
+
+    /* Set TPBENCH_TIMER environment variable */
+    setenv("TPBENCH_TIMER", timer.name, 1);
+
+    /* Fork and exec */
+    pid = fork();
+    if (pid < 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
+        for (int i = 2; i < argc; i++) {
+            free(argv[i]);
+        }
+        free(argv);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    if (pid == 0) {
+        /* Child process: exec the kernel */
+        execv(exec_path, argv);
+        /* If execv returns, it failed */
+        fprintf(stderr, "execv failed for %s\n", exec_path);
+        _exit(127);
+    }
+
+    /* Parent process: print PID and wait */
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start process PID=%d\n", pid);
+
+    /* Wait for child to complete */
+    waitpid(pid, &status, 0);
+
+    /* Clean up argv */
+    for (int i = 2; i < argc; i++) {
+        free(argv[i]);
+    }
+    free(argv);
+
+    /* Check exit status */
+    if (WIFEXITED(status)) {
+        int exit_code = WEXITSTATUS(status);
+        if (exit_code != 0) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Kernel %s exited with code %d\n",
+                       hdl->kernel.info.name, exit_code);
+            return exit_code;
+        }
+    } else if (WIFSIGNALED(status)) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Kernel %s killed by signal %d\n",
+                   hdl->kernel.info.name, WTERMSIG(status));
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    return 0;
+}
+
 int
 tpb_driver_run_all(void)
 {
@@ -1051,22 +1175,185 @@ tpb_driver_run_all(void)
     /* Loop from ihdl=1 to nhdl-1 (skip pseudo handle at index 0) */
     for (int i = 1; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
+        TPB_K_CTRL ktype = handle->kernel.info.kctrl & TPB_KTYPE_MASK;
 
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
-                   handle->kernel.info.name);
         /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
         tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i, nhdl - 1);
 
-        err = tpb_run_kernel(handle);
+        if (ktype == TPB_KTYPE_PLI) {
+            /* PLI mode: fork and exec */
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
+                       handle->kernel.info.name);
+            err = tpb_driver_run_pli(handle);
+        } else {
+            /* FLI mode: call runner directly */
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
+                       handle->kernel.info.name);
+            err = tpb_run_kernel(handle);
+            tpb_driver_clean_handle(handle);
+        }
+
         if (err != 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed.\n",
                        handle->kernel.info.name);
             return err;
         }
-
-        tpb_driver_clean_handle(handle);
     }
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
+    return 0;
+}
+
+/* PLI API implementations */
+
+void
+tpb_driver_enable_kernel_reg(void)
+{
+    /* Temporarily clear current_rthdl to allow kernel registration */
+    current_rthdl = NULL;
+}
+
+void
+tpb_driver_disable_kernel_reg(void)
+{
+    /* Restore current_rthdl to pseudo handle (index 0) if available */
+    if (handle_list != NULL && nhdl > 0) {
+        current_rthdl = &handle_list[0];
+    }
+}
+
+int
+tpb_driver_set_integ_mode(int mode)
+{
+    if (mode != TPB_INTEG_MODE_FLI && mode != TPB_INTEG_MODE_PLI) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+    integration_mode = mode;
+    return 0;
+}
+
+int
+tpb_driver_get_integ_mode(void)
+{
+    return integration_mode;
+}
+
+int
+tpb_k_finalize_pli(void)
+{
+    if (current_kernel == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "No kernel registered. Call tpb_k_register first.\n");
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    /* PLI kernels don't have a runner function */
+    current_kernel->func.k_run = NULL;
+
+    /* Finalize registration: increment kernel count */
+    tpb_driver_nkern++;
+    current_kernel = NULL;
+
+    return 0;
+}
+
+int
+tpb_pli_set_timer(const char *timer_name)
+{
+    if (timer_name == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* Use the same timer setup logic as tpb_argp_set_timer */
+    return tpb_argp_set_timer(timer_name);
+}
+
+int
+tpb_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
+{
+    if (handle == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    /* The current_kernel should be set by the kernel's registration */
+    if (kernel_all == NULL || tpb_driver_nkern == 0) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    /* Use the most recently registered kernel */
+    tpb_kernel_t *kernel = &kernel_all[tpb_driver_nkern - 1];
+
+    /* Initialize handle */
+    memset(handle, 0, sizeof(tpb_k_rthdl_t));
+    memcpy(&handle->kernel, kernel, sizeof(tpb_kernel_t));
+
+    /* Build argpack from positional arguments */
+    int nparms = kernel->info.nparms;
+    if (nparms > 0) {
+        handle->argpack.args = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * nparms);
+        if (handle->argpack.args == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        handle->argpack.n = nparms;
+
+        /* Copy parameter definitions and apply values from argv */
+        for (int i = 0; i < nparms; i++) {
+            memcpy(&handle->argpack.args[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
+
+            /* Apply value from argv if provided, otherwise use default */
+            if (i < argc && argv[i] != NULL) {
+                uint32_t type_code = handle->argpack.args[i].ctrlbits & TPB_PARM_TYPE_MASK;
+                tpb_parm_value_t *value = &handle->argpack.args[i].value;
+
+                if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+                    value->f64 = strtod(argv[i], NULL);
+                } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                           type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+                    value->i64 = strtoll(argv[i], NULL, 10);
+                } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                           type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+                    value->u64 = strtoull(argv[i], NULL, 10);
+                } else if (type_code == TPB_CHAR_T) {
+                    value->c = argv[i][0];
+                }
+            } else {
+                /* Use default value */
+                handle->argpack.args[i].value = kernel->info.parms[i].default_value;
+            }
+        }
+    } else {
+        handle->argpack.n = 0;
+        handle->argpack.args = NULL;
+    }
+
+    /* Build respack from kernel's registered outputs */
+    int nouts = kernel->info.nouts;
+    if (nouts > 0 && kernel->info.outs != NULL) {
+        handle->respack.outputs = (tpb_k_output_t *)malloc(sizeof(tpb_k_output_t) * nouts);
+        if (handle->respack.outputs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        handle->respack.n = nouts;
+
+        for (int i = 0; i < nouts; i++) {
+            memcpy(&handle->respack.outputs[i], &kernel->info.outs[i], sizeof(tpb_k_output_t));
+            handle->respack.outputs[i].p = NULL;
+            handle->respack.outputs[i].n = 0;
+
+            /* Resolve TPB_UNIT_TIMER: use the timer's unit, preserve attributes */
+            TPB_UNIT_T base_unit = kernel->info.outs[i].unit & ~TPB_UATTR_MASK;
+            if (base_unit == TPB_UNIT_TIMER) {
+                TPB_UNIT_T attrs = kernel->info.outs[i].unit & TPB_UATTR_MASK;
+                handle->respack.outputs[i].unit = timer.unit | attrs;
+            }
+        }
+    } else {
+        handle->respack.n = 0;
+        handle->respack.outputs = NULL;
+    }
+
+    /* Set as current handle for kernel API calls */
+    current_rthdl = handle;
+
     return 0;
 }

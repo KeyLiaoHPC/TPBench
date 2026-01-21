@@ -230,4 +230,70 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
  */
 int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
 
+/* PLI (Process-Level Integration) API */
+
+/**
+ * @brief Enable kernel registration mode.
+ *
+ * This function resets internal state to allow additional kernels to be
+ * registered after tpb_register_kernel() has been called. Used for FLI
+ * mode where kernels are registered separately from the driver init.
+ */
+void tpb_driver_enable_kernel_reg(void);
+
+/**
+ * @brief Disable kernel registration mode.
+ *
+ * Restores internal state after kernel registration is complete.
+ */
+void tpb_driver_disable_kernel_reg(void);
+
+/**
+ * @brief Set the integration mode for the driver.
+ * @param mode TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_integ_mode(int mode);
+
+/**
+ * @brief Get the current integration mode.
+ * @return Current integration mode (TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI).
+ */
+int tpb_driver_get_integ_mode(void);
+
+/**
+ * @brief Finalize PLI kernel registration.
+ *
+ * For PLI kernels, this replaces tpb_k_add_runner(). It increments the kernel
+ * count without setting a runner function (PLI kernels use exec instead).
+ *
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_k_finalize_pli(void);
+
+/**
+ * @brief Set timer for PLI kernel executable.
+ *
+ * This function is intended to be called from .tpbx executables. It sets up
+ * the timer based on the provided timer name. This function is only valid
+ * to call from a PLI kernel process context.
+ *
+ * @param timer_name Timer name (e.g., "clock_gettime", "tsc_asym")
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_pli_set_timer(const char *timer_name);
+
+/**
+ * @brief Build handle from positional arguments for PLI executable.
+ *
+ * This function parses positional arguments (in parameter registration order)
+ * and builds a runtime handle. Called from .tpbx executables.
+ *
+ * @param handle Pointer to runtime handle to populate.
+ * @param argc Number of positional argument values.
+ * @param argv Array of argument value strings.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv);
+
 #endif /* TPB_DRIVER_H */

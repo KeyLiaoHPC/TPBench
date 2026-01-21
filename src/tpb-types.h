@@ -88,6 +88,10 @@ typedef uint32_t TPB_K_CTRL;
 #define TPB_KTYPE_PLI       ((TPB_K_CTRL)(1 << 1))
 #define TPB_KTYPE_ALI       ((TPB_K_CTRL)(1 << 2))
 
+/** Integration mode for driver */
+#define TPB_INTEG_MODE_FLI  0
+#define TPB_INTEG_MODE_PLI  1
+
 /** Error codes */
 enum _tpb_errno {
     TPBE_SUCCESS = 0,
@@ -104,7 +108,9 @@ enum _tpb_errno {
     TPBE_DTYPE_NOT_SUPPORTED,
     TPBE_ILLEGAL_CALL,
     TPBE_KERNEL_NE_FAIL,    // Kernel not exist
-    TPBE_KARG_NE_FAIL       // Kernel argument not exist
+    TPBE_KARG_NE_FAIL,      // Kernel argument not exist
+    TPBE_KERNEL_INCOMPLETE, // Incomplete kernel (missing .so or .tpbx)
+    TPBE_DLOPEN_FAIL        // dlopen failed
 };
 typedef enum _tpb_errno tpb_errno_t;
 

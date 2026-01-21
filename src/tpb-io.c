@@ -270,14 +270,24 @@ tpb_list()
 {
     int nkern = tpb_get_kernel_count();
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Description\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Type    Description\n");
     for (int i = 0; i < nkern; i++) {
         tpb_kernel_t *kernel = NULL;
         if (tpb_get_kernel_by_index(i, &kernel) != 0) {
             continue;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %s\n",
-                   kernel->info.name, kernel->info.note);
+        /* Determine integration type string */
+        const char *type_str = "UNK";
+        TPB_K_CTRL ktype = kernel->info.kctrl & TPB_KTYPE_MASK;
+        if (ktype == TPB_KTYPE_FLI) {
+            type_str = "FLI";
+        } else if (ktype == TPB_KTYPE_PLI) {
+            type_str = "PLI";
+        } else if (ktype == TPB_KTYPE_ALI) {
+            type_str = "ALI";
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-7s %s\n",
+                   kernel->info.name, type_str, kernel->info.note);
     }
 }
 

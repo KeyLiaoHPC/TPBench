@@ -23,6 +23,10 @@
     "Action: run, benchmark, list, help\n" \
     "Options and explanation for each action:\n" \
     "    run: Run one or more benchmark kernels.\n" \
+    "        -P          Use Process-Level Integration mode (default). Kernels run as\n" \
+    "                    separate processes via fork/exec.\n" \
+    "        -F          Use Function-Level Integration mode. Kernels run as linked\n" \
+    "                    functions within the same process.\n" \
     "        --kernel    <kernel_name>\n" \
     "                    Mandatory. Kernel list separated by comma. Each kernel can have\n" \
     "                    multiple kargs separated by colon. (e.g.\n" \
@@ -50,6 +54,9 @@
     "        --outdir    <PATH> (Optional. Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
     "                    Path to the data directory of the current test. \n" \
     "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
+    "    list: List available kernels.\n" \
+    "        -P          Use Process-Level Integration mode (default).\n" \
+    "        -F          Use Function-Level Integration mode.\n" \
     "    help: Print help message for an object and exit.\n" \
 
 /**

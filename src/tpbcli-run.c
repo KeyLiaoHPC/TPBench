@@ -15,13 +15,35 @@
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
+#include "kernels/kernels.h"
 
 /* Local Function Prototypes */
+
+/* Pre-parse integration mode (-P/-F) before kernel registration */
+static void parse_integ_mode(int argc, char **argv);
 
 /* Parse run-specific arguments */
 static int parse_run(int argc, char **argv);
 
 /* Local Function Implementations */
+
+static void
+parse_integ_mode(int argc, char **argv)
+{
+    /* Default is PLI mode */
+    int mode = TPB_INTEG_MODE_PLI;
+
+    /* Scan for -P or -F switches */
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "-P") == 0) {
+            mode = TPB_INTEG_MODE_PLI;
+        } else if (strcmp(argv[i], "-F") == 0) {
+            mode = TPB_INTEG_MODE_FLI;
+        }
+    }
+
+    tpb_driver_set_integ_mode(mode);
+}
 
 static int
 parse_run(int argc, char **argv)
@@ -36,7 +58,15 @@ parse_run(int argc, char **argv)
     }
 
     for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--kernel") == 0) {
+        if (strcmp(argv[i], "-P") == 0) {
+            /* Already handled in parse_integ_mode */
+            continue;
+
+        } else if (strcmp(argv[i], "-F") == 0) {
+            /* Already handled in parse_integ_mode */
+            continue;
+
+        } else if (strcmp(argv[i], "--kernel") == 0) {
             if (i + 1 >= argc) {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "Option %s requires arguments.\n", argv[i]);
@@ -99,16 +129,34 @@ tpbcli_run(int argc, char **argv)
 {
     int err = 0;
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
-    err = tpb_register_kernel();
-    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
-
     if (argc <= 1) {
         /* No args */
         tpb_printf(TPBM_PRTN_M_DIRECT,
                    "No arguments provided, exit after printing help message.\n");
         tpb_print_help_total();
         return TPBE_EXIT_ON_HELP;
+    }
+
+    /* Parse integration mode BEFORE registering kernels */
+    parse_integ_mode(argc, argv);
+
+    /* Print integration mode */
+    int mode = tpb_driver_get_integ_mode();
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench kernel integration mode: %s\n",
+               mode == TPB_INTEG_MODE_PLI ? "PLI" : "FLI");
+
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
+    err = tpb_register_kernel();
+    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
+
+    /* For FLI mode, register the statically linked kernels */
+    if (mode == TPB_INTEG_MODE_FLI) {
+        tpb_driver_enable_kernel_reg();
+        err = register_triad();
+        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_triad");
+        err = register_stream();
+        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_stream");
+        tpb_driver_disable_kernel_reg();
     }
 
     err = parse_run(argc, argv);

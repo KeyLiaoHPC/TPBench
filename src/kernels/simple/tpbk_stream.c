@@ -47,6 +47,7 @@ static double epsilon = 1.e-8;
 int register_stream(void);
 int _tpbk_register_stream(void);
 int _tpbk_run_stream(void);
+int tpbk_pli_register_stream(void);
 static int d_stream(tpb_timer_t *timer, int ntest, double kib, 
                    int64_t *copy_time, int64_t *scale_time, 
                    int64_t *add_time, int64_t *triad_time,
@@ -60,6 +61,32 @@ register_stream(void)
 {
     /* Wrapper function for backward compatibility */
     return _tpbk_register_stream();
+}
+
+/* PLI registration: register only name, note, and parameters (no outputs, no runner) */
+int
+tpbk_pli_register_stream(void)
+{
+    int err;
+
+    /* Register to TPBench as PLI kernel */
+    err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_PLI);
+    if (err != 0) return err;
+
+    /* Kernel input parameters - same as FLI registration */
+    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)1, (int64_t)100000);
+    if (err != 0) return err;
+    err = tpb_k_add_parm("memsize", "Memory size in KiB", "32",
+                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
+                         0.0009765625, DBL_MAX);
+    if (err != 0) return err;
+
+    /* NO outputs registered here - kernel registers them in its own process */
+    /* NO runner function - PLI uses exec */
+
+    return tpb_k_finalize_pli();
 }
 
 int
