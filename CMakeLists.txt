@@ -85,6 +85,20 @@ add_executable(tpbk_stream.tpbx src/kernels/simple/tpbk_stream_main.c)
 target_include_directories(tpbk_stream.tpbx PRIVATE src src/include)
 target_link_libraries(tpbk_stream.tpbx PRIVATE tpbench tpbk_stream m)
 
+# Flattened public header for installs
+set(TPB_FLAT_HEADER "${CMAKE_BINARY_DIR}/include/tpbench.h")
+add_custom_command(
+    OUTPUT "${TPB_FLAT_HEADER}"
+    COMMAND "${CMAKE_COMMAND}" -DOUT="${TPB_FLAT_HEADER}" -DTPB_ROOT="${CMAKE_SOURCE_DIR}"
+            -P "${CMAKE_SOURCE_DIR}/cmake/flatten_tpbench.cmake"
+    DEPENDS
+        src/tpb-unitdefs.h
+        src/tpb-types.h
+        src/tpb-driver.h
+        src/tpb-io.h
+)
+add_custom_target(tpbench_flat_header ALL DEPENDS "${TPB_FLAT_HEADER}")
+
 # Install targets
 install(TARGETS tpbench tpbk_triad tpbk_stream
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -94,5 +108,8 @@ install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install public headers
-install(DIRECTORY src/include/
+install(FILES "${TPB_FLAT_HEADER}"
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(DIRECTORY src/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        PATTERN "tpbench.h" EXCLUDE)
