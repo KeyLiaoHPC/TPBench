@@ -18,9 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../tpb-types.h"
-#include "../../tpb-driver.h"
-#include "../../tpb-io.h"
+#include "tpbench.h"
 
 /* External declarations from tpbk_stream.c */
 extern int _tpbk_register_stream(void);

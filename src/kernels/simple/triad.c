@@ -32,9 +32,7 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
-#include "../../tpb-types.h"
-#include "../../tpb-driver.h"
-#include "../../tpb-io.h"
+#include "tpbench.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"

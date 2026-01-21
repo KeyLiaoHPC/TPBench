@@ -32,9 +32,7 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
-#include "../../tpb-types.h"
-#include "../../tpb-driver.h"
-#include "../../tpb-io.h"
+#include "tpbench.h"
 
 #define MALLOC(_A, _NARR)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NARR);   \
                             if((_A) == NULL) {                                  \
