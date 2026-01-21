@@ -177,7 +177,7 @@ tpb_register_kernel()
     /* Register kernels based on integration mode */
     if (integration_mode == TPB_INTEG_MODE_PLI) {
         /* PLI mode: dynamically scan for kernels */
-        err = tpb_dynloader_scan();
+        err = tpb_dl_scan();
         if (err != 0) {
             return err;
         }
@@ -813,7 +813,7 @@ tpb_driver_add_handle(const char *kernel_name)
 
     /* For PLI kernels, check that both .so and .tpbx exist */
     if ((kernel->info.kctrl & TPB_KTYPE_MASK) == TPB_KTYPE_PLI) {
-        if (!tpb_dynloader_is_complete(kernel_name)) {
+        if (!tpb_dl_is_complete(kernel_name)) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                        "Incomplete kernel: '%s' (missing .tpbx executable)\n", kernel_name);
             return TPBE_KERNEL_INCOMPLETE;
@@ -1067,7 +1067,7 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     }
 
     /* Get executable path */
-    exec_path = (char *)tpb_dynloader_get_exec_path(hdl->kernel.info.name);
+    exec_path = (char *)tpb_dl_get_exec_path(hdl->kernel.info.name);
     if (exec_path == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Incomplete kernel: '%s'\n", hdl->kernel.info.name);

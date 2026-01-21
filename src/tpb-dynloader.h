@@ -15,7 +15,7 @@
  * @brief Get the resolved TPB_DIR path.
  * @return Pointer to the TPB_DIR string (static storage).
  */
-const char *tpb_get_tpb_dir(void);
+const char *tpb_dl_get_tpb_dir(void);
 
 /**
  * @brief Scan ${TPB_DIR}/lib and ${TPB_DIR}/bin for PLI kernels.
@@ -30,27 +30,27 @@ const char *tpb_get_tpb_dir(void);
  *
  * @return 0 on success, error code otherwise.
  */
-int tpb_dynloader_scan(void);
+int tpb_dl_scan(void);
 
 /**
  * @brief Get the PLI kernel executable path by name.
  * @param kernel_name Name of the kernel.
  * @return Path to the .tpbx executable, or NULL if not found or incomplete.
  */
-const char *tpb_dynloader_get_exec_path(const char *kernel_name);
+const char *tpb_dl_get_exec_path(const char *kernel_name);
 
 /**
  * @brief Check if a kernel has both .so and .tpbx files.
  * @param kernel_name Name of the kernel.
  * @return 1 if complete, 0 if incomplete or not found.
  */
-int tpb_dynloader_is_complete(const char *kernel_name);
+int tpb_dl_is_complete(const char *kernel_name);
 
 /**
  * @brief Get the integration type for a registered kernel.
  * @param kernel_name Name of the kernel.
  * @return Kernel integration type (TPB_KTYPE_PLI, TPB_KTYPE_FLI, etc.), or 0 if not found.
  */
-TPB_K_CTRL tpb_dynloader_get_ktype(const char *kernel_name);
+TPB_K_CTRL tpb_dl_get_ktype(const char *kernel_name);
 
 #endif /* TPB_DYNLOADER_H */

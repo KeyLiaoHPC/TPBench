@@ -148,7 +148,7 @@ find_dyn_kernel(const char *kernel_name)
 /* Public Function Implementations */
 
 const char *
-tpb_get_tpb_dir(void)
+tpb_dl_get_tpb_dir(void)
 {
     if (tpb_dir_resolved[0] == '\0') {
         resolve_tpb_dir();
@@ -157,7 +157,7 @@ tpb_get_tpb_dir(void)
 }
 
 int
-tpb_dynloader_scan(void)
+tpb_dl_scan(void)
 {
     int err;
     DIR *dir;
@@ -182,7 +182,7 @@ tpb_dynloader_scan(void)
     dir = opendir(lib_path);
     if (dir == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "In tpb_dynloader_scan: Cannot open lib directory: %s\n", lib_path);
+                   "In tpb_dl_scan: Cannot open lib directory: %s\n", lib_path);
         return 0;  /* Not an error - just no kernels found */
     }
 
@@ -196,7 +196,7 @@ tpb_dynloader_scan(void)
         /* Check if we have room for more kernels */
         if (num_dyn_kernels >= MAX_DYN_KERNELS) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "In tpb_dynloader_scan: Maximum number of dynamic kernels reached.\n");
+                       "In tpb_dl_scan: Maximum number of dynamic kernels reached.\n");
             break;
         }
 
@@ -207,7 +207,7 @@ tpb_dynloader_scan(void)
         void *handle = dlopen(so_path, RTLD_NOW | RTLD_LOCAL);
         if (handle == NULL) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "In tpb_dynloader_scan: Failed to load %s: %s\n", so_path, dlerror());
+                       "In tpb_dl_scan: Failed to load %s: %s\n", so_path, dlerror());
             continue;
         }
 
@@ -218,7 +218,7 @@ tpb_dynloader_scan(void)
 
         if (reg_func == NULL) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "In tpb_dynloader_scan: No PLI registration function %s in %s\n", func_name, so_path);
+                       "In tpb_dl_scan: No PLI registration function %s in %s\n", func_name, so_path);
             dlclose(handle);
             continue;
         }
@@ -227,7 +227,7 @@ tpb_dynloader_scan(void)
         err = reg_func();
         if (err != 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "In tpb_dynloader_scan: Failed to register kernel %s: error %d\n", kernel_name, err);
+                       "In tpb_dl_scan: Failed to register kernel %s: error %d\n", kernel_name, err);
             dlclose(handle);
             continue;
         }
@@ -243,7 +243,7 @@ tpb_dynloader_scan(void)
 
         if (!k->complete) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "In tpb_dynloader_scan: Kernel %s is incomplete: missing %s\n",
+                       "In tpb_dl_scan: Kernel %s is incomplete: missing %s\n",
                        kernel_name, k->exec_path);
         }
 
@@ -257,7 +257,7 @@ tpb_dynloader_scan(void)
 }
 
 const char *
-tpb_dynloader_get_exec_path(const char *kernel_name)
+tpb_dl_get_exec_path(const char *kernel_name)
 {
     if (kernel_name == NULL) {
         return NULL;
@@ -276,7 +276,7 @@ tpb_dynloader_get_exec_path(const char *kernel_name)
 }
 
 int
-tpb_dynloader_is_complete(const char *kernel_name)
+tpb_dl_is_complete(const char *kernel_name)
 {
     if (kernel_name == NULL) {
         return 0;
@@ -291,7 +291,7 @@ tpb_dynloader_is_complete(const char *kernel_name)
 }
 
 TPB_K_CTRL
-tpb_dynloader_get_ktype(const char *kernel_name)
+tpb_dl_get_ktype(const char *kernel_name)
 {
     if (kernel_name == NULL) {
         return 0;
