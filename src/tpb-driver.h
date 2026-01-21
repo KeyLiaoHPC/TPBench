@@ -9,7 +9,6 @@
 #define _GNU_SOURCE
 
 #include "tpb-types.h"
-#include "../tpb-impl.h"
 
 /**
  * @brief Set timer function for the whole driver.
@@ -115,9 +114,11 @@ int tpb_run_kernel(tpb_k_rthdl_t *handle);
 /**
  * @brief Register a new kernel with given a name and description.
  * @param name Kernel name (must be unique)
+ * @param note Kernel description
+ * @param kctrl Kernel attribution control bits
  * @return 0 on success, error code otherwise
  */
-int tpb_k_register(const char *name, const char *note);
+int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
 
 /**
  * @brief Add a runtime parameter to the current kernel

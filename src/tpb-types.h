@@ -81,9 +81,14 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_STRING_T        ((TPB_DTYPE)0x00001000)
 #define TPB_DTYPE_TIMER_T   ((TPB_DTYPE)0x0000083F)
 
-/* Error codes */
+/** Kernel integration types */
+typedef uint32_t TPB_K_CTRL;
+#define TPB_KTYPE_MASK      ((TPB_K_CTRL)0x0000000F)
+#define TPB_KTYPE_FLI       ((TPB_K_CTRL)(1 << 0))
+#define TPB_KTYPE_PLI       ((TPB_K_CTRL)(1 << 1))
+#define TPB_KTYPE_ALI       ((TPB_K_CTRL)(1 << 2))
 
-/** @brief Error codes for tpbench */
+/** Error codes */
 enum _tpb_errno {
     TPBE_SUCCESS = 0,
     TPBE_EXIT_ON_HELP,
@@ -178,6 +183,7 @@ typedef struct tpb_argpack {
 typedef struct tpb_k_static_info {
     char name[TPBM_NAME_STR_MAX_LEN];
     char note[TPBM_NOTE_STR_MAX_LEN];
+    TPB_K_CTRL kctrl;                    /**< Kernel integration type: DLI, SPI, SLI */
     int nparms, nouts;
     tpb_rt_parm_t *parms;
     tpb_k_output_t *outs;

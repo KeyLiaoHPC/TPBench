@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include "tpbcli-list.h"
 #include "tpb-driver.h"
+#include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
 

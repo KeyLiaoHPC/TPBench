@@ -33,8 +33,8 @@
 #include <time.h>
 #include <float.h>
 #include "../../tpb-types.h"
-#include "../../tpb-impl.h"
 #include "../../tpb-driver.h"
+#include "../../tpb-io.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"
@@ -63,7 +63,7 @@ register_triad(void)
     int err;
     
     /* Register to TPBench */
-    err = tpb_k_register("triad", "STREAM Triad: a[i] = b[i] + s * c[i]");
+    err = tpb_k_register("triad", "STREAM Triad: a[i] = b[i] + s * c[i]", TPB_KTYPE_FLI);
     if(err != 0) return err;
 
     /* Kernel input parameters */

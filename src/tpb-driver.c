@@ -317,7 +317,7 @@ tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 }
 
 int
-tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE_STR_MAX_LEN])
+tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE_STR_MAX_LEN], TPB_K_CTRL kctrl)
 {
     if (name == NULL) {
         return TPBE_KERN_ARG_FAIL;
@@ -346,6 +346,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     
     sprintf(current_kernel->info.name, "%s", name);
     sprintf(current_kernel->info.note, "%s", note);
+    current_kernel->info.kctrl = kctrl;
     current_kernel->info.nparms = 0;
     current_kernel->info.parms = NULL;
     current_kernel->info.nouts = 0;
