@@ -48,7 +48,7 @@ int register_triad(void);
 int _tpbk_register_triad(void);
 int _tpbk_run_triad(void);
 int tpbk_pli_register_triad(void);
-static int d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw);
+static int d_triad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, uint32_t *array_size_out, double *bw);
 static int check_d_triad(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
 int
@@ -77,6 +77,10 @@ tpbk_pli_register_triad(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)4294967295);
+    if (err != 0) return err;
 
     /* NO outputs registered here - kernel registers them in its own process */
     /* NO runner function - PLI uses exec */
@@ -102,6 +106,10 @@ _tpbk_register_triad(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if(err != 0) return err;
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)4294967295);
+    if(err != 0) return err;
 
     /* Kernel outputs */
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
@@ -112,6 +120,9 @@ _tpbk_register_triad(void)
     if(err != 0) return err;
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three triad arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT );
+    if(err != 0) return err;
+    err = tpb_k_add_output("array_size", "Actual number of elements per array.",
+                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
     // Set runner function.
     err = tpb_k_add_runner(_tpbk_run_triad);
@@ -129,6 +140,7 @@ _tpbk_run_triad(void)
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
     double memsize;
+    uint32_t array_size;
     /* Output */
     void *tot_time = NULL;
     void *step_time = NULL;
@@ -144,6 +156,8 @@ _tpbk_run_triad(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
     if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
+    if (tpberr) return tpberr;
 
     /* Malloc callbacks for kernel\'s outputs */
     tpberr = tpb_k_alloc_output("tot_time", 1, &tot_time);
@@ -151,6 +165,9 @@ _tpbk_run_triad(void)
     tpberr = tpb_k_alloc_output("step_time", ntest, &step_time);
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
+    if (tpberr) return tpberr;
+    uint32_t *array_size_out = NULL;
+    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
     if (tpberr) return tpberr;
 
     /* Measured data throughput rate is a derived metrics, adding at run-time */
@@ -171,21 +188,27 @@ _tpbk_run_triad(void)
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_triad(&timer, ntest, memsize, tot_time, step_time, real_memsize, bw);
+    tpberr = d_triad(&timer, ntest, memsize, array_size, tot_time, step_time, real_memsize, array_size_out, bw);
 
     return tpberr;
 }
 
 static int
-d_triad(tpb_timer_t *timer, int ntest, double kib, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, double *bw) {
+d_triad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size, int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize, uint32_t *array_size_out, double *bw) {
     int narr, err;
     double *a, *b, *c;
     double s = 0.42;
     uint64_t t0, t1;
 
     err = 0;
-    narr = (int)(kib * 1024 / sizeof(double) / 3);
+    /* Use array_size if specified (non-zero), otherwise use memsize */
+    if (array_size > 0) {
+        narr = array_size;
+    } else {
+        narr = (int)(kib * 1024 / sizeof(double) / 3);
+    }
     *real_memsize = narr * sizeof(double) * 3;
+    *array_size_out = narr;
 
     MALLOC(a, narr);
     MALLOC(b, narr);

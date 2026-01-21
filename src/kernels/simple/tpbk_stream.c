@@ -48,11 +48,11 @@ int register_stream(void);
 int _tpbk_register_stream(void);
 int _tpbk_run_stream(void);
 int tpbk_pli_register_stream(void);
-static int d_stream(tpb_timer_t *timer, int ntest, double kib, 
-                   int64_t *copy_time, int64_t *scale_time, 
+static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
+                   int64_t *copy_time, int64_t *scale_time,
                    int64_t *add_time, int64_t *triad_time,
-                   uint64_t *real_memsize, 
-                   double *copy_bw, double *scale_bw, 
+                   uint64_t *real_memsize, uint32_t *array_size_out,
+                   double *copy_bw, double *scale_bw,
                    double *add_bw, double *triad_bw);
 static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
@@ -82,6 +82,10 @@ tpbk_pli_register_stream(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)4294967295);
+    if (err != 0) return err;
 
     /* NO outputs registered here - kernel registers them in its own process */
     /* NO runner function - PLI uses exec */
@@ -107,6 +111,10 @@ _tpbk_register_stream(void)
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if(err != 0) return err;
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)4294967295);
+    if(err != 0) return err;
 
     /* Kernel outputs - 4 separate timing sections */
     err = tpb_k_add_output("copy_time", "Measured runtime of copy operation.", 
@@ -124,6 +132,9 @@ _tpbk_register_stream(void)
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three stream arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT );
     if(err != 0) return err;
+    err = tpb_k_add_output("array_size", "Actual number of elements per array.",
+                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_POINT);
+    if(err != 0) return err;
     // Set runner function.
     err = tpb_k_add_runner(_tpbk_run_stream);
     if(err != 0) return err;
@@ -140,6 +151,7 @@ _tpbk_run_stream(void)
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
     double memsize;
+    uint32_t array_size;
     /* Output */
     void *copy_time = NULL;
     void *scale_time = NULL;
@@ -160,6 +172,8 @@ _tpbk_run_stream(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
     if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
+    if (tpberr) return tpberr;
 
     /* Malloc callbacks for kernel\'s outputs - 4 separate timing arrays */
     tpberr = tpb_k_alloc_output("copy_time", ntest, &copy_time);
@@ -171,6 +185,9 @@ _tpbk_run_stream(void)
     tpberr = tpb_k_alloc_output("triad_time", ntest, &triad_time);
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
+    if (tpberr) return tpberr;
+    uint32_t *array_size_out = NULL;
+    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
     if (tpberr) return tpberr;
 
     /* Measured data throughput rate is a derived metrics, adding at run-time */
@@ -215,18 +232,18 @@ _tpbk_run_stream(void)
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_stream(&timer, ntest, memsize, copy_time, scale_time, add_time, triad_time, 
-                      real_memsize, copy_bw, scale_bw, add_bw, triad_bw);
+    tpberr = d_stream(&timer, ntest, memsize, array_size, copy_time, scale_time, add_time, triad_time,
+                      real_memsize, array_size_out, copy_bw, scale_bw, add_bw, triad_bw);
 
     return tpberr;
 }
 
 static int
-d_stream(tpb_timer_t *timer, int ntest, double kib, 
-          int64_t *copy_time, int64_t *scale_time, 
+d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
+          int64_t *copy_time, int64_t *scale_time,
           int64_t *add_time, int64_t *triad_time,
-          uint64_t *real_memsize, 
-          double *copy_bw, double *scale_bw, 
+          uint64_t *real_memsize, uint32_t *array_size_out,
+          double *copy_bw, double *scale_bw,
           double *add_bw, double *triad_bw) {
     int narr, err;
     double *a, *b, *c;
@@ -234,8 +251,14 @@ d_stream(tpb_timer_t *timer, int ntest, double kib,
     uint64_t t0, t1;
 
     err = 0;
-    narr = (int)(kib * 1024 / sizeof(double) / 3);
+    /* Use array_size if specified (non-zero), otherwise use memsize */
+    if (array_size > 0) {
+        narr = array_size;
+    } else {
+        narr = (int)(kib * 1024 / sizeof(double) / 3);
+    }
     *real_memsize = narr * sizeof(double) * 3;
+    *array_size_out = narr;
 
     MALLOC(a, narr);
     MALLOC(b, narr);

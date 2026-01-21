@@ -663,6 +663,15 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
                 case TPB_INT64_T:
                     *((int64_t *)argptr) = current_rthdl->argpack.args[i].value.i64;
                     break;
+                case TPB_UINT8_T:
+                    *((uint8_t *)argptr) = (uint8_t)current_rthdl->argpack.args[i].value.u64;
+                    break;
+                case TPB_UINT16_T:
+                    *((uint16_t *)argptr) = (uint16_t)current_rthdl->argpack.args[i].value.u64;
+                    break;
+                case TPB_UINT32_T:
+                    *((uint32_t *)argptr) = (uint32_t)current_rthdl->argpack.args[i].value.u64;
+                    break;
                 case TPB_UINT64_T:
                     *((uint64_t *)argptr) = (uint64_t)current_rthdl->argpack.args[i].value.u64;
                     break;
