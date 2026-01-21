@@ -23,7 +23,11 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_LIST_DUP,            TPBE_FAIL, "Duplicated element."},
     {TPBE_NULLPTR_ARG,         TPBE_FAIL, "Empty input pointer."},
     {TPBE_DTYPE_NOT_SUPPORTED, TPBE_FAIL, "Datatype not supported."},
-    {TPBE_ILLEGAL_CALL,        TPBE_FAIL, "Illegal call."}
+    {TPBE_ILLEGAL_CALL,        TPBE_FAIL, "Illegal call."},
+    {TPBE_KERNEL_NE_FAIL,      TPBE_FAIL, "Kernel does not exist."},
+    {TPBE_KARG_NE_FAIL,        TPBE_FAIL, "Kernel argument does not exist."},
+    {TPBE_KERNEL_INCOMPLETE,   TPBE_FAIL, "Incomplete kernel (missing .so or .tpbx)."},
+    {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."}
 };
 
 int
