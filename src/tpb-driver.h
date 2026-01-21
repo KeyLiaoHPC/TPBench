@@ -281,7 +281,7 @@ int tpb_k_finalize_pli(void);
  * @param timer_name Timer name (e.g., "clock_gettime", "tsc_asym")
  * @return 0 on success, error code otherwise.
  */
-int tpb_pli_set_timer(const char *timer_name);
+int tpb_k_pli_set_timer(const char *timer_name);
 
 /**
  * @brief Build handle from positional arguments for PLI executable.
@@ -294,6 +294,6 @@ int tpb_pli_set_timer(const char *timer_name);
  * @param argv Array of argument value strings.
  * @return 0 on success, error code otherwise.
  */
-int tpb_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv);
+int tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv);
 
 #endif /* TPB_DRIVER_H */

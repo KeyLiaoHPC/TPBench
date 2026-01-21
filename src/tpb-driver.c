@@ -1258,7 +1258,7 @@ tpb_k_finalize_pli(void)
 }
 
 int
-tpb_pli_set_timer(const char *timer_name)
+tpb_k_pli_set_timer(const char *timer_name)
 {
     if (timer_name == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1269,7 +1269,7 @@ tpb_pli_set_timer(const char *timer_name)
 }
 
 int
-tpb_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
+tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
 {
     if (handle == NULL) {
         return TPBE_NULLPTR_ARG;

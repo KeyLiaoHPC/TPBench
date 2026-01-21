@@ -44,7 +44,7 @@ main(int argc, char **argv)
     }
 
     /* 2. Set timer */
-    err = tpb_pli_set_timer(timer_name);
+    err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
         fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
         return err;
@@ -59,7 +59,7 @@ main(int argc, char **argv)
 
     /* 4. Build handle from positional arguments (argc-2, argv+2) */
     tpb_k_rthdl_t handle;
-    err = tpb_pli_build_handle(&handle, argc - 2, argv + 2);
+    err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
     if (err != 0) {
         fprintf(stderr, "Error: Failed to build handle\n");
         return err;
