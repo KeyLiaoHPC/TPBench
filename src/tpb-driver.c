@@ -172,6 +172,10 @@ tpb_register_kernel()
     if (err != 0) {
         return err;
     }
+    err = register_stream();
+    if (err != 0) {
+        return err;
+    }
 
     /* Create pseudo handle (ihdl=0) for _tpb_common */
     handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));

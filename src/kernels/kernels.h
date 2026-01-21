@@ -15,4 +15,11 @@
  */
 extern int register_triad(void);
 
+/**
+ * @brief Register stream kernel
+ * @param kernel Pointer to kernel structure to fill
+ * @return Error code (0 on success)
+ */
+extern int register_stream(void);
+
 #endif // #ifndef _KERNELS_H

@@ -45,9 +45,14 @@ target_include_directories(tpbench PUBLIC src src/include)
 target_link_libraries(tpbench PUBLIC m)
 
 # Triad kernel as shared library
-add_library(triad SHARED src/kernels/simple/triad.c)
+add_library(triad SHARED src/kernels/simple/tpbk_triad.c)
 target_include_directories(triad PRIVATE src src/include)
 target_link_libraries(triad PRIVATE tpbench m)
+
+# Stream kernel as shared library
+add_library(tpbk_stream SHARED src/kernels/simple/tpbk_stream.c)
+target_include_directories(tpbk_stream PRIVATE src src/include)
+target_link_libraries(tpbk_stream PRIVATE tpbench m)
 
 # Main CLI executable and subcommands
 add_executable(tpbcli
@@ -58,10 +63,10 @@ add_executable(tpbcli
     src/tpbcli-help.c
 )
 target_include_directories(tpbcli PRIVATE src src/include)
-target_link_libraries(tpbcli PRIVATE tpbench triad m)
+target_link_libraries(tpbcli PRIVATE tpbench triad tpbk_stream m)
 
 # Install targets
-install(TARGETS tpbench triad
+install(TARGETS tpbench triad tpbk_stream
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
