@@ -11,8 +11,33 @@ $ mkdir build && cd ./build
 $ cmake ..
 $ make
 $ ls
-CMakeCache.txt  CMakeFiles  cmake_install.cmake  libtpbench.so  libtriad.so  Makefile  tpbcli
+bin  CMakeCache.txt  CMakeFiles  cmake_install.cmake  etc  lib  log  Makefile
 ```
+
+**2）SIMD 和并行化编译选项**
+
+TPBench 支持通过 CMake 选项启用 SIMD 指令集和 OpenMP 并行化。可用的 `-DTPB_USE_*` 选项如下：
+
+| CMake 选项 | 默认值 | 描述 |
+| -------- | -------- | -------- |
+| `-DTPB_USE_AVX512=ON` | OFF | 启用 AVX-512 SIMD 指令集（x86_64） |
+| `-DTPB_USE_AVX2=ON` | OFF | 启用 AVX2 SIMD 指令集（x86_64） |
+| `-DTPB_USE_KP_SVE=ON` | OFF | 启用 ARM SVE SIMD 指令集（aarch64） |
+| `-DTPB_USE_OPENMP=ON` | OFF | 启用 OpenMP 并行化 |
+
+示例：在 x86_64 平台上启用 AVX-512 指令集编译
+```bash
+$ cmake -DTPB_USE_AVX512=ON ..
+$ make
+```
+
+示例：在 ARM 平台上启用 SVE 指令集编译
+```bash
+$ cmake -DTPB_USE_KP_SVE=ON ..
+$ make
+```
+
+注意：SIMD 选项需要编译器和目标平台支持相应的指令集。启用 AVX-512 或 AVX2 时，建议同时添加 `-march=native` 编译选项以获得最佳性能。
 
 # 2 使用 tpbcli 
 ## 2.1 简介
@@ -21,8 +46,12 @@ CMakeCache.txt  CMakeFiles  cmake_install.cmake  libtpbench.so  libtriad.so  Mak
 tpbcli <subcommand> <options>
 ```
 支持 2 个子命令：`run` 和 `benchmark`。
-- `tpbcli run`：用于运行一个或多个 TPBench 内核，支持设置运行时参数，进行可变参数维度扫描。支持通过 TPBench 框架为每个待测内核传递运行时命令行参数、环境变量或 MPI 运行时参数。
-- `tpbcli benchmark`（开发中）：运行预定义的评测套件，每个套件包含一系列评测内核及预定义参数、计分规则及公式，输出评测过程和结果评分。
+- `tpbcli run`: 用于运行一个或多个 TPBench 内核，支持设置运行时参数，进行可变参数维度扫描。支持通过 TPBench 框架为每个待测内核传递运行时命令行参数、环境变量或 MPI 运行时参数。
+- `tpbcli benchmark`: 运行预定义的评测套件，每个套件包含一系列评测内核及预定义参数、计分规则及公式，输出评测过程和结果评分。
+- `tpbcli list`: 列出目前支持的评测内核。
+- `tpbcli help`: 帮助文档。
+
+屏幕上的输出结果会同时输出到log目录下。
 
 ## 2.2 tpbcli run
 
@@ -54,11 +83,11 @@ tpbcli run <tpbench_options> <default_args> \
 参数选项（`--kargs`、`--kenvs`和`--kmpiargs`）接受一个使用逗号分隔的字符串列表，每个列表元素的格式为`<key>=<value>`。一个参数选项后可以存在多个上述键值对，表示将内核中变量名为“\<key\>”的参数设置为“\<value\>”。TPBench解析选项设置，并检查参数的合法性。若对于一轮测试来说，命令行中出现了多次带有相同参数名的设置，那么优先级由高到低为：可变参数>内核参数>默认参数，优先级更高的参数设置将覆盖低优先级参数。对于一个名为“foo”的内核，`--kernel foo` 后的 `--kargs` 定义与默认参数设置重复，那么 `<foo>` 将使用其作用域中最后一次出现的参数。因此，以下三条指令的作用是一样的。
 
 ```
-$ tpbcli --kargs memsize=128,ntest=100 --kernel triad
-$ tpbcli --kargs ntest=10 --kernel triad --kargs memsize=128,ntest=100
-$ tpbcli --kernel triad \
-         --kargs memsize=128 \
-         --kargs ntest=100
+$ ./bin/tpbcli run --kargs memsize=128,ntest=100 --kernel triad
+$ ./bin/tpbcli run --kargs ntest=10 --kernel triad --kargs memsize=128,ntest=100
+$ ./bin/tpbcli run --kernel triad \
+    --kargs memsize=128 \
+    --kargs ntest=100
 ```
 
 
