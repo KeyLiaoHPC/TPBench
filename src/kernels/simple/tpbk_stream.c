@@ -47,10 +47,9 @@ int _tpbk_register_stream(void);
 int _tpbk_run_stream(void);
 int tpbk_pli_register_stream(void);
 static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
-                   int64_t *copy_time, int64_t *scale_time,
-                   int64_t *add_time, int64_t *triad_time,
-                   uint64_t *real_memsize, uint32_t *array_size_out,
-                   double *copy_bw, double *scale_bw,
+                   int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
+                   int64_t *add_time, int64_t *triad_time, uint64_t *real_memsize,
+                   uint32_t *array_size_out, double *copy_bw, double *scale_bw,
                    double *add_bw, double *triad_bw);
 static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
@@ -84,6 +83,10 @@ tpbk_pli_register_stream(void)
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
+    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)10000);
+    if (err != 0) return err;
 
     /* NO outputs registered here - kernel registers them in its own process */
     /* NO runner function - PLI uses exec */
@@ -113,6 +116,10 @@ _tpbk_register_stream(void)
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if(err != 0) return err;
+    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)0, (int64_t)10000);
+    if (err != 0) return err;
 
     /* Kernel outputs - 4 separate timing sections */
     err = tpb_k_add_output("copy_time", "Measured runtime of copy operation.", 
@@ -150,6 +157,7 @@ _tpbk_run_stream(void)
     tpb_timer_t timer;
     double memsize;
     uint32_t array_size;
+    int64_t twarm_ms;
     /* Output */
     void *copy_time = NULL;
     void *scale_time = NULL;
@@ -171,6 +179,8 @@ _tpbk_run_stream(void)
     tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
+    if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
     if (tpberr) return tpberr;
 
     /* Malloc callbacks for kernel\'s outputs - 4 separate timing arrays */
@@ -230,18 +240,19 @@ _tpbk_run_stream(void)
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_stream(&timer, ntest, memsize, array_size, copy_time, scale_time, add_time, triad_time,
-                      real_memsize, array_size_out, copy_bw, scale_bw, add_bw, triad_bw);
+    tpberr = d_stream(&timer, ntest, memsize, array_size, twarm_ms,
+                      copy_time, scale_time, add_time, triad_time,
+                      real_memsize, array_size_out, copy_bw, scale_bw,
+                      add_bw, triad_bw);
 
     return tpberr;
 }
 
 static int
 d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
-          int64_t *copy_time, int64_t *scale_time,
-          int64_t *add_time, int64_t *triad_time,
-          uint64_t *real_memsize, uint32_t *array_size_out,
-          double *copy_bw, double *scale_bw,
+          int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
+          int64_t *add_time, int64_t *triad_time, uint64_t *real_memsize,
+          uint32_t *array_size_out, double *copy_bw, double *scale_bw,
           double *add_bw, double *triad_bw) {
     int narr, err;
     double *a, *b, *c;
@@ -274,7 +285,7 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
 
     clock_gettime(CLOCK_MONOTONIC, &wts);
     wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
-    wns1 = wns0 + 1e9;
+    wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
     while(wns0 < wns1) {
         #pragma omp parallel for shared(a, b, c, s, narr)
         for(int j = 0; j < narr; j ++){

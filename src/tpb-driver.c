@@ -108,20 +108,20 @@ tpb_register_common()
     kernel_common.info.parms[0].plims[0].i64 = 1;
     kernel_common.info.parms[0].plims[1].i64 = 100000;
 
-    /* nskip: number of initial iterations to skip */
-    snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "nskip");
-    snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Number of initial iterations to skip");
-    kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[1].default_value.i64 = 2;
-    kernel_common.info.parms[1].value.i64 = 2;
-    kernel_common.info.parms[1].nlims = 2;
-    kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    kernel_common.info.parms[1].plims[0].i64 = 0;
-    kernel_common.info.parms[1].plims[1].i64 = 1000;
+    // /* nskip: number of initial iterations to skip */
+    // snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "nskip");
+    // snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Number of initial iterations to skip");
+    // kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
+    // kernel_common.info.parms[1].default_value.i64 = 2;
+    // kernel_common.info.parms[1].value.i64 = 2;
+    // kernel_common.info.parms[1].nlims = 2;
+    // kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
+    // kernel_common.info.parms[1].plims[0].i64 = 0;
+    // kernel_common.info.parms[1].plims[1].i64 = 1000;
 
     /* twarm: warmup time in milliseconds */
     snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "twarm");
-    snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Warmup time in milliseconds");
+    snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Warm-up time in milliseconds");
     kernel_common.info.parms[2].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.parms[2].default_value.i64 = 100;
     kernel_common.info.parms[2].value.i64 = 100;

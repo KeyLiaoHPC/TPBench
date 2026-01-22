@@ -326,16 +326,13 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
             int sep_len = (int)strlen(sep);
             int total_len = parm_len + sep_len;
 
-            /* Check if we need to wrap */
-            if (cur_col + total_len > max_col && cur_col > prefix_len) {
+            /* Check if we need to wrap - disabled, do not auto wrap */
+            /*
+            if (cur_col + total_len > max_col && cur_col > 0) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
-                /* Print continuation indent */
-                char indent[256];
-                memset(indent, ' ', prefix_len);
-                indent[prefix_len] = '\0';
-                tpb_printf(TPBM_PRTN_M_DIRECT, "%s", indent);
-                cur_col = prefix_len;
+                cur_col = 0;
             }
+            */
 
             tpb_printf(TPBM_PRTN_M_DIRECT, "%s%s", parm_buf, sep);
             cur_col += total_len;
