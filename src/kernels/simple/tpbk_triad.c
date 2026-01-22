@@ -121,16 +121,16 @@ _tpbk_register_triad(void)
 
     /* Kernel outputs */
     err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
     err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three triad arrays.",
-                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT );
+                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT );
     if(err != 0) return err;
     err = tpb_k_add_output("array_size", "Actual number of elements per array.",
-                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_POINT);
+                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
     // Set runner function.
     err = tpb_k_add_runner(_tpbk_run_triad);

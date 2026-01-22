@@ -123,22 +123,22 @@ _tpbk_register_stream(void)
 
     /* Kernel outputs - 4 separate timing sections */
     err = tpb_k_add_output("copy_time", "Measured runtime of copy operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("scale_time", "Measured runtime of scale operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("add_time", "Measured runtime of add operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("triad_time", "Measured runtime of triad operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_1D);
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if(err != 0) return err;
     err = tpb_k_add_output("real_memsize", "Actual memory footprint of three stream arrays.",
-                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_SHAPE_POINT );
+                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT );
     if(err != 0) return err;
     err = tpb_k_add_output("array_size", "Actual number of elements per array.",
-                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_POINT);
+                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
     // Set runner function.
     err = tpb_k_add_runner(_tpbk_run_stream);
@@ -202,36 +202,36 @@ _tpbk_run_stream(void)
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
         tpb_k_add_output("copy_bw_walltime", "Measured copy bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("copy_bw_walltime", ntest, &copy_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("scale_bw_walltime", "Measured scale bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("scale_bw_walltime", ntest, &scale_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("add_bw_walltime", "Measured add bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("add_bw_walltime", ntest, &add_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("triad_bw_walltime", "Measured triad bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("triad_bw_walltime", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
         tpb_k_add_output("copy_bw_phystime", "Measured copy bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("copy_bw_phystime", ntest, &copy_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("scale_bw_phystime", "Measured scale bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("scale_bw_phystime", ntest, &scale_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("add_bw_phystime", "Measured add bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("add_bw_phystime", ntest, &add_bw);
         if (tpberr) return tpberr;
         tpb_k_add_output("triad_bw_phystime", "Measured triad bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("triad_bw_phystime", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else {

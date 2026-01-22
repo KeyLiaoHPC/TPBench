@@ -229,6 +229,8 @@ typedef struct tpb_cliout_format {
     size_t nq;
     double *qtiles;
     int sigbit, intbit;
+    int unit_cast;      /* Enable/disable unit casting (0 or 1) */
+    int sigbit_trim;    /* Significant bits for trimming (default 5, 0=no trim) */
     int initialized;
 } tpb_cliout_format_t;
 

@@ -41,6 +41,9 @@ typedef uint64_t TPB_UNIT_T;
 #define TPB_UATTR_SHAPE_5D           ((TPB_UNIT_T)(5ULL << 49))     // 5D array
 #define TPB_UATTR_SHAPE_6D           ((TPB_UNIT_T)(6ULL << 49))     // 6D array
 #define TPB_UATTR_SHAPE_7D           ((TPB_UNIT_T)(7ULL << 49))     // 7D array
+#define TPB_UATTR_TRIM_MASK          ((TPB_UNIT_T)(1ULL << 52))     // Trim control mask
+#define TPB_UATTR_TRIM_N             ((TPB_UNIT_T)(1ULL << 52))     // Disable trimming (bit set)
+#define TPB_UATTR_TRIM_Y             ((TPB_UNIT_T)(0ULL << 52))     // Enable trimming (bit not set, default)
 
 // A full unit name = UKIND&<name_code>
 #define TPB_UKIND_MASK          ((TPB_UNIT_T)  0x0000F00000000000)

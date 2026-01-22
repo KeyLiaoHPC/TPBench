@@ -120,4 +120,14 @@ int tpb_cliout_args(tpb_k_rthdl_t *handle);
  */
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
+/**
+ * @brief Set output formatting arguments for CLI display.
+ *
+ * This function sets the unit_cast and sigbit_trim options for output formatting.
+ *
+ * @param unit_cast Enable/disable unit casting (0 or 1).
+ * @param sigbit_trim Significant bits for trimming (default 5, 0=no trim).
+ */
+void tpb_set_outargs(int unit_cast, int sigbit_trim);
+
 #endif /* TPB_IO_H */

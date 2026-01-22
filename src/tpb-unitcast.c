@@ -110,6 +110,51 @@ static const TPB_UNIT_T tps_dec[] = {
 };
 static const int tps_dec_len = 9;
 
+/* DATAPS (decimal): B/s -> KB/s -> MB/s -> GB/s -> TB/s -> ... */
+static const TPB_UNIT_T dataps_dec[] = {
+    TPB_UNIT_BPS, TPB_UNIT_KBPS, TPB_UNIT_MBPS, TPB_UNIT_GBPS,
+    TPB_UNIT_TBPS, TPB_UNIT_PBPS, TPB_UNIT_EBPS, TPB_UNIT_ZBPS, TPB_UNIT_YBPS
+};
+static const int dataps_dec_len = 9;
+
+/* BITPS (binary): bit/s -> B/s -> KiB/s -> MiB/s -> GiB/s -> ... */
+static const TPB_UNIT_T bitps_bin[] = {
+    TPB_UNIT_BITPS, TPB_UNIT_BYTEPS, TPB_UNIT_KIBPS, TPB_UNIT_MIBPS,
+    TPB_UNIT_GIBPS, TPB_UNIT_TIBPS, TPB_UNIT_PIBPS, TPB_UNIT_EIBPS,
+    TPB_UNIT_ZIBPS, TPB_UNIT_YIBPS
+};
+static const int bitps_bin_len = 10;
+
+/* DATAPCY (decimal): B/cy -> KB/cy -> MB/cy -> GB/cy -> ... */
+static const TPB_UNIT_T datapcy_dec[] = {
+    TPB_UNIT_BPCY, TPB_UNIT_KBPCY, TPB_UNIT_MBPCY, TPB_UNIT_GBPCY,
+    TPB_UNIT_TBPCY, TPB_UNIT_PBPCY, TPB_UNIT_EBPCY, TPB_UNIT_ZBPCY, TPB_UNIT_YBPCY
+};
+static const int datapcy_dec_len = 9;
+
+/* BITPCY (binary): bit/cy -> B/cy -> KiB/cy -> MiB/cy -> ... */
+static const TPB_UNIT_T bitpcy_bin[] = {
+    TPB_UNIT_BITPCY, TPB_UNIT_BYTEPCY, TPB_UNIT_KIBPCY, TPB_UNIT_MIBPCY,
+    TPB_UNIT_GIBPCY, TPB_UNIT_TIBPCY, TPB_UNIT_PIBPCY, TPB_UNIT_EIBPCY,
+    TPB_UNIT_ZIBPCY, TPB_UNIT_YIBPCY
+};
+static const int bitpcy_bin_len = 10;
+
+/* DATAPTICK (decimal): B/tick -> KB/tick -> MB/tick -> ... */
+static const TPB_UNIT_T dataptick_dec[] = {
+    TPB_UNIT_BPTICK, TPB_UNIT_KBPTICK, TPB_UNIT_MBPTICK, TPB_UNIT_GBPTICK,
+    TPB_UNIT_TBPTICK, TPB_UNIT_PBPTICK, TPB_UNIT_EBPTICK, TPB_UNIT_ZBPTICK, TPB_UNIT_YBPTICK
+};
+static const int dataptick_dec_len = 9;
+
+/* BITPTICK (binary): bit/tick -> B/tick -> KiB/tick -> ... */
+static const TPB_UNIT_T bitptick_bin[] = {
+    TPB_UNIT_BITPTICK, TPB_UNIT_BYTEPTICK, TPB_UNIT_KIBPTICK, TPB_UNIT_MIBPTICK,
+    TPB_UNIT_GIBPTICK, TPB_UNIT_TIBPTICK, TPB_UNIT_PIBPTICK, TPB_UNIT_EIBPTICK,
+    TPB_UNIT_ZIBPTICK, TPB_UNIT_YIBPTICK
+};
+static const int bitptick_bin_len = 10;
+
 /* Helper Functions */
 
 /* Get element from array as double, based on dtype */
@@ -202,8 +247,8 @@ tpb_unit_get_scale(TPB_UNIT_T unit)
 /* Unit Casting */
 
 /* Find target unit index in table based on minimum value and sigbit.
-   For EXP-based units, find the largest unit where the scaled value
-   has <= sigbit significant figures. */
+   For EXP-based units, find the unit where the scaled value is in [1, 1000) range.
+   If no such unit exists, use the largest or smallest available. */
 static int
 find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
@@ -213,17 +258,17 @@ find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int s
 
     int target_idx = 0;
 
+    /* Try to find unit where scaled value is in [1, 1000) */
     for (int i = len - 1; i >= 0; i--) {
         double scale = tpb_unit_get_scale(table[i]);
         double scaled_val = min_in_base / scale;
 
-        if (scaled_val >= 1.0) {
-            /* Check significant figures: count integer digits */
-            int int_digits = (int)floor(log10(fabs(scaled_val))) + 1;
-            if (int_digits <= sigbit) {
-                target_idx = i;
-                break;
-            }
+        if (scaled_val >= 1.0 && scaled_val < 1000.0) {
+            target_idx = i;
+            break;
+        } else if (scaled_val >= 1000.0) {
+            /* Value is too large for this unit, continue to larger units */
+            target_idx = i;  /* Use largest available if we don't find better */
         }
     }
 
@@ -231,7 +276,7 @@ find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int s
 }
 
 /* Find target unit index for MUL-based units (DATETIME).
-   Find the largest unit where scaled value >= 1. */
+   Find the unit where scaled value is in [1, 1000) range. */
 static int
 find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
@@ -241,17 +286,17 @@ find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int s
 
     int target_idx = 0;
 
+    /* Try to find unit where scaled value is in [1, 1000) */
     for (int i = len - 1; i >= 0; i--) {
         double scale = tpb_unit_get_scale(table[i]);
         double scaled_val = min_in_base / scale;
 
-        if (scaled_val >= 1.0) {
-            /* Check significant figures */
-            int int_digits = (int)floor(log10(fabs(scaled_val))) + 1;
-            if (int_digits <= sigbit) {
-                target_idx = i;
-                break;
-            }
+        if (scaled_val >= 1.0 && scaled_val < 1000.0) {
+            target_idx = i;
+            break;
+        } else if (scaled_val >= 1000.0) {
+            /* Value is too large for this unit, continue to larger units */
+            target_idx = i;  /* Use largest available if we don't find better */
         }
     }
 
@@ -324,6 +369,36 @@ select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len)
     if (unit_in_table(unit, tps_dec, tps_dec_len)) {
         *table = tps_dec;
         *len = tps_dec_len;
+        return 1;
+    }
+    if (unit_in_table(unit, dataps_dec, dataps_dec_len)) {
+        *table = dataps_dec;
+        *len = dataps_dec_len;
+        return 1;
+    }
+    if (unit_in_table(unit, bitps_bin, bitps_bin_len)) {
+        *table = bitps_bin;
+        *len = bitps_bin_len;
+        return 1;
+    }
+    if (unit_in_table(unit, datapcy_dec, datapcy_dec_len)) {
+        *table = datapcy_dec;
+        *len = datapcy_dec_len;
+        return 1;
+    }
+    if (unit_in_table(unit, bitpcy_bin, bitpcy_bin_len)) {
+        *table = bitpcy_bin;
+        *len = bitpcy_bin_len;
+        return 1;
+    }
+    if (unit_in_table(unit, dataptick_dec, dataptick_dec_len)) {
+        *table = dataptick_dec;
+        *len = dataptick_dec_len;
+        return 1;
+    }
+    if (unit_in_table(unit, bitptick_bin, bitptick_bin_len)) {
+        *table = bitptick_bin;
+        *len = bitptick_bin_len;
         return 1;
     }
 
@@ -447,10 +522,10 @@ tpb_format_value(double value, char *buf, size_t bufsize,
     double absval = fabs(value);
     int value_int_digits = (absval >= 1.0) ? (int)floor(log10(absval)) + 1 : 0;
 
-    /* Case 2: sigbit>0 && intbit<=0 - Format as 0.XXXXXeE */
+    /* Case 2: sigbit>0 && intbit<=0 - Format as 0.XXXXXE */
     if (sigbit > 0 && intbit <= 0) {
         /* All sigbit digits after decimal point */
-        return snprintf(buf, bufsize, "%.*e", sigbit - 1, value);
+        return snprintf(buf, bufsize, "%.*E", sigbit - 1, value);
     }
 
     /* Case 3: sigbit<=0 && intbit>0 - Limit integer digits only */

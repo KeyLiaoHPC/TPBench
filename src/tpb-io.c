@@ -47,6 +47,8 @@ static tpb_cliout_format_t cliout_fmt = {
     .max_col = 85,
     .qtiles = default_qtiles,
     .nq = 5,
+    .unit_cast = 0,
+    .sigbit_trim = 5,
     .initialized = 0
 };
 
@@ -70,7 +72,32 @@ init_cliout(void)
 
     cliout_fmt.sigbit = 5;
     cliout_fmt.intbit = 1;
+    
+    /* Read outargs from environment variables (for PLI kernels) */
+    const char *env_unit_cast = getenv("TPBENCH_UNIT_CAST");
+    const char *env_sigbit_trim = getenv("TPBENCH_SIGBIT_TRIM");
+    if (env_unit_cast != NULL) {
+        cliout_fmt.unit_cast = atoi(env_unit_cast);
+    }
+    if (env_sigbit_trim != NULL) {
+        cliout_fmt.sigbit_trim = atoi(env_sigbit_trim);
+    }
+    
     cliout_fmt.initialized = 1;
+}
+
+void
+tpb_set_outargs(int unit_cast, int sigbit_trim)
+{
+    cliout_fmt.unit_cast = unit_cast;
+    cliout_fmt.sigbit_trim = sigbit_trim;
+    
+    /* Set environment variables for PLI kernels */
+    char buf[32];
+    snprintf(buf, sizeof(buf), "%d", unit_cast);
+    setenv("TPBENCH_UNIT_CAST", buf, 1);
+    snprintf(buf, sizeof(buf), "%d", sigbit_trim);
+    setenv("TPBENCH_SIGBIT_TRIM", buf, 1);
 }
 
 static inline TPB_UNIT_T
@@ -357,6 +384,8 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     size_t nq = cliout_fmt.nq;
     int sigbit = cliout_fmt.sigbit;
     int intbit = cliout_fmt.intbit;
+    int unit_cast = cliout_fmt.unit_cast;
+    int sigbit_trim = cliout_fmt.sigbit_trim;
 
     /* Test results section */
     tpb_printf(TPBM_PRTN_M_DIRECT, "## Output  \n");
@@ -380,9 +409,9 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             continue;
         }
 
-        /* Check if cast is enabled for this output */
+        /* Check if cast is enabled for this output and unit_cast is enabled */
         int cast_enabled = (out->unit & TPB_UATTR_CAST_MASK) == TPB_UATTR_CAST_Y;
-        if (!cast_enabled) {
+        if (!cast_enabled || !unit_cast) {
             continue;
         }
 
@@ -440,9 +469,10 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             continue;
         }
 
-        /* Extract shape and cast control from unit */
+        /* Extract shape, cast control, and trim control from unit */
         TPB_UNIT_T shape = out->unit & TPB_UATTR_SHAPE_MASK;
         int cast_enabled = (out->unit & TPB_UATTR_CAST_MASK) == TPB_UATTR_CAST_Y;
+        int trim_disabled = (out->unit & TPB_UATTR_TRIM_MASK) == TPB_UATTR_TRIM_N;  /* TRIM_N means bit is set */
         TPB_UNIT_T base_unit = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
 
         /* Print metrics name */
@@ -450,7 +480,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
 
         /* Determine display unit */
         TPB_UNIT_T display_unit = base_unit;
-        if (cast_enabled) {
+        if (cast_enabled && unit_cast) {
             TPB_UNIT_T uname = get_uname(out->unit);
             for (int g = 0; g < ngroups; g++) {
                 if (group_unames[g] == uname) {
@@ -474,14 +504,35 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             }
 
             /* Scale value if cast enabled and units differ */
-            if (cast_enabled && display_unit != base_unit) {
+            if (cast_enabled && unit_cast && display_unit != base_unit) {
                 double current_scale = tpb_unit_get_scale(base_unit);
                 double target_scale = tpb_unit_get_scale(display_unit);
                 value = (value * current_scale) / target_scale;
             }
 
             char buf[64];
-            tpb_format_value(value, buf, sizeof(buf), sigbit, intbit);
+            /* Use sigbit_trim if enabled and not disabled for this output */
+            if (sigbit_trim > 0 && !trim_disabled) {
+                tpb_format_value(value, buf, sizeof(buf), sigbit_trim, intbit);
+            } else if (sigbit_trim == 0 || trim_disabled) {
+                /* sigbit_trim=0 or TRIM_N: no formatting, print as-is WITHOUT scientific notation */
+                /* Check if value is integer-like (no significant fractional part) */
+                if (value == floor(value)) {
+                    snprintf(buf, sizeof(buf), "%.0f", value);
+                } else {
+                    snprintf(buf, sizeof(buf), "%f", value);
+                    /* Remove trailing zeros after decimal point */
+                    int len = strlen(buf);
+                    while (len > 0 && buf[len-1] == '0') {
+                        buf[--len] = '\0';
+                    }
+                    if (len > 0 && buf[len-1] == '.') {
+                        buf[--len] = '\0';
+                    }
+                }
+            } else {
+                tpb_format_value(value, buf, sizeof(buf), sigbit, intbit);
+            }
             tpb_printf(TPBM_PRTN_M_DIRECT, "Result value: %s\n", buf);
 
         } else if (shape == TPB_UATTR_SHAPE_1D) {
@@ -498,20 +549,41 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             err = tpb_stat_qtile_1d(out->p, (size_t)out->n, out->dtype, qtiles, nq, qout);
             if (err != TPBE_SUCCESS) {
                 /* Scale and format mean */
-                if (cast_enabled && display_unit != base_unit) {
+                if (cast_enabled && unit_cast && display_unit != base_unit) {
                     double current_scale = tpb_unit_get_scale(base_unit);
                     double target_scale = tpb_unit_get_scale(display_unit);
                     mean_val = (mean_val * current_scale) / target_scale;
                 }
                 char buf[64];
-                tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+                /* Use sigbit_trim if enabled and not disabled for this output */
+                if (sigbit_trim > 0 && !trim_disabled) {
+                    tpb_format_value(mean_val, buf, sizeof(buf), sigbit_trim, intbit);
+                } else if (sigbit_trim == 0 || trim_disabled) {
+                    /* sigbit_trim=0 or TRIM_N: no formatting, print as-is WITHOUT scientific notation */
+                    /* Check if value is integer-like (no significant fractional part) */
+                    if (mean_val == floor(mean_val)) {
+                        snprintf(buf, sizeof(buf), "%.0f", mean_val);
+                    } else {
+                        snprintf(buf, sizeof(buf), "%f", mean_val);
+                        /* Remove trailing zeros after decimal point */
+                        int len = strlen(buf);
+                        while (len > 0 && buf[len-1] == '0') {
+                            buf[--len] = '\0';
+                        }
+                        if (len > 0 && buf[len-1] == '.') {
+                            buf[--len] = '\0';
+                        }
+                    }
+                } else {
+                    tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+                }
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: N/A\n");
                 continue;
             }
 
             /* Scale values if cast enabled and units differ */
-            if (cast_enabled && display_unit != base_unit) {
+            if (cast_enabled && unit_cast && display_unit != base_unit) {
                 double current_scale = tpb_unit_get_scale(base_unit);
                 double target_scale = tpb_unit_get_scale(display_unit);
                 mean_val = (mean_val * current_scale) / target_scale;
@@ -522,7 +594,28 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
 
             /* Print mean */
             char buf[64];
-            tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            /* Use sigbit_trim if enabled and not disabled for this output */
+            if (sigbit_trim > 0 && !trim_disabled) {
+                tpb_format_value(mean_val, buf, sizeof(buf), sigbit_trim, intbit);
+            } else if (sigbit_trim == 0 || trim_disabled) {
+                /* sigbit_trim=0 or TRIM_N: no formatting, print as-is WITHOUT scientific notation */
+                /* Check if value is integer-like (no significant fractional part) */
+                if (mean_val == floor(mean_val)) {
+                    snprintf(buf, sizeof(buf), "%.0f", mean_val);
+                } else {
+                    snprintf(buf, sizeof(buf), "%f", mean_val);
+                    /* Remove trailing zeros after decimal point */
+                    int len = strlen(buf);
+                    while (len > 0 && buf[len-1] == '0') {
+                        buf[--len] = '\0';
+                    }
+                    if (len > 0 && buf[len-1] == '.') {
+                        buf[--len] = '\0';
+                    }
+                }
+            } else {
+                tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            }
             tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
 
             /* Print quantiles */
@@ -531,7 +624,28 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
                 if (q > 0) {
                     tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
                 }
-                tpb_format_value(qout[q], buf, sizeof(buf), sigbit, intbit);
+                /* Use sigbit_trim if enabled and not disabled for this output */
+                if (sigbit_trim > 0 && !trim_disabled) {
+                    tpb_format_value(qout[q], buf, sizeof(buf), sigbit_trim, intbit);
+                } else if (sigbit_trim == 0 || trim_disabled) {
+                    /* sigbit_trim=0 or TRIM_N: no formatting, print as-is WITHOUT scientific notation */
+                    /* Check if value is integer-like (no significant fractional part) */
+                    if (qout[q] == floor(qout[q])) {
+                        snprintf(buf, sizeof(buf), "%.0f", qout[q]);
+                    } else {
+                        snprintf(buf, sizeof(buf), "%f", qout[q]);
+                        /* Remove trailing zeros after decimal point */
+                        int len = strlen(buf);
+                        while (len > 0 && buf[len-1] == '0') {
+                            buf[--len] = '\0';
+                        }
+                        if (len > 0 && buf[len-1] == '.') {
+                            buf[--len] = '\0';
+                        }
+                    }
+                } else {
+                    tpb_format_value(qout[q], buf, sizeof(buf), sigbit, intbit);
+                }
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Q%.2f=%s", qtiles[q], buf);
             }
             tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
@@ -550,14 +664,35 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             }
 
             /* Scale value if cast enabled and units differ */
-            if (cast_enabled && display_unit != base_unit) {
+            if (cast_enabled && unit_cast && display_unit != base_unit) {
                 double current_scale = tpb_unit_get_scale(base_unit);
                 double target_scale = tpb_unit_get_scale(display_unit);
                 mean_val = (mean_val * current_scale) / target_scale;
             }
 
             char buf[64];
-            tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            /* Use sigbit_trim if enabled and not disabled for this output */
+            if (sigbit_trim > 0 && !trim_disabled) {
+                tpb_format_value(mean_val, buf, sizeof(buf), sigbit_trim, intbit);
+            } else if (sigbit_trim == 0 || trim_disabled) {
+                /* sigbit_trim=0 or TRIM_N: no formatting, print as-is WITHOUT scientific notation */
+                /* Check if value is integer-like (no significant fractional part) */
+                if (mean_val == floor(mean_val)) {
+                    snprintf(buf, sizeof(buf), "%.0f", mean_val);
+                } else {
+                    snprintf(buf, sizeof(buf), "%f", mean_val);
+                    /* Remove trailing zeros after decimal point */
+                    int len = strlen(buf);
+                    while (len > 0 && buf[len-1] == '0') {
+                        buf[--len] = '\0';
+                    }
+                    if (len > 0 && buf[len-1] == '.') {
+                        buf[--len] = '\0';
+                    }
+                }
+            } else {
+                tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
+            }
             tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
         }
     }

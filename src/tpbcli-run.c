@@ -25,6 +25,9 @@ static void parse_integ_mode(int argc, char **argv);
 /* Parse run-specific arguments */
 static int parse_run(int argc, char **argv);
 
+/* Parse outargs string and set output formatting options */
+static int parse_outargs_string(const char *outargs_str);
+
 /* Local Function Implementations */
 
 static void
@@ -43,6 +46,65 @@ parse_integ_mode(int argc, char **argv)
     }
 
     tpb_driver_set_integ_mode(mode);
+}
+
+static int
+parse_outargs_string(const char *outargs_str)
+{
+    char *str_copy = strdup(outargs_str);
+    if (str_copy == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Variables to accumulate settings - use defaults if not specified */
+    int unit_cast = 0;      /* Default: no unit casting */
+    int sigbit_trim = 5;    /* Default: 5 significant bits */
+
+    char *token = strtok(str_copy, ",");
+    while (token != NULL) {
+        /* Skip leading whitespace */
+        while (*token == ' ' || *token == '\t') {
+            token++;
+        }
+
+        /* Parse key=value pair */
+        char *eq = strchr(token, '=');
+        if (eq != NULL) {
+            *eq = '\0';
+            char *key = token;
+            char *value = eq + 1;
+
+            /* Remove trailing whitespace from key */
+            char *key_end = key + strlen(key) - 1;
+            while (key_end > key && (*key_end == ' ' || *key_end == '\t')) {
+                *key_end = '\0';
+                key_end--;
+            }
+
+            /* Skip leading whitespace in value */
+            while (*value == ' ' || *value == '\t') {
+                value++;
+            }
+
+            if (strcmp(key, "unit_cast") == 0) {
+                unit_cast = atoi(value);
+            } else if (strcmp(key, "sigbit_trim") == 0) {
+                sigbit_trim = atoi(value);
+            } else {
+                tpb_printf(TPBM_PRTN_M_DIRECT, "Unknown outargs key: %s\n", key);
+                free(str_copy);
+                return TPBE_CLI_FAIL;
+            }
+        }
+
+        token = strtok(NULL, ",");
+    }
+
+    /* Apply settings after parsing all key=value pairs */
+    tpb_set_outargs(unit_cast, sigbit_trim);
+
+    free(str_copy);
+    return 0;
 }
 
 static int
@@ -106,6 +168,18 @@ parse_run(int argc, char **argv)
             if (err != 0) {
                 tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
                 return TPBE_CLI_FAIL;
+            }
+
+        } else if (strcmp(argv[i], "--outargs") == 0) {
+            if (i + 1 >= argc) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Option %s requires arguments.\n", argv[i]);
+                return TPBE_CLI_FAIL;
+            }
+            i++;
+            err = parse_outargs_string(argv[i]);
+            if (err != 0) {
+                return err;
             }
 
         } else {

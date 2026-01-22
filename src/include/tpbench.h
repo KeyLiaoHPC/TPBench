@@ -19,6 +19,9 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_UATTR_SHAPE_MASK         ((TPB_UNIT_T)(7ULL << 49))
 #define TPB_UATTR_SHAPE_POINT        ((TPB_UNIT_T)(0ULL << 49))
 #define TPB_UATTR_SHAPE_1D           ((TPB_UNIT_T)(1ULL << 49))
+#define TPB_UATTR_TRIM_MASK          ((TPB_UNIT_T)(1ULL << 52))
+#define TPB_UATTR_TRIM_N             ((TPB_UNIT_T)(1ULL << 52))
+#define TPB_UATTR_TRIM_Y             ((TPB_UNIT_T)(0ULL << 52))
 
 /* Unit kind/name encoding */
 #define TPB_UKIND_MASK          ((TPB_UNIT_T)0x0000F00000000000)
