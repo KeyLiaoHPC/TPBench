@@ -22,4 +22,16 @@ extern int register_triad(void);
  */
 extern int register_stream(void);
 
+/**
+ * @brief Register staxpy kernel (Stanza AXPY)
+ * @return Error code (0 on success)
+ */
+extern int register_staxpy(void);
+
+/**
+ * @brief Register striad kernel (Stanza Triad)
+ * @return Error code (0 on success)
+ */
+extern int register_striad(void);
+
 #endif // #ifndef _KERNELS_H

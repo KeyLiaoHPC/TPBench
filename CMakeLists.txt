@@ -8,6 +8,35 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Set default optimization to -O2
 add_compile_options(-O2)
 
+# SIMD and parallelization options
+option(TPB_USE_AVX512 "Enable AVX-512 SIMD instructions" OFF)
+option(TPB_USE_AVX2 "Enable AVX2 SIMD instructions" OFF)
+option(TPB_USE_KP_SVE "Enable ARM SVE SIMD instructions" OFF)
+option(TPB_USE_OPENMP "Enable OpenMP parallelization" ON)
+
+# Apply SIMD compile definitions
+if(TPB_USE_AVX512)
+    add_compile_definitions(TPB_USE_AVX512)
+    message(STATUS "TPB_USE_AVX512 enabled")
+endif()
+if(TPB_USE_AVX2)
+    add_compile_definitions(TPB_USE_AVX2)
+    message(STATUS "TPB_USE_AVX2 enabled")
+endif()
+if(TPB_USE_KP_SVE)
+    add_compile_definitions(TPB_USE_KP_SVE)
+    message(STATUS "TPB_USE_KP_SVE enabled")
+endif()
+if(TPB_USE_OPENMP)
+    find_package(OpenMP)
+    if(OpenMP_C_FOUND)
+        add_compile_definitions(TPB_USE_OPENMP)
+        message(STATUS "TPB_USE_OPENMP enabled")
+    else()
+        message(WARNING "OpenMP not found, TPB_USE_OPENMP disabled")
+    endif()
+endif()
+
 # Set output directories for build artifacts
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -65,6 +94,22 @@ add_library(tpbk_stream SHARED src/kernels/simple/tpbk_stream.c)
 target_include_directories(tpbk_stream PRIVATE src src/include)
 target_link_libraries(tpbk_stream PRIVATE tpbench m)
 
+# Staxpy kernel as shared library
+add_library(tpbk_staxpy SHARED src/kernels/simple/tpbk_staxpy.c)
+target_include_directories(tpbk_staxpy PRIVATE src src/include)
+target_link_libraries(tpbk_staxpy PRIVATE tpbench m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_staxpy PRIVATE OpenMP::OpenMP_C)
+endif()
+
+# Striad kernel as shared library
+add_library(tpbk_striad SHARED src/kernels/simple/tpbk_striad.c)
+target_include_directories(tpbk_striad PRIVATE src src/include)
+target_link_libraries(tpbk_striad PRIVATE tpbench m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_striad PRIVATE OpenMP::OpenMP_C)
+endif()
+
 # Main CLI executable and subcommands
 add_executable(tpbcli
     src/tpbcli.c
@@ -74,7 +119,7 @@ add_executable(tpbcli
     src/tpbcli-help.c
 )
 target_include_directories(tpbcli PRIVATE src src/include)
-target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream m)
+target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad m)
 
 # PLI Executables (.tpbx) for triad and stream kernels
 add_executable(tpbk_triad.tpbx src/kernels/simple/tpbk_triad_main.c)
@@ -85,12 +130,26 @@ add_executable(tpbk_stream.tpbx src/kernels/simple/tpbk_stream_main.c)
 target_include_directories(tpbk_stream.tpbx PRIVATE src src/include)
 target_link_libraries(tpbk_stream.tpbx PRIVATE tpbench tpbk_stream m)
 
+add_executable(tpbk_staxpy.tpbx src/kernels/simple/tpbk_staxpy_main.c)
+target_include_directories(tpbk_staxpy.tpbx PRIVATE src src/include)
+target_link_libraries(tpbk_staxpy.tpbx PRIVATE tpbench tpbk_staxpy m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_staxpy.tpbx PRIVATE OpenMP::OpenMP_C)
+endif()
+
+add_executable(tpbk_striad.tpbx src/kernels/simple/tpbk_striad_main.c)
+target_include_directories(tpbk_striad.tpbx PRIVATE src src/include)
+target_link_libraries(tpbk_striad.tpbx PRIVATE tpbench tpbk_striad m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_striad.tpbx PRIVATE OpenMP::OpenMP_C)
+endif()
+
 # Install targets
-install(TARGETS tpbench tpbk_triad tpbk_stream
+install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
-install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx
+install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx tpbk_staxpy.tpbx tpbk_striad.tpbx
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Install public headers
