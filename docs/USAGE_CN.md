@@ -57,7 +57,7 @@ tpbcli <subcommand> <options>
 
 ### 2.2.1 基础格式
 
-`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。
+`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kmpiargs-dims`时，选项需要加引号。
 ``` bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
@@ -76,7 +76,7 @@ tpbcli run <tpbench_options> <default_args> \
 
 `--kernel` 选项定义一个即将被测试的评测内核，名为 `<kernel_name>`。随后出现的所有以 `--k*` 开头的选项代表内核选项，被应用于该评测内核，直至出现下一个 `--kernel` 或命令行结束。如果 `--kargs`、`--kenvs` 和 `--kmpiargs` 之前未指定 `--kernel`，则该设置的参数作为默认参数，传递给所有待运行内核。TPBench 将执行若干轮测试，直至完成所有 `--kernel` 定义的内核测试，或中途报错退出。一个 `--kargs` 可以设置多个参数，参数之间使用逗号隔开。若等号后使用逗号作为参数设置的一部分，则需要使用引号包裹，防止错误解析。
 
-语法：`--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
+语法：`--kernel <kernel_name> --kargs '<key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...'`
 
 对于一个 `--kernel` 定义，`--kargs`、`--kenvs` 和 `--kmpiargs` 可以出现多次，但是带有后缀 `_dim` 的选项只能出现一次（见2.2.3节）。当同一参数名在一个 `--kernel` 定义后出现多次时，TPBench 将使用最后一次出现的值。
 
@@ -120,48 +120,48 @@ $ tpbcli run --kargs memsize=128,ntest=100 -k triad -k pchase --kargs=1000
 
 对于指定评测内核的一个参数，生成一个步长确定的连续序列。语法如下所示，对参数 `<parm_name>`，生成从 `st` 出发、步长为 `step` 的列表，参数值满足闭区间 `[st,en]`。
 
-语法：`--kargs-dim <parm_name>=(st,en,step)`
+语法：`--kargs-dim '<parm_name>=(st,en,step)'`
 
 示例：运行 `triad` 内核，使用 `double` 数据类型，每轮测试运行 100 次循环。配置内存总容量 `memsize` 为可变参数，该参数为线性序列，以 128KiB 为间隔，令 128KiB <= memsize <= 512KiB。TPBench 将运行 4 轮 `triad` 测试，分别将 `memsize` 参数设置为 128、256、384、512。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim memsize=(128,512,128)
+$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'memsize=(128,512,128)'
 ```
 
 **2）显式列表**
 
 对于指定评测内核的一个参数，生成一个显式指定元素的集合，依次使用集合中的每个元素运行评测。语法如下所示，对参数 `<parm_name>`，生成集合，包含元素 `a`、`b`、`c`……
 
-语法：`--kargs-dim <parm_name>=[a, b, c, ...]`
+语法：`--kargs-dim '<parm_name>=[a, b, c, ...]'`
 
 示例：运行 `triad` 内核，设置总内存容量 256KiB，每轮测试运行 100 次循环。配置数据类型 `dtype` 为可变参数，该参数为显式列表序列，包含 `double`、`float`、`iso-fp16`。TPBench 将轮流使用上述 3 种变量格式，共运行 3 轮 triad 测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100,memsize=256 --kargs-dim dtype=[double,float,iso-fp16]
+$ tpbcli --kernel triad --kargs ntest=100,memsize=256 --kargs-dim 'dtype=[double,float,iso-fp16]'
 ```
 
 **3）递推序列**
 
 对于指定评测内核的一个参数，生成一个递推参数序列。初值 `st`，使用计算 `<op>`，基于上一次测试的参数值 `@` 计算出新参数值。上述参数配置中，符号 `@` 表示递推变量；`op` 表示操作符，目前支持 add、sub、mul、div 和 pow；`st` 表示 `parm_name` 参数首次测试的值；`min`、`max` 和 `nlim` 分别表示递推结果的最小值、最大值和递推步数限制。当递推结果超出 `[min, max]` 区间，或递推步数高于 `nlim` 时，递推将终止。`nlim` 设置为 0 时，不限制递推步数。
 
-语法：`--kargs-dim <parm_name>=<op>(@,x)(st,min,max,nlim)`
+语法：`--kargs-dim <parm_name>='<op>(@,x)(st,min,max,nlim)'`
 
 示例：运行 `triad` 内核，每轮执行 100 个循环，轮流将 `memsize` 设置为 `16`、`32`、`64`、`128`，共运行 4 轮测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim memsize=mul(@,2)(16,16,128,0)
+$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'memsize=mul(@,2)(16,16,128,0)'
 ```
 
 **4）嵌套序列**
 
 嵌套多个可变参数，每个可变参数定义后，可以在大括号中定义另一个可变参数。在命令行解析中，最内层的参数列表将被优先计算。注意，目前不允许在不同嵌套层定义相同参数名。
 
-语法：`--kargs-dim <dim>{<nested_dim1>{<nested_dim2>{...}}}`
+语法：`--kargs-dim '<dim>{<nested_dim1>{<nested_dim2>{...}}}'`
 
 示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式。对于每种格式，轮流将 `memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim dtype=[double,float,iso-fp16]{memsize=mul(@,2)(16,16,128,0)}
+$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'dtype=[double,float,iso-fp16]{memsize=mul(@,2)(16,16,128,0)}'
 ```
 
 ### 2.2.4 设置计时方法

@@ -9,13 +9,18 @@
 #include <stdio.h>
 #include <linux/limits.h>
 #include <string.h>
+#include <inttypes.h>
 #include "tpbcli-run.h"
 #include "tpb-argp.h"
+#include "tpb-argp-dim.h"
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
 #include "kernels/kernels.h"
+
+/* Maximum number of dimension configs per kernel */
+#define MAX_DIM_CONFIGS 16
 
 /* Local Function Prototypes */
 
@@ -27,6 +32,16 @@ static int parse_run(int argc, char **argv);
 
 /* Parse outargs string and set output formatting options */
 static int parse_outargs_string(const char *outargs_str);
+
+/* Expand handles based on dimension configurations */
+static int expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
+
+/* Apply dimension value to current handle */
+static int apply_dim_value(tpb_dim_values_t *dim_val, int index);
+
+/* Recursive helper for expanding nested dimensions */
+static int expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
+                              int max_depth, const char *kernel_name);
 
 /* Local Function Implementations */
 
@@ -113,6 +128,10 @@ parse_run(int argc, char **argv)
     int err = 0;
     int nkern_parsed = 0;
 
+    /* Dimension config tracking per kernel */
+    tpb_dim_config_t *pending_dim_cfg = NULL;
+    char pending_kernel_name[TPBM_NAME_STR_MAX_LEN] = {0};
+
     /* Set default timer */
     err = tpb_argp_set_timer("clock_gettime");
     if (err != 0) {
@@ -128,7 +147,19 @@ parse_run(int argc, char **argv)
             /* Already handled in parse_integ_mode */
             continue;
 
-        } else if (strcmp(argv[i], "--kernel") == 0) {
+        } else if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
+            /* Before adding new kernel, expand any pending dimension config */
+            if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
+                err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
+                if (err != 0) {
+                    tpb_dim_config_free(pending_dim_cfg);
+                    return err;
+                }
+                tpb_dim_config_free(pending_dim_cfg);
+                pending_dim_cfg = NULL;
+                pending_kernel_name[0] = '\0';
+            }
+
             if (i + 1 >= argc) {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "Option %s requires arguments.\n", argv[i]);
@@ -141,6 +172,9 @@ parse_run(int argc, char **argv)
             if (err != 0) {
                 return err;
             }
+
+            /* Track current kernel name for potential dim expansion */
+            snprintf(pending_kernel_name, TPBM_NAME_STR_MAX_LEN, "%s", argv[i]);
             nkern_parsed++;
 
         } else if (strcmp(argv[i], "--kargs") == 0) {
@@ -155,6 +189,35 @@ parse_run(int argc, char **argv)
             err = tpb_argp_set_kargs_tokstr((int)strlen(argv[i]), argv[i], NULL);
             if (err != 0) {
                 return err;
+            }
+
+        } else if (strcmp(argv[i], "--kargs-dim") == 0) {
+            if (i + 1 >= argc) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Option %s requires arguments.\n", argv[i]);
+                return TPBE_CLI_FAIL;
+            }
+            i++;  /* Move to the dimension argument string */
+
+            /* Parse dimension configuration */
+            tpb_dim_config_t *new_cfg = NULL;
+            err = tpb_argp_parse_dim(argv[i], &new_cfg);
+            if (err != 0) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Failed to parse --kargs-dim: %s\n", argv[i]);
+                return err;
+            }
+
+            /* Chain nested dimensions if there's already a pending config */
+            if (pending_dim_cfg != NULL) {
+                /* Find the deepest nested config and attach new one */
+                tpb_dim_config_t *tail = pending_dim_cfg;
+                while (tail->nested != NULL) {
+                    tail = tail->nested;
+                }
+                tail->nested = new_cfg;
+            } else {
+                pending_dim_cfg = new_cfg;
             }
 
         } else if (strcmp(argv[i], "--timer") == 0) {
@@ -188,12 +251,209 @@ parse_run(int argc, char **argv)
         }
     }
 
+    /* Expand any remaining pending dimension config */
+    if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
+        err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
+        if (err != 0) {
+            tpb_dim_config_free(pending_dim_cfg);
+            return err;
+        }
+        tpb_dim_config_free(pending_dim_cfg);
+        pending_dim_cfg = NULL;
+    }
+
     if (nkern_parsed == 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT, "No kernels specified. Use --kernel option.\n");
         return TPBE_CLI_FAIL;
     }
 
     return 0;
+}
+
+/* ============================================================================
+ * Dimension Expansion Functions
+ * ============================================================================ */
+
+/**
+ * @brief Apply a dimension value to the current handle.
+ */
+static int
+apply_dim_value(tpb_dim_values_t *dim_val, int index)
+{
+    char value_str[256];
+
+    if (dim_val == NULL || index < 0 || index >= dim_val->n) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if (dim_val->is_string && dim_val->str_values != NULL) {
+        /* Use string value directly */
+        return tpb_driver_set_hdl_karg(dim_val->parm_name, dim_val->str_values[index]);
+    } else {
+        /* Convert numeric value to string */
+        double val = dim_val->values[index];
+        if (val == (int64_t)val) {
+            snprintf(value_str, sizeof(value_str), "%" PRId64, (int64_t)val);
+        } else {
+            snprintf(value_str, sizeof(value_str), "%.15g", val);
+        }
+        return tpb_driver_set_hdl_karg(dim_val->parm_name, value_str);
+    }
+}
+
+/**
+ * @brief Count nesting depth of dimension values.
+ */
+static int
+count_dim_depth(tpb_dim_values_t *vals)
+{
+    int depth = 0;
+    tpb_dim_values_t *p = vals;
+    while (p != NULL) {
+        depth++;
+        p = p->nested;
+    }
+    return depth;
+}
+
+/**
+ * @brief Get dimension values at specific depth.
+ */
+static tpb_dim_values_t *
+get_dim_at_depth(tpb_dim_values_t *vals, int depth)
+{
+    tpb_dim_values_t *p = vals;
+    for (int i = 0; i < depth && p != NULL; i++) {
+        p = p->nested;
+    }
+    return p;
+}
+
+/**
+ * @brief Recursive helper for expanding nested dimensions.
+ *
+ * Creates handles for each combination of dimension values.
+ * The first combination modifies the existing handle, subsequent ones create new handles.
+ *
+ * @param vals       Dimension values structure.
+ * @param indices    Array tracking current index at each depth.
+ * @param depth      Current recursion depth.
+ * @param max_depth  Total nesting depth.
+ * @param kernel_name Kernel name for creating new handles.
+ * @param is_first   Pointer to flag indicating if this is the first combination.
+ */
+static int
+expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
+                        int max_depth, const char *kernel_name, int *is_first)
+{
+    int err;
+    tpb_dim_values_t *current = get_dim_at_depth(vals, depth);
+
+    if (current == NULL) {
+        return 0;
+    }
+
+    if (depth == max_depth - 1) {
+        /* Innermost dimension: create handles for each value */
+        for (int i = 0; i < current->n; i++) {
+            indices[depth] = i;
+
+            if (*is_first) {
+                /* First combination: apply to existing handle (already created by --kernel) */
+                *is_first = 0;
+            } else {
+                /* Subsequent combinations: add a new handle */
+                err = tpb_driver_add_handle(kernel_name);
+                if (err != 0) {
+                    return err;
+                }
+            }
+
+            /* Apply all dimension values from outer to inner */
+            for (int d = 0; d <= depth; d++) {
+                tpb_dim_values_t *dim_at_d = get_dim_at_depth(vals, d);
+                err = apply_dim_value(dim_at_d, indices[d]);
+                if (err != 0) {
+                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                               "Failed to set dimension value for '%s'\n",
+                               dim_at_d->parm_name);
+                    /* Continue anyway - parameter might not exist for this kernel */
+                }
+            }
+        }
+    } else {
+        /* Outer dimension: iterate and recurse */
+        for (int i = 0; i < current->n; i++) {
+            indices[depth] = i;
+            err = expand_nested_dims_impl(vals, indices, depth + 1, max_depth,
+                                          kernel_name, is_first);
+            if (err != 0) {
+                return err;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Wrapper for expand_nested_dims_impl.
+ */
+static int
+expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
+                   int max_depth, const char *kernel_name)
+{
+    int is_first = 1;
+    return expand_nested_dims_impl(vals, indices, depth, max_depth, kernel_name, &is_first);
+}
+
+/**
+ * @brief Expand handles based on dimension configurations.
+ *
+ * For a kernel with dimension config, this creates multiple handles,
+ * one for each combination of dimension values.
+ */
+static int
+expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
+{
+    tpb_dim_values_t *dim_vals = NULL;
+    int err;
+    int total_count;
+    int depth;
+
+    if (dim_cfg == NULL || kernel_name == NULL) {
+        return 0;  /* No dimension to expand */
+    }
+
+    /* Generate values from configuration */
+    err = tpb_dim_generate_values(dim_cfg, &dim_vals);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Failed to generate dimension values\n");
+        return err;
+    }
+
+    total_count = tpb_dim_get_total_count(dim_cfg);
+    depth = count_dim_depth(dim_vals);
+
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "Expanding %d dimension combinations for kernel '%s'\n",
+               total_count, kernel_name);
+
+    /* Allocate indices array for recursive expansion */
+    int *indices = (int *)calloc(depth, sizeof(int));
+    if (indices == NULL) {
+        tpb_dim_values_free(dim_vals);
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Expand dimensions recursively */
+    err = expand_nested_dims(dim_vals, indices, 0, depth, kernel_name);
+
+    free(indices);
+    tpb_dim_values_free(dim_vals);
+
+    return err;
 }
 
 /* Public Function Implementations */

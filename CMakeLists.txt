@@ -65,6 +65,7 @@ set(TPB_SOURCES
     src/tpb-unitcast.c
     src/tpb-impl.c
     src/tpb-argp.c
+    src/tpb-argp-dim.c
     src/tpb-dynloader.c
 )
 
