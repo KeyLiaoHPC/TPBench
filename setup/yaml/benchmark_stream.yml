@@ -1,0 +1,150 @@
+# A key "benchmark" defines a benchmark suite.
+benchmark:
+  # name: The name of the benchmark suite.
+  name: "streamx6_template"
+  # note: The description of the benchmark suite.
+  note: "This benchmark scores the system with six different sizes of stream benchmarks."
+  # batch: A list of tests being run. The test is executed by the order of the list.
+  batch:
+    # id: A string which is the only index to tag the test
+    # note: A string to explain this test.
+    # kernel: The kernel's name.
+    # kargs: The 2D array of --kargs for `tpbcli run`, each element is a key-value pair. 
+    # v: The array that tells `tpb benchmark` what outputs being used
+    #    The fist element is the output's name.
+    #    The second element is the arithmetic applying to the result, in case it is a array.
+    #    For a single point data, this setting will be ignored. For an array, all data will
+    #    first be flatten to 1D, then apply the arithmetic. Current supported: "mean", "median",
+    #    "max", "min", "Q=<quantile_number>". <quantile_number> is a decimal number in [0,100].
+    - id: S0
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "32"], ["ntest", "100"], ["twarm", "100"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+    - id: S1
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "256"], ["ntest", "100"], ["twarm", "100"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+    - id: S2
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "512"], ["ntest", "100"], ["twarm", "100"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+    - id: S3
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "1024"], ["ntest", "100"], ["twarm", "100"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+    - id: S4
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "131072"], ["ntest", "10"], ["twarm", "10"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+    - id: S5
+      note: ""
+      kernel: stream
+      kargs: [["memsize", "1048576"], ["ntest", "10"], ["twarm", "10"]]
+      v:
+        - ["copy_bw_walltime", "mean"]
+        - ["scale_bw_walltime", "mean"]
+        - ["add_bw_walltime", "mean"]
+        - ["triad_bw_walltime", "mean"]
+  # score: The definition and calculation of benchmark score. 
+  score:
+    # id: A number starts from 0
+    # name: The name of the score
+    # display: 1 to display the result, 0 to hide. Set to 0 for intermediate value. 
+    #          At least one score should be displayed.
+    # modifier and args: For calculate current score, applying a modifier on args. 
+    #                    The "@" means reference, use @<block>.<sub-block>[<key>==<value> or <index>]
+    #                    to use the value of other scores or output values.
+    # Supported modifiers:
+    #   sum: Sum of all args. 
+    #   div: Starts from args[0], score=args[0]/args[1]/args[2]/...
+    #   mul: args[0]*args[1]*...
+    - id: 0
+      name: "Final Score"
+      display: 1
+      modifier: "sum"
+      args:
+        - "@score[id==1]"
+        - "@score[id==2]"
+        - "@score[id==3]"
+        - "@score[id==4]"
+        - "@score[id==5]"
+        - "@score[id==6]"
+    - id: 1
+      modifer: "sum"
+      name: "32KiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S0].v[0]"
+        - "@batch[id==S0].v[1]"
+        - "@batch[id==S0].v[2]"
+        - "@batch[id==S0].v[3]"
+    - id: 2
+      modifer: "sum"
+      name: "256KiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S1].v[0]"
+        - "@batch[id==S1].v[1]"
+        - "@batch[id==S1].v[2]"
+        - "@batch[id==S1].v[3]"
+    - id: 3
+      modifer: "sum"
+      name: "512KiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S2].v[0]"
+        - "@batch[id==S2].v[1]"
+        - "@batch[id==S2].v[2]"
+        - "@batch[id==S2].v[3]"
+    - id: 4
+      modifer: "sum"
+      name: "1MiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S3].v[0]"
+        - "@batch[id==S3].v[1]"
+        - "@batch[id==S3].v[2]"
+        - "@batch[id==S3].v[3]"
+    - id: 5
+      modifer: "sum"
+      name: "128MiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S4].v[0]"
+        - "@batch[id==S4].v[1]"
+        - "@batch[id==S4].v[2]"
+        - "@batch[id==S4].v[3]"
+    - id: 6
+      modifer: "sum"
+      name: "1GiB Score"
+      display: 1
+      args: 
+        - "@batch[id==S5].v[0]"
+        - "@batch[id==S5].v[1]"
+        - "@batch[id==S5].v[2]"
+        - "@batch[id==S5].v[3]"

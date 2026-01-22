@@ -96,3 +96,10 @@ install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx
 # Install public headers
 install(DIRECTORY src/include/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# Copy YAML configuration files to build/etc directory
+add_custom_target(copy_yaml_files ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/etc
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/setup/yaml ${CMAKE_BINARY_DIR}/etc
+    COMMENT "Copying YAML configuration files to build/etc"
+)
