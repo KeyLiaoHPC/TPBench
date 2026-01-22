@@ -130,4 +130,28 @@ int tpb_cliout_results(tpb_k_rthdl_t *handle);
  */
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
 
+/**
+ * @brief Initialize the logging system.
+ *
+ * Creates ${TPB_DIR}/log directory and opens a timestamped log file.
+ * Log filename format: tpbrunlog_YYYYMMDDThhmmss_<hostname>.md
+ *
+ * @return 0 on success, error code on failure (non-fatal).
+ */
+int tpb_log_init(void);
+
+/**
+ * @brief Cleanup and close the log file.
+ */
+void tpb_log_cleanup(void);
+
+/**
+ * @brief Write output directly to the log file.
+ *
+ * This is used by PLI kernels to write captured stdout/stderr to the log.
+ *
+ * @param output String to write to log file.
+ */
+void tpb_log_write_output(const char *output);
+
 #endif /* TPB_IO_H */

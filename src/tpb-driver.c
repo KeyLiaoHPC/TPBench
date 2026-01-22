@@ -1070,6 +1070,9 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     pid_t pid;
     int status;
     char value_buf[256];
+    int pipefd[2];
+    char buffer[4096];
+    ssize_t nbytes;
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1118,10 +1121,22 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     /* Set TPBENCH_TIMER environment variable */
     setenv("TPBENCH_TIMER", timer.name, 1);
 
+    /* Create pipe for capturing child output */
+    if (pipe(pipefd) == -1) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "pipe() failed\n");
+        for (int i = 2; i < argc; i++) {
+            free(argv[i]);
+        }
+        free(argv);
+        return TPBE_FILE_IO_FAIL;
+    }
+
     /* Fork and exec */
     pid = fork();
     if (pid < 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
+        close(pipefd[0]);
+        close(pipefd[1]);
         for (int i = 2; i < argc; i++) {
             free(argv[i]);
         }
@@ -1130,15 +1145,34 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     }
 
     if (pid == 0) {
-        /* Child process: exec the kernel */
+        /* Child process: redirect stdout and stderr to pipe, then exec */
+        close(pipefd[0]);  /* Close read end */
+        dup2(pipefd[1], STDOUT_FILENO);
+        dup2(pipefd[1], STDERR_FILENO);
+        close(pipefd[1]);
+        
         execv(exec_path, argv);
         /* If execv returns, it failed */
         fprintf(stderr, "execv failed for %s\n", exec_path);
         _exit(127);
     }
 
-    /* Parent process: print PID and wait */
+    /* Parent process: close write end and read from pipe */
+    close(pipefd[1]);
+    
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start process PID=%d\n", pid);
+
+    /* Read and forward child output to both console and log */
+    while ((nbytes = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[nbytes] = '\0';
+        /* Write to console */
+        fputs(buffer, stdout);
+        fflush(stdout);
+        /* Write to log file */
+        tpb_log_write_output(buffer);
+    }
+    
+    close(pipefd[0]);
 
     /* Wait for child to complete */
     waitpid(pid, &status, 0);

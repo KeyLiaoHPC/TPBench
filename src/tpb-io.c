@@ -20,6 +20,7 @@
 #include "tpb-driver.h"
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
+#include "tpb-dynloader.h"
 
 /* Local Function Prototypes */
 
@@ -51,6 +52,10 @@ static tpb_cliout_format_t cliout_fmt = {
     .sigbit_trim = 5,
     .initialized = 0
 };
+
+/* Logging state */
+static FILE *log_file = NULL;
+static char log_filepath[PATH_MAX] = {0};
 
 #define MAX_UNAME_GROUPS 32
 
@@ -173,6 +178,92 @@ transpose(uint64_t *out, uint64_t **in, int m, int n)
     }
 }
 
+/* Logging Function Implementations */
+
+int
+tpb_log_init(void)
+{
+    char hostname[256] = {0};
+    char logdir[PATH_MAX];
+    char timestamp[32];
+    time_t now;
+    struct tm *tm_now;
+
+    /* Get TPB_DIR */
+    const char *tpb_dir = tpb_dl_get_tpb_dir();
+    if (tpb_dir == NULL || strlen(tpb_dir) == 0) {
+        fprintf(stderr, "Warning: Could not determine TPB_DIR for logging\n");
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    /* Create log directory */
+    snprintf(logdir, sizeof(logdir), "%s/log", tpb_dir);
+    if (tpb_mkdir(logdir) != 0) {
+        fprintf(stderr, "Warning: Could not create log directory %s\n", logdir);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    /* Get hostname */
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        snprintf(hostname, sizeof(hostname), "unknown");
+    }
+
+    /* Generate timestamp */
+    now = time(NULL);
+    tm_now = localtime(&now);
+    snprintf(timestamp, sizeof(timestamp), "%04d%02d%02dT%02d%02d%02d",
+             tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
+             tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
+
+    /* Construct log filepath */
+    snprintf(log_filepath, sizeof(log_filepath),
+             "%s/tpbrunlog_%s_%s.md", logdir, timestamp, hostname);
+
+    /* Open log file */
+    log_file = fopen(log_filepath, "w");
+    if (log_file == NULL) {
+        fprintf(stderr, "Warning: Could not open log file %s\n", log_filepath);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    /* Write markdown header */
+    fprintf(log_file, "# TPBench Run Log\n");
+    fprintf(log_file, "**Session Started:** %04d-%02d-%02d %02d:%02d:%02d\n",
+            tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
+            tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
+    fprintf(log_file, "**Hostname:** %s\n", hostname);
+    fprintf(log_file, "**TPB Version:** %g\n", TPB_VERSION);
+    fprintf(log_file, "**TPB_DIR:** %s\n", tpb_dir);
+    fprintf(log_file, "\n---\n\n");
+    fflush(log_file);
+
+    return TPBE_SUCCESS;
+}
+
+void
+tpb_log_cleanup(void)
+{
+    if (log_file != NULL) {
+        fclose(log_file);
+        log_file = NULL;
+    }
+}
+
+static void
+tpb_log_write(const char *msg)
+{
+    if (log_file != NULL && msg != NULL) {
+        fputs(msg, log_file);
+        fflush(log_file);
+    }
+}
+
+void
+tpb_log_write_output(const char *output)
+{
+    tpb_log_write(output);
+}
+
 /* Public Function Implementations */
 
 int
@@ -255,6 +346,9 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
     uint64_t print_mode = mode_bit & 0x0F;
     uint64_t tag_mode = mode_bit & 0xF0;
     const char *tag = "NOTE";
+    char msg_buf[4096];
+    char header_buf[128] = {0};
+    int header_len = 0;
 
     if (tag_mode == TPBE_WARN) {
         tag = "WARN";
@@ -264,26 +358,56 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
         tag = "UNKN";
     }
 
-    va_list args;
+    va_list args, args_copy;
     va_start(args, fmt);
 
+    /* Format the message for both console and log */
     if (print_mode == TPBM_PRTN_M_DIRECT) {
+        /* Direct mode - format the message to buffer */
+        va_copy(args_copy, args);
+        vsnprintf(msg_buf, sizeof(msg_buf), fmt, args_copy);
+        va_end(args_copy);
+        
         vprintf(fmt, args);
         va_end(args);
+        
+        tpb_log_write(msg_buf);
         return;
     }
+    
+    /* Build header string for timestamped/tagged output */
     if (print_mode & TPBM_PRTN_M_TS) {
         time_t t = time(0);
         struct tm* lt = localtime(&t);
-        printf("%04d-%02d-%02d %02d:%02d:%02d ",
-               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
-               lt->tm_hour, lt->tm_min, lt->tm_sec);
+        header_len += snprintf(header_buf + header_len, 
+                               sizeof(header_buf) - header_len,
+                               "%04d-%02d-%02d %02d:%02d:%02d ",
+                               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
+                               lt->tm_hour, lt->tm_min, lt->tm_sec);
     }
     if (print_mode & TPBM_PRTN_M_TAG) {
-        printf("[%s] ", tag);
+        header_len += snprintf(header_buf + header_len,
+                               sizeof(header_buf) - header_len,
+                               "[%s] ", tag);
+    }
+    
+    /* Format the actual message */
+    va_copy(args_copy, args);
+    vsnprintf(msg_buf, sizeof(msg_buf), fmt, args_copy);
+    va_end(args_copy);
+    
+    /* Print to console */
+    if (header_len > 0) {
+        printf("%s", header_buf);
     }
     vprintf(fmt, args);
     va_end(args);
+    
+    /* Write to log file */
+    if (header_len > 0) {
+        tpb_log_write(header_buf);
+    }
+    tpb_log_write(msg_buf);
 }
 
 void

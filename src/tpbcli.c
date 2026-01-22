@@ -47,7 +47,17 @@ tpbcli_main(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
-    int rc = tpbcli_main(argc, argv);
+    int rc;
+    
+    /* Initialize logging system */
+    tpb_log_init();
+    
+    /* Execute main CLI logic */
+    rc = tpbcli_main(argc, argv);
+    
+    /* Cleanup logging system */
+    tpb_log_cleanup();
+    
     if (rc == TPBE_EXIT_ON_HELP) {
         return 0;
     }
