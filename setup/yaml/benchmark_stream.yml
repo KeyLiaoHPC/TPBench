@@ -95,7 +95,7 @@ benchmark:
         - "@score[id==5]"
         - "@score[id==6]"
     - id: 1
-      modifer: "sum"
+      modifier: "sum"
       name: "32KiB Score"
       display: 1
       args: 
@@ -104,7 +104,7 @@ benchmark:
         - "@batch[id==S0].v[2]"
         - "@batch[id==S0].v[3]"
     - id: 2
-      modifer: "sum"
+      modifier: "sum"
       name: "256KiB Score"
       display: 1
       args: 
@@ -113,7 +113,7 @@ benchmark:
         - "@batch[id==S1].v[2]"
         - "@batch[id==S1].v[3]"
     - id: 3
-      modifer: "sum"
+      modifier: "sum"
       name: "512KiB Score"
       display: 1
       args: 
@@ -122,7 +122,7 @@ benchmark:
         - "@batch[id==S2].v[2]"
         - "@batch[id==S2].v[3]"
     - id: 4
-      modifer: "sum"
+      modifier: "sum"
       name: "1MiB Score"
       display: 1
       args: 
@@ -131,7 +131,7 @@ benchmark:
         - "@batch[id==S3].v[2]"
         - "@batch[id==S3].v[3]"
     - id: 5
-      modifer: "sum"
+      modifier: "sum"
       name: "128MiB Score"
       display: 1
       args: 
@@ -140,7 +140,7 @@ benchmark:
         - "@batch[id==S4].v[2]"
         - "@batch[id==S4].v[3]"
     - id: 6
-      modifer: "sum"
+      modifier: "sum"
       name: "1GiB Score"
       display: 1
       args: 
