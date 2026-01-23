@@ -61,12 +61,12 @@ Output results on screen are also written to the log directory.
 
 ### 2.2.1 Basic Format
 
-Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim`, `--kenvs-dim`, and `--kkmpiargs-dims`, the options need to be quoted.
+Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim`, `--kenvs-dim`, and `--kmpiargs-dim`, the options need to be quoted.
 
 ```bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kkmpiargs-dims <opts>]]
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
 
 `<tpbench_options>` supported options include:
@@ -195,22 +195,54 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16
 
 ### 2.2.6 Set MPI Runtime Parameters
 
-**1) Set Single or Multiple MPI Arguments**
+**1) Set MPI Arguments**
+
+The `--kmpiargs` option accepts a string that is passed as-is to `mpirun`. The string should be enclosed in single or double quotes.
+
+Syntax: `--kmpiargs '<mpi_args_string>'`
 
 Example: Run stream_mpi kernel with 100 test iterations, memory size 1024KiB per rank, using 2 MPI processes, and allow running as root.
 
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs '-np 2'
 ```
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=,np=2"
-```
+
+You can specify `--kmpiargs` multiple times; they will be concatenated with a space. If `--kmpiargs` is specified after `--kernel`, the kernel-specific MPI arguments replace the common MPI arguments.
 
 **2) Variable MPI Arguments**
 
-MPI arguments can also be configured as variable parameters using `--kmpiargs-dim`, similar to `--kargs-dim`. This allows scanning different MPI configurations.
+`--kmpiargs-dim` supports explicit list and nested list formats for scanning different MPI configurations.
 
-Example: Run stream_mpi kernel with 100 test iterations, memory size 1024KiB per rank, scanning MPI process counts from 1 to 4.
+Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
+
+Example 1: Run stream_mpi kernel, scanning MPI process counts from 1 to 4.
+
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+    --kmpiargs '--bind-to core' \
+    --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
+```
+
+Example 2: Use nested lists to scan process counts and binding policies.
+
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+    --kmpiargs '--bind-to core' \
+    --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
+```
+
+The above command generates 4 combinations:
+- `-np 2 --bind-to core`
+- `-np 2 --bind-to socket`
+- `-np 4 --bind-to core`
+- `-np 4 --bind-to socket`
+
+**3) Command Line Visibility**
+
+When TPBench executes a PLI kernel, the full command line is printed to the terminal for debugging and analysis. The command line format is:
 
 ```
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=" --kmpiargs-dim "np=[1,2,4]"
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <params...>
 ```
 
 Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.

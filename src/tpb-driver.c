@@ -806,12 +806,11 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
     }
     hdl->envpack.n = 0;
 
-    /* Free mpipack.args */
-    if (hdl->mpipack.args != NULL) {
-        free(hdl->mpipack.args);
-        hdl->mpipack.args = NULL;
+    /* Free mpipack.mpiargs */
+    if (hdl->mpipack.mpiargs != NULL) {
+        free(hdl->mpipack.mpiargs);
+        hdl->mpipack.mpiargs = NULL;
     }
-    hdl->mpipack.n = 0;
 
     return 0;
 }
@@ -913,19 +912,12 @@ tpb_driver_add_handle(const char *kernel_name)
     }
 
     /* Initialize mpipack and inherit from pseudo handle */
-    hdl->mpipack.n = 0;
-    hdl->mpipack.args = NULL;
+    hdl->mpipack.mpiargs = NULL;
 
-    if (handle_list != NULL && nhdl > 0 && handle_list[0].mpipack.n > 0) {
-        int mpi_n = handle_list[0].mpipack.n;
-        hdl->mpipack.args = (tpb_mpi_entry_t *)malloc(sizeof(tpb_mpi_entry_t) * mpi_n);
-        if (hdl->mpipack.args == NULL) {
+    if (handle_list != NULL && nhdl > 0 && handle_list[0].mpipack.mpiargs != NULL) {
+        hdl->mpipack.mpiargs = strdup(handle_list[0].mpipack.mpiargs);
+        if (hdl->mpipack.mpiargs == NULL) {
             return TPBE_MALLOC_FAIL;
-        }
-        hdl->mpipack.n = mpi_n;
-        for (int i = 0; i < mpi_n; i++) {
-            memcpy(&hdl->mpipack.args[i], &handle_list[0].mpipack.args[i],
-                   sizeof(tpb_mpi_entry_t));
         }
     }
 
@@ -1150,44 +1142,74 @@ tpb_driver_set_hdl_env(const char *env_name, const char *env_value)
 }
 
 int
-tpb_driver_set_hdl_mpiarg(const char *key, const char *value)
+tpb_driver_set_hdl_mpiargs(const char *mpiargs_str)
 {
-    if (key == NULL || value == NULL) {
+    if (mpiargs_str == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
     if (handle_list == NULL || current_rthdl == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "In tpb_driver_set_hdl_mpiarg: Empty kernel running list.\n");
+                   "In tpb_driver_set_hdl_mpiargs: Empty kernel running list.\n");
         return TPBE_ILLEGAL_CALL;
     }
 
-    /* Check if MPI arg already exists in current handle, if so update it */
-    for (int i = 0; i < current_rthdl->mpipack.n; i++) {
-        if (strcmp(current_rthdl->mpipack.args[i].key, key) == 0) {
-            snprintf(current_rthdl->mpipack.args[i].value,
-                     TPBM_CLI_STR_MAX_LEN, "%s", value);
-            return 0;
-        }
+    /* Free existing mpiargs if any */
+    if (current_rthdl->mpipack.mpiargs != NULL) {
+        free(current_rthdl->mpipack.mpiargs);
     }
 
-    /* Add new MPI arg */
-    int new_n = current_rthdl->mpipack.n + 1;
-    tpb_mpi_entry_t *new_args = (tpb_mpi_entry_t *)realloc(
-        current_rthdl->mpipack.args,
-        sizeof(tpb_mpi_entry_t) * new_n);
-    if (new_args == NULL) {
+    /* Set new mpiargs string */
+    current_rthdl->mpipack.mpiargs = strdup(mpiargs_str);
+    if (current_rthdl->mpipack.mpiargs == NULL) {
         return TPBE_MALLOC_FAIL;
     }
-    current_rthdl->mpipack.args = new_args;
 
-    /* Initialize new entry */
-    tpb_mpi_entry_t *entry = &current_rthdl->mpipack.args[current_rthdl->mpipack.n];
-    snprintf(entry->key, TPBM_NAME_STR_MAX_LEN, "%s", key);
-    snprintf(entry->value, TPBM_CLI_STR_MAX_LEN, "%s", value);
-
-    current_rthdl->mpipack.n = new_n;
     return 0;
+}
+
+int
+tpb_driver_append_hdl_mpiargs(const char *mpiargs_str)
+{
+    if (mpiargs_str == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (handle_list == NULL || current_rthdl == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "In tpb_driver_append_hdl_mpiargs: Empty kernel running list.\n");
+        return TPBE_ILLEGAL_CALL;
+    }
+
+    if (current_rthdl->mpipack.mpiargs == NULL) {
+        /* No existing mpiargs, just set */
+        current_rthdl->mpipack.mpiargs = strdup(mpiargs_str);
+        if (current_rthdl->mpipack.mpiargs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+    } else {
+        /* Concatenate with space separator */
+        size_t old_len = strlen(current_rthdl->mpipack.mpiargs);
+        size_t new_len = strlen(mpiargs_str);
+        char *new_str = (char *)malloc(old_len + 1 + new_len + 1);
+        if (new_str == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        sprintf(new_str, "%s %s", current_rthdl->mpipack.mpiargs, mpiargs_str);
+        free(current_rthdl->mpipack.mpiargs);
+        current_rthdl->mpipack.mpiargs = new_str;
+    }
+
+    return 0;
+}
+
+const char *
+tpb_driver_get_hdl_mpiargs(void)
+{
+    if (handle_list == NULL || current_rthdl == NULL) {
+        return NULL;
+    }
+    return current_rthdl->mpipack.mpiargs;
 }
 
 int
@@ -1236,22 +1258,15 @@ tpb_driver_copy_hdl_from(int src_idx)
     }
 
     /* Copy mpipack */
-    if (src->mpipack.n > 0 && src->mpipack.args != NULL) {
+    if (src->mpipack.mpiargs != NULL) {
         /* Free existing mpipack if any */
-        if (current_rthdl->mpipack.args != NULL) {
-            free(current_rthdl->mpipack.args);
+        if (current_rthdl->mpipack.mpiargs != NULL) {
+            free(current_rthdl->mpipack.mpiargs);
         }
 
-        current_rthdl->mpipack.args = (tpb_mpi_entry_t *)malloc(
-            sizeof(tpb_mpi_entry_t) * src->mpipack.n);
-        if (current_rthdl->mpipack.args == NULL) {
+        current_rthdl->mpipack.mpiargs = strdup(src->mpipack.mpiargs);
+        if (current_rthdl->mpipack.mpiargs == NULL) {
             return TPBE_MALLOC_FAIL;
-        }
-        current_rthdl->mpipack.n = src->mpipack.n;
-
-        for (int i = 0; i < src->mpipack.n; i++) {
-            memcpy(&current_rthdl->mpipack.args[i], &src->mpipack.args[i],
-                   sizeof(tpb_mpi_entry_t));
         }
     }
 
@@ -1265,52 +1280,41 @@ tpb_driver_get_current_hdl_idx(void)
 }
 
 /**
- * @brief Build MPI argv array for mpirun execution.
- * Format: mpirun -key1 val1 -key2 ... exec_path timer_name params...
- * Empty values become flags without arguments.
+ * @brief Build full command string for PLI execution.
+ * Format: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...>
+ * Environment variables are prepended explicitly for visibility and to avoid
+ * polluting the parent process environment.
  */
-static char **
-build_mpi_argv(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_name,
-               int *out_argc, int *out_start)
+static char *
+build_pli_command(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_name)
 {
     char value_buf[256];
+    size_t cmd_size = 8192;  /* Initial buffer size */
+    char *cmd = (char *)malloc(cmd_size);
+    if (cmd == NULL) return NULL;
+    cmd[0] = '\0';
 
-    /* Count MPI args: keys with values need 2 slots, flags need 1 */
-    int mpi_args = 0;
-    for (int i = 0; i < hdl->mpipack.n; i++) {
-        mpi_args++;  /* key */
-        if (hdl->mpipack.args[i].value[0] != '\0') {
-            mpi_args++;  /* value (only if non-empty) */
-        }
+    size_t pos = 0;
+
+    /* 1. Add environment variables as prefix */
+    /* TPBENCH_TIMER */
+    pos += snprintf(cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer_name);
+
+    /* envpack variables */
+    for (int i = 0; i < hdl->envpack.n; i++) {
+        pos += snprintf(cmd + pos, cmd_size - pos, "%s=%s ",
+                        hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
     }
 
-    int argc = 1 + mpi_args + 2 + hdl->argpack.n;
-    char **argv = (char **)malloc(sizeof(char *) * (argc + 1));
-    if (argv == NULL) return NULL;
-
-    int idx = 0;
-    argv[idx++] = "mpirun";
-
-    /* Add MPI args: short keys (<=2 chars) use -, longer use -- */
-    for (int i = 0; i < hdl->mpipack.n; i++) {
-        char key_buf[TPBM_NAME_STR_MAX_LEN + 3];
-        size_t keylen = strlen(hdl->mpipack.args[i].key);
-        if (keylen <= 2) {
-            snprintf(key_buf, sizeof(key_buf), "-%s", hdl->mpipack.args[i].key);
-        } else {
-            snprintf(key_buf, sizeof(key_buf), "--%s", hdl->mpipack.args[i].key);
-        }
-        argv[idx++] = strdup(key_buf);
-        /* Only add value if non-empty */
-        if (hdl->mpipack.args[i].value[0] != '\0') {
-            argv[idx++] = strdup(hdl->mpipack.args[i].value);
-        }
+    /* 2. Add mpirun and mpiargs if MPI is used */
+    if (hdl->mpipack.mpiargs != NULL && hdl->mpipack.mpiargs[0] != '\0') {
+        pos += snprintf(cmd + pos, cmd_size - pos, "mpirun %s ", hdl->mpipack.mpiargs);
     }
 
-    argv[idx++] = strdup(exec_path);
-    argv[idx++] = strdup(timer_name);
+    /* 3. Add executable path and timer name */
+    pos += snprintf(cmd + pos, cmd_size - pos, "%s %s", exec_path, timer_name);
 
-    /* Add kernel parameter values */
+    /* 4. Add kernel parameters */
     for (int i = 0; i < hdl->argpack.n; i++) {
         tpb_rt_parm_t *parm = &hdl->argpack.args[i];
         uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
@@ -1328,13 +1332,10 @@ build_mpi_argv(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_name
         } else {
             snprintf(value_buf, sizeof(value_buf), "0");
         }
-        argv[idx++] = strdup(value_buf);
+        pos += snprintf(cmd + pos, cmd_size - pos, " %s", value_buf);
     }
-    argv[idx] = NULL;
 
-    *out_argc = argc;
-    *out_start = 1;  /* strdup'd args start at index 1 */
-    return argv;
+    return cmd;
 }
 
 /* Run a PLI kernel via fork/exec */
@@ -1342,16 +1343,12 @@ static int
 tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
-    char **argv;
-    int argc;
+    char *full_cmd;
     pid_t pid;
     int status;
-    char value_buf[256];
     int pipefd[2];
     char buffer[4096];
     ssize_t nbytes;
-    int use_mpi = 0;
-    int argv_start = 0;  /* Index where strdup'd args start (for cleanup) */
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1365,63 +1362,19 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         return TPBE_KERNEL_INCOMPLETE;
     }
 
-    /* Check if MPI is needed */
-    use_mpi = (hdl->mpipack.n > 0);
-
-    /* Build argv depending on MPI usage */
-    if (use_mpi) {
-        argv = build_mpi_argv(hdl, exec_path, timer.name, &argc, &argv_start);
-        if (argv == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-    } else {
-        argc = 2 + hdl->argpack.n;
-        argv_start = 2;
-        argv = (char **)malloc(sizeof(char *) * (argc + 1));
-        if (argv == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        argv[0] = exec_path;
-        argv[1] = timer.name;
-
-    /* Add parameter values in registration order */
-    for (int i = 0; i < hdl->argpack.n; i++) {
-        tpb_rt_parm_t *parm = &hdl->argpack.args[i];
-        uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
-
-        if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
-            snprintf(value_buf, sizeof(value_buf), "%.15g", parm->value.f64);
-        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
-                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
-            snprintf(value_buf, sizeof(value_buf), "%" PRId64, parm->value.i64);
-        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
-                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
-            snprintf(value_buf, sizeof(value_buf), "%" PRIu64, parm->value.u64);
-        } else if (type_code == TPB_CHAR_T) {
-            snprintf(value_buf, sizeof(value_buf), "%c", parm->value.c);
-        } else {
-            snprintf(value_buf, sizeof(value_buf), "0");
-        }
-            argv[2 + i] = strdup(value_buf);
-        }
-        argv[argc] = NULL;
+    /* Build full command string with env vars, mpiargs, and kernel params */
+    full_cmd = build_pli_command(hdl, exec_path, timer.name);
+    if (full_cmd == NULL) {
+        return TPBE_MALLOC_FAIL;
     }
 
-    /* Set TPBENCH_TIMER environment variable */
-    setenv("TPBENCH_TIMER", timer.name, 1);
-
-    /* Apply envpack environment variables */
-    for (int i = 0; i < hdl->envpack.n; i++) {
-        setenv(hdl->envpack.envs[i].name, hdl->envpack.envs[i].value, 1);
-    }
+    /* Print full command for debugging/analysis */
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Exec: %s\n", full_cmd);
 
     /* Create pipe for capturing child output */
     if (pipe(pipefd) == -1) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "pipe() failed\n");
-        for (int i = argv_start; i < argc; i++) {
-            free(argv[i]);
-        }
-        free(argv);
+        free(full_cmd);
         return TPBE_FILE_IO_FAIL;
     }
 
@@ -1431,35 +1384,25 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
         close(pipefd[0]);
         close(pipefd[1]);
-        for (int i = argv_start; i < argc; i++) {
-            free(argv[i]);
-        }
-        free(argv);
+        free(full_cmd);
         return TPBE_FILE_IO_FAIL;
     }
 
     if (pid == 0) {
-        /* Child process: redirect stdout and stderr to pipe, then exec */
+        /* Child process: redirect stdout and stderr to pipe, then exec via shell */
         close(pipefd[0]);  /* Close read end */
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[1]);
 
-        if (use_mpi) {
-            /* Execute via mpirun - use execvp to search PATH */
-            execvp("mpirun", argv);
-            fprintf(stderr, "execvp failed for mpirun\n");
-        } else {
-            execv(exec_path, argv);
-            fprintf(stderr, "execv failed for %s\n", exec_path);
-        }
+        /* Execute via shell to handle env vars and mpiargs correctly */
+        execl("/bin/sh", "sh", "-c", full_cmd, (char *)NULL);
+        fprintf(stderr, "execl failed for /bin/sh\n");
         _exit(127);
     }
 
     /* Parent process: close write end and read from pipe */
     close(pipefd[1]);
-    
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start process PID=%d\n", pid);
 
     /* Read and forward child output to both console and log */
     while ((nbytes = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
@@ -1470,17 +1413,14 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         /* Write to log file */
         tpb_log_write_output(buffer);
     }
-    
+
     close(pipefd[0]);
 
     /* Wait for child to complete */
     waitpid(pid, &status, 0);
 
-    /* Clean up argv */
-    for (int i = 2; i < argc; i++) {
-        free(argv[i]);
-    }
-    free(argv);
+    /* Clean up */
+    free(full_cmd);
 
     /* Check exit status */
     if (WIFEXITED(status)) {

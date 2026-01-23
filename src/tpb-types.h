@@ -197,16 +197,9 @@ typedef struct tpb_envpack {
     tpb_env_entry_t *envs;    /**< Array of env vars */
 } tpb_envpack_t;
 
-/** @brief MPI argument entry (key-value pair) */
-typedef struct tpb_mpi_entry {
-    char key[TPBM_NAME_STR_MAX_LEN];    /**< MPI arg key, e.g., "np", "hostfile" */
-    char value[TPBM_CLI_STR_MAX_LEN];   /**< MPI arg value, e.g., "4", "hosts.txt" */
-} tpb_mpi_entry_t;
-
 /** @brief MPI argument package for kernel execution */
 typedef struct tpb_mpipack {
-    int n;                    /**< Number of MPI args */
-    tpb_mpi_entry_t *args;    /**< Array of MPI args */
+    char *mpiargs;            /**< MPI args string to pass to launcher as-is */
 } tpb_mpipack_t;
 
 /** @brief Static kernel information */

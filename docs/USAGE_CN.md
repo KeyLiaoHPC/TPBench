@@ -58,11 +58,11 @@ tpbcli <subcommand> <options>
 
 ### 2.2.1 基础格式
 
-`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kkmpiargs-dims`时，选项需要加引号。
+`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kmpiargs-dim`时，选项需要用一对单引号或双引号包围。
 ``` bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kkmpiargs-dims <opts>]]
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
 \<tpbench_options\>支持的选项包括：
 - `-P/-F`: 选择PLI集成内核或FLI集成内核，默认为-P。
@@ -192,22 +192,54 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16
 
 ### 2.2.6 设置 MPI 运行参数
 
-**1) 设置单个或多个 MPI 参数**
+**1) 设置 MPI 参数**
+
+`--kmpiargs` 选项接受一个字符串，该字符串将原样传递给 `mpirun`。字符串应当用单引号或双引号包裹。
+
+语法：`--kmpiargs '<mpi_args_string>'`
 
 示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，使用 2 个 MPI 进程，并允许以 root 身份运行。
 
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs ' -np 2'
 ```
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=,np=2"
-```
+
+可以多次指定 `--kmpiargs`，它们将用空格连接。如果在 `--kernel` 之后指定 `--kmpiargs`，则该内核特定的 MPI 参数将替换通用 MPI 参数。
 
 **2) 可变 MPI 参数**
 
-MPI 参数也可以通过 `--kmpiargs-dim` 配置为可变参数，类似于 `--kargs-dim`。这允许扫描不同的 MPI 配置。
+`--kmpiargs-dim` 支持显式列表和嵌套列表格式，用于扫描不同的 MPI 配置。
 
-示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，扫描 MPI 进程数从 1 到 4。
+语法：`--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
+
+示例1：运行 stream_mpi 内核，扫描 MPI 进程数从 1 到 4。
+
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+    --kmpiargs '--bind-to core' \
+    --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
+```
+
+示例2：使用嵌套列表扫描进程数和绑定策略。
+
+```bash
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+    --kmpiargs '--bind-to core' \
+    --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
+```
+
+上述命令将生成 4 种组合：
+- `-np 2 --bind-to core`
+- `-np 2 --bind-to socket`
+- `-np 4 --bind-to core`
+- `-np 4 --bind-to socket`
+
+**3) 命令行分析**
+
+TPBench 执行 PLI 内核时，将完整命令行打印至终端，便于调试和分析。命令行格式为：
 
 ```
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=" --kmpiargs-dim "np=[1,2,4]"
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <params...>
 ```
 
 注意：MPI 参数直接传递给 `mpirun`，TPBench 不进行验证。如果 `mpirun` 子进程失败，将报告错误。
