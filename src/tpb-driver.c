@@ -806,6 +806,13 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
     }
     hdl->envpack.n = 0;
 
+    /* Free mpipack.args */
+    if (hdl->mpipack.args != NULL) {
+        free(hdl->mpipack.args);
+        hdl->mpipack.args = NULL;
+    }
+    hdl->mpipack.n = 0;
+
     return 0;
 }
 
@@ -902,6 +909,23 @@ tpb_driver_add_handle(const char *kernel_name)
         for (int i = 0; i < env_n; i++) {
             memcpy(&hdl->envpack.envs[i], &handle_list[0].envpack.envs[i],
                    sizeof(tpb_env_entry_t));
+        }
+    }
+
+    /* Initialize mpipack and inherit from pseudo handle */
+    hdl->mpipack.n = 0;
+    hdl->mpipack.args = NULL;
+
+    if (handle_list != NULL && nhdl > 0 && handle_list[0].mpipack.n > 0) {
+        int mpi_n = handle_list[0].mpipack.n;
+        hdl->mpipack.args = (tpb_mpi_entry_t *)malloc(sizeof(tpb_mpi_entry_t) * mpi_n);
+        if (hdl->mpipack.args == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        hdl->mpipack.n = mpi_n;
+        for (int i = 0; i < mpi_n; i++) {
+            memcpy(&hdl->mpipack.args[i], &handle_list[0].mpipack.args[i],
+                   sizeof(tpb_mpi_entry_t));
         }
     }
 
@@ -1126,6 +1150,47 @@ tpb_driver_set_hdl_env(const char *env_name, const char *env_value)
 }
 
 int
+tpb_driver_set_hdl_mpiarg(const char *key, const char *value)
+{
+    if (key == NULL || value == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (handle_list == NULL || current_rthdl == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "In tpb_driver_set_hdl_mpiarg: Empty kernel running list.\n");
+        return TPBE_ILLEGAL_CALL;
+    }
+
+    /* Check if MPI arg already exists in current handle, if so update it */
+    for (int i = 0; i < current_rthdl->mpipack.n; i++) {
+        if (strcmp(current_rthdl->mpipack.args[i].key, key) == 0) {
+            snprintf(current_rthdl->mpipack.args[i].value,
+                     TPBM_CLI_STR_MAX_LEN, "%s", value);
+            return 0;
+        }
+    }
+
+    /* Add new MPI arg */
+    int new_n = current_rthdl->mpipack.n + 1;
+    tpb_mpi_entry_t *new_args = (tpb_mpi_entry_t *)realloc(
+        current_rthdl->mpipack.args,
+        sizeof(tpb_mpi_entry_t) * new_n);
+    if (new_args == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    current_rthdl->mpipack.args = new_args;
+
+    /* Initialize new entry */
+    tpb_mpi_entry_t *entry = &current_rthdl->mpipack.args[current_rthdl->mpipack.n];
+    snprintf(entry->key, TPBM_NAME_STR_MAX_LEN, "%s", key);
+    snprintf(entry->value, TPBM_CLI_STR_MAX_LEN, "%s", value);
+
+    current_rthdl->mpipack.n = new_n;
+    return 0;
+}
+
+int
 tpb_driver_copy_hdl_from(int src_idx)
 {
     if (handle_list == NULL || current_rthdl == NULL) {
@@ -1170,6 +1235,26 @@ tpb_driver_copy_hdl_from(int src_idx)
         }
     }
 
+    /* Copy mpipack */
+    if (src->mpipack.n > 0 && src->mpipack.args != NULL) {
+        /* Free existing mpipack if any */
+        if (current_rthdl->mpipack.args != NULL) {
+            free(current_rthdl->mpipack.args);
+        }
+
+        current_rthdl->mpipack.args = (tpb_mpi_entry_t *)malloc(
+            sizeof(tpb_mpi_entry_t) * src->mpipack.n);
+        if (current_rthdl->mpipack.args == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        current_rthdl->mpipack.n = src->mpipack.n;
+
+        for (int i = 0; i < src->mpipack.n; i++) {
+            memcpy(&current_rthdl->mpipack.args[i], &src->mpipack.args[i],
+                   sizeof(tpb_mpi_entry_t));
+        }
+    }
+
     return 0;
 }
 
@@ -1177,6 +1262,79 @@ int
 tpb_driver_get_current_hdl_idx(void)
 {
     return ihdl;
+}
+
+/**
+ * @brief Build MPI argv array for mpirun execution.
+ * Format: mpirun -key1 val1 -key2 ... exec_path timer_name params...
+ * Empty values become flags without arguments.
+ */
+static char **
+build_mpi_argv(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_name,
+               int *out_argc, int *out_start)
+{
+    char value_buf[256];
+
+    /* Count MPI args: keys with values need 2 slots, flags need 1 */
+    int mpi_args = 0;
+    for (int i = 0; i < hdl->mpipack.n; i++) {
+        mpi_args++;  /* key */
+        if (hdl->mpipack.args[i].value[0] != '\0') {
+            mpi_args++;  /* value (only if non-empty) */
+        }
+    }
+
+    int argc = 1 + mpi_args + 2 + hdl->argpack.n;
+    char **argv = (char **)malloc(sizeof(char *) * (argc + 1));
+    if (argv == NULL) return NULL;
+
+    int idx = 0;
+    argv[idx++] = "mpirun";
+
+    /* Add MPI args: short keys (<=2 chars) use -, longer use -- */
+    for (int i = 0; i < hdl->mpipack.n; i++) {
+        char key_buf[TPBM_NAME_STR_MAX_LEN + 3];
+        size_t keylen = strlen(hdl->mpipack.args[i].key);
+        if (keylen <= 2) {
+            snprintf(key_buf, sizeof(key_buf), "-%s", hdl->mpipack.args[i].key);
+        } else {
+            snprintf(key_buf, sizeof(key_buf), "--%s", hdl->mpipack.args[i].key);
+        }
+        argv[idx++] = strdup(key_buf);
+        /* Only add value if non-empty */
+        if (hdl->mpipack.args[i].value[0] != '\0') {
+            argv[idx++] = strdup(hdl->mpipack.args[i].value);
+        }
+    }
+
+    argv[idx++] = strdup(exec_path);
+    argv[idx++] = strdup(timer_name);
+
+    /* Add kernel parameter values */
+    for (int i = 0; i < hdl->argpack.n; i++) {
+        tpb_rt_parm_t *parm = &hdl->argpack.args[i];
+        uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
+
+        if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+            snprintf(value_buf, sizeof(value_buf), "%.15g", parm->value.f64);
+        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+            snprintf(value_buf, sizeof(value_buf), "%" PRId64, parm->value.i64);
+        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+            snprintf(value_buf, sizeof(value_buf), "%" PRIu64, parm->value.u64);
+        } else if (type_code == TPB_CHAR_T) {
+            snprintf(value_buf, sizeof(value_buf), "%c", parm->value.c);
+        } else {
+            snprintf(value_buf, sizeof(value_buf), "0");
+        }
+        argv[idx++] = strdup(value_buf);
+    }
+    argv[idx] = NULL;
+
+    *out_argc = argc;
+    *out_start = 1;  /* strdup'd args start at index 1 */
+    return argv;
 }
 
 /* Run a PLI kernel via fork/exec */
@@ -1192,6 +1350,8 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     int pipefd[2];
     char buffer[4096];
     ssize_t nbytes;
+    int use_mpi = 0;
+    int argv_start = 0;  /* Index where strdup'd args start (for cleanup) */
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1205,15 +1365,24 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         return TPBE_KERNEL_INCOMPLETE;
     }
 
-    /* Build argv: [exec_path, timer_name, param1, param2, ..., NULL] */
-    argc = 2 + hdl->argpack.n;  /* exec_path + timer_name + params */
-    argv = (char **)malloc(sizeof(char *) * (argc + 1));
-    if (argv == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
+    /* Check if MPI is needed */
+    use_mpi = (hdl->mpipack.n > 0);
 
-    argv[0] = exec_path;
-    argv[1] = timer.name;
+    /* Build argv depending on MPI usage */
+    if (use_mpi) {
+        argv = build_mpi_argv(hdl, exec_path, timer.name, &argc, &argv_start);
+        if (argv == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+    } else {
+        argc = 2 + hdl->argpack.n;
+        argv_start = 2;
+        argv = (char **)malloc(sizeof(char *) * (argc + 1));
+        if (argv == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        argv[0] = exec_path;
+        argv[1] = timer.name;
 
     /* Add parameter values in registration order */
     for (int i = 0; i < hdl->argpack.n; i++) {
@@ -1233,9 +1402,10 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         } else {
             snprintf(value_buf, sizeof(value_buf), "0");
         }
-        argv[2 + i] = strdup(value_buf);
+            argv[2 + i] = strdup(value_buf);
+        }
+        argv[argc] = NULL;
     }
-    argv[argc] = NULL;
 
     /* Set TPBENCH_TIMER environment variable */
     setenv("TPBENCH_TIMER", timer.name, 1);
@@ -1248,7 +1418,7 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
     /* Create pipe for capturing child output */
     if (pipe(pipefd) == -1) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "pipe() failed\n");
-        for (int i = 2; i < argc; i++) {
+        for (int i = argv_start; i < argc; i++) {
             free(argv[i]);
         }
         free(argv);
@@ -1261,7 +1431,7 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
         close(pipefd[0]);
         close(pipefd[1]);
-        for (int i = 2; i < argc; i++) {
+        for (int i = argv_start; i < argc; i++) {
             free(argv[i]);
         }
         free(argv);
@@ -1274,10 +1444,15 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
         dup2(pipefd[1], STDOUT_FILENO);
         dup2(pipefd[1], STDERR_FILENO);
         close(pipefd[1]);
-        
-        execv(exec_path, argv);
-        /* If execv returns, it failed */
-        fprintf(stderr, "execv failed for %s\n", exec_path);
+
+        if (use_mpi) {
+            /* Execute via mpirun - use execvp to search PATH */
+            execvp("mpirun", argv);
+            fprintf(stderr, "execvp failed for mpirun\n");
+        } else {
+            execv(exec_path, argv);
+            fprintf(stderr, "execv failed for %s\n", exec_path);
+        }
         _exit(127);
     }
 
@@ -1442,6 +1617,9 @@ tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
         return TPBE_NULLPTR_ARG;
     }
 
+    /* Initialize handle first to ensure safe cleanup on error */
+    memset(handle, 0, sizeof(tpb_k_rthdl_t));
+
     /* The current_kernel should be set by the kernel's registration */
     if (kernel_all == NULL || tpb_driver_nkern == 0) {
         return TPBE_KERN_ARG_FAIL;
@@ -1449,9 +1627,6 @@ tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
 
     /* Use the most recently registered kernel */
     tpb_kernel_t *kernel = &kernel_all[tpb_driver_nkern - 1];
-
-    /* Initialize handle */
-    memset(handle, 0, sizeof(tpb_k_rthdl_t));
     memcpy(&handle->kernel, kernel, sizeof(tpb_kernel_t));
 
     /* Build argpack from positional arguments */

@@ -11,8 +11,34 @@ $ mkdir build && cd ./build
 $ cmake ..
 $ make
 $ ls
-CMakeCache.txt  CMakeFiles  cmake_install.cmake  libtpbench.so  libtriad.so  Makefile  tpbcli
+bin  CMakeCache.txt  CMakeFiles  cmake_install.cmake  etc  lib  log  Makefile
 ```
+
+**2) SIMD and Parallelization Build Options**
+
+TPBench supports enabling SIMD instruction sets and OpenMP parallelization through CMake options. Available `-DTPB_USE_*` options are as follows:
+
+| CMake Option | Default | Description |
+| -------- | -------- | -------- |
+| `-DTPB_USE_AVX512=ON` | OFF | Enable AVX-512 instruction set (x86_64) |
+| `-DTPB_USE_AVX2=ON` | OFF | Enable AVX2 instruction set (x86_64) |
+| `-DTPB_USE_KP_SVE=ON` | OFF | Enable ARM SVE instruction set (aarch64) |
+| `-DTPB_USE_OPENMP=ON` | OFF | Enable OpenMP |
+| `-DTPB_USE_MPI=</path/to/mpi/install/dir>` | OFF | Enable MPI |
+
+Example: Enable AVX-512 instruction set compilation on x86_64 platform
+```bash
+$ cmake -DTPB_USE_AVX512=ON ..
+$ make
+```
+
+Example: Enable SVE instruction set compilation on ARM platform
+```bash
+$ cmake -DTPB_USE_KP_SVE=ON ..
+$ make
+```
+
+Note: SIMD options require compiler and target platform support for the corresponding instruction sets. When enabling AVX-512 or AVX2, it is recommended to also add the `-march=native` compilation option for optimal performance.
 
 # 2 Use tpbcli
 
@@ -23,23 +49,32 @@ tpbcli basic format:
 tpbcli <subcommand> <options>
 ```
 
-Supports two subcommands: `run` and `benchmark`.
+Supports 4 subcommands: `run`, `benchmark`, `list`, and `help`.
 - `tpbcli run`: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
-- `tpbcli benchmark` (under development): Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
+- `tpbcli benchmark`: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
+- `tpbcli list`: List currently supported evaluation kernels.
+- `tpbcli help`: Display help documentation.
+
+Output results on screen are also written to the log directory.
 
 ## 2.2 tpbcli run
 
 ### 2.2.1 Basic Format
 
-Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels.
+Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim`, `--kenvs-dim`, and `--kkmpiargs-dims`, the options need to be quoted.
 
 ```bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kmpiargs-dims <opts>]]
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kkmpiargs-dims <opts>]]
 ```
 
-In the command format above, all angle bracket `<>` options must be replaced with actual option names.
+`<tpbench_options>` supported options include:
+- `-P/-F`: Select PLI-integrated kernels or FLI-integrated kernels, default is `-P`.
+- `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
+- `--outargs`: Log and data output format settings
+    - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
+    - `sigbit_trim=<x>`: Limit the number of significant digits in output data. Integer parts exceeding the number of digits will be represented in scientific notation.
 
 ### 2.2.2 Run Basic Evaluation
 
@@ -49,7 +84,7 @@ In the command format above, all angle bracket `<>` options must be replaced wit
 
 Syntax: `--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
 
-For one `--kernel` definition, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times. Options with suffix `_dim` can only appear once (see section 2.2.3). When same parameter name appears multiple times after one `--kernel` definition, TPBench uses the last occurrence.
+For one `--kernel` definition, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times, but options with suffix `_dim` can only appear once (see section 2.2.3). When the same parameter name appears multiple times after one `--kernel` definition, TPBench uses the last occurrence.
 
 Parameter options (`--kargs`, `--kenvs`, and `--kmpiargs`) accept a comma-separated string list, with each element in the format `<key>=<value>`. Multiple such key-value pairs can follow a parameter option, indicating that the variable named "<key>" in the kernel should be set to "<value>". TPBench parses the option settings and checks the parameter legality. If multiple settings with the same parameter name appear in the command line for one test, the priority from high to low is: variable parameters > kernel parameters > default parameters, with higher-priority parameter settings overriding lower-priority ones. For a kernel named "foo", if `--kargs` definition after `--kernel foo` duplicates default parameter settings, `<foo>` will use the last occurrence in its scope. Therefore, the following three commands have the same effect.
 
@@ -159,3 +194,23 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16
 ```
 
 ### 2.2.6 Set MPI Runtime Parameters
+
+**1) Set Single or Multiple MPI Arguments**
+
+Example: Run stream_mpi kernel with 100 test iterations, memory size 1024KiB per rank, using 2 MPI processes, and allow running as root.
+
+```
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=,np=2"
+```
+
+**2) Variable MPI Arguments**
+
+MPI arguments can also be configured as variable parameters using `--kmpiargs-dim`, similar to `--kargs-dim`. This allows scanning different MPI configurations.
+
+Example: Run stream_mpi kernel with 100 test iterations, memory size 1024KiB per rank, scanning MPI process counts from 1 to 4.
+
+```
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=" --kmpiargs-dim "np=[1,2,4]"
+```
+
+Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.

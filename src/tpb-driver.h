@@ -62,7 +62,15 @@ int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
 int tpb_driver_set_hdl_env(const char *env_name, const char *env_value);
 
 /**
- * @brief Copy argpack and envpack from source handle index to current handle.
+ * @brief Set MPI argument for current handle.
+ * @param key MPI argument key (e.g., "np", "hostfile")
+ * @param value MPI argument value (e.g., "4", "hosts.txt")
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_hdl_mpiarg(const char *key, const char *value);
+
+/**
+ * @brief Copy argpack, envpack, and mpipack from source handle index to current handle.
  * @param src_idx Source handle index to copy from.
  * @return 0 on success, error code otherwise.
  */

@@ -37,6 +37,19 @@ if(TPB_USE_OPENMP)
     endif()
 endif()
 
+# MPI support (optional, for MPI kernels only - not linked to libtpbench.so)
+set(TPB_USE_MPI "" CACHE PATH "Path to MPI installation (leave empty to disable)")
+if(NOT TPB_USE_MPI STREQUAL "")
+    set(MPI_ROOT ${TPB_USE_MPI})
+    find_package(MPI REQUIRED)
+    if(MPI_C_FOUND)
+        add_compile_definitions(TPB_USE_MPI)
+        message(STATUS "MPI enabled from: ${TPB_USE_MPI}")
+    else()
+        message(FATAL_ERROR "MPI not found at ${TPB_USE_MPI}")
+    endif()
+endif()
+
 # Set output directories for build artifacts
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -117,6 +130,16 @@ if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_striad PRIVATE OpenMP::OpenMP_C)
 endif()
 
+# Stream MPI kernel (only built when MPI is enabled)
+if(MPI_C_FOUND)
+    add_library(tpbk_stream_mpi SHARED src/kernels/simple/tpbk_stream_mpi.c)
+    target_include_directories(tpbk_stream_mpi PRIVATE src src/include)
+    target_link_libraries(tpbk_stream_mpi PRIVATE tpbench m MPI::MPI_C)
+    if(OpenMP_C_FOUND)
+        target_link_libraries(tpbk_stream_mpi PRIVATE OpenMP::OpenMP_C)
+    endif()
+endif()
+
 # Main CLI executable and subcommands
 add_executable(tpbcli
     src/tpbcli.c
@@ -157,6 +180,16 @@ if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_striad.tpbx PRIVATE OpenMP::OpenMP_C)
 endif()
 
+# Stream MPI PLI executable (only built when MPI is enabled)
+if(MPI_C_FOUND)
+    add_executable(tpbk_stream_mpi.tpbx src/kernels/simple/tpbk_stream_mpi_main.c)
+    target_include_directories(tpbk_stream_mpi.tpbx PRIVATE src src/include)
+    target_link_libraries(tpbk_stream_mpi.tpbx PRIVATE tpbench tpbk_stream_mpi m MPI::MPI_C)
+    if(OpenMP_C_FOUND)
+        target_link_libraries(tpbk_stream_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
+    endif()
+endif()
+
 # Install targets
 install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -164,6 +197,15 @@ install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad
 
 install(TARGETS tpbcli tpbk_triad.tpbx tpbk_stream.tpbx tpbk_staxpy.tpbx tpbk_striad.tpbx
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Conditional install for MPI targets
+if(MPI_C_FOUND)
+    install(TARGETS tpbk_stream_mpi
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(TARGETS tpbk_stream_mpi.tpbx
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 
 # Install public headers
 install(DIRECTORY src/include/

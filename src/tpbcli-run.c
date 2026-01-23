@@ -52,6 +52,15 @@ static int apply_env_dim_value(tpb_dim_values_t *dim_val, int index);
 /* Expand handles for env dimensions */
 static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
 
+/* Parse comma-separated MPI arg key=value string and set MPI args */
+static int parse_mpiargs_tokstr(const char *tokstr);
+
+/* Apply MPI dimension value to current handle */
+static int apply_mpi_dim_value(tpb_dim_values_t *dim_val, int index);
+
+/* Expand handles for MPI dimensions */
+static int expand_mpi_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
+
 /* Local Function Implementations */
 
 static void
@@ -269,6 +278,46 @@ parse_run(int argc, char **argv)
                 }
             }
             tpb_dim_config_free(env_dim_cfg);
+
+        } else if (strcmp(argv[i], "--kmpiargs") == 0) {
+            if (i + 1 >= argc) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Option %s requires arguments.\n", argv[i]);
+                return TPBE_CLI_FAIL;
+            }
+            i++;
+            /* Parse MPI args (e.g., "np=4,hostfile=hosts") */
+            err = parse_mpiargs_tokstr(argv[i]);
+            if (err != 0) {
+                return err;
+            }
+
+        } else if (strcmp(argv[i], "--kmpiargs-dim") == 0) {
+            if (i + 1 >= argc) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Option %s requires arguments.\n", argv[i]);
+                return TPBE_CLI_FAIL;
+            }
+            i++;
+
+            /* Parse dimension configuration for MPI args */
+            tpb_dim_config_t *mpi_dim_cfg = NULL;
+            err = tpb_argp_parse_dim(argv[i], &mpi_dim_cfg);
+            if (err != 0) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "Failed to parse --kmpiargs-dim: %s\n", argv[i]);
+                return err;
+            }
+
+            /* Expand MPI dimensions for current kernel */
+            if (pending_kernel_name[0] != '\0') {
+                err = expand_mpi_dim_handles(mpi_dim_cfg, pending_kernel_name);
+                if (err != 0) {
+                    tpb_dim_config_free(mpi_dim_cfg);
+                    return err;
+                }
+            }
+            tpb_dim_config_free(mpi_dim_cfg);
 
         } else if (strcmp(argv[i], "--timer") == 0) {
             if (i + 1 >= argc) {
@@ -709,6 +758,212 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     /* Expand env dimensions recursively */
     int is_first = 1;
     err = expand_env_nested_dims_impl(dim_vals, indices, 0, depth, kernel_name,
+                                      &is_first, orig_hdl_idx);
+
+    free(indices);
+    tpb_dim_values_free(dim_vals);
+
+    return err;
+}
+
+/**
+ * @brief Parse MPI args token string (comma-separated KEY=VALUE pairs).
+ */
+static int
+parse_mpiargs_tokstr(const char *tokstr)
+{
+    char *tokstr_copy = strdup(tokstr);
+    if (tokstr_copy == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    char *saveptr;
+    char *token = strtok_r(tokstr_copy, ",", &saveptr);
+
+    while (token != NULL) {
+        /* Trim leading whitespace */
+        while (*token == ' ' || *token == '\t') {
+            token++;
+        }
+
+        /* Find the '=' separator */
+        char *eq = strchr(token, '=');
+        if (eq == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                       "Invalid mpiarg \"%s\". Expected KEY=VALUE.\n", token);
+            free(tokstr_copy);
+            return TPBE_CLI_FAIL;
+        }
+
+        *eq = '\0';
+        char *key = token;
+        char *value = eq + 1;
+
+        /* Trim trailing whitespace from key */
+        char *key_end = key + strlen(key) - 1;
+        while (key_end > key && (*key_end == ' ' || *key_end == '\t')) {
+            *key_end = '\0';
+            key_end--;
+        }
+
+        /* Skip leading whitespace in value */
+        while (*value == ' ' || *value == '\t') {
+            value++;
+        }
+
+        if (*key == '\0') {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                       "Invalid mpiarg: empty key detected.\n");
+            free(tokstr_copy);
+            return TPBE_CLI_FAIL;
+        }
+
+        /* Set MPI arg for current handle */
+        int err = tpb_driver_set_hdl_mpiarg(key, value);
+        if (err != 0) {
+            free(tokstr_copy);
+            return err;
+        }
+
+        token = strtok_r(NULL, ",", &saveptr);
+    }
+
+    free(tokstr_copy);
+    return 0;
+}
+
+/**
+ * @brief Apply MPI dimension value to current handle.
+ */
+static int
+apply_mpi_dim_value(tpb_dim_values_t *dim_val, int index)
+{
+    char value_str[TPBM_CLI_STR_MAX_LEN];
+
+    if (dim_val == NULL || index < 0 || index >= dim_val->n) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if (dim_val->is_string && dim_val->str_values != NULL) {
+        /* Use string value directly */
+        return tpb_driver_set_hdl_mpiarg(dim_val->parm_name, dim_val->str_values[index]);
+    } else {
+        /* Convert numeric value to string */
+        double val = dim_val->values[index];
+        if (val == (int64_t)val) {
+            snprintf(value_str, sizeof(value_str), "%" PRId64, (int64_t)val);
+        } else {
+            snprintf(value_str, sizeof(value_str), "%.15g", val);
+        }
+        return tpb_driver_set_hdl_mpiarg(dim_val->parm_name, value_str);
+    }
+}
+
+/**
+ * @brief Recursive helper for expanding MPI dimensions.
+ */
+static int
+expand_mpi_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
+                            int max_depth, const char *kernel_name,
+                            int *is_first, int orig_hdl_idx)
+{
+    int err;
+    tpb_dim_values_t *current = get_dim_at_depth(vals, depth);
+
+    if (current == NULL) {
+        return 0;
+    }
+
+    if (depth == max_depth - 1) {
+        /* Innermost dimension: create handles for each value */
+        for (int i = 0; i < current->n; i++) {
+            indices[depth] = i;
+
+            if (*is_first) {
+                /* First combination: apply to existing handle */
+                *is_first = 0;
+            } else {
+                /* Subsequent combinations: add a new handle and copy kargs */
+                err = tpb_driver_add_handle(kernel_name);
+                if (err != 0) {
+                    return err;
+                }
+                /* Copy kargs and envs from original handle */
+                err = tpb_driver_copy_hdl_from(orig_hdl_idx);
+                if (err != 0) {
+                    return err;
+                }
+            }
+
+            /* Apply all MPI dimension values from outer to inner */
+            for (int d = 0; d <= depth; d++) {
+                tpb_dim_values_t *dim_at_d = get_dim_at_depth(vals, d);
+                err = apply_mpi_dim_value(dim_at_d, indices[d]);
+                if (err != 0) {
+                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                               "Failed to set mpi dimension value for '%s'\n",
+                               dim_at_d->parm_name);
+                }
+            }
+        }
+    } else {
+        /* Outer dimension: iterate and recurse */
+        for (int i = 0; i < current->n; i++) {
+            indices[depth] = i;
+            err = expand_mpi_nested_dims_impl(vals, indices, depth + 1, max_depth,
+                                              kernel_name, is_first, orig_hdl_idx);
+            if (err != 0) {
+                return err;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief Expand handles for MPI dimensions.
+ */
+static int
+expand_mpi_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
+{
+    tpb_dim_values_t *dim_vals = NULL;
+    int err;
+    int total_count;
+    int depth;
+
+    if (dim_cfg == NULL || kernel_name == NULL) {
+        return 0;
+    }
+
+    /* Generate values from configuration */
+    err = tpb_dim_generate_values(dim_cfg, &dim_vals);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Failed to generate MPI dimension values\n");
+        return err;
+    }
+
+    total_count = tpb_dim_get_total_count(dim_cfg);
+    depth = count_dim_depth(dim_vals);
+
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "Expanding %d MPI dimension combinations for kernel '%s'\n",
+               total_count, kernel_name);
+
+    /* Allocate indices array for recursive expansion */
+    int *indices = (int *)calloc(depth, sizeof(int));
+    if (indices == NULL) {
+        tpb_dim_values_free(dim_vals);
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Save original handle index before expansion */
+    int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
+
+    /* Expand MPI dimensions recursively */
+    int is_first = 1;
+    err = expand_mpi_nested_dims_impl(dim_vals, indices, 0, depth, kernel_name,
                                       &is_first, orig_hdl_idx);
 
     free(indices);

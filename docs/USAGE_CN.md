@@ -20,10 +20,11 @@ TPBench 支持通过 CMake 选项启用 SIMD 指令集和 OpenMP 并行化。可
 
 | CMake 选项 | 默认值 | 描述 |
 | -------- | -------- | -------- |
-| `-DTPB_USE_AVX512=ON` | OFF | 启用 AVX-512 SIMD 指令集（x86_64） |
-| `-DTPB_USE_AVX2=ON` | OFF | 启用 AVX2 SIMD 指令集（x86_64） |
-| `-DTPB_USE_KP_SVE=ON` | OFF | 启用 ARM SVE SIMD 指令集（aarch64） |
-| `-DTPB_USE_OPENMP=ON` | OFF | 启用 OpenMP 并行化 |
+| `-DTPB_USE_AVX512=ON` | OFF | 启用AVX-512指令集（x86_64） |
+| `-DTPB_USE_AVX2=ON` | OFF | 启用AVX2指令集（x86_64） |
+| `-DTPB_USE_KP_SVE=ON` | OFF | 启用ARM SVE指令集（aarch64） |
+| `-DTPB_USE_OPENMP=ON` | OFF | 启用OpenMP |
+| `-DTPB_USE_MPI=</path/to/mpi/install/dir>` | OFF | 启用MPI |
 
 示例：在 x86_64 平台上启用 AVX-512 指令集编译
 ```bash
@@ -57,11 +58,11 @@ tpbcli <subcommand> <options>
 
 ### 2.2.1 基础格式
 
-`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kmpiargs-dims`时，选项需要加引号。
+`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kkmpiargs-dims`时，选项需要加引号。
 ``` bash
 tpbcli run <tpbench_options> <default_args> \
 [--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kmpiargs-dims <opts>]]
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs <opts> | --kkmpiargs-dims <opts>]]
 ```
 \<tpbench_options\>支持的选项包括：
 - `-P/-F`: 选择PLI集成内核或FLI集成内核，默认为-P。
@@ -190,3 +191,23 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16
 
 
 ### 2.2.6 设置 MPI 运行参数
+
+**1) 设置单个或多个 MPI 参数**
+
+示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，使用 2 个 MPI 进程，并允许以 root 身份运行。
+
+```
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=,np=2"
+```
+
+**2) 可变 MPI 参数**
+
+MPI 参数也可以通过 `--kmpiargs-dim` 配置为可变参数，类似于 `--kargs-dim`。这允许扫描不同的 MPI 配置。
+
+示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，扫描 MPI 进程数从 1 到 4。
+
+```
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs "allow-run-as-root=" --kmpiargs-dim "np=[1,2,4]"
+```
+
+注意：MPI 参数直接传递给 `mpirun`，TPBench 不进行验证。如果 `mpirun` 子进程失败，将报告错误。

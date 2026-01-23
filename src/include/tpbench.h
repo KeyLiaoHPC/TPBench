@@ -203,9 +203,35 @@ typedef struct tpb_kernel {
     tpb_k_func_t func;
 } tpb_kernel_t;
 
+/** @brief Environment variable entry */
+typedef struct tpb_env_entry {
+    char name[TPBM_NAME_STR_MAX_LEN];     /**< Environment variable name */
+    char value[TPBM_CLI_STR_MAX_LEN];     /**< Environment variable value */
+} tpb_env_entry_t;
+
+/** @brief Environment variable package */
+typedef struct tpb_envpack {
+    int n;                     /**< Number of environment variables */
+    tpb_env_entry_t *envs;     /**< Array of environment entries */
+} tpb_envpack_t;
+
+/** @brief MPI argument entry */
+typedef struct tpb_mpi_entry {
+    char key[TPBM_NAME_STR_MAX_LEN];      /**< MPI arg key, e.g., "np", "hostfile" */
+    char value[TPBM_CLI_STR_MAX_LEN];     /**< MPI arg value, e.g., "4", "hosts.txt" */
+} tpb_mpi_entry_t;
+
+/** @brief MPI argument package */
+typedef struct tpb_mpipack {
+    int n;                     /**< Number of MPI args */
+    tpb_mpi_entry_t *args;     /**< Array of MPI args */
+} tpb_mpipack_t;
+
 /** @brief Runtime handle for kernel execution */
 typedef struct tpb_k_rthdl {
     tpb_argpack_t argpack;
+    tpb_envpack_t envpack;     /**< Environment variables for kernel */
+    tpb_mpipack_t mpipack;     /**< MPI arguments for kernel (e.g., np=4) */
     tpb_respack_t respack;
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
