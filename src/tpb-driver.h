@@ -54,6 +54,27 @@ int tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
 int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
 
 /**
+ * @brief Set environment variable for current handle.
+ * @param env_name Environment variable name
+ * @param env_value Environment variable value (string)
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_hdl_env(const char *env_name, const char *env_value);
+
+/**
+ * @brief Copy argpack and envpack from source handle index to current handle.
+ * @param src_idx Source handle index to copy from.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_copy_hdl_from(int src_idx);
+
+/**
+ * @brief Get the current handle index.
+ * @return Current handle index, or -1 if none.
+ */
+int tpb_driver_get_current_hdl_idx(void);
+
+/**
  * @brief Add a handle for a kernel by name.
  * Creates handle, sets current_rthdl internally, increments nhdl.
  * @param kernel_name Kernel name to create handle for.

@@ -799,6 +799,13 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
     }
     hdl->argpack.n = 0;
 
+    /* Free envpack.envs */
+    if (hdl->envpack.envs != NULL) {
+        free(hdl->envpack.envs);
+        hdl->envpack.envs = NULL;
+    }
+    hdl->envpack.n = 0;
+
     return 0;
 }
 
@@ -880,6 +887,23 @@ tpb_driver_add_handle(const char *kernel_name)
 
     hdl->respack.n = 0;
     hdl->respack.outputs = NULL;
+
+    /* Initialize envpack and inherit from pseudo handle */
+    hdl->envpack.n = 0;
+    hdl->envpack.envs = NULL;
+
+    if (handle_list != NULL && nhdl > 0 && handle_list[0].envpack.n > 0) {
+        int env_n = handle_list[0].envpack.n;
+        hdl->envpack.envs = (tpb_env_entry_t *)malloc(sizeof(tpb_env_entry_t) * env_n);
+        if (hdl->envpack.envs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        hdl->envpack.n = env_n;
+        for (int i = 0; i < env_n; i++) {
+            memcpy(&hdl->envpack.envs[i], &handle_list[0].envpack.envs[i],
+                   sizeof(tpb_env_entry_t));
+        }
+    }
 
     /* Set ihdl = nhdl, then increment nhdl */
     ihdl = nhdl;
@@ -1060,6 +1084,101 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
     return 0;
 }
 
+int
+tpb_driver_set_hdl_env(const char *env_name, const char *env_value)
+{
+    if (env_name == NULL || env_value == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (handle_list == NULL || current_rthdl == NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "In tpb_driver_set_hdl_env: Empty kernel running list.\n");
+        return TPBE_ILLEGAL_CALL;
+    }
+
+    /* Check if env var already exists in current handle, if so update it */
+    for (int i = 0; i < current_rthdl->envpack.n; i++) {
+        if (strcmp(current_rthdl->envpack.envs[i].name, env_name) == 0) {
+            snprintf(current_rthdl->envpack.envs[i].value,
+                     TPBM_CLI_STR_MAX_LEN, "%s", env_value);
+            return 0;
+        }
+    }
+
+    /* Add new env var */
+    int new_n = current_rthdl->envpack.n + 1;
+    tpb_env_entry_t *new_envs = (tpb_env_entry_t *)realloc(
+        current_rthdl->envpack.envs,
+        sizeof(tpb_env_entry_t) * new_n);
+    if (new_envs == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    current_rthdl->envpack.envs = new_envs;
+
+    /* Initialize new entry */
+    tpb_env_entry_t *entry = &current_rthdl->envpack.envs[current_rthdl->envpack.n];
+    snprintf(entry->name, TPBM_NAME_STR_MAX_LEN, "%s", env_name);
+    snprintf(entry->value, TPBM_CLI_STR_MAX_LEN, "%s", env_value);
+
+    current_rthdl->envpack.n = new_n;
+    return 0;
+}
+
+int
+tpb_driver_copy_hdl_from(int src_idx)
+{
+    if (handle_list == NULL || current_rthdl == NULL) {
+        return TPBE_ILLEGAL_CALL;
+    }
+
+    if (src_idx < 0 || src_idx >= nhdl) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    tpb_k_rthdl_t *src = &handle_list[src_idx];
+
+    /* Copy argpack values (structures already allocated in add_handle) */
+    for (int i = 0; i < current_rthdl->argpack.n && i < src->argpack.n; i++) {
+        /* Find matching parameter by name and copy value */
+        for (int j = 0; j < src->argpack.n; j++) {
+            if (strcmp(current_rthdl->argpack.args[i].name,
+                       src->argpack.args[j].name) == 0) {
+                current_rthdl->argpack.args[i].value = src->argpack.args[j].value;
+                break;
+            }
+        }
+    }
+
+    /* Copy envpack */
+    if (src->envpack.n > 0 && src->envpack.envs != NULL) {
+        /* Free existing envpack if any */
+        if (current_rthdl->envpack.envs != NULL) {
+            free(current_rthdl->envpack.envs);
+        }
+
+        current_rthdl->envpack.envs = (tpb_env_entry_t *)malloc(
+            sizeof(tpb_env_entry_t) * src->envpack.n);
+        if (current_rthdl->envpack.envs == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        current_rthdl->envpack.n = src->envpack.n;
+
+        for (int i = 0; i < src->envpack.n; i++) {
+            memcpy(&current_rthdl->envpack.envs[i], &src->envpack.envs[i],
+                   sizeof(tpb_env_entry_t));
+        }
+    }
+
+    return 0;
+}
+
+int
+tpb_driver_get_current_hdl_idx(void)
+{
+    return ihdl;
+}
+
 /* Run a PLI kernel via fork/exec */
 static int
 tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
@@ -1120,6 +1239,11 @@ tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
 
     /* Set TPBENCH_TIMER environment variable */
     setenv("TPBENCH_TIMER", timer.name, 1);
+
+    /* Apply envpack environment variables */
+    for (int i = 0; i < hdl->envpack.n; i++) {
+        setenv(hdl->envpack.envs[i].name, hdl->envpack.envs[i].value, 1);
+    }
 
     /* Create pipe for capturing child output */
     if (pipe(pipefd) == -1) {

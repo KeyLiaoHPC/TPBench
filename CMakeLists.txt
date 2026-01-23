@@ -89,11 +89,17 @@ target_compile_definitions(tpbench PRIVATE TPB_DIR="${TPB_DIR_RESOLVED}")
 add_library(tpbk_triad SHARED src/kernels/simple/tpbk_triad.c)
 target_include_directories(tpbk_triad PRIVATE src src/include)
 target_link_libraries(tpbk_triad PRIVATE tpbench m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_triad PRIVATE OpenMP::OpenMP_C)
+endif()
 
 # Stream kernel as shared library
 add_library(tpbk_stream SHARED src/kernels/simple/tpbk_stream.c)
 target_include_directories(tpbk_stream PRIVATE src src/include)
 target_link_libraries(tpbk_stream PRIVATE tpbench m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_stream PRIVATE OpenMP::OpenMP_C)
+endif()
 
 # Staxpy kernel as shared library
 add_library(tpbk_staxpy SHARED src/kernels/simple/tpbk_staxpy.c)
@@ -126,10 +132,16 @@ target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream tpbk_staxpy 
 add_executable(tpbk_triad.tpbx src/kernels/simple/tpbk_triad_main.c)
 target_include_directories(tpbk_triad.tpbx PRIVATE src src/include)
 target_link_libraries(tpbk_triad.tpbx PRIVATE tpbench tpbk_triad m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_triad.tpbx PRIVATE OpenMP::OpenMP_C)
+endif()
 
 add_executable(tpbk_stream.tpbx src/kernels/simple/tpbk_stream_main.c)
 target_include_directories(tpbk_stream.tpbx PRIVATE src src/include)
 target_link_libraries(tpbk_stream.tpbx PRIVATE tpbench tpbk_stream m)
+if(OpenMP_C_FOUND)
+    target_link_libraries(tpbk_stream.tpbx PRIVATE OpenMP::OpenMP_C)
+endif()
 
 add_executable(tpbk_staxpy.tpbx src/kernels/simple/tpbk_staxpy_main.c)
 target_include_directories(tpbk_staxpy.tpbx PRIVATE src src/include)

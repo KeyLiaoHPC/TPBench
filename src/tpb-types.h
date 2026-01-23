@@ -185,6 +185,18 @@ typedef struct tpb_argpack {
     tpb_rt_parm_t *args;
 } tpb_argpack_t;
 
+/** @brief Environment variable entry */
+typedef struct tpb_env_entry {
+    char name[TPBM_NAME_STR_MAX_LEN];   /**< Env var name */
+    char value[TPBM_CLI_STR_MAX_LEN];   /**< Env var value */
+} tpb_env_entry_t;
+
+/** @brief Environment package for kernel execution */
+typedef struct tpb_envpack {
+    int n;                    /**< Number of env vars */
+    tpb_env_entry_t *envs;    /**< Array of env vars */
+} tpb_envpack_t;
+
 /** @brief Static kernel information */
 typedef struct tpb_k_static_info {
     char name[TPBM_NAME_STR_MAX_LEN];
@@ -210,6 +222,7 @@ typedef struct tpb_kernel {
 /** @brief Runtime handle for kernel execution */
 typedef struct tpb_k_rthdl {
     tpb_argpack_t argpack;
+    tpb_envpack_t envpack;    /**< Environment variables for kernel */
     tpb_respack_t respack;
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
