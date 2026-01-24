@@ -1505,6 +1505,46 @@ tpb_driver_disable_kernel_reg(void)
 }
 
 int
+tpb_driver_reset_handles(void)
+{
+    /* Clean all handles except pseudo handle (index 0), reset handle list */
+    if (handle_list == NULL || nhdl <= 1) {
+        return 0;  /* Nothing to reset */
+    }
+
+    /* Clean handles from index 1 to nhdl-1 */
+    for (int i = 1; i < nhdl; i++) {
+        tpb_driver_clean_handle(&handle_list[i]);
+    }
+
+    /* Shrink handle_list to just pseudo handle */
+    tpb_k_rthdl_t *new_list = (tpb_k_rthdl_t *)realloc(handle_list, sizeof(tpb_k_rthdl_t));
+    if (new_list != NULL) {
+        handle_list = new_list;
+    }
+
+    /* Reset handle count and current index */
+    nhdl = 1;
+    ihdl = 0;
+
+    /* Clear pseudo handle's per-run settings (mpiargs, envs) */
+    if (handle_list[0].mpipack.mpiargs != NULL) {
+        free(handle_list[0].mpipack.mpiargs);
+        handle_list[0].mpipack.mpiargs = NULL;
+    }
+    if (handle_list[0].envpack.envs != NULL) {
+        free(handle_list[0].envpack.envs);
+        handle_list[0].envpack.envs = NULL;
+    }
+    handle_list[0].envpack.n = 0;
+
+    /* Reset current_rthdl to pseudo handle */
+    current_rthdl = &handle_list[0];
+
+    return 0;
+}
+
+int
 tpb_driver_set_integ_mode(int mode)
 {
     if (mode != TPB_INTEG_MODE_FLI && mode != TPB_INTEG_MODE_PLI) {

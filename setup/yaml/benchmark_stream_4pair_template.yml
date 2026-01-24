@@ -22,7 +22,7 @@ benchmark:
     #    "max", "min", "Q=<quantile_number>". <quantile_number> is a decimal number in [0,100].
     - id: 8Kx1
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
@@ -33,7 +33,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 8Kx4
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
@@ -44,7 +44,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 48Kx1
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
@@ -55,7 +55,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 48Kx4
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
@@ -66,7 +66,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 1024Kx1
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
@@ -77,7 +77,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 1024Kx4
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
@@ -88,7 +88,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 524288Kx1
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
@@ -99,7 +99,7 @@ benchmark:
         - ["triad_bw_walltime", "mean"]
     - id: 524288Kx4
       note: ""
-      kernel: stream
+      kernel: stream_mpi
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"

@@ -290,6 +290,16 @@ void tpb_driver_enable_kernel_reg(void);
 void tpb_driver_disable_kernel_reg(void);
 
 /**
+ * @brief Reset handles for next batch run.
+ *
+ * Cleans and removes all handles except the pseudo handle (index 0).
+ * Preserves the kernel registry. Used by benchmark to run multiple batches.
+ *
+ * @return 0 on success.
+ */
+int tpb_driver_reset_handles(void);
+
+/**
  * @brief Set the integration mode for the driver.
  * @param mode TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI
  * @return 0 on success, error code otherwise.

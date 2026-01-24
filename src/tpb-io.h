@@ -154,4 +154,11 @@ void tpb_log_cleanup(void);
  */
 void tpb_log_write_output(const char *output);
 
+/**
+ * @brief Get the current log file path.
+ *
+ * @return Path to the log file, or NULL if not initialized.
+ */
+const char *tpb_log_get_filepath(void);
+
 #endif /* TPB_IO_H */
