@@ -101,7 +101,7 @@ typedef struct tpb_dim_values {
  * @brief Parse a linear sequence specification.
  *
  * Parses format: <parm_name>=(st,en,step)
- * Example: memsize=(128,512,128) generates [128, 256, 384, 512]
+ * Example: total_memsize=(128,512,128) generates [128, 256, 384, 512]
  *
  * @param spec Input specification string (after the '=' for linear).
  * @param cfg  Output configuration structure.
@@ -126,7 +126,7 @@ int tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg);
  *
  * Parses format: <parm_name>=<op>(@,x)(st,min,max,nlim)
  * Operators: add, sub, mul, div, pow
- * Example: memsize=mul(@,2)(16,16,128,0) generates [16, 32, 64, 128]
+ * Example: total_memsize=mul(@,2)(16,16,128,0) generates [16, 32, 64, 128]
  *
  * @param spec Input specification string (after the '=' for recur).
  * @param cfg  Output configuration structure.
@@ -138,7 +138,7 @@ int tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg);
  * @brief Parse a nested sequence specification.
  *
  * Parses format: <dim>{<nested_dim1>{<nested_dim2>{...}}}
- * Example: dtype=[double,float]{memsize=mul(@,2)(16,16,128,0)}
+ * Example: dtype=[double,float]{total_memsize=mul(@,2)(16,16,128,0)}
  *
  * @param spec Input specification string.
  * @param cfg  Output configuration structure (linked list via nested pointer).

@@ -84,29 +84,29 @@ tpbcli run <tpbench_options> <default_args> \
 参数选项（`--kargs`、`--kenvs`和`--kmpiargs`）接受一个使用逗号分隔的字符串列表，每个列表元素的格式为`<key>=<value>`。一个参数选项后可以存在多个上述键值对，表示将内核中变量名为“\<key\>”的参数设置为“\<value\>”。TPBench解析选项设置，并检查参数的合法性。若对于一轮测试来说，命令行中出现了多次带有相同参数名的设置，那么优先级由高到低为：可变参数>内核参数>默认参数，优先级更高的参数设置将覆盖低优先级参数。对于一个名为“foo”的内核，`--kernel foo` 后的 `--kargs` 定义与默认参数设置重复，那么 `<foo>` 将使用其作用域中最后一次出现的参数。因此，以下三条指令的作用是一样的。
 
 ```
-$ ./bin/tpbcli run --kargs memsize=128,ntest=100 --kernel triad
-$ ./bin/tpbcli run --kargs ntest=10 --kernel triad --kargs memsize=128,ntest=100
+$ ./bin/tpbcli run --kargs total_memsize=128,ntest=100 --kernel triad
+$ ./bin/tpbcli run --kargs ntest=10 --kernel triad --kargs total_memsize=128,ntest=100
 $ ./bin/tpbcli run --kernel triad \
-    --kargs memsize=128 \
+    --kargs total_memsize=128 \
     --kargs ntest=100
 ```
 
 
-需要注意，默认参数集或输入参数并不总是能被原样采用，主要有2个原因：1）参数处理由评测内核定义；2）评测内核不一定支持所有默认参数名。以总内存容量（`memsize=128`）为例，使用 `double` 精度时，triad 计算（`a_i=b_i+s*c_i`）会为每个数组开辟 5461 个 double 变量所需内存（128/3*1024/sizeof(double)，下取整），实际的总内存容量为 **131064 Bytes**，而不是 **131072 Bytes**。因此，在每轮测试结束后，评测内核实际使用的参数将被输出至终端，用户应当以此作为评测内核的实际输入参数。
+需要注意，默认参数集或输入参数并不总是能被原样采用，主要有2个原因：1）参数处理由评测内核定义；2）评测内核不一定支持所有默认参数名。以总内存容量（`total_memsize=128`）为例，使用 `double` 精度时，triad 计算（`a_i=b_i+s*c_i`）会为每个数组开辟 5461 个 double 变量所需内存（128/3*1024/sizeof(double)，下取整），实际的总内存容量为 **131064 Bytes**，而不是 **131072 Bytes**。因此，在每轮测试结束后，评测内核实际使用的参数将被输出至终端，用户应当以此作为评测内核的实际输入参数。
 
 示例1：运行 triad 内核，总内存容量 128KiB
 ```bash
-$ tpbcli run --kargs memsize=128 -k triad
+$ tpbcli run --kargs total_memsize=128 -k triad
 ```
 
 示例2：测试 2 轮 triad 内核，第 1 轮测试运行 100 个循环，总内存容量 128KiB；第 2 轮测试运行 100 个循环，总内存容量 256KiB
 ```bash
-$ tpbcli run --kargs ntest=100 -k triad --kargs memsize=128 -k triad --kargs memsize=256
+$ tpbcli run --kargs ntest=100 -k triad --kargs total_memsize=128 -k triad --kargs total_memsize=256
 ```
 
 示例3：先后运行 triad、pchase 两个内核，每个内核的总内存容量 128KiB。triad 循环 100 次，pchase 循环 1000 次。
 ```bash
-$ tpbcli run --kargs memsize=128,ntest=100 -k triad -k pchase --kargs=1000
+$ tpbcli run --kargs total_memsize=128,ntest=100 -k triad -k pchase --kargs=1000
 ```
 
 使用 `--kernel -l` 可以列出目前可用的评测内核，使用 `--kernel <foo> --kargs -l` 可以列出 `<foo>` 内核支持的命令行输入参数。
@@ -123,10 +123,10 @@ $ tpbcli run --kargs memsize=128,ntest=100 -k triad -k pchase --kargs=1000
 
 语法：`--kargs-dim '<parm_name>=(st,en,step)'`
 
-示例：运行 `triad` 内核，使用 `double` 数据类型，每轮测试运行 100 次循环。配置内存总容量 `memsize` 为可变参数，该参数为线性序列，以 128KiB 为间隔，令 128KiB <= memsize <= 512KiB。TPBench 将运行 4 轮 `triad` 测试，分别将 `memsize` 参数设置为 128、256、384、512。
+示例：运行 `triad` 内核，使用 `double` 数据类型，每轮测试运行 100 次循环。配置内存总容量 `total_memsize` 为可变参数，该参数为线性序列，以 128KiB 为间隔，令 128KiB <= total_memsize <= 512KiB。TPBench 将运行 4 轮 `triad` 测试，分别将 `total_memsize` 参数设置为 128、256、384、512。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'memsize=(128,512,128)'
+$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'total_memsize=(128,512,128)'
 ```
 
 **2）显式列表**
@@ -138,7 +138,7 @@ $ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'memsize=(128
 示例：运行 `triad` 内核，设置总内存容量 256KiB，每轮测试运行 100 次循环。配置数据类型 `dtype` 为可变参数，该参数为显式列表序列，包含 `double`、`float`、`iso-fp16`。TPBench 将轮流使用上述 3 种变量格式，共运行 3 轮 triad 测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100,memsize=256 --kargs-dim 'dtype=[double,float,iso-fp16]'
+$ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim 'dtype=[double,float,iso-fp16]'
 ```
 
 **3）递推序列**
@@ -147,10 +147,10 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=256 --kargs-dim 'dtype=[double
 
 语法：`--kargs-dim <parm_name>='<op>(@,x)(st,min,max,nlim)'`
 
-示例：运行 `triad` 内核，每轮执行 100 个循环，轮流将 `memsize` 设置为 `16`、`32`、`64`、`128`，共运行 4 轮测试。
+示例：运行 `triad` 内核，每轮执行 100 个循环，轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 4 轮测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'memsize=mul(@,2)(16,16,128,0)'
+$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'total_memsize=mul(@,2)(16,16,128,0)'
 ```
 
 **4）嵌套序列**
@@ -159,10 +159,10 @@ $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'memsize=mul(@,2)(16,16,12
 
 语法：`--kargs-dim '<dim>{<nested_dim1>{<nested_dim2>{...}}}'`
 
-示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式。对于每种格式，轮流将 `memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试。
+示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式。对于每种格式，轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'dtype=[double,float,iso-fp16]{memsize=mul(@,2)(16,16,128,0)}'
+$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}'
 ```
 
 ### 2.2.4 设置计时方法
@@ -186,7 +186,7 @@ TPBench 默认使用 `clock_gettime` 获取 `CLOCK_MONOTONIC_RAW` 时钟（Linux
 示例：运行 triad 时，循环 100 次，内存大小为 128KiB，使用 16 个 OpenMP 线程，每 4 个线程为一组，分别绑定至 CPU 核心 0-3、4-7、8-11、12-15。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16,OMP_PLACES="{0:4}:4:4"
+$ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THREADS=16,OMP_PLACES="{0:4}:4:4"
 ```
 
 
@@ -201,7 +201,7 @@ $ tpbcli --kernel triad --kargs ntest=100,memsize=128 --kenvs OMP_NUM_THREADS=16
 示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，使用 2 个 MPI 进程，并允许以 root 身份运行。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs ' -np 2'
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 --kmpiargs ' -np 2'
 ```
 
 可以多次指定 `--kmpiargs`，它们将用空格连接。如果在 `--kernel` 之后指定 `--kmpiargs`，则该内核特定的 MPI 参数将替换通用 MPI 参数。
@@ -215,7 +215,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 --kmpiargs ' -np
 示例1：运行 stream_mpi 内核，扫描 MPI 进程数从 1 到 4。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
 ```
@@ -223,7 +223,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
 示例2：使用嵌套列表扫描进程数和绑定策略。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
 ```

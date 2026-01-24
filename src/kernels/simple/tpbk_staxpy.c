@@ -35,7 +35,7 @@ int _tpbk_run_staxpy(void);
 int tpbk_pli_register_staxpy(void);
 static int d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
                     int64_t twarm_ms, int stride, int jump,
-                    int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize,
+                    int64_t *tot_time, int64_t *step_time, uint64_t *real_total_memsize,
                     uint32_t *array_size_out, double *bw);
 static int check_d_staxpy(int narr, int ntest, int stride, int jump,
                           double *a, double *b, double s, double epsilon, double *errval);
@@ -62,11 +62,11 @@ tpbk_pli_register_staxpy(void)
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("memsize", "Memory size in KiB", "32",
+    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
@@ -103,11 +103,11 @@ _tpbk_register_staxpy(void)
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("memsize", "Memory size in KiB", "32",
+    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use memsize)", "0",
+    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
@@ -131,7 +131,7 @@ _tpbk_register_staxpy(void)
     err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("real_memsize", "Actual memory footprint of two staxpy arrays.",
+    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of two staxpy arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
     err = tpb_k_add_output("array_size", "Actual number of elements per array.",
@@ -152,14 +152,14 @@ _tpbk_run_staxpy(void)
     int ntest;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
-    double memsize;
+    double total_memsize;
     uint32_t array_size;
     int64_t twarm_ms;
     int64_t stride, jump;
     /* Output */
     void *tot_time = NULL;
     void *step_time = NULL;
-    uint64_t *real_memsize = NULL;
+    uint64_t *real_total_memsize = NULL;
     double *bw = NULL;
 
     /* Get timer */
@@ -169,7 +169,7 @@ _tpbk_run_staxpy(void)
     /* Get arguments by names */
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
+    tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
     if (tpberr) return tpberr;
@@ -185,7 +185,7 @@ _tpbk_run_staxpy(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("step_time", ntest, &step_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
+    tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
     tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
@@ -209,8 +209,8 @@ _tpbk_run_staxpy(void)
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_staxpy(&timer, ntest, memsize, array_size, twarm_ms, (int)stride, (int)jump,
-                      tot_time, step_time, real_memsize, array_size_out, bw);
+    tpberr = d_staxpy(&timer, ntest, total_memsize, array_size, twarm_ms, (int)stride, (int)jump,
+                      tot_time, step_time, real_total_memsize, array_size_out, bw);
 
     return tpberr;
 }
@@ -218,7 +218,7 @@ _tpbk_run_staxpy(void)
 static int
 d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
          int64_t twarm_ms, int stride, int jump,
-         int64_t *tot_time, int64_t *step_time, uint64_t *real_memsize,
+         int64_t *tot_time, int64_t *step_time, uint64_t *real_total_memsize,
          uint32_t *array_size_out, double *bw) {
     int narr, err;
     int total_step, nb;
@@ -231,7 +231,7 @@ d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
 #endif
 
     err = 0;
-    /* Use array_size if specified (non-zero), otherwise use memsize */
+    /* Use array_size if specified (non-zero), otherwise use total_memsize */
     if (array_size > 0) {
         narr = array_size;
     } else {
@@ -245,7 +245,7 @@ d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     narr = ((narr + 3) / 4) * 4;
 #endif
 
-    *real_memsize = narr * sizeof(double) * 2;
+    *real_total_memsize = narr * sizeof(double) * 2;
     *array_size_out = narr;
 
     MALLOC(a, narr);

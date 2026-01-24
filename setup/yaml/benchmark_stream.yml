@@ -19,7 +19,7 @@ benchmark:
     - id: S0
       note: ""
       kernel: stream
-      kargs: [["memsize", "32"], ["ntest", "100"], ["twarm", "100"]]
+      kargs: [["total_memsize", "32"], ["ntest", "100"], ["twarm", "100"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -28,7 +28,7 @@ benchmark:
     - id: S1
       note: ""
       kernel: stream
-      kargs: [["memsize", "256"], ["ntest", "100"], ["twarm", "100"]]
+      kargs: [["total_memsize", "256"], ["ntest", "100"], ["twarm", "100"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -37,7 +37,7 @@ benchmark:
     - id: S2
       note: ""
       kernel: stream
-      kargs: [["memsize", "512"], ["ntest", "100"], ["twarm", "100"]]
+      kargs: [["total_memsize", "512"], ["ntest", "100"], ["twarm", "100"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -46,7 +46,7 @@ benchmark:
     - id: S3
       note: ""
       kernel: stream
-      kargs: [["memsize", "1024"], ["ntest", "100"], ["twarm", "100"]]
+      kargs: [["total_memsize", "1024"], ["ntest", "100"], ["twarm", "100"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -55,7 +55,7 @@ benchmark:
     - id: S4
       note: ""
       kernel: stream
-      kargs: [["memsize", "131072"], ["ntest", "10"], ["twarm", "10"]]
+      kargs: [["total_memsize", "131072"], ["ntest", "10"], ["twarm", "10"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -64,7 +64,7 @@ benchmark:
     - id: S5
       note: ""
       kernel: stream
-      kargs: [["memsize", "1048576"], ["ntest", "10"], ["twarm", "10"]]
+      kargs: [["total_memsize", "1048576"], ["ntest", "10"], ["twarm", "10"]]
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]

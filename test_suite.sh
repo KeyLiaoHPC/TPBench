@@ -4,16 +4,16 @@ echo "TPBench Argument Parsing Test Suite"
 echo "=========================================="
 echo ""
 
-echo "Test 1: Basic kernel with dtype and memsize"
-./tpbcgt.x run -k triad:dtype=double:memsize=128 --kargs ntest=100 2>&1 | grep -E "(tests|Elements)" | head -2
+echo "Test 1: Basic kernel with dtype and total_memsize"
+./tpbcgt.x run -k triad:dtype=double:total_memsize=128 --kargs ntest=100 2>&1 | grep -E "(tests|Elements)" | head -2
 echo ""
 
 echo "Test 2: Kernel-specific args override common args"
-./tpbcgt.x run -k triad:ntest=20:memsize=256 --kargs ntest=5,memsize=32 2>&1 | grep -E "(tests|Elements)" | head -2
+./tpbcgt.x run -k triad:ntest=20:total_memsize=256 --kargs ntest=5,total_memsize=32 2>&1 | grep -E "(tests|Elements)" | head -2
 echo ""
 
 echo "Test 3: Later args override earlier args"
-./tpbcgt.x run -k triad:memsize=64:memsize=512 --kargs ntest=3 2>&1 | grep -E "(tests|Elements)" | head -2
+./tpbcgt.x run -k triad:total_memsize=64:total_memsize=512 --kargs ntest=3 2>&1 | grep -E "(tests|Elements)" | head -2
 echo ""
 
 echo "Test 4: Warning for unsupported common arg (continues)"

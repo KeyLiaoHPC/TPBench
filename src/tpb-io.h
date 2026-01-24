@@ -30,7 +30,7 @@
     "        --kernel    <kernel_name>\n" \
     "                    Mandatory. Kernel list separated by comma. Each kernel can have\n" \
     "                    multiple kargs separated by colon. (e.g.\n" \
-    "                    d_init:memsize=1024,triad:fp=fp64:memsize=1024)\n" \
+    "                    d_init:total_memsize=1024,triad:fp=fp64:total_memsize=1024)\n" \
     "                    Use 'help <kernel>' for available options of a kernel.\n" \
     "        --kargs     <key>=<value>\n" \
     "                    Optional. Default kernel run-time arguments.\n" \

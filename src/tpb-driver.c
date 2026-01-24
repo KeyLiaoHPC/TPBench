@@ -130,8 +130,8 @@ tpb_register_common()
     kernel_common.info.parms[2].plims[0].i64 = 0;
     kernel_common.info.parms[2].plims[1].i64 = 10000;
 
-    /* memsize: memory size in KiB */
-    snprintf(kernel_common.info.parms[3].name, TPBM_NAME_STR_MAX_LEN, "memsize");
+    /* total_memsize: memory size in KiB */
+    snprintf(kernel_common.info.parms[3].name, TPBM_NAME_STR_MAX_LEN, "total_memsize");
     snprintf(kernel_common.info.parms[3].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
     kernel_common.info.parms[3].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
     kernel_common.info.parms[3].default_value.u64 = 32;

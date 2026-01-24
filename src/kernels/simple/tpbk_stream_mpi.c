@@ -34,10 +34,7 @@
 #include <mpi.h>
 #include "tpbench.h"
 
-#define MALLOC(_A, _NARR)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NARR); \
-                            if((_A) == NULL) {                                  \
-                                return TPBE_MALLOC_FAIL;                        \
-                            }
+#define ARRAY_ALIGNMENT 64
 
 static double epsilon = 1.e-8;
 
@@ -47,7 +44,7 @@ int _tpbk_run_stream_mpi(void);
 int tpbk_pli_register_stream_mpi(void);
 static int d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
                         int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
-                        int64_t *add_time, int64_t *triad_time, uint64_t *real_memsize,
+                        int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
                         uint32_t *array_size_out, double *copy_bw, double *scale_bw,
                         double *add_bw, double *triad_bw);
 static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, 
@@ -68,11 +65,15 @@ tpbk_pli_register_stream_mpi(void)
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("memsize", "Memory size per rank in KiB", "32",
+    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB (32 for default). "
+                         "The overall designated memory used by the compute kernel. "
+                         "total_array_size = round_down(total_memsize / 3 / sizeof(double)), "
+                         "then distributed across ranks with the last rank getting any remainder.", 
+                         "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use memsize)", "0",
+    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
@@ -101,11 +102,11 @@ _tpbk_register_stream_mpi(void)
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("memsize", "Memory size per rank in KiB", "32",
+    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB (overall designated memory)", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use memsize)", "0",
+    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
@@ -127,7 +128,7 @@ _tpbk_register_stream_mpi(void)
     err = tpb_k_add_output("triad_time", "Measured runtime of triad operation (min across ranks).", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("real_memsize", "Actual memory footprint of three stream arrays per rank.",
+    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of three stream arrays per rank.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
     err = tpb_k_add_output("array_size", "Actual number of elements per array per rank.",
@@ -149,7 +150,7 @@ _tpbk_run_stream_mpi(void)
     int ntest;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
-    double memsize;
+    double total_memsize;
     uint32_t array_size;
     int64_t twarm_ms;
     /* Output */
@@ -157,7 +158,7 @@ _tpbk_run_stream_mpi(void)
     void *scale_time = NULL;
     void *add_time = NULL;
     void *triad_time = NULL;
-    uint64_t *real_memsize = NULL;
+    uint64_t *real_total_memsize = NULL;
     double *copy_bw = NULL;
     double *scale_bw = NULL;
     double *add_bw = NULL;
@@ -170,7 +171,7 @@ _tpbk_run_stream_mpi(void)
     /* Get arguments by names */
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("memsize", TPB_DOUBLE_T, (void *)&memsize);
+    tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
     if (tpberr) return tpberr;
@@ -186,7 +187,7 @@ _tpbk_run_stream_mpi(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_alloc_output("triad_time", ntest, &triad_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_memsize", 1, &real_memsize);
+    tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
     tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
@@ -235,9 +236,9 @@ _tpbk_run_stream_mpi(void)
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_stream_mpi(&timer, ntest, memsize, array_size, twarm_ms,
+    tpberr = d_stream_mpi(&timer, ntest, total_memsize, array_size, twarm_ms,
                           copy_time, scale_time, add_time, triad_time,
-                          real_memsize, array_size_out, copy_bw, scale_bw,
+                          real_total_memsize, array_size_out, copy_bw, scale_bw,
                           add_bw, triad_bw);
 
     return tpberr;
@@ -246,14 +247,15 @@ _tpbk_run_stream_mpi(void)
 static int
 d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
              int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
-             int64_t *add_time, int64_t *triad_time, uint64_t *real_memsize,
+             int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
              uint32_t *array_size_out, double *copy_bw, double *scale_bw,
              double *add_bw, double *triad_bw)
 {
-    int narr, err;
+    int narr, err, k;
     double *a, *b, *c;
     double s = 0.42;
     int rank, nprocs;
+    uint64_t total_array_size, base_size, array_bytes;
 
     /* Local timing arrays */
     int64_t *local_copy_time = NULL;
@@ -267,34 +269,115 @@ d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     int64_t *all_add_time = NULL;
     int64_t *all_triad_time = NULL;
 
+    /* Error arrays for gathering */
+    double local_errval = 0.0;
+    double *all_errvals = NULL;
+
     err = 0;
 
     /* Get MPI info */
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
-    /* Use array_size if specified (non-zero), otherwise use memsize */
+    /* Use array_size if specified (non-zero), otherwise use total_memsize */
     if (array_size > 0) {
-        narr = array_size;
+        /* If array_size is specified, it's the total across all ranks */
+        total_array_size = array_size;
     } else {
-        narr = (int)(kib * 1024 / sizeof(double) / 3);
+        /* Calculate total_array_size from total_memsize across all ranks */
+        total_array_size = (uint64_t)(kib * 1024 / sizeof(double) / 3);
     }
-    *real_memsize = narr * sizeof(double) * 3;
+    
+    /* Distribute array size across ranks */
+    base_size = total_array_size / nprocs;
+    narr = (int)base_size;
+    
+    /* Last rank gets the remainder */
+    if (rank == nprocs - 1) {
+        narr += (int)(total_array_size % nprocs);
+    }
+
+    /* Allocate arrays using posix_memalign */
+    array_bytes = narr * sizeof(double);
+    k = posix_memalign((void **)&a, ARRAY_ALIGNMENT, array_bytes);
+    if (k != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array a failed, return code is %d\n", rank, k);
+        return TPBE_MALLOC_FAIL;
+    }
+    k = posix_memalign((void **)&b, ARRAY_ALIGNMENT, array_bytes);
+    if (k != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array b failed, return code is %d\n", rank, k);
+        free(a);
+        return TPBE_MALLOC_FAIL;
+    }
+    k = posix_memalign((void **)&c, ARRAY_ALIGNMENT, array_bytes);
+    if (k != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array c failed, return code is %d\n", rank, k);
+        free(a);
+        free(b);
+        return TPBE_MALLOC_FAIL;
+    }
+
+    /* Calculate actual memory footprint per rank */
+    *real_total_memsize = (narr * nprocs + total_array_size % nprocs ) * sizeof(double) * 3;
     *array_size_out = narr;
 
-    /* Print MPI info */
+    /* Print MPI info on rank 0 */
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "MPI STREAM: %d ranks, %d elements per array per rank\n", 
-                   nprocs, narr);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Total memory: %.2f MiB (%.2f MiB per rank)\n",
-                   (double)(*real_memsize) * nprocs / (1024.0 * 1024.0),
-                   (double)(*real_memsize) / (1024.0 * 1024.0));
+        uint64_t total_mem = 0;
+        /* Gather array sizes from all ranks to compute total memory */
+        uint32_t *all_narrs = (uint32_t *)malloc(sizeof(uint32_t) * nprocs);
+        if (all_narrs == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Rank 0: Failed to allocate array for gathering sizes\n");
+            free(a); free(b); free(c);
+            return TPBE_MALLOC_FAIL;
+        }
+        
+        MPI_Gather(&narr, 1, MPI_UINT32_T, all_narrs, 1, MPI_UINT32_T, 0, MPI_COMM_WORLD);
+        
+        for (int i = 0; i < nprocs; i++) {
+            total_mem += all_narrs[i] * sizeof(double) * 3;
+        }
+        
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "MPI STREAM Benchmark\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "This system uses %lu bytes per array element.\n", sizeof(double));
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate Array size = %llu (elements)\n", 
+                   (unsigned long long)total_array_size);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate Memory per array = %.1f MiB (= %.1f GiB).\n",
+                   (double)total_array_size * sizeof(double) / (1024.0 * 1024.0),
+                   (double)total_array_size * sizeof(double) / (1024.0 * 1024.0 * 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate memory required = %.1f MiB (= %.1f GiB).\n",
+                   (double)total_mem / (1024.0 * 1024.0),
+                   (double)total_mem / (1024.0 * 1024.0 * 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Data is distributed across %d MPI ranks\n", nprocs);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "   Array size per MPI rank = %u (elements, base) ", (unsigned int)base_size);
+        if (total_array_size % nprocs != 0) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "+ %llu (remainder on last rank)\n", 
+                       (unsigned long long)(total_array_size % nprocs));
+        } else {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "   Memory per array per MPI rank = %.1f MiB (= %.1f GiB).\n",
+                   (double)base_size * sizeof(double) / (1024.0 * 1024.0),
+                   (double)base_size * sizeof(double) / (1024.0 * 1024.0 * 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT, "   Total memory per MPI rank = %.1f MiB (= %.1f GiB).\n",
+                   (double)base_size * sizeof(double) * 3 / (1024.0 * 1024.0),
+                   (double)base_size * sizeof(double) * 3 / (1024.0 * 1024.0 * 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Each kernel will be executed %d times.\n", ntest);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "The *best* time for each kernel (excluding the first iteration)\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, " will be used to compute the reported bandwidth.\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "The SCALAR value used for this run is %f\n", s);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        
+        free(all_narrs);
+    } else {
+        /* Other ranks also participate in the gather */
+        MPI_Gather(&narr, 1, MPI_UINT32_T, NULL, 0, MPI_UINT32_T, 0, MPI_COMM_WORLD);
     }
-
-    /* Allocate local arrays */
-    MALLOC(a, narr);
-    MALLOC(b, narr);
-    MALLOC(c, narr);
 
     /* Allocate local timing arrays */
     local_copy_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
@@ -459,11 +542,62 @@ d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
         }
     }
 
-    /* Verify results. */
-    double errval;
-    err = check_d_stream(narr, ntest, a, b, c, s, epsilon, &errval);
+    /* Verify results on each rank */
+    err = check_d_stream(narr, ntest, a, b, c, s, epsilon, &local_errval);
+    
+    /* Rank 0 allocates array to gather all errors */
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "stream_mpi error (rank 0): %lf\n", errval);
+        all_errvals = (double *)malloc(sizeof(double) * nprocs);
+        if (all_errvals == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Rank 0: Failed to allocate array for gathering errors\n");
+            free(a); free(b); free(c);
+            free(local_copy_time); free(local_scale_time);
+            free(local_add_time); free(local_triad_time);
+            free(all_copy_time); free(all_scale_time);
+            free(all_add_time); free(all_triad_time);
+            return TPBE_MALLOC_FAIL;
+        }
+    }
+    
+    /* Gather all errors to rank 0 */
+    MPI_Gather(&local_errval, 1, MPI_DOUBLE, all_errvals, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    
+    /* Rank 0 computes and reports min, max, mean errors */
+    if (rank == 0) {
+        double min_err = all_errvals[0];
+        double max_err = all_errvals[0];
+        double sum_err = 0.0;
+        int min_rank = 0;
+        int max_rank = 0;
+        
+        for (int r = 0; r < nprocs; r++) {
+            sum_err += all_errvals[r];
+            if (all_errvals[r] < min_err) {
+                min_err = all_errvals[r];
+                min_rank = r;
+            }
+            if (all_errvals[r] > max_err) {
+                max_err = all_errvals[r];
+                max_rank = r;
+            }
+        }
+        
+        double mean_err = sum_err / nprocs;
+        
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Solution Validation:\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, "  Min error: %.6e (rank %d)\n", min_err, min_rank);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "  Max error: %.6e (rank %d)\n", max_err, max_rank);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "  Mean error: %.6e (across all ranks)\n", mean_err);
+        
+        if (max_err <= epsilon) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "  Solution validates: avg error less than %.6e on all ranks\n", epsilon);
+        } else {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "  WARNING: Solution validation failed on some ranks\n");
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        
+        free(all_errvals);
     }
 
     /* Cleanup */
