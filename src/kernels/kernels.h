@@ -34,4 +34,28 @@ extern int register_staxpy(void);
  */
 extern int register_striad(void);
 
+/**
+ * @brief Register scale kernel (STREAM Scale)
+ * @return Error code (0 on success)
+ */
+extern int register_scale(void);
+
+/**
+ * @brief Register axpy kernel (BLAS AXPY)
+ * @return Error code (0 on success)
+ */
+extern int register_axpy(void);
+
+/**
+ * @brief Register rtriad kernel (Repeat Triad)
+ * @return Error code (0 on success)
+ */
+extern int register_rtriad(void);
+
+/**
+ * @brief Register sum kernel (Reduction)
+ * @return Error code (0 on success)
+ */
+extern int register_sum(void);
+
 #endif // #ifndef _KERNELS_H
