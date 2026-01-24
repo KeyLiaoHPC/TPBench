@@ -44,6 +44,19 @@ extern "C" {
 #define DBG_LOG_NOLN(fmt, ...) ((void)0)
 #endif
 
+/* Very early debug - runs when shared library is loaded */
+__attribute__((constructor))
+static void roofline_rocm_init(void) {
+    fprintf(stderr, "[ROOFLINE_DBG] === LIBRARY LOADED (constructor) ===\n");
+    fflush(stderr);
+}
+
+__attribute__((destructor))
+static void roofline_rocm_fini(void) {
+    fprintf(stderr, "[ROOFLINE_DBG] === LIBRARY UNLOADING (destructor) ===\n");
+    fflush(stderr);
+}
+
 /* Target arithmetic intensities (FLOP/Byte) */
 static const double ai_values[N_AI_POINTS] = {
     0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0
