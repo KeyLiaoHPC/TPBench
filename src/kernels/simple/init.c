@@ -28,8 +28,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "tptimer.h"
-#include "tperror.h"
-#include "tpdata.h"
+#include "../../tpb-impl.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
 
 #ifdef KP_SVE
@@ -136,7 +136,7 @@ d_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     //kernel end
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, 8, nsize);
 
     free((void *)a);
@@ -179,7 +179,7 @@ s_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     }
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, 4, nsize);
 
     free((void *)a);
@@ -223,7 +223,7 @@ h_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     }
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, 2, nsize);
 
     free((void *)a);
@@ -272,7 +272,7 @@ i_init(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     // kernel end
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     dpipe_k0(ns, cy, nskip, ntest, freq, 4, nsize);
 
     free((void *)a);

@@ -27,10 +27,10 @@
 #include <time.h>
 #include <string.h>
 #include "tptimer.h"
-#include "tperror.h"
-#include "tpdata.h"
+#include "../tpb-impl.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"
@@ -127,11 +127,11 @@ int d_jacobi2d5p_sendrecv(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, u
     int skip_comp = get_int_from_env("TPBENCH_SKIP_COMP", 0);
     init_kernel_data(N);
 
-    tpprintf(0, 0, 0, "Matrix size (local domain) N=%d\n", N);
-    tpprintf(0, 0, 0, "Working set size: %.1f KB\n", (1.0 * Nplus2) * Nplus2 * sizeof(double) * 2 / 1000);
-    tpprintf(0, 0, 0, "Sendrecv %.1f KB messages.\n", 2.0 * N * sizeof(double) / 1000);
+    tpb_printf(0, 0, 0, "Matrix size (local domain) N=%d\n", N);
+    tpb_printf(0, 0, 0, "Working set size: %.1f KB\n", (1.0 * Nplus2) * Nplus2 * sizeof(double) * 2 / 1000);
+    tpb_printf(0, 0, 0, "Sendrecv %.1f KB messages.\n", 2.0 * N * sizeof(double) / 1000);
     if (skip_comp) {
-        tpprintf(0, 0, 0, " COMM only: the computation will be skipped.\n");
+        tpb_printf(0, 0, 0, " COMM only: the computation will be skipped.\n");
     }
     // kernel warm. the #warmups need to be the same among ranks because of the MPI_Bcast
     int nwarmups = MAX(1e8 / N / N, 1);
@@ -169,7 +169,7 @@ int d_jacobi2d5p_sendrecv(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, u
     free_kernel_data();
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     report_performance(ns, cy, nskip, ntest, nepoch, N, skip_comp);
     char kernel_name[32] = "jacobi2d5p_sendrecv";
     log_step_info(ns, cy, kernel_name, ntest, nepoch, N, skip_comp);

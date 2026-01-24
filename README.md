@@ -31,7 +31,7 @@ $ ./tpbench.x -n 50 -s 65536 -g d_stream
 
 </code>
 
-On Armv8-a (aarch64) platform (e.g. Marvel ThunderX2): 
+On Armv8-a (aarch64) platform: 
 <!-- <code> -->
 $ tar xf TPBench.tar.gz <br>
 $ cd TPBench <br>
@@ -59,7 +59,7 @@ For Armv8 architecture, TPBench provide a simple PMU kernel module to let you ac
 
   -d, --data_dir[=PATH]      Optional. Data directory. <br>
   -g, --group=group_list     Group list. (e.g. -g d_stream). <br>
-  -k, --kernel=kernel_list   Kernel list.(e.g. -k d_init,d_sum). <br>
+  -k, --kernel=kernel   Kernel list.(e.g. -k d_init,d_sum). <br>
   -L, --list                 List all group and kernels then exit. <br>
   -n, --ntest=# of test      Overall number of tests. <br>
   -s, --nkib=kib_size        Memory usage for a single test array, in KiB. <br>
@@ -69,7 +69,7 @@ For Armv8 architecture, TPBench provide a simple PMU kernel module to let you ac
 
 ### 2.3 - Data and timer
 All tests include cycle-level timer and nanosecond-level timer. For now, every test include a 1-second warmup. 
-After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpdata.h.
+After warming up, the first 10 results will be skipped, you can change the number of skipped results by setting __NSKIP macro at src/include/tpb-stat.h.
 If '-d' option is not set, results will be automatically saved in data/${hostname} folder in the place you start the program.
 The syntax of output csv file is \<prefix>-r\<rank#>_c<core#>-\<postfix>.csv
 

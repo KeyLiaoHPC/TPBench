@@ -8,7 +8,9 @@
 *.png
 *.svg
 *.swp
+Make.dev
 .vscode
+.clangd
 ./*.sh
 .vscode/
 data/
@@ -18,3 +20,24 @@ scripts/
 .DS_Store
 result*/*
 __pycache__/
+
+# Kernel modules
+*.ko
+*.o
+*.mod.c
+*.order
+*.symvers
+*.cmd
+*.mod
+*.mod.o
+*.mod.o.cmd
+*.mod.o.o
+*.mod.o.o.cmd
+
+# Ignore CMake temporary files
+build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+.cache/

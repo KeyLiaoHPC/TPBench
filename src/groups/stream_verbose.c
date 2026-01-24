@@ -27,10 +27,10 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "tperror.h"
+#include "../tpb-impl.h"
 #include "tptimer.h"
-#include "tpdata.h"
-#include "tpio.h"
+#include "tpb-stat.h"
+#include "tpb-io.h"
 #include "tpmpi.h"
 
 
@@ -42,13 +42,13 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     volatile double *a, *b, *c;
     register double s = 0.42;
 
-    tpprintf(0, 0, 0, "Running STREAM Benchmark for verbose data.\n");
-    tpprintf(0, 0, 0, "CAUTION: The overall data output here is calculated across every single test spot.\n");
-    tpprintf(0, 0, 0, "TRUE kernel runtime is evaluted in every test spot, syncing is only for contorlling.\n");
-    tpprintf(0, 0, 0, "kernels to start at the same time.\n");
-    tpprintf(0, 0, 0, "Number of tests: %d\n", ntest);
-    tpprintf(0, 0, 0, "Estimated memory allocation: %llu Kib\n", nkib * 3);
-    tpprintf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
+    tpb_printf(0, 0, 0, "Running STREAM Benchmark for verbose data.\n");
+    tpb_printf(0, 0, 0, "CAUTION: The overall data output here is calculated across every single test spot.\n");
+    tpb_printf(0, 0, 0, "TRUE kernel runtime is evaluted in every test spot, syncing is only for contorlling.\n");
+    tpb_printf(0, 0, 0, "kernels to start at the same time.\n");
+    tpb_printf(0, 0, 0, "Number of tests: %d\n", ntest);
+    tpb_printf(0, 0, 0, "Estimated memory allocation: %llu Kib\n", nkib * 3);
+    tpb_printf(0, 0, 0, "# of Elements per Array: %d\n", nkib * 1024 / sizeof(double));
 
     narr = nkib * 1024 / sizeof(double);
     a = (double *)malloc(narr * sizeof(double));
@@ -142,15 +142,13 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
     free((void *)a);
     free((void *)b);
     free((void *)c);
-    tpprintf(0, 0, 0, "Verbose STREAM Benchmark done, processing data.\n");
+    tpb_printf(0, 0, 0, "Verbose STREAM Benchmark done, processing data.\n");
 
     // skip some tests in the front 
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     uint64_t nitem, snitem;
     snitem = ntest - nskip;
-    if(ntest <= 10) {
-        nskip = 0;
-    }
+
 #ifdef USE_MPI
     MPI_Status stat;
     if(tpmpi_info.myrank == 0) {
@@ -173,7 +171,7 @@ d_stream_verbose(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t n
                 MPI_Recv(all_cy + i * snitem, snitem, MPI_UINT64_T, i, 102, MPI_COMM_WORLD, &stat);
             }
             // process data.
-            tpprintf(0, 0, 0, "Epoch %d: \n", eid);
+            tpb_printf(0, 0, 0, "Epoch %d: \n", eid);
             // process overall data
             dpipe_k0(all_ns, all_cy, 0, nitem, freq, bpi[eid], narr);
         }

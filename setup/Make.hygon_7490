@@ -1,0 +1,4 @@
+#!/bin/sh
+CC=mpicc
+CFLAGS=-O3 -fno-builtin -march=native  -Wno-discarded-qualifiers -Wno-incompatible-pointer-types
+TPBFLAGS=-DTPM_NO_CYCLE -DTPM_NO_RAW_DATA -DAVX2 -DFL_RATIO_F8L1 -DUSE_MPI 

@@ -24,10 +24,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "tptimer.h"
-#include "tperror.h"
-#include "tpdata.h"
+#include "../../tpb-impl.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 #ifdef __aarch64__
 
@@ -1081,10 +1081,10 @@ d_fmaldr(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
 #endif
 #endif
 
-    tpprintf(0, 0, 0, "SIMD Instr: %s\n", SIMD_NAME);
-    tpprintf(0, 0, 0, "Working set size: %dKB.\n", kib);
-    tpprintf(0, 0, 0, "repeat times: %lu.\n", repeat);
-    tpprintf(0, 0, 0, "Operation intensity: %f.\n", operation_intensity);
+    tpb_printf(0, 0, 0, "SIMD Instr: %s\n", SIMD_NAME);
+    tpb_printf(0, 0, 0, "Working set size: %dKB.\n", kib);
+    tpb_printf(0, 0, 0, "repeat times: %lu.\n", repeat);
+    tpb_printf(0, 0, 0, "Operation intensity: %f.\n", operation_intensity);
 
     init_kernel_data(nsize);
 

@@ -28,10 +28,9 @@
 #include <string.h>
 #include "tplog.h"
 #include "tptimer.h"
-#include "tperror.h"
-#include "tpdata.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 #ifdef KP_SVE
 #include "arm_sve.h"
@@ -210,7 +209,7 @@ int d_gemm_bcast(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t m
     int skip_comm = get_int_from_env("TPBENCH_SKIP_COMM", 0);
 
     if (skip_comp == 1 && skip_comm == 1) {
-        tpprintf(0, 0, 0, "Both computation and communication are skipped.\n");
+        tpb_printf(0, 0, 0, "Both computation and communication are skipped.\n");
         return 0;
     }
 
@@ -220,14 +219,14 @@ int d_gemm_bcast(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t m
 
     init_kernel_data(N);
 
-    tpprintf(0, 0, 0, "Matrix size N=%d\n", N);
-    tpprintf(0, 0, 0, "#Bcast rows Nr=%d\n", Nr);
-    tpprintf(0, 0, 0, "Working set size: %.1f KB\n", 1.0 * ((double) N) * N * sizeof(double) * 3 / 1000);
-    tpprintf(0, 0, 0, "Bcast %.1f KB messages.\n", 1.0 * N * Nr * sizeof(double) / 1000);
+    tpb_printf(0, 0, 0, "Matrix size N=%d\n", N);
+    tpb_printf(0, 0, 0, "#Bcast rows Nr=%d\n", Nr);
+    tpb_printf(0, 0, 0, "Working set size: %.1f KB\n", 1.0 * ((double) N) * N * sizeof(double) * 3 / 1000);
+    tpb_printf(0, 0, 0, "Bcast %.1f KB messages.\n", 1.0 * N * Nr * sizeof(double) / 1000);
     if (skip_comp) {
-        tpprintf(0, 0, 0, "COMM only: the computation will be skipped.\n");
+        tpb_printf(0, 0, 0, "COMM only: the computation will be skipped.\n");
     } else if (skip_comm) {
-        tpprintf(0, 0, 0, "COMP only: the communication will be skipped.\n");
+        tpb_printf(0, 0, 0, "COMP only: the communication will be skipped.\n");
     }
     // kernel warm. the #warmups need to be the same among ranks because of the MPI_Bcast
     int nwarmups = MAX(1e9 / N / N / N, 1);
@@ -276,7 +275,7 @@ int d_gemm_bcast(int ntest, int nepoch, uint64_t **ns, uint64_t **cy, uint64_t m
     free_kernel_data();
 
     // overall result
-    int nskip = 10, freq=1;
+    int nskip = 1, freq=1;
     report_performance(ns, cy, total_wall_time, nskip, ntest, nepoch, N, Nr, skip_comp, skip_comm);
 
     char kernel_name[32] = "gemmbcast";

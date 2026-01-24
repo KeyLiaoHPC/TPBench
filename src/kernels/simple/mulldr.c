@@ -24,10 +24,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "tptimer.h"
-#include "tperror.h"
-#include "tpdata.h"
+#include "../../tpb-impl.h"
+#include "tpb-stat.h"
 #include "tpmpi.h"
-#include "tpio.h"
+#include "tpb-io.h"
 
 #ifdef KP_SVE
 #include <arm_sve.h>
@@ -728,9 +728,9 @@ d_mulldr(int ntest, uint64_t *ns, uint64_t *cy, uint64_t kib, ...) {
     kib = nsize * sizeof(double) / 1024;
     repeat = ((size_t) 1e8) / (nsize / 8) / MAX(1, (operation_intensity / 0.125));
     repeat = MAX(repeat, 1);
-    tpprintf(0, 0, 0, "Working set size: %dKB.\n", kib);
-    tpprintf(0, 0, 0, "repeat times: %lu.\n", repeat);
-    tpprintf(0, 0, 0, "Operation intensity: %f.\n", operation_intensity);
+    tpb_printf(0, 0, 0, "Working set size: %dKB.\n", kib);
+    tpb_printf(0, 0, 0, "repeat times: %lu.\n", repeat);
+    tpb_printf(0, 0, 0, "Operation intensity: %f.\n", operation_intensity);
 
     #ifdef __aarch64__
     #ifdef KP_SVE
