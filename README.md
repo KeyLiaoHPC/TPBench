@@ -1,5 +1,7 @@
 # TPBench - A Comprehensive HPC Benchmark Tool and Framework
 
+## Please refer to docs/USAGE.md for latest user manual, for now.
+
 ## 1 - Introduction
 
 TPBench is a benchmarking tool for scientific computing and HPC. It enables users to evaluate and observe the performance characteristics of HPC hardware system and computing application in one application. In addition to existed benchmark kernels, TPBench provides fundamental facilaties for benchmarking including high-precision timer, data factory, statistical analyzer, etc. TPBench aims at enabling you to integrate your own scientific kernel and bridging the performance gaps from micro architecture benchmark to top-level parallel application.
