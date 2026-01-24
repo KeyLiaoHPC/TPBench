@@ -147,6 +147,8 @@ add_executable(tpbcli
     src/tpbcli-list.c
     src/tpbcli-benchmark.c
     src/tpbcli-help.c
+    src/tpb-bench-yaml.c
+    src/tpb-bench-score.c
 )
 target_include_directories(tpbcli PRIVATE src src/include)
 target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad m)

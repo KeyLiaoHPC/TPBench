@@ -264,6 +264,15 @@ tpb_log_write_output(const char *output)
     tpb_log_write(output);
 }
 
+const char *
+tpb_log_get_filepath(void)
+{
+    if (log_filepath[0] != '\0') {
+        return log_filepath;
+    }
+    return NULL;
+}
+
 /* Public Function Implementations */
 
 int
