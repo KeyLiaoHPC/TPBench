@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16) # Require at least CMake 3.16
-project(TPBench C) # Project name and language
+project(TPBench C CXX) # Project name and languages (CXX needed for ROCm)
 
 # Use C11 and require it
 set(CMAKE_C_STANDARD 11)
@@ -320,6 +320,46 @@ if(MPI_C_FOUND)
     endif()
 endif()
 
+# ============================================================================
+# ROCm/HIP GPU Support
+# ============================================================================
+option(TPB_USE_ROCM "Enable ROCm/HIP GPU support" OFF)
+
+if(TPB_USE_ROCM)
+    # Enable HIP language support (requires CMake 3.21+)
+    cmake_minimum_required(VERSION 3.21)
+    enable_language(HIP)
+
+    # Find HIP package
+    find_package(hip REQUIRED)
+    if(hip_FOUND)
+        add_compile_definitions(TPB_USE_ROCM)
+        message(STATUS "ROCm/HIP enabled")
+        message(STATUS "  HIP version: ${hip_VERSION}")
+    else()
+        message(FATAL_ERROR "HIP not found but TPB_USE_ROCM is ON")
+    endif()
+
+    # Roofline ROCm kernel as shared library
+    add_library(tpbk_roofline_rocm SHARED
+        src/kernels/rocm/tpbk_roofline_rocm.hip)
+    target_include_directories(tpbk_roofline_rocm PRIVATE src src/include)
+    target_link_libraries(tpbk_roofline_rocm PRIVATE tpbench hip::device m)
+    set_target_properties(tpbk_roofline_rocm PROPERTIES
+        HIP_SEPARABLE_COMPILATION ON
+        POSITION_INDEPENDENT_CODE ON)
+
+    # Roofline ROCm PLI executable (uses regular C++ compiler, links HIP runtime)
+    add_executable(tpbk_roofline_rocm.tpbx
+        src/kernels/rocm/tpbk_roofline_rocm_main.cpp)
+    target_include_directories(tpbk_roofline_rocm.tpbx PRIVATE src src/include)
+    target_link_libraries(tpbk_roofline_rocm.tpbx PRIVATE
+        tpbench tpbk_roofline_rocm hip::host m)
+    set_target_properties(tpbk_roofline_rocm.tpbx PROPERTIES
+        LINKER_LANGUAGE CXX
+        CXX_STANDARD 11)
+endif()
+
 # Install targets
 install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad tpbk_scale tpbk_axpy tpbk_rtriad tpbk_sum
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -334,6 +374,15 @@ if(MPI_C_FOUND)
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
     install(TARGETS tpbk_stream_mpi.tpbx tpbk_scale_mpi.tpbx tpbk_axpy_mpi.tpbx tpbk_rtriad_mpi.tpbx tpbk_sum_mpi.tpbx
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+
+# Conditional install for ROCm targets
+if(TPB_USE_ROCM)
+    install(TARGETS tpbk_roofline_rocm
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    install(TARGETS tpbk_roofline_rocm.tpbx
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 

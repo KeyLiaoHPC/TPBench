@@ -36,6 +36,7 @@ __pycache__/
 
 # Ignore CMake temporary files
 build/
+build*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

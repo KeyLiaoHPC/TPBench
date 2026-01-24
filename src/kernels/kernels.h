@@ -58,4 +58,12 @@ extern int register_rtriad(void);
  */
 extern int register_sum(void);
 
+#ifdef TPB_USE_ROCM
+/**
+ * @brief Register roofline_rocm kernel (ROCm GPU Roofline Model)
+ * @return Error code (0 on success)
+ */
+extern int register_roofline_rocm(void);
+#endif
+
 #endif // #ifndef _KERNELS_H

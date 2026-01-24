@@ -115,7 +115,51 @@ $ tpbcli run --kargs total_memsize=128,ntest=100 -k triad -k pchase --kargs=1000
 
 Use `--kernel -l` to list currently available evaluation kernels. Use `--kernel <foo> --kargs -l` to list command-line input parameters supported by `<foo>` kernel.
 
-### 2.2.3 Run Variable Parameter Evaluation
+### 2.2.3 Build and Run Heterogeneous Evaluation
+
+TPBench supports heterogeneous computing evaluation with ROCm/HIP for AMD GPUs. To enable ROCm support, configure and build with the `TPB_USE_ROCM` option.
+
+**1) Build with ROCm Support**
+
+```bash
+# Configure with ROCm enabled (requires ROCm installation)
+$ cmake -B build_rocm -DTPB_USE_ROCM=ON -DCMAKE_PREFIX_PATH=/opt/rocm
+
+# Build all targets including tpbcli
+$ cmake --build build_rocm -j$(nproc)
+```
+
+**2) Run GPU Roofline Evaluation**
+
+The `roofline_rocm` kernel measures GPU roofline model performance at various arithmetic intensities.
+
+Parameters:
+- `type_code`: Data type (0=BF16, 1=FP32, default: 0)
+- `op_code`: Operation type (0=vector, 1=tensor, default: 0)
+- `total_memsize`: Memory size in KiB (default: 131072)
+- `ntest`: Number of test iterations (default: 100)
+- `twarm`: Warm-up time in milliseconds (default: 100)
+
+Example 1: Run BF16 vector roofline with default parameters
+```bash
+$ cd build_rocm
+$ ./bin/tpbcli run -P --kernel roofline_rocm
+```
+
+Example 2: Run FP32 vector roofline with 512 MiB memory
+```bash
+$ ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=1,total_memsize=524288
+```
+
+Example 3: Select specific GPU device using environment variables
+```bash
+$ HIP_VISIBLE_DEVICES=1 ./bin/tpbcli run -P --kernel roofline_rocm
+$ ROCR_VISIBLE_DEVICES=0 ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=1
+```
+
+Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, and 8.0.
+
+### 2.2.4 Run Variable Parameter Evaluation
 
 When configuring variable parameter evaluation, TPBench runs tests sequentially according to predefined value sequences. Each value executes the kernel once. Get results as a parameter changes along a coordinate axis (e.g., a performance curve as a parameter changes). When specifying evaluation kernel `--kernel <foo>`, any parameter configurable via `--kargs` in the `foo` kernel can be configured via `--kargs-dim` as a variable parameter. If a variable parameter name duplicates a parameter name in `--kargs`, the `--kargs` value is ignored.
 
@@ -169,7 +213,7 @@ Example: Run `triad` kernel. Each round executes 100 loops. Use `double`, `float
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}
 ```
 
-### 2.2.4 Set Timing Method
+### 2.2.5 Set Timing Method
 
 TPBench defaults to using `clock_gettime` to get the `CLOCK_MONOTONIC_RAW` clock (Linux kernel version not lower than 2.6.28). You can also use `--timer <timer_name>` to set other timing methods. Use `tpbcli run --timer -l` to display currently supported timing methods. `<timer_name>` can choose the following timing methods:
 
@@ -183,7 +227,7 @@ TPBench defaults to using `clock_gettime` to get the `CLOCK_MONOTONIC_RAW` clock
 
 One timing method defines clock source, function to read clock source, data format, storage format, storage method, and clock calculation method. Therefore, the same evaluation kernel and parameters using different timing methods may produce different output results and output units.
 
-### 2.2.5 Set Environment Variables Passed to Evaluation Kernel
+### 2.2.6 Set Environment Variables Passed to Evaluation Kernel
 
 **1) Set Single or Multiple Environment Variables**
 
@@ -193,7 +237,7 @@ Example: Run triad. Loop 100 times. Memory size 128KiB. Use 16 OpenMP threads. G
 $ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THREADS=16,OMP_PLACES="{0:4}:4:4"
 ```
 
-### 2.2.6 Set MPI Runtime Parameters
+### 2.2.7 Set MPI Runtime Parameters
 
 **1) Set MPI Arguments**
 
