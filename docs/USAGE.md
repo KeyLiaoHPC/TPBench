@@ -134,13 +134,13 @@ $ cmake --build build_rocm -j$(nproc)
 The `roofline_rocm` kernel measures GPU roofline model performance at various arithmetic intensities.
 
 Parameters:
-- `type_code`: Data type (0=BF16, 1=FP32, default: 0)
-- `op_code`: Operation type (0=vector, 1=tensor, default: 0)
+- `type_code`: Data type (0=FP16, 1=BF16, 2=FP32, 3=FP64, default: 0)
+- `op_code`: Operation type (0=vector, 1=tensor, default: 0). Tensor only for BF16/FP32.
 - `total_memsize`: Memory size in KiB (default: 131072)
 - `ntest`: Number of test iterations (default: 100)
 - `twarm`: Warm-up time in milliseconds (default: 100)
 
-Example 1: Run BF16 vector roofline with default parameters
+Example 1: Run FP16 vector roofline with default parameters
 ```bash
 $ cd build_rocm
 $ ./bin/tpbcli run -P --kernel roofline_rocm
@@ -148,16 +148,21 @@ $ ./bin/tpbcli run -P --kernel roofline_rocm
 
 Example 2: Run FP32 vector roofline with 512 MiB memory
 ```bash
-$ ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=1,total_memsize=524288
+$ ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=2,total_memsize=524288
 ```
 
-Example 3: Select specific GPU device using environment variables
+Example 3: Run FP64 roofline measurement
+```bash
+$ ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=3
+```
+
+Example 4: Select specific GPU device using environment variables
 ```bash
 $ HIP_VISIBLE_DEVICES=1 ./bin/tpbcli run -P --kernel roofline_rocm
 $ ROCR_VISIBLE_DEVICES=0 ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=1
 ```
 
-Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, and 8.0.
+Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, and 30.0.
 
 ### 2.2.4 Run Variable Parameter Evaluation
 
