@@ -124,10 +124,31 @@ benchmark:
     #   div: Starts from args[0], score=args[0]/args[1]/args[2]/...
     #   mul: args[0]*args[1]*...
     #   mean: Average of all args.
-    - id: "0"
+    - id: "Total Score"
       name: "Final Score"
       display: 1
       modifier: "sum"
+      args:
+        - "@score[id==8K_copy]"
+        - "@score[id==8K_scale]"
+        - "@score[id==8K_add]"
+        - "@score[id==8K_triad]"
+        - "@score[id==48K_copy]"
+        - "@score[id==48K_scale]"
+        - "@score[id==48K_add]"
+        - "@score[id==48K_triad]"
+        - "@score[id==1024K_copy]"
+        - "@score[id==1024K_scale]"
+        - "@score[id==1024K_add]"
+        - "@score[id==1024K_triad]"
+        - "@score[id==524288K_copy]"
+        - "@score[id==524288K_scale]"
+        - "@score[id==524288K_add]"
+        - "@score[id==524288K_triad]"
+    - id: "Mean Score"
+      name: "Final Score"
+      display: 1
+      modifier: "mean"
       args:
         - "@score[id==8K_copy]"
         - "@score[id==8K_scale]"
