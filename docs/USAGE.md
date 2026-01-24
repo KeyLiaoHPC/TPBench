@@ -162,7 +162,7 @@ $ HIP_VISIBLE_DEVICES=1 ./bin/tpbcli run -P --kernel roofline_rocm
 $ ROCR_VISIBLE_DEVICES=0 ./bin/tpbcli run -P --kernel roofline_rocm --kargs type_code=1
 ```
 
-Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, and 30.0.
+Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, and 90.0.
 
 ### 2.2.4 Run Variable Parameter Evaluation
 

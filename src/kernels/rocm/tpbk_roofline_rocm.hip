@@ -23,11 +23,11 @@ extern "C" {
 }
 
 /* Number of arithmetic intensity points to measure */
-#define N_AI_POINTS 17
+#define N_AI_POINTS 23
 
 /* Target arithmetic intensities (FLOP/Byte) */
 static const double ai_values[N_AI_POINTS] = {
-    0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0
+    0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0
 };
 
 /* AI index: 0-12 same as before, 13=15.0, 14=20.0, 15=25.0, 16=30.0 */
@@ -53,7 +53,7 @@ int tpbk_pli_register_roofline_rocm(void);
 
 static int d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                            double total_memsize_kib, int64_t ntest, int64_t twarm_ms,
-                           double *flops_out);
+                           int64_t nloop_timing, double *flops_out);
 
 /*
  * ============================================================================
@@ -298,126 +298,75 @@ __global__ void roofline_fp32_vec_ai_7p0(float *data, size_t n) {
     }
 }
 
-/* AI = 8.0: Highly compute-bound
- * Each thread processes 4 FP32 elements with 16 independent FMA chains for maximum ILP
- * 1024 FMAs per load group = 2048 FLOPs per 32 bytes = 64 FLOP/byte */
+/* AI = 8.0: (64 FLOPs per 8 bytes) → 8 iterations */
 __global__ void roofline_fp32_vec_ai_8p0(float *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
     if (idx + 3 < n) {
-        /* Load 4 elements into 16 registers for maximum ILP */
-        float v0 = data[idx];
-        float v1 = data[idx + 1];
-        float v2 = data[idx + 2];
-        float v3 = data[idx + 3];
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        
-        /* 1024 FMAs = 2048 FLOPs for 32 bytes R/W = 64 FLOP/byte
-         * Using 16 independent chains for maximum ILP */
         #pragma unroll
-        for (int i = 0; i < 64; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f);
-            v1 = fmaf(v1, 1.0001f, 0.0001f);
-            v2 = fmaf(v2, 1.0001f, 0.0001f);
-            v3 = fmaf(v3, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f);
-            a1 = fmaf(a1, 1.0001f, 0.0001f);
-            a2 = fmaf(a2, 1.0001f, 0.0001f);
-            a3 = fmaf(a3, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f);
-            b1 = fmaf(b1, 1.0001f, 0.0001f);
-            b2 = fmaf(b2, 1.0001f, 0.0001f);
-            b3 = fmaf(b3, 1.0001f, 0.0001f);
-            c0 = fmaf(c0, 1.0001f, 0.0001f);
-            c1 = fmaf(c1, 1.0001f, 0.0001f);
-            c2 = fmaf(c2, 1.0001f, 0.0001f);
-            c3 = fmaf(c3, 1.0001f, 0.0001f);
+        for (int i = 0; i < 8; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
-        
-        /* Combine and store */
-        data[idx] = v0 + a0 + b0 + c0;
-        data[idx + 1] = v1 + a1 + b1 + c1;
-        data[idx + 2] = v2 + a2 + b2 + c2;
-        data[idx + 3] = v3 + a3 + b3 + c3;
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
     }
 }
 
-/* AI = 9.0: Highly compute-bound (72 FLOPs per 8 bytes) */
+/* AI = 9.0: (72 FLOPs per 8 bytes) → 9 iterations */
 __global__ void roofline_fp32_vec_ai_9p0(float *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
     if (idx + 3 < n) {
-        float v0 = data[idx];
-        float v1 = data[idx + 1];
-        float v2 = data[idx + 2];
-        float v3 = data[idx + 3];
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        
         #pragma unroll
-        for (int i = 0; i < 72; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f);
-            v1 = fmaf(v1, 1.0001f, 0.0001f);
-            v2 = fmaf(v2, 1.0001f, 0.0001f);
-            v3 = fmaf(v3, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f);
-            a1 = fmaf(a1, 1.0001f, 0.0001f);
-            a2 = fmaf(a2, 1.0001f, 0.0001f);
-            a3 = fmaf(a3, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f);
-            b1 = fmaf(b1, 1.0001f, 0.0001f);
-            b2 = fmaf(b2, 1.0001f, 0.0001f);
-            b3 = fmaf(b3, 1.0001f, 0.0001f);
-            c0 = fmaf(c0, 1.0001f, 0.0001f);
-            c1 = fmaf(c1, 1.0001f, 0.0001f);
-            c2 = fmaf(c2, 1.0001f, 0.0001f);
-            c3 = fmaf(c3, 1.0001f, 0.0001f);
+        for (int i = 0; i < 9; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
-        
-        data[idx] = v0 + a0 + b0 + c0;
-        data[idx + 1] = v1 + a1 + b1 + c1;
-        data[idx + 2] = v2 + a2 + b2 + c2;
-        data[idx + 3] = v3 + a3 + b3 + c3;
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
     }
 }
 
-/* AI = 10.0: Highly compute-bound (80 FLOPs per 8 bytes) */
+/* AI = 10.0: (80 FLOPs per 8 bytes) → 10 iterations */
 __global__ void roofline_fp32_vec_ai_10p0(float *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
     if (idx + 3 < n) {
-        float v0 = data[idx];
-        float v1 = data[idx + 1];
-        float v2 = data[idx + 2];
-        float v3 = data[idx + 3];
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        
         #pragma unroll
-        for (int i = 0; i < 80; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f);
-            v1 = fmaf(v1, 1.0001f, 0.0001f);
-            v2 = fmaf(v2, 1.0001f, 0.0001f);
-            v3 = fmaf(v3, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f);
-            a1 = fmaf(a1, 1.0001f, 0.0001f);
-            a2 = fmaf(a2, 1.0001f, 0.0001f);
-            a3 = fmaf(a3, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f);
-            b1 = fmaf(b1, 1.0001f, 0.0001f);
-            b2 = fmaf(b2, 1.0001f, 0.0001f);
-            b3 = fmaf(b3, 1.0001f, 0.0001f);
-            c0 = fmaf(c0, 1.0001f, 0.0001f);
-            c1 = fmaf(c1, 1.0001f, 0.0001f);
-            c2 = fmaf(c2, 1.0001f, 0.0001f);
-            c3 = fmaf(c3, 1.0001f, 0.0001f);
+        for (int i = 0; i < 10; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
-        
-        data[idx] = v0 + a0 + b0 + c0;
-        data[idx + 1] = v1 + a1 + b1 + c1;
-        data[idx + 2] = v2 + a2 + b2 + c2;
-        data[idx + 3] = v3 + a3 + b3 + c3;
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
     }
 }
 
@@ -430,7 +379,6 @@ __global__ void roofline_fp32_vec_ai_15p0(float *data, size_t n) {
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        #pragma unroll
         for (int i = 0; i < 15; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
             v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
@@ -439,6 +387,7 @@ __global__ void roofline_fp32_vec_ai_15p0(float *data, size_t n) {
             b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
             b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
             c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            asm volatile("");
             c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
         data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
@@ -454,7 +403,6 @@ __global__ void roofline_fp32_vec_ai_20p0(float *data, size_t n) {
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        #pragma unroll
         for (int i = 0; i < 20; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
             v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
@@ -463,6 +411,7 @@ __global__ void roofline_fp32_vec_ai_20p0(float *data, size_t n) {
             b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
             b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
             c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            asm volatile("");
             c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
         data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
@@ -478,7 +427,6 @@ __global__ void roofline_fp32_vec_ai_25p0(float *data, size_t n) {
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        #pragma unroll
         for (int i = 0; i < 25; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
             v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
@@ -487,6 +435,7 @@ __global__ void roofline_fp32_vec_ai_25p0(float *data, size_t n) {
             b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
             b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
             c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            asm volatile("");
             c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
         }
         data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
@@ -502,7 +451,6 @@ __global__ void roofline_fp32_vec_ai_30p0(float *data, size_t n) {
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
         float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
-        #pragma unroll
         for (int i = 0; i < 30; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
             v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
@@ -511,7 +459,152 @@ __global__ void roofline_fp32_vec_ai_30p0(float *data, size_t n) {
             b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
             b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
             c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            asm volatile("");
             c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 40.0: (320 FLOPs per 8 bytes) → 40 iterations */
+__global__ void roofline_fp32_vec_ai_40p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 40; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 50.0: (400 FLOPs per 8 bytes) → 50 iterations */
+__global__ void roofline_fp32_vec_ai_50p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 50; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 60.0: (480 FLOPs per 8 bytes) → 60 iterations */
+__global__ void roofline_fp32_vec_ai_60p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 60; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 70.0: (560 FLOPs per 8 bytes) → 70 iterations with 4 chains */
+__global__ void roofline_fp32_vec_ai_70p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 70; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 80.0: (640 FLOPs per 8 bytes) → 80 iterations with 4 chains */
+__global__ void roofline_fp32_vec_ai_80p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 80; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+        data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
+    }
+}
+
+/* AI = 90.0: (720 FLOPs per 8 bytes) → 90 iterations with 4 chains */
+__global__ void roofline_fp32_vec_ai_90p0(float *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = data[idx], v1 = data[idx + 1], v2 = data[idx + 2], v3 = data[idx + 3];
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
+        float c0 = v0, c1 = v1, c2 = v2, c3 = v3;
+        for (int i = 0; i < 90; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f);
+            b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            c0 = fmaf(c0, 1.0001f, 0.0001f); c1 = fmaf(c1, 1.0001f, 0.0001f);
+            c2 = fmaf(c2, 1.0001f, 0.0001f); c3 = fmaf(c3, 1.0001f, 0.0001f);
+            asm volatile("");
         }
         data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
         data[idx + 2] = v2 + a2 + b2 + c2; data[idx + 3] = v3 + a3 + b3 + c3;
@@ -761,64 +854,22 @@ __global__ void roofline_bf16_vec_ai_4p0(hip_bfloat16 *data, size_t n) {
     }
 }
 
-/* AI = 8.0: Highly compute-bound
- * Each thread processes 8 BF16 elements with 32 independent FMA chains for maximum ILP
- * 2048 FMAs per load group = 4096 FLOPs per 16 bytes = 256 FLOP/byte */
+/* AI = 8.0: (32 FLOPs per 4 bytes) → 8 iterations */
 __global__ void roofline_bf16_vec_ai_8p0(hip_bfloat16 *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        /* Load 8 BF16 elements into 32 registers for maximum ILP */
-        float v0 = float(data[idx]);
-        float v1 = float(data[idx + 1]);
-        float v2 = float(data[idx + 2]);
-        float v3 = float(data[idx + 3]);
-        float v4 = float(data[idx + 4]);
-        float v5 = float(data[idx + 5]);
-        float v6 = float(data[idx + 6]);
-        float v7 = float(data[idx + 7]);
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]);
+        float v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
-        float a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
-        float b4 = v4, b5 = v5, b6 = v6, b7 = v7;
-        
-        /* 2048 FMAs total = 4096 FLOPs, for 16 bytes R/W = 256 FLOP/byte */
         #pragma unroll
-        for (int i = 0; i < 64; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f);
-            v1 = fmaf(v1, 1.0001f, 0.0001f);
-            v2 = fmaf(v2, 1.0001f, 0.0001f);
-            v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f);
-            v5 = fmaf(v5, 1.0001f, 0.0001f);
-            v6 = fmaf(v6, 1.0001f, 0.0001f);
-            v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f);
-            a1 = fmaf(a1, 1.0001f, 0.0001f);
-            a2 = fmaf(a2, 1.0001f, 0.0001f);
-            a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f);
-            a5 = fmaf(a5, 1.0001f, 0.0001f);
-            a6 = fmaf(a6, 1.0001f, 0.0001f);
-            a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f);
-            b1 = fmaf(b1, 1.0001f, 0.0001f);
-            b2 = fmaf(b2, 1.0001f, 0.0001f);
-            b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f);
-            b5 = fmaf(b5, 1.0001f, 0.0001f);
-            b6 = fmaf(b6, 1.0001f, 0.0001f);
-            b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 8; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        
-        /* Combine and store */
-        data[idx] = hip_bfloat16(v0 + a0 + b0);
-        data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
-        data[idx + 2] = hip_bfloat16(v2 + a2 + b2);
-        data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
-        data[idx + 4] = hip_bfloat16(v4 + a4 + b4);
-        data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
-        data[idx + 6] = hip_bfloat16(v6 + a6 + b6);
-        data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+        data[idx] = hip_bfloat16(v0 + a0); data[idx + 1] = hip_bfloat16(v1 + a1);
+        data[idx + 2] = hip_bfloat16(v2 + a2); data[idx + 3] = hip_bfloat16(v3 + a3);
     }
 }
 
@@ -877,50 +928,41 @@ __global__ void roofline_bf16_vec_ai_7p0(hip_bfloat16 *data, size_t n) {
     }
 }
 
-/* BF16 AI = 9.0, 10.0 kernels - same pattern as AI 8.0 */
+/* AI = 9.0: (36 FLOPs per 4 bytes) → 9 iterations */
 __global__ void roofline_bf16_vec_ai_9p0(hip_bfloat16 *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
-        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
-        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]);
+        float v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         #pragma unroll
-        for (int i = 0; i < 72; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 9; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
-        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
-        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
-        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+        data[idx] = hip_bfloat16(v0 + a0); data[idx + 1] = hip_bfloat16(v1 + a1);
+        data[idx + 2] = hip_bfloat16(v2 + a2); data[idx + 3] = hip_bfloat16(v3 + a3);
     }
 }
 
+/* AI = 10.0: (40 FLOPs per 4 bytes) → 10 iterations */
 __global__ void roofline_bf16_vec_ai_10p0(hip_bfloat16 *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
-        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
-        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]);
+        float v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         #pragma unroll
-        for (int i = 0; i < 80; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 10; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
-        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
-        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
-        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+        data[idx] = hip_bfloat16(v0 + a0); data[idx + 1] = hip_bfloat16(v1 + a1);
+        data[idx + 2] = hip_bfloat16(v2 + a2); data[idx + 3] = hip_bfloat16(v3 + a3);
     }
 }
 
@@ -1004,6 +1046,150 @@ __global__ void roofline_bf16_vec_ai_30p0(hip_bfloat16 *data, size_t n) {
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
         #pragma unroll
         for (int i = 0; i < 20; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=40: 27 iterations → 162 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_40p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 27; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=50: 33 iterations → 198 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_50p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 33; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=60: 40 iterations → 240 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_60p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 40; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=70: 47 iterations → 282 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_70p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 47; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=80: 53 iterations → 318 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_80p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 53; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = hip_bfloat16(v0 + a0 + b0); data[idx + 1] = hip_bfloat16(v1 + a1 + b1);
+        data[idx + 2] = hip_bfloat16(v2 + a2 + b2); data[idx + 3] = hip_bfloat16(v3 + a3 + b3);
+        data[idx + 4] = hip_bfloat16(v4 + a4 + b4); data[idx + 5] = hip_bfloat16(v5 + a5 + b5);
+        data[idx + 6] = hip_bfloat16(v6 + a6 + b6); data[idx + 7] = hip_bfloat16(v7 + a7 + b7);
+    }
+}
+
+/* AI=90: 60 iterations → 360 FLOPs/elem */
+__global__ void roofline_bf16_vec_ai_90p0(hip_bfloat16 *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = float(data[idx]), v1 = float(data[idx + 1]), v2 = float(data[idx + 2]), v3 = float(data[idx + 3]);
+        float v4 = float(data[idx + 4]), v5 = float(data[idx + 5]), v6 = float(data[idx + 6]), v7 = float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 60; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
             v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
             a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
@@ -1256,60 +1442,22 @@ __global__ void roofline_fp16_vec_ai_4p0(__half *data, size_t n) {
     }
 }
 
-/* AI = 8.0: Highly compute-bound
- * Each thread processes 8 FP16 elements with 24 independent FMA chains for maximum ILP */
+/* AI = 8.0: (32 FLOPs per 4 bytes) → 8 iterations */
 __global__ void roofline_fp16_vec_ai_8p0(__half *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        float v0 = __half2float(data[idx]);
-        float v1 = __half2float(data[idx + 1]);
-        float v2 = __half2float(data[idx + 2]);
-        float v3 = __half2float(data[idx + 3]);
-        float v4 = __half2float(data[idx + 4]);
-        float v5 = __half2float(data[idx + 5]);
-        float v6 = __half2float(data[idx + 6]);
-        float v7 = __half2float(data[idx + 7]);
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]);
+        float v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
         float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
-        float a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3;
-        float b4 = v4, b5 = v5, b6 = v6, b7 = v7;
-        
         #pragma unroll
-        for (int i = 0; i < 64; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f);
-            v1 = fmaf(v1, 1.0001f, 0.0001f);
-            v2 = fmaf(v2, 1.0001f, 0.0001f);
-            v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f);
-            v5 = fmaf(v5, 1.0001f, 0.0001f);
-            v6 = fmaf(v6, 1.0001f, 0.0001f);
-            v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f);
-            a1 = fmaf(a1, 1.0001f, 0.0001f);
-            a2 = fmaf(a2, 1.0001f, 0.0001f);
-            a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f);
-            a5 = fmaf(a5, 1.0001f, 0.0001f);
-            a6 = fmaf(a6, 1.0001f, 0.0001f);
-            a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f);
-            b1 = fmaf(b1, 1.0001f, 0.0001f);
-            b2 = fmaf(b2, 1.0001f, 0.0001f);
-            b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f);
-            b5 = fmaf(b5, 1.0001f, 0.0001f);
-            b6 = fmaf(b6, 1.0001f, 0.0001f);
-            b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 8; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        
-        data[idx] = __float2half(v0 + a0 + b0);
-        data[idx + 1] = __float2half(v1 + a1 + b1);
-        data[idx + 2] = __float2half(v2 + a2 + b2);
-        data[idx + 3] = __float2half(v3 + a3 + b3);
-        data[idx + 4] = __float2half(v4 + a4 + b4);
-        data[idx + 5] = __float2half(v5 + a5 + b5);
-        data[idx + 6] = __float2half(v6 + a6 + b6);
-        data[idx + 7] = __float2half(v7 + a7 + b7);
+        data[idx] = __float2half(v0 + a0); data[idx + 1] = __float2half(v1 + a1);
+        data[idx + 2] = __float2half(v2 + a2); data[idx + 3] = __float2half(v3 + a3);
     }
 }
 
@@ -1368,50 +1516,41 @@ __global__ void roofline_fp16_vec_ai_7p0(__half *data, size_t n) {
     }
 }
 
-/* FP16 AI = 9.0, 10.0 kernels */
+/* AI = 9.0: (36 FLOPs per 4 bytes) → 9 iterations */
 __global__ void roofline_fp16_vec_ai_9p0(__half *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
-        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
-        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]);
+        float v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         #pragma unroll
-        for (int i = 0; i < 72; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 9; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
-        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
-        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
-        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+        data[idx] = __float2half(v0 + a0); data[idx + 1] = __float2half(v1 + a1);
+        data[idx + 2] = __float2half(v2 + a2); data[idx + 3] = __float2half(v3 + a3);
     }
 }
 
+/* AI = 10.0: (40 FLOPs per 4 bytes) → 10 iterations */
 __global__ void roofline_fp16_vec_ai_10p0(__half *data, size_t n) {
-    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
-    if (idx + 7 < n) {
-        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
-        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
-        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
-        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 4;
+    if (idx + 3 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]);
+        float v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3;
         #pragma unroll
-        for (int i = 0; i < 80; i++) {
-            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
-            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
-            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
-            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
-            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
-            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        for (int i = 0; i < 10; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f);
+            v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f);
+            a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
         }
-        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
-        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
-        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
-        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+        data[idx] = __float2half(v0 + a0); data[idx + 1] = __float2half(v1 + a1);
+        data[idx + 2] = __float2half(v2 + a2); data[idx + 3] = __float2half(v3 + a3);
     }
 }
 
@@ -1495,6 +1634,150 @@ __global__ void roofline_fp16_vec_ai_30p0(__half *data, size_t n) {
         float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
         #pragma unroll
         for (int i = 0; i < 20; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=40: 27 iterations → 162 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_40p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 27; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=50: 33 iterations → 198 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_50p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 33; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=60: 40 iterations → 240 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_60p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 40; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=70: 47 iterations → 282 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_70p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 47; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=80: 53 iterations → 318 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_80p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 53; i++) {
+            v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
+            v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
+            a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
+            a4 = fmaf(a4, 1.0001f, 0.0001f); a5 = fmaf(a5, 1.0001f, 0.0001f); a6 = fmaf(a6, 1.0001f, 0.0001f); a7 = fmaf(a7, 1.0001f, 0.0001f);
+            b0 = fmaf(b0, 1.0001f, 0.0001f); b1 = fmaf(b1, 1.0001f, 0.0001f); b2 = fmaf(b2, 1.0001f, 0.0001f); b3 = fmaf(b3, 1.0001f, 0.0001f);
+            b4 = fmaf(b4, 1.0001f, 0.0001f); b5 = fmaf(b5, 1.0001f, 0.0001f); b6 = fmaf(b6, 1.0001f, 0.0001f); b7 = fmaf(b7, 1.0001f, 0.0001f);
+        }
+        data[idx] = __float2half(v0 + a0 + b0); data[idx + 1] = __float2half(v1 + a1 + b1);
+        data[idx + 2] = __float2half(v2 + a2 + b2); data[idx + 3] = __float2half(v3 + a3 + b3);
+        data[idx + 4] = __float2half(v4 + a4 + b4); data[idx + 5] = __float2half(v5 + a5 + b5);
+        data[idx + 6] = __float2half(v6 + a6 + b6); data[idx + 7] = __float2half(v7 + a7 + b7);
+    }
+}
+
+/* AI=90: 60 iterations → 360 FLOPs/elem */
+__global__ void roofline_fp16_vec_ai_90p0(__half *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 8;
+    if (idx + 7 < n) {
+        float v0 = __half2float(data[idx]), v1 = __half2float(data[idx + 1]), v2 = __half2float(data[idx + 2]), v3 = __half2float(data[idx + 3]);
+        float v4 = __half2float(data[idx + 4]), v5 = __half2float(data[idx + 5]), v6 = __half2float(data[idx + 6]), v7 = __half2float(data[idx + 7]);
+        float a0 = v0, a1 = v1, a2 = v2, a3 = v3, a4 = v4, a5 = v5, a6 = v6, a7 = v7;
+        float b0 = v0, b1 = v1, b2 = v2, b3 = v3, b4 = v4, b5 = v5, b6 = v6, b7 = v7;
+        #pragma unroll
+        for (int i = 0; i < 60; i++) {
             v0 = fmaf(v0, 1.0001f, 0.0001f); v1 = fmaf(v1, 1.0001f, 0.0001f); v2 = fmaf(v2, 1.0001f, 0.0001f); v3 = fmaf(v3, 1.0001f, 0.0001f);
             v4 = fmaf(v4, 1.0001f, 0.0001f); v5 = fmaf(v5, 1.0001f, 0.0001f); v6 = fmaf(v6, 1.0001f, 0.0001f); v7 = fmaf(v7, 1.0001f, 0.0001f);
             a0 = fmaf(a0, 1.0001f, 0.0001f); a1 = fmaf(a1, 1.0001f, 0.0001f); a2 = fmaf(a2, 1.0001f, 0.0001f); a3 = fmaf(a3, 1.0001f, 0.0001f);
@@ -1618,13 +1901,13 @@ __global__ void roofline_fp64_vec_ai_7p0(double *data, size_t n) {
     }
 }
 
-/* FP64 AI = 8.0 to 10.0: Highly compute-bound kernels */
+/* AI = 8.0: (128 FLOPs per 16 bytes) → 16 iterations */
 __global__ void roofline_fp64_vec_ai_8p0(double *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
     if (idx + 1 < n) {
         double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
         #pragma unroll
-        for (int i = 0; i < 32; i++) {
+        for (int i = 0; i < 16; i++) {
             v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
             a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
             b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
@@ -1634,12 +1917,13 @@ __global__ void roofline_fp64_vec_ai_8p0(double *data, size_t n) {
     }
 }
 
+/* AI = 9.0: (144 FLOPs per 16 bytes) → 18 iterations */
 __global__ void roofline_fp64_vec_ai_9p0(double *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
     if (idx + 1 < n) {
         double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
         #pragma unroll
-        for (int i = 0; i < 36; i++) {
+        for (int i = 0; i < 18; i++) {
             v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
             a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
             b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
@@ -1649,12 +1933,13 @@ __global__ void roofline_fp64_vec_ai_9p0(double *data, size_t n) {
     }
 }
 
+/* AI = 10.0: (160 FLOPs per 16 bytes) → 20 iterations */
 __global__ void roofline_fp64_vec_ai_10p0(double *data, size_t n) {
     size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
     if (idx + 1 < n) {
         double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
         #pragma unroll
-        for (int i = 0; i < 40; i++) {
+        for (int i = 0; i < 20; i++) {
             v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
             a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
             b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
@@ -1716,6 +2001,102 @@ __global__ void roofline_fp64_vec_ai_30p0(double *data, size_t n) {
         double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
         #pragma unroll
         for (int i = 0; i < 120; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=40: 80 iterations → 640 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_40p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 80; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=50: 100 iterations → 800 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_50p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 100; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=60: 120 iterations → 960 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_60p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 120; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=70: 140 iterations → 1120 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_70p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 140; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=80: 160 iterations → 1280 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_80p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 160; i++) {
+            v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
+            a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
+            b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
+            c0 = fma(c0, 1.0001, 0.0001); c1 = fma(c1, 1.0001, 0.0001);
+        }
+        data[idx] = v0 + a0 + b0 + c0; data[idx + 1] = v1 + a1 + b1 + c1;
+    }
+}
+
+/* AI=90: 180 iterations → 1440 FLOPs/elem */
+__global__ void roofline_fp64_vec_ai_90p0(double *data, size_t n) {
+    size_t idx = (blockIdx.x * blockDim.x + threadIdx.x) * 2;
+    if (idx + 1 < n) {
+        double v0 = data[idx], v1 = data[idx + 1], a0 = v0, a1 = v1, b0 = v0, b1 = v1, c0 = v0, c1 = v1;
+        #pragma unroll
+        for (int i = 0; i < 180; i++) {
             v0 = fma(v0, 1.0001, 0.0001); v1 = fma(v1, 1.0001, 0.0001);
             a0 = fma(a0, 1.0001, 0.0001); a1 = fma(a1, 1.0001, 0.0001);
             b0 = fma(b0, 1.0001, 0.0001); b1 = fma(b1, 1.0001, 0.0001);
@@ -2185,7 +2566,9 @@ static fp16_vec_kernel_t fp16_vec_kernels[N_AI_POINTS] = {
     roofline_fp16_vec_ai_4p0,  roofline_fp16_vec_ai_5p0,  roofline_fp16_vec_ai_6p0,
     roofline_fp16_vec_ai_7p0,  roofline_fp16_vec_ai_8p0,  roofline_fp16_vec_ai_9p0,
     roofline_fp16_vec_ai_10p0, roofline_fp16_vec_ai_15p0, roofline_fp16_vec_ai_20p0,
-    roofline_fp16_vec_ai_25p0, roofline_fp16_vec_ai_30p0
+    roofline_fp16_vec_ai_25p0, roofline_fp16_vec_ai_30p0, roofline_fp16_vec_ai_40p0,
+    roofline_fp16_vec_ai_50p0, roofline_fp16_vec_ai_60p0, roofline_fp16_vec_ai_70p0,
+    roofline_fp16_vec_ai_80p0, roofline_fp16_vec_ai_90p0
 };
 
 /* type_code 1: BF16 */
@@ -2195,7 +2578,9 @@ static bf16_vec_kernel_t bf16_vec_kernels[N_AI_POINTS] = {
     roofline_bf16_vec_ai_4p0,  roofline_bf16_vec_ai_5p0,  roofline_bf16_vec_ai_6p0,
     roofline_bf16_vec_ai_7p0,  roofline_bf16_vec_ai_8p0,  roofline_bf16_vec_ai_9p0,
     roofline_bf16_vec_ai_10p0, roofline_bf16_vec_ai_15p0, roofline_bf16_vec_ai_20p0,
-    roofline_bf16_vec_ai_25p0, roofline_bf16_vec_ai_30p0
+    roofline_bf16_vec_ai_25p0, roofline_bf16_vec_ai_30p0, roofline_bf16_vec_ai_40p0,
+    roofline_bf16_vec_ai_50p0, roofline_bf16_vec_ai_60p0, roofline_bf16_vec_ai_70p0,
+    roofline_bf16_vec_ai_80p0, roofline_bf16_vec_ai_90p0
 };
 
 /* type_code 2: FP32 */
@@ -2205,7 +2590,9 @@ static fp32_vec_kernel_t fp32_vec_kernels[N_AI_POINTS] = {
     roofline_fp32_vec_ai_4p0,  roofline_fp32_vec_ai_5p0,  roofline_fp32_vec_ai_6p0,
     roofline_fp32_vec_ai_7p0,  roofline_fp32_vec_ai_8p0,  roofline_fp32_vec_ai_9p0,
     roofline_fp32_vec_ai_10p0, roofline_fp32_vec_ai_15p0, roofline_fp32_vec_ai_20p0,
-    roofline_fp32_vec_ai_25p0, roofline_fp32_vec_ai_30p0
+    roofline_fp32_vec_ai_25p0, roofline_fp32_vec_ai_30p0, roofline_fp32_vec_ai_40p0,
+    roofline_fp32_vec_ai_50p0, roofline_fp32_vec_ai_60p0, roofline_fp32_vec_ai_70p0,
+    roofline_fp32_vec_ai_80p0, roofline_fp32_vec_ai_90p0
 };
 
 /* type_code 3: FP64 */
@@ -2215,7 +2602,9 @@ static fp64_vec_kernel_t fp64_vec_kernels[N_AI_POINTS] = {
     roofline_fp64_vec_ai_4p0,  roofline_fp64_vec_ai_5p0,  roofline_fp64_vec_ai_6p0,
     roofline_fp64_vec_ai_7p0,  roofline_fp64_vec_ai_8p0,  roofline_fp64_vec_ai_9p0,
     roofline_fp64_vec_ai_10p0, roofline_fp64_vec_ai_15p0, roofline_fp64_vec_ai_20p0,
-    roofline_fp64_vec_ai_25p0, roofline_fp64_vec_ai_30p0
+    roofline_fp64_vec_ai_25p0, roofline_fp64_vec_ai_30p0, roofline_fp64_vec_ai_40p0,
+    roofline_fp64_vec_ai_50p0, roofline_fp64_vec_ai_60p0, roofline_fp64_vec_ai_70p0,
+    roofline_fp64_vec_ai_80p0, roofline_fp64_vec_ai_90p0
 };
 
 /* Tensor kernels - only available for BF16/FP32 (use AI=8 for high AI points) */
@@ -2223,6 +2612,8 @@ static fp32_tensor_kernel_t fp32_tensor_kernels[N_AI_POINTS] = {
     roofline_fp32_tensor_ai_0p1,  roofline_fp32_tensor_ai_0p25, roofline_fp32_tensor_ai_0p5,
     roofline_fp32_tensor_ai_1p0,  roofline_fp32_tensor_ai_2p0,  roofline_fp32_tensor_ai_3p0,
     roofline_fp32_tensor_ai_4p0,  roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,
+    roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,
+    roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,
     roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,
     roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0,
     roofline_fp32_tensor_ai_8p0,  roofline_fp32_tensor_ai_8p0
@@ -2234,43 +2625,45 @@ static bf16_tensor_kernel_t bf16_tensor_kernels[N_AI_POINTS] = {
     roofline_bf16_tensor_ai_4p0,  roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,
     roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,
     roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,
+    roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,
+    roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0,
     roofline_bf16_tensor_ai_8p0,  roofline_bf16_tensor_ai_8p0
 };
 
 /* FLOPs per element for FP16 vector (4 bytes R/W)
- * 8 elements, 3 chains, 24 FMAs/iter = 6 FLOPs/elem/iter
- * AI 15: 10 iters = 60 FLOPs, AI 20: 14 iters = 84 FLOPs, AI 25: 17 iters = 102 FLOPs, AI 30: 20 iters = 120 FLOPs */
+ * FLOPs = AI × bytes_per_elem = AI × 4 (counting FMA as 2 ops)
+ * 4 elements, 2 chains, 8 FMAs/iter × 2 = 4 FLOPs/elem/iter */
 static const int flops_per_elem_fp16_vec[N_AI_POINTS] = {
-    2, 2, 2, 4, 8, 12, 16, 20, 24, 28, 384, 432, 480, 60, 84, 102, 120
+    1, 1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 60, 80, 100, 120, 160, 200, 240, 280, 320, 360
 };
 
 /* FLOPs per element for BF16 vector (4 bytes R/W) - same as FP16 */
 static const int flops_per_elem_bf16_vec[N_AI_POINTS] = {
-    2, 2, 2, 4, 8, 12, 16, 20, 24, 28, 384, 432, 480, 60, 84, 102, 120
+    1, 1, 2, 4, 8, 12, 16, 20, 24, 28, 32, 36, 40, 60, 80, 100, 120, 160, 200, 240, 280, 320, 360
 };
 
 /* FLOPs per element for FP32 vector (8 bytes R/W)
- * 4 elements, 4 chains, 16 FMAs/iter = 8 FLOPs/elem/iter
- * AI 15: 15 iters = 120 FLOPs, AI 20: 20 iters = 160 FLOPs, AI 25: 25 iters = 200 FLOPs, AI 30: 30 iters = 240 FLOPs */
+ * FLOPs = AI × bytes_per_elem = AI × 8 (counting FMA as 2 ops)
+ * 4 elements, 4 chains, 16 FMAs/iter × 2 = 8 FLOPs/elem/iter */
 static const int flops_per_elem_fp32_vec[N_AI_POINTS] = {
-    2, 2, 4, 8, 16, 24, 32, 40, 48, 56, 512, 576, 640, 120, 160, 200, 240
+    1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 120, 160, 200, 240, 320, 400, 480, 560, 640, 720
 };
 
 /* FLOPs per element for FP64 vector (16 bytes R/W)
- * 2 elements, 4 chains, 8 FMAs/iter = 8 FLOPs/elem/iter
- * AI 15: 30 iters = 240 FLOPs, AI 20: 40 iters = 320 FLOPs, AI 25: 50 iters = 400 FLOPs, AI 30: 60 iters = 480 FLOPs */
+ * FLOPs = AI × bytes_per_elem = AI × 16 (counting FMA as 2 ops)
+ * 2 elements, 4 chains, 8 FMAs/iter × 2 = 8 FLOPs/elem/iter */
 static const int flops_per_elem_fp64_vec[N_AI_POINTS] = {
-    2, 4, 8, 16, 32, 48, 64, 80, 96, 112, 256, 288, 320, 240, 320, 400, 480
+    2, 4, 8, 16, 32, 48, 64, 80, 96, 112, 128, 144, 160, 240, 320, 400, 480, 640, 800, 960, 1120, 1280, 1440
 };
 
 /* FLOPs per 4-element group for tensor operations (32 bytes R/W for FP32) */
 static const int flops_per_group_fp32_tensor[N_AI_POINTS] = {
-    2, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 480, 640, 800, 960
+    2, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 480, 640, 800, 960, 1280, 1600, 1920, 2240, 2560, 2880
 };
 
 /* FLOPs per 4-element group for BF16 tensor (16 bytes R/W) */
 static const int flops_per_group_bf16_tensor[N_AI_POINTS] = {
-    2, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 480, 640, 800, 960
+    2, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 480, 640, 800, 960, 1280, 1600, 1920, 2240, 2560, 2880
 };
 
 /*
@@ -2330,6 +2723,13 @@ tpbk_pli_register_roofline_rocm(void)
                          (int64_t)0, (int64_t)600000);
     if (err != 0) return err;
 
+    err = tpb_k_add_parm("nloop_timing",
+                         "Repeat factor for timing accuracy",
+                         "1",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)1, (int64_t)1000);
+    if (err != 0) return err;
+
     return tpb_k_finalize_pli();
 }
 
@@ -2376,6 +2776,13 @@ _tpbk_register_roofline_rocm(void)
                          "100",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)600000);
+    if (err != 0) return err;
+
+    err = tpb_k_add_parm("nloop_timing",
+                         "Repeat factor for timing accuracy",
+                         "1",
+                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                         (int64_t)1, (int64_t)1000);
     if (err != 0) return err;
 
     /* Output: FLOP/s at each arithmetic intensity */
@@ -2481,6 +2888,42 @@ _tpbk_register_roofline_rocm(void)
                            TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
 
+    err = tpb_k_add_output("flops_ai_40p0",
+                           "FLOP/s at AI=40.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
+    err = tpb_k_add_output("flops_ai_50p0",
+                           "FLOP/s at AI=50.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
+    err = tpb_k_add_output("flops_ai_60p0",
+                           "FLOP/s at AI=60.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
+    err = tpb_k_add_output("flops_ai_70p0",
+                           "FLOP/s at AI=70.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
+    err = tpb_k_add_output("flops_ai_80p0",
+                           "FLOP/s at AI=80.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
+    err = tpb_k_add_output("flops_ai_90p0",
+                           "FLOP/s at AI=90.0",
+                           TPB_DOUBLE_T,
+                           TPB_UNIT_FLOPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+
     err = tpb_k_add_runner(_tpbk_run_roofline_rocm);
     if (err != 0) return err;
 
@@ -2498,7 +2941,7 @@ _tpbk_run_roofline_rocm(void)
 {
     int tpberr;
     tpb_timer_t timer;
-    int64_t type_code, op_code, ntest, twarm_ms;
+    int64_t type_code, op_code, ntest, twarm_ms, nloop_timing;
     double total_memsize;
     double *flops_out[N_AI_POINTS];
 
@@ -2515,6 +2958,8 @@ _tpbk_run_roofline_rocm(void)
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
     if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("nloop_timing", TPB_INT64_T, (void *)&nloop_timing);
+    if (tpberr) return tpberr;
 
     /* Allocate outputs for each AI point */
     const char *output_names[N_AI_POINTS] = {
@@ -2522,7 +2967,8 @@ _tpbk_run_roofline_rocm(void)
         "flops_ai_2p0", "flops_ai_3p0", "flops_ai_4p0", "flops_ai_5p0",
         "flops_ai_6p0", "flops_ai_7p0", "flops_ai_8p0", "flops_ai_9p0",
         "flops_ai_10p0", "flops_ai_15p0", "flops_ai_20p0", "flops_ai_25p0",
-        "flops_ai_30p0"
+        "flops_ai_30p0", "flops_ai_40p0", "flops_ai_50p0", "flops_ai_60p0",
+        "flops_ai_70p0", "flops_ai_80p0", "flops_ai_90p0"
     };
 
     for (int i = 0; i < N_AI_POINTS; i++) {
@@ -2534,7 +2980,7 @@ _tpbk_run_roofline_rocm(void)
     double flops_results[N_AI_POINTS];
 
     tpberr = d_roofline_rocm(&timer, type_code, op_code, total_memsize,
-                             ntest, twarm_ms, flops_results);
+                             ntest, twarm_ms, nloop_timing, flops_results);
 
     /* Copy results to allocated outputs */
     for (int i = 0; i < N_AI_POINTS; i++) {
@@ -2553,7 +2999,7 @@ _tpbk_run_roofline_rocm(void)
 static int
 d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                 double total_memsize_kib, int64_t ntest, int64_t twarm_ms,
-                double *flops_out)
+                int64_t nloop_timing, double *flops_out)
 {
     hipError_t hip_err;
     int device_id = 0;
@@ -2696,58 +3142,62 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
         
         HIP_CHECK(hipEventRecord(start, 0));
         
-        for (int64_t iter = 0; iter < ntest; iter++) {
-            /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
-            int cur_grid_size;
-            if (type_code == 0) {
-                /* FP16 */
-                /* AI 0-3 use 8 elem/thread, AI 4-9 use 4 elem/thread, AI 10-12 use 8 elem/thread */
-                if (ai_idx <= 3 || ai_idx >= 10) {
-                    cur_grid_size = grid_size_half_8elem;
-                } else {
-                    cur_grid_size = grid_size_half_4elem;
-                }
-                hipLaunchKernelGGL(fp16_vec_kernels[ai_idx], dim3(cur_grid_size),
-                                   dim3(block_size), 0, 0,
-                                   (__half *)d_data, n_elements);
-            } else if (type_code == 1) {
-                /* BF16 */
-                if (op_code == 0) {
-                    if (ai_idx <= 3 || ai_idx >= 10) {
+        /* nloop_timing repeats the entire ntest loop for better timing accuracy */
+        for (int64_t timing_loop = 0; timing_loop < nloop_timing; timing_loop++) {
+            for (int64_t iter = 0; iter < ntest; iter++) {
+                /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
+                int cur_grid_size;
+                if (type_code == 0) {
+                    /* FP16 */
+                    /* AI 0-3 use 8 elem/thread, AI 4-12 use 4 elem/thread, AI 13+ use 8 elem/thread */
+                    if (ai_idx <= 3 || ai_idx >= 13) {
                         cur_grid_size = grid_size_half_8elem;
                     } else {
                         cur_grid_size = grid_size_half_4elem;
                     }
-                    hipLaunchKernelGGL(bf16_vec_kernels[ai_idx], dim3(cur_grid_size),
+                    hipLaunchKernelGGL(fp16_vec_kernels[ai_idx], dim3(cur_grid_size),
                                        dim3(block_size), 0, 0,
-                                       (hip_bfloat16 *)d_data, n_elements);
-                } else {
-                    hipLaunchKernelGGL(bf16_tensor_kernels[ai_idx], dim3(grid_size_tensor),
-                                       dim3(block_size), 0, 0,
-                                       (hip_bfloat16 *)d_data, n_elements);
-                }
-            } else if (type_code == 2) {
-                /* FP32 */
-                if (op_code == 0) {
-                    if (ai_idx <= 3 || ai_idx >= 10) {
-                        cur_grid_size = grid_size_fp32_4elem;
+                                       (__half *)d_data, n_elements);
+                } else if (type_code == 1) {
+                    /* BF16 */
+                    if (op_code == 0) {
+                        if (ai_idx <= 3 || ai_idx >= 13) {
+                            cur_grid_size = grid_size_half_8elem;
+                        } else {
+                            cur_grid_size = grid_size_half_4elem;
+                        }
+                        hipLaunchKernelGGL(bf16_vec_kernels[ai_idx], dim3(cur_grid_size),
+                                           dim3(block_size), 0, 0,
+                                           (hip_bfloat16 *)d_data, n_elements);
                     } else {
-                        cur_grid_size = grid_size_fp32_2elem;
+                        hipLaunchKernelGGL(bf16_tensor_kernels[ai_idx], dim3(grid_size_tensor),
+                                           dim3(block_size), 0, 0,
+                                           (hip_bfloat16 *)d_data, n_elements);
                     }
-                    hipLaunchKernelGGL(fp32_vec_kernels[ai_idx], dim3(cur_grid_size),
-                                       dim3(block_size), 0, 0,
-                                       (float *)d_data, n_elements);
+                } else if (type_code == 2) {
+                    /* FP32 */
+                    if (op_code == 0) {
+                        /* AI 0-3 and 10+ use 4 elem/thread, AI 4-9 use 2 elem/thread */
+                        if (ai_idx <= 3 || ai_idx >= 10) {
+                            cur_grid_size = grid_size_fp32_4elem;
+                        } else {
+                            cur_grid_size = grid_size_fp32_2elem;
+                        }
+                        hipLaunchKernelGGL(fp32_vec_kernels[ai_idx], dim3(cur_grid_size),
+                                           dim3(block_size), 0, 0,
+                                           (float *)d_data, n_elements);
+                    } else {
+                        hipLaunchKernelGGL(fp32_tensor_kernels[ai_idx], dim3(grid_size_tensor),
+                                           dim3(block_size), 0, 0,
+                                           (float *)d_data, n_elements);
+                    }
                 } else {
-                    hipLaunchKernelGGL(fp32_tensor_kernels[ai_idx], dim3(grid_size_tensor),
+                    /* FP64 */
+                    cur_grid_size = grid_size_fp64_2elem;
+                    hipLaunchKernelGGL(fp64_vec_kernels[ai_idx], dim3(cur_grid_size),
                                        dim3(block_size), 0, 0,
-                                       (float *)d_data, n_elements);
+                                       (double *)d_data, n_elements);
                 }
-            } else {
-                /* FP64 */
-                cur_grid_size = grid_size_fp64_2elem;
-                hipLaunchKernelGGL(fp64_vec_kernels[ai_idx], dim3(cur_grid_size),
-                                   dim3(block_size), 0, 0,
-                                   (double *)d_data, n_elements);
             }
         }
         
@@ -2770,13 +3220,13 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
             } else {
                 flops_per_elem = flops_per_elem_fp64_vec[ai_idx];
             }
-            total_flops = (uint64_t)n_elements * flops_per_elem * ntest;
+            total_flops = (uint64_t)n_elements * flops_per_elem * ntest * nloop_timing;
         } else {
             /* Tensor operations (4 elements per group) - only for BF16/FP32 */
             int flops_per_group = (type_code == 1) ?
                 flops_per_group_bf16_tensor[ai_idx] :
                 flops_per_group_fp32_tensor[ai_idx];
-            total_flops = (uint64_t)(n_elements / 4) * flops_per_group * ntest;
+            total_flops = (uint64_t)(n_elements / 4) * flops_per_group * ntest * nloop_timing;
         }
 
         /* Calculate FLOP/s */
