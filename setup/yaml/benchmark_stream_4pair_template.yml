@@ -1,11 +1,12 @@
 # A key "benchmark" defines a benchmark suite.
 benchmark:
   # name: The name of the benchmark suite.
-  name: "streamx6_template"
+  name: "stream_4pair_weak_scaling"
   # note: The description of the benchmark suite.
   note: >
     This benchmark scores the system with eight stream benchmarks. These benchmarks
-    are divded into four pairs, 
+    are divded into four pairs, each pair includes a single-rank and multi-rank 
+    stream_mpi benchmark.
     
   # batch: A list of tests being run. The test is executed by the order of the list.
   batch:
@@ -23,6 +24,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -33,6 +35,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -43,6 +46,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -53,6 +57,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -63,6 +68,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -73,6 +79,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -83,6 +90,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
@@ -93,6 +101,7 @@ benchmark:
       note: ""
       kernel: stream
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
+      kenvs: "OMP_NUM_THREADS=1"
       kmpiargs: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
