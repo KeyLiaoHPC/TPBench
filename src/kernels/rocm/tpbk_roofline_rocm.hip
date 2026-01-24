@@ -25,6 +25,25 @@ extern "C" {
 /* Number of arithmetic intensity points to measure */
 #define N_AI_POINTS 23
 
+/* Debug logging - set to 1 to enable verbose debug output */
+#ifndef ROOFLINE_DEBUG
+#define ROOFLINE_DEBUG 1
+#endif
+
+#if ROOFLINE_DEBUG
+#define DBG_LOG(fmt, ...) do { \
+    fprintf(stderr, "[ROOFLINE_DBG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+    fflush(stderr); \
+} while(0)
+#define DBG_LOG_NOLN(fmt, ...) do { \
+    fprintf(stderr, "[ROOFLINE_DBG] " fmt, ##__VA_ARGS__); \
+    fflush(stderr); \
+} while(0)
+#else
+#define DBG_LOG(fmt, ...) ((void)0)
+#define DBG_LOG_NOLN(fmt, ...) ((void)0)
+#endif
+
 /* Target arithmetic intensities (FLOP/Byte) */
 static const double ai_values[N_AI_POINTS] = {
     0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0
@@ -35,12 +54,15 @@ static const double ai_values[N_AI_POINTS] = {
 /* HIP error checking macro - uses TPBE_KERN_ARG_FAIL for HIP runtime errors */
 #define HIP_CHECK(call)                                                        \
     do {                                                                       \
+        DBG_LOG("HIP_CHECK: %s", #call);                                       \
         hipError_t err = call;                                                 \
         if (err != hipSuccess) {                                               \
-            fprintf(stderr, "HIP error at %s:%d: %s\n", __FILE__, __LINE__,    \
-                    hipGetErrorString(err));                                   \
+            fprintf(stderr, "HIP error at %s:%d: %s (code=%d)\n",              \
+                    __FILE__, __LINE__, hipGetErrorString(err), (int)err);     \
+            fflush(stderr);                                                    \
             return TPBE_KERN_ARG_FAIL;                                         \
         }                                                                      \
+        DBG_LOG("HIP_CHECK OK: %s", #call);                                    \
     } while (0)
 
 /* Forward declarations */
@@ -2738,6 +2760,31 @@ _tpbk_register_roofline_rocm(void)
 {
     int err;
 
+    DBG_LOG("=== _tpbk_register_roofline_rocm() START ===");
+
+    /* Early HIP initialization check */
+    DBG_LOG("Checking HIP runtime...");
+    int device_count = 0;
+    hipError_t hip_init_err = hipGetDeviceCount(&device_count);
+    DBG_LOG("hipGetDeviceCount returned: %d, device_count=%d",
+            (int)hip_init_err, device_count);
+    if (hip_init_err != hipSuccess) {
+        fprintf(stderr, "HIP init failed: %s\n", hipGetErrorString(hip_init_err));
+        fflush(stderr);
+    }
+
+    for (int i = 0; i < device_count; i++) {
+        hipDeviceProp_t props;
+        hipError_t prop_err = hipGetDeviceProperties(&props, i);
+        if (prop_err == hipSuccess) {
+            DBG_LOG("  Device %d: %s, arch=%s, multiProcessorCount=%d, maxThreadsPerBlock=%d",
+                    i, props.name, props.gcnArchName, props.multiProcessorCount, props.maxThreadsPerBlock);
+        } else {
+            DBG_LOG("  Device %d: failed to get properties: %s", i, hipGetErrorString(prop_err));
+        }
+    }
+
+    DBG_LOG("Calling tpb_k_register...");
     err = tpb_k_register("roofline_rocm",
                          "ROCm GPU Roofline Model Benchmark",
                          TPB_KTYPE_FLI);
@@ -2945,23 +2992,40 @@ _tpbk_run_roofline_rocm(void)
     double total_memsize;
     double *flops_out[N_AI_POINTS];
 
-    tpberr = tpb_k_get_timer(&timer);
-    if (tpberr) return tpberr;
+    DBG_LOG("=== _tpbk_run_roofline_rocm() START ===");
 
+    DBG_LOG("Getting timer...");
+    tpberr = tpb_k_get_timer(&timer);
+    if (tpberr) { DBG_LOG("tpb_k_get_timer failed: %d", tpberr); return tpberr; }
+    DBG_LOG("Timer obtained successfully");
+
+    DBG_LOG("Getting arguments...");
     tpberr = tpb_k_get_arg("type_code", TPB_INT64_T, (void *)&type_code);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get type_code failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  type_code = %" PRId64, type_code);
+
     tpberr = tpb_k_get_arg("op_code", TPB_INT64_T, (void *)&op_code);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get op_code failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  op_code = %" PRId64, op_code);
+
     tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get total_memsize failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  total_memsize = %.2f KiB", total_memsize);
+
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get ntest failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  ntest = %" PRId64, ntest);
+
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get twarm failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  twarm = %" PRId64 " ms", twarm_ms);
+
     tpberr = tpb_k_get_arg("nloop_timing", TPB_INT64_T, (void *)&nloop_timing);
-    if (tpberr) return tpberr;
+    if (tpberr) { DBG_LOG("get nloop_timing failed: %d", tpberr); return tpberr; }
+    DBG_LOG("  nloop_timing = %" PRId64, nloop_timing);
 
     /* Allocate outputs for each AI point */
+    DBG_LOG("Allocating outputs for %d AI points...", N_AI_POINTS);
     const char *output_names[N_AI_POINTS] = {
         "flops_ai_0p1", "flops_ai_0p25", "flops_ai_0p5", "flops_ai_1p0",
         "flops_ai_2p0", "flops_ai_3p0", "flops_ai_4p0", "flops_ai_5p0",
@@ -2972,21 +3036,32 @@ _tpbk_run_roofline_rocm(void)
     };
 
     for (int i = 0; i < N_AI_POINTS; i++) {
+        DBG_LOG("  Allocating output[%d]: %s", i, output_names[i]);
         tpberr = tpb_k_alloc_output(output_names[i], 1, &flops_out[i]);
-        if (tpberr) return tpberr;
+        if (tpberr) {
+            DBG_LOG("  FAILED to allocate output[%d]: err=%d", i, tpberr);
+            return tpberr;
+        }
     }
+    DBG_LOG("All outputs allocated successfully");
 
     /* Flatten output pointers into a single array for the core function */
     double flops_results[N_AI_POINTS];
 
+    DBG_LOG("Calling d_roofline_rocm(type=%d, op=%d, memsize=%.2f, ntest=%d, twarm=%d, nloop=%d)...",
+            (int)type_code, (int)op_code, total_memsize, (int)ntest, (int)twarm_ms, (int)nloop_timing);
     tpberr = d_roofline_rocm(&timer, type_code, op_code, total_memsize,
                              ntest, twarm_ms, nloop_timing, flops_results);
+    DBG_LOG("d_roofline_rocm returned: %d", tpberr);
 
     /* Copy results to allocated outputs */
+    DBG_LOG("Copying results to output pointers...");
     for (int i = 0; i < N_AI_POINTS; i++) {
         *flops_out[i] = flops_results[i];
     }
+    DBG_LOG("Results copied successfully");
 
+    DBG_LOG("=== _tpbk_run_roofline_rocm() END ===");
     return tpberr;
 }
 
@@ -3004,20 +3079,38 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     hipError_t hip_err;
     int device_id = 0;
     
+    DBG_LOG("=== d_roofline_rocm() START ===");
+
     /* Check for device selection via environment variable */
     const char *hip_visible = getenv("HIP_VISIBLE_DEVICES");
+    DBG_LOG("HIP_VISIBLE_DEVICES = %s", hip_visible ? hip_visible : "(null)");
     if (hip_visible == NULL) {
         hip_visible = getenv("ROCR_VISIBLE_DEVICES");
+        DBG_LOG("ROCR_VISIBLE_DEVICES = %s", hip_visible ? hip_visible : "(null)");
     }
     /* If env var is set, HIP runtime will handle device remapping,
        so we always use device 0 in that case */
     
+    DBG_LOG("Setting device to %d...", device_id);
     /* Initialize HIP and select device */
     HIP_CHECK(hipSetDevice(device_id));
+    DBG_LOG("Device %d set successfully", device_id);
 
     /* Get device properties for info */
+    DBG_LOG("Getting device properties...");
     hipDeviceProp_t props;
     HIP_CHECK(hipGetDeviceProperties(&props, device_id));
+    DBG_LOG("Device properties obtained:");
+    DBG_LOG("  name: %s", props.name);
+    DBG_LOG("  gcnArchName: %s", props.gcnArchName);
+    DBG_LOG("  multiProcessorCount: %d", props.multiProcessorCount);
+    DBG_LOG("  maxThreadsPerBlock: %d", props.maxThreadsPerBlock);
+    DBG_LOG("  maxThreadsPerMultiProcessor: %d", props.maxThreadsPerMultiProcessor);
+    DBG_LOG("  warpSize: %d", props.warpSize);
+    DBG_LOG("  totalGlobalMem: %zu bytes (%.2f GB)", props.totalGlobalMem,
+            props.totalGlobalMem / (1024.0 * 1024.0 * 1024.0));
+    DBG_LOG("  sharedMemPerBlock: %zu", props.sharedMemPerBlock);
+    DBG_LOG("  regsPerBlock: %d", props.regsPerBlock);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Using GPU: %s\n", props.name);
     tpb_printf(TPBM_PRTN_M_DIRECT, "  Compute capability: %d.%d\n",
                props.major, props.minor);
@@ -3026,6 +3119,7 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
 
     /* Calculate array size based on memory size and data type */
     /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
+    DBG_LOG("Calculating array size for type_code=%d...", (int)type_code);
     size_t elem_size;
     const char *type_name;
     if (type_code == 0) {
@@ -3048,6 +3142,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     n_elements = (n_elements / 8) * 8;
     if (n_elements < 256) n_elements = 256;
 
+    DBG_LOG("Array config: type=%s, elem_size=%zu, n_elements=%zu, total_bytes=%zu",
+            type_name, elem_size, n_elements, n_elements * elem_size);
+
     tpb_printf(TPBM_PRTN_M_DIRECT, "Configuration:\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "  Data type: %s\n", type_name);
     tpb_printf(TPBM_PRTN_M_DIRECT, "  Operation: %s\n",
@@ -3058,16 +3155,22 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     tpb_printf(TPBM_PRTN_M_DIRECT, "  Iterations: %" PRId64 "\n", ntest);
 
     /* Allocate device memory */
-    void *d_data;
+    DBG_LOG("Allocating device memory: %zu bytes...", n_elements * elem_size);
+    void *d_data = NULL;
     HIP_CHECK(hipMalloc(&d_data, n_elements * elem_size));
+    DBG_LOG("Device memory allocated at %p", d_data);
 
     /* Initialize device memory */
+    DBG_LOG("Initializing device memory with memset...");
     HIP_CHECK(hipMemset(d_data, 0, n_elements * elem_size));
+    DBG_LOG("Device memory initialized");
 
     /* Create events for timing */
+    DBG_LOG("Creating HIP events...");
     hipEvent_t start, stop;
     HIP_CHECK(hipEventCreate(&start));
     HIP_CHECK(hipEventCreate(&stop));
+    DBG_LOG("HIP events created");
 
     /* Calculate grid and block dimensions */
     int block_size = 1024;
@@ -3083,7 +3186,14 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     /* FP64: 2 elem/thread */
     int grid_size_fp64_2elem = ((n_elements / 2) + block_size - 1) / block_size;
 
+    DBG_LOG("Grid/block config: block_size=%d", block_size);
+    DBG_LOG("  grid_size_tensor=%d", grid_size_tensor);
+    DBG_LOG("  grid_size_half_8elem=%d, grid_size_half_4elem=%d", grid_size_half_8elem, grid_size_half_4elem);
+    DBG_LOG("  grid_size_fp32_4elem=%d, grid_size_fp32_2elem=%d", grid_size_fp32_4elem, grid_size_fp32_2elem);
+    DBG_LOG("  grid_size_fp64_2elem=%d", grid_size_fp64_2elem);
+
     /* Warm-up phase */
+    DBG_LOG("=== WARM-UP PHASE START (%" PRId64 " ms) ===", twarm_ms);
     tpb_printf(TPBM_PRTN_M_DIRECT, "Warming up for %" PRId64 " ms...\n", twarm_ms);
     
     struct timespec wts;
@@ -3092,7 +3202,11 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     wns0 = wts.tv_sec * 1000000000ULL + wts.tv_nsec;
     wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
 
+    int warmup_count = 0;
     while (wns0 < wns1) {
+        if (warmup_count == 0) {
+            DBG_LOG("Launching first warm-up kernel (type=%d, op=%d)...", (int)type_code, (int)op_code);
+        }
         /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
         if (type_code == 0) {
             /* FP16 */
@@ -3127,18 +3241,37 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                                dim3(block_size), 0, 0,
                                (double *)d_data, n_elements);
         }
-        HIP_CHECK(hipDeviceSynchronize());
+        if (warmup_count == 0) {
+            DBG_LOG("First warm-up kernel launched, syncing...");
+        }
+        hipError_t sync_err = hipDeviceSynchronize();
+        if (sync_err != hipSuccess) {
+            DBG_LOG("WARM-UP SYNC FAILED at iteration %d: %s (code=%d)",
+                    warmup_count, hipGetErrorString(sync_err), (int)sync_err);
+            fprintf(stderr, "HIP error at warmup sync: %s\n", hipGetErrorString(sync_err));
+            fflush(stderr);
+            return TPBE_KERN_ARG_FAIL;
+        }
+        if (warmup_count == 0) {
+            DBG_LOG("First warm-up kernel completed successfully");
+        }
+        warmup_count++;
         clock_gettime(CLOCK_MONOTONIC, &wts);
         wns0 = wts.tv_sec * 1000000000ULL + wts.tv_nsec;
     }
+    DBG_LOG("Warm-up complete: %d kernels executed", warmup_count);
 
     /* Measure each arithmetic intensity point */
+    DBG_LOG("=== MEASUREMENT PHASE START ===");
     tpb_printf(TPBM_PRTN_M_DIRECT, "\nMeasuring roofline points...\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "%-8s %15s %15s\n", "AI", "Time (ms)", "GFLOP/s");
     tpb_printf(TPBM_PRTN_M_DIRECT, "-------- --------------- ---------------\n");
 
     for (int ai_idx = 0; ai_idx < N_AI_POINTS; ai_idx++) {
         float elapsed_ms = 0.0f;
+        int cur_grid_size = 0;
+        
+        DBG_LOG("--- AI point %d (AI=%.2f) ---", ai_idx, ai_values[ai_idx]);
         
         HIP_CHECK(hipEventRecord(start, 0));
         
@@ -3146,7 +3279,6 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
         for (int64_t timing_loop = 0; timing_loop < nloop_timing; timing_loop++) {
             for (int64_t iter = 0; iter < ntest; iter++) {
                 /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
-                int cur_grid_size;
                 if (type_code == 0) {
                     /* FP16 */
                     /* AI 0-3 use 8 elem/thread, AI 4-12 use 4 elem/thread, AI 13+ use 8 elem/thread */
@@ -3154,6 +3286,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                         cur_grid_size = grid_size_half_8elem;
                     } else {
                         cur_grid_size = grid_size_half_4elem;
+                    }
+                    if (timing_loop == 0 && iter == 0) {
+                        DBG_LOG("FP16 kernel[%d]: grid=%d, block=%d", ai_idx, cur_grid_size, block_size);
                     }
                     hipLaunchKernelGGL(fp16_vec_kernels[ai_idx], dim3(cur_grid_size),
                                        dim3(block_size), 0, 0,
@@ -3166,10 +3301,16 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                         } else {
                             cur_grid_size = grid_size_half_4elem;
                         }
+                        if (timing_loop == 0 && iter == 0) {
+                            DBG_LOG("BF16 vec kernel[%d]: grid=%d, block=%d", ai_idx, cur_grid_size, block_size);
+                        }
                         hipLaunchKernelGGL(bf16_vec_kernels[ai_idx], dim3(cur_grid_size),
                                            dim3(block_size), 0, 0,
                                            (hip_bfloat16 *)d_data, n_elements);
                     } else {
+                        if (timing_loop == 0 && iter == 0) {
+                            DBG_LOG("BF16 tensor kernel[%d]: grid=%d, block=%d", ai_idx, grid_size_tensor, block_size);
+                        }
                         hipLaunchKernelGGL(bf16_tensor_kernels[ai_idx], dim3(grid_size_tensor),
                                            dim3(block_size), 0, 0,
                                            (hip_bfloat16 *)d_data, n_elements);
@@ -3183,10 +3324,16 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                         } else {
                             cur_grid_size = grid_size_fp32_2elem;
                         }
+                        if (timing_loop == 0 && iter == 0) {
+                            DBG_LOG("FP32 vec kernel[%d]: grid=%d, block=%d", ai_idx, cur_grid_size, block_size);
+                        }
                         hipLaunchKernelGGL(fp32_vec_kernels[ai_idx], dim3(cur_grid_size),
                                            dim3(block_size), 0, 0,
                                            (float *)d_data, n_elements);
                     } else {
+                        if (timing_loop == 0 && iter == 0) {
+                            DBG_LOG("FP32 tensor kernel[%d]: grid=%d, block=%d", ai_idx, grid_size_tensor, block_size);
+                        }
                         hipLaunchKernelGGL(fp32_tensor_kernels[ai_idx], dim3(grid_size_tensor),
                                            dim3(block_size), 0, 0,
                                            (float *)d_data, n_elements);
@@ -3194,6 +3341,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
                 } else {
                     /* FP64 */
                     cur_grid_size = grid_size_fp64_2elem;
+                    if (timing_loop == 0 && iter == 0) {
+                        DBG_LOG("FP64 vec kernel[%d]: grid=%d, block=%d", ai_idx, cur_grid_size, block_size);
+                    }
                     hipLaunchKernelGGL(fp64_vec_kernels[ai_idx], dim3(cur_grid_size),
                                        dim3(block_size), 0, 0,
                                        (double *)d_data, n_elements);
@@ -3201,9 +3351,18 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
             }
         }
         
+        DBG_LOG("Recording stop event and syncing...");
         HIP_CHECK(hipEventRecord(stop, 0));
-        HIP_CHECK(hipEventSynchronize(stop));
+        hipError_t sync_err = hipEventSynchronize(stop);
+        if (sync_err != hipSuccess) {
+            DBG_LOG("MEASUREMENT SYNC FAILED at ai_idx=%d: %s (code=%d)",
+                    ai_idx, hipGetErrorString(sync_err), (int)sync_err);
+            fprintf(stderr, "HIP error at measurement sync: %s\n", hipGetErrorString(sync_err));
+            fflush(stderr);
+            return TPBE_KERN_ARG_FAIL;
+        }
         HIP_CHECK(hipEventElapsedTime(&elapsed_ms, start, stop));
+        DBG_LOG("AI[%d] completed: elapsed=%.3f ms", ai_idx, elapsed_ms);
 
         /* Calculate total FLOPs */
         /* type_code: 0=FP16, 1=BF16, 2=FP32, 3=FP64 */
@@ -3239,11 +3398,16 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     }
 
     /* Cleanup */
+    DBG_LOG("=== CLEANUP PHASE ===");
+    DBG_LOG("Destroying HIP events...");
     HIP_CHECK(hipEventDestroy(start));
     HIP_CHECK(hipEventDestroy(stop));
+    DBG_LOG("Freeing device memory at %p...", d_data);
     HIP_CHECK(hipFree(d_data));
+    DBG_LOG("Cleanup complete");
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "\nRoofline measurement completed.\n");
 
+    DBG_LOG("=== d_roofline_rocm() END (success) ===");
     return 0;
 }
