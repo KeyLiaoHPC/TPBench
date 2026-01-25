@@ -14,11 +14,23 @@ extern int _tpbk_register_roofline_rocm(void);
 extern int _tpbk_run_roofline_rocm(void);
 }
 
-/* Debug macro for main */
+/*
+ * Debug logging - enabled via:
+ *   - CMake: -DTPB_SHOW_DEBUG=ON
+ *   - Compiler: -DTPB_K_DEBUG=1
+ */
+#ifndef TPB_K_DEBUG
+#define TPB_K_DEBUG 0
+#endif
+
+#if TPB_K_DEBUG
 #define MAIN_DBG(fmt, ...) do { \
     fprintf(stderr, "[MAIN_DBG] " fmt "\n", ##__VA_ARGS__); \
     fflush(stderr); \
 } while(0)
+#else
+#define MAIN_DBG(fmt, ...) ((void)0)
+#endif
 
 int
 main(int argc, char **argv)

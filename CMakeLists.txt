@@ -14,6 +14,9 @@ option(TPB_USE_AVX2 "Enable AVX2 SIMD instructions" OFF)
 option(TPB_USE_KP_SVE "Enable ARM SVE SIMD instructions" OFF)
 option(TPB_USE_OPENMP "Enable OpenMP parallelization" ON)
 
+# Debug options
+option(TPB_SHOW_DEBUG "Enable kernel debug logging (TPB_K_DEBUG)" OFF)
+
 # Apply SIMD compile definitions
 if(TPB_USE_AVX512)
     add_compile_definitions(TPB_USE_AVX512)
@@ -348,6 +351,11 @@ if(TPB_USE_ROCM)
     set_target_properties(tpbk_roofline_rocm PROPERTIES
         HIP_SEPARABLE_COMPILATION ON
         POSITION_INDEPENDENT_CODE ON)
+    # Enable debug logging if TPB_SHOW_DEBUG is ON
+    if(TPB_SHOW_DEBUG)
+        target_compile_definitions(tpbk_roofline_rocm PRIVATE TPB_K_DEBUG=1)
+        message(STATUS "TPB_K_DEBUG enabled for tpbk_roofline_rocm")
+    endif()
 
     # Roofline ROCm PLI executable (uses regular C++ compiler, links HIP runtime)
     add_executable(tpbk_roofline_rocm.tpbx
@@ -358,6 +366,11 @@ if(TPB_USE_ROCM)
     set_target_properties(tpbk_roofline_rocm.tpbx PROPERTIES
         LINKER_LANGUAGE CXX
         CXX_STANDARD 11)
+    # Enable debug logging if TPB_SHOW_DEBUG is ON
+    if(TPB_SHOW_DEBUG)
+        target_compile_definitions(tpbk_roofline_rocm.tpbx PRIVATE TPB_K_DEBUG=1)
+        message(STATUS "TPB_K_DEBUG enabled for tpbk_roofline_rocm.tpbx")
+    endif()
 endif()
 
 # Install targets

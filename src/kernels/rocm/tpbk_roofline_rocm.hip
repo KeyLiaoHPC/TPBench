@@ -25,12 +25,17 @@ extern "C" {
 /* Number of arithmetic intensity points to measure */
 #define N_AI_POINTS 23
 
-/* Debug logging - set to 1 to enable verbose debug output */
-#ifndef ROOFLINE_DEBUG
-#define ROOFLINE_DEBUG 1
+/*
+ * Debug logging - enabled via:
+ *   - CMake: -DTPB_SHOW_DEBUG=ON
+ *   - Compiler: -DTPB_K_DEBUG=1
+ *   - Or define TPB_K_DEBUG before including this file
+ */
+#ifndef TPB_K_DEBUG
+#define TPB_K_DEBUG 0
 #endif
 
-#if ROOFLINE_DEBUG
+#if TPB_K_DEBUG
 #define DBG_LOG(fmt, ...) do { \
     fprintf(stderr, "[ROOFLINE_DBG] %s:%d: " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
     fflush(stderr); \
@@ -39,10 +44,6 @@ extern "C" {
     fprintf(stderr, "[ROOFLINE_DBG] " fmt, ##__VA_ARGS__); \
     fflush(stderr); \
 } while(0)
-#else
-#define DBG_LOG(fmt, ...) ((void)0)
-#define DBG_LOG_NOLN(fmt, ...) ((void)0)
-#endif
 
 /* Very early debug - runs when shared library is loaded */
 __attribute__((constructor))
@@ -56,6 +57,10 @@ static void roofline_rocm_fini(void) {
     fprintf(stderr, "[ROOFLINE_DBG] === LIBRARY UNLOADING (destructor) ===\n");
     fflush(stderr);
 }
+#else
+#define DBG_LOG(fmt, ...) ((void)0)
+#define DBG_LOG_NOLN(fmt, ...) ((void)0)
+#endif
 
 /* Target arithmetic intensities (FLOP/Byte) */
 static const double ai_values[N_AI_POINTS] = {
