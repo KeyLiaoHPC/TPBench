@@ -526,6 +526,7 @@ tpb_argp_set_timer(const char *timer_name)
         timer.tick = tick_clock_gettime;
         timer.tock = tock_clock_gettime;
         timer.get_stamp = get_time_clock_gettime;
+#if defined(__x86_64__) || defined(_M_X64)
     } else if (strcmp(timer_name, "tsc_asym") == 0) {
         snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "tsc_asym");
         timer.unit = TPB_UNIT_CY;
@@ -534,6 +535,7 @@ tpb_argp_set_timer(const char *timer_name)
         timer.tick = tick_tsc_asym;
         timer.tock = tock_tsc_asym;
         timer.get_stamp = get_time_tsc_asym;
+#endif
     } else {
         return TPBE_CLI_FAIL;
     }

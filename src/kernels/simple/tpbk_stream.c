@@ -367,7 +367,7 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     /* Verify results. */
     double errval;
     err = check_d_stream(narr, ntest, a, b, c, s, epsilon, &errval);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "stream error: %lf\n", errval);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "stream error: %.17f\n", errval);
     // kernel end
     
     free((void *)a);
@@ -379,9 +379,11 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
 static int 
 check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval)
 {
+    int err;
     double a0 = 1.0;
     double b0 = 2.0;
     double c0 = 3.0;
+    double asum, bsum, csum;
 
     /* Simulate 4 operations repeated ntest times */
     /* copy: c = a */
@@ -394,13 +396,51 @@ check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, d
         c0 = a0 + b0;
         a0 = b0 + s * c0;
     }
-
-    *errval = 0;
+    
+    a0 = a0 * (double)(narr);
+    b0 = b0 * (double)(narr);
+    c0 = c0 * (double)(narr);
+    asum = 0.0;
+    bsum = 0.0;
+    csum = 0.0;
     for (int i = 0; i < narr; i ++) {
-        *errval += (a[i] - a0) > 0 ? (a[i] - a0): (a0 - a[i]);
+        asum += a[i];
+        bsum += b[i];
+        csum += c[i];
     }
+    printf ("Results Comparison: \n");
+    printf ("        Expected  : %f %f %f \n",a0, b0, c0);
+    printf ("        Observed  : %f %f %f \n",asum, bsum, csum);
+#define abs(a) ((a) >= 0? (a) : (-a))
+	if (abs(a0-asum)/asum > epsilon) {
+		printf ("Failed Validation on array a[]\n");
+		printf ("        Expected  : %f \n",a0);
+		printf ("        Observed  : %f \n",asum);
+        err = TPBE_KERN_VERIFY_FAIL;
+	}
+	else if (abs(b0-bsum)/bsum > epsilon) {
+		printf ("Failed Validation on array b[]\n");
+		printf ("        Expected  : %f \n",b0);
+		printf ("        Observed  : %f \n",bsum);
+        err = TPBE_KERN_VERIFY_FAIL;
+	}
+	else if (abs(c0-csum)/csum > epsilon) {
+		printf ("Failed Validation on array c[]\n");
+		printf ("        Expected  : %f \n",c0);
+		printf ("        Observed  : %f \n",csum);
+        err = TPBE_KERN_VERIFY_FAIL;
+	}
+	else {
+		printf ("Solution Validates\n");
+        err = 0;
+	}
 
-    if (*errval > epsilon) return TPBE_KERN_VERIFY_FAIL;
+    // *errval = 0;
+    // for (int i = 0; i < narr; i ++) {
+    //     *errval += (a[i] - a0) > 0 ? (a[i] - a0): (a0 - a[i]);
+    // }
 
-    return 0;
+    // if (*errval > epsilon) return TPBE_KERN_VERIFY_FAIL;
+
+    return err;
 }
