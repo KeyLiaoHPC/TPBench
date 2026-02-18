@@ -13,6 +13,7 @@ Make.dev
 .clangd
 ./*.sh
 .vscode/
+.continue/
 data/
 bin/
 lib/
