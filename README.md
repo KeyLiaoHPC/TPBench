@@ -2,7 +2,7 @@
 
 TPBench is a benchmark tool for computing systems. It integrates facilities for measuring runtime and events, creating benchmark workloads, creating benchmark score rules, and analyzing performance data.
 
-With TPBench, you can traverse between profiling, benchmarking, recording with one instruction:
+With TPBench, it's easy to traverse between profiling and benchmarking, and to record and track performance:
 - `tpbcli run`: Evaluate the performance and health with common micro computing kernels (e.g. arithmetic instructions, the STREAM benchmark, stencils, AI operators, etc).
 - `tpbcli benchmark`: Score and compare the performance from multiple dimensions you care.
 - `tpbcli profile`: Profile a part of your codes and turn it into a benchmark target.
