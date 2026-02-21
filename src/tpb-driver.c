@@ -12,7 +12,11 @@
 #include <float.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"

@@ -8,7 +8,11 @@
 #define TPB_VERSION 0.8
 
 #include <limits.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include <stdint.h>
 #include <stddef.h>
 #include "tpb-unitdefs.h"
