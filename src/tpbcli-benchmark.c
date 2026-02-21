@@ -9,7 +9,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include <ctype.h>
 #include <math.h>
 #include "tpbcli-benchmark.h"

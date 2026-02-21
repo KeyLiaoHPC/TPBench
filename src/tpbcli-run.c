@@ -7,7 +7,11 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include <string.h>
 #include <inttypes.h>
 #include "tpbcli-run.h"

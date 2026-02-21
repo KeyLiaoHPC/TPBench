@@ -11,7 +11,11 @@
 #include <dirent.h>
 #include <dlfcn.h>
 #include <unistd.h>
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include "tpb-dynloader.h"
 #include "tpb-driver.h"
 #include "tpb-io.h"

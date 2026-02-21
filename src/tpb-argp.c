@@ -4,7 +4,11 @@
  * Provides internal utilities for parsing and validating kernel arguments.
  */
 
+#ifdef __linux__
 #include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
