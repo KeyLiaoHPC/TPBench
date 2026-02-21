@@ -41,8 +41,30 @@ if(TPB_USE_OPENMP)
 endif()
 
 # MPI support (optional, for MPI kernels only - not linked to libtpbench.so)
-set(TPB_USE_MPI "" CACHE PATH "Path to MPI installation (leave empty to disable)")
-if(NOT TPB_USE_MPI STREQUAL "")
+# Usage:
+#   -DTPB_USE_MPI=OFF or -DTPB_USE_MPI=FALSE or -DTPB_USE_MPI=0 or leave unset → MPI disabled
+#   -DTPB_USE_MPI=ON → Search MPI in system default locations
+#   -DTPB_USE_MPI=/path/to/mpi → Search MPI in the specified directory
+set(TPB_USE_MPI "" CACHE STRING "MPI support: OFF to disable, ON for system default, or specify MPI installation path")
+
+# Normalize TPB_USE_MPI to uppercase for case-insensitive comparison
+string(TOUPPER "${TPB_USE_MPI}" TPB_USE_MPI_UPPER)
+
+# Check if MPI should be enabled (ON or a path)
+if(TPB_USE_MPI_UPPER STREQUAL "ON")
+    # Case 2: TPB_USE_MPI=ON - search in system default locations
+    find_package(MPI REQUIRED)
+    if(MPI_C_FOUND)
+        add_compile_definitions(TPB_USE_MPI)
+        message(STATUS "MPI enabled (system default)")
+    else()
+        message(FATAL_ERROR "MPI not found in system default locations")
+    endif()
+elseif(TPB_USE_MPI_UPPER STREQUAL "OFF" OR TPB_USE_MPI_UPPER STREQUAL "FALSE" OR TPB_USE_MPI_UPPER STREQUAL "0" OR TPB_USE_MPI STREQUAL "")
+    # Case 1: MPI disabled (empty, 0, OFF, FALSE)
+    message(STATUS "MPI disabled")
+else()
+    # Case 3: TPB_USE_MPI=/path/to/mpi - search in specified directory
     set(MPI_ROOT ${TPB_USE_MPI})
     find_package(MPI REQUIRED)
     if(MPI_C_FOUND)
