@@ -168,21 +168,9 @@ Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1
 
 When configuring variable parameter evaluation, TPBench runs tests sequentially according to predefined value sequences. Each value executes the kernel once. Get results as a parameter changes along a coordinate axis (e.g., a performance curve as a parameter changes). When specifying evaluation kernel `--kernel <foo>`, any parameter configurable via `--kargs` in the `foo` kernel can be configured via `--kargs-dim` as a variable parameter. If a variable parameter name duplicates a parameter name in `--kargs`, the `--kargs` value is ignored.
 
-Currently, `tpbcli run` supports configuring single parameter linear sequence, explicit list, and recursive sequence. To traverse multiple dimensions, nest multiple parameter sequences.
+Currently, `tpbcli run` supports configuring explicit list and recursive sequence. To traverse multiple dimensions, nest multiple parameter sequences.
 
-**1) Linear Sequence**
-
-For one parameter of the specified evaluation kernel, generate a continuous sequence with a determined step size. Syntax shown below. For parameter `<parm_name>`, generate a list starting from `st`, step size `step`. Parameter values satisfy the closed interval `[st,en]`.
-
-Syntax: `--kargs-dim <parm_name>=(st,en,step)`
-
-Example: Run `triad` kernel. Use `double` data type. Each test round runs 100 loops. Configure total memory capacity `total_memsize` as variable parameter. Parameter is linear sequence. Interval 128KiB. 128KiB <= total_memsize <= 512KiB. TPBench runs 4 rounds of `triad` tests. Set `total_memsize` parameter to 128, 256, 384, 512 respectively.
-
-```
-$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim total_memsize=(128,512,128)
-```
-
-**2) Explicit List**
+**1) Explicit List**
 
 For one parameter of the specified evaluation kernel, generate a set with explicitly specified elements. Run evaluation using each element in the set sequentially. Syntax shown below. For parameter `<parm_name>`, generate a set containing elements `a`, `b`, `c`, ...
 
@@ -194,7 +182,7 @@ Example: Run `triad` kernel. Set total memory capacity 256KiB. Each test round r
 $ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim dtype=[double,float,iso-fp16]
 ```
 
-**3) Recursive Sequence**
+**2) Recursive Sequence**
 
 For one parameter of the specified evaluation kernel, generate a recursive parameter sequence. Initial value `st`. Use calculation `<op>`. Calculate a new parameter value based on the previous test parameter value `@`. In the parameter configuration above, symbol `@` represents the recursive variable. `op` represents the operator. Currently supports add, sub, mul, div, and pow. `st` represents the value of the `parm_name` parameter for the first test. `min`, `max`, and `nlim` represent minimum value, maximum value, and recursive step limit of the recursive result. When the recursive result exceeds the `[min, max]` interval, or recursive steps exceed `nlim`, recursion terminates. `nlim` set to 0 means no recursive step limit.
 
@@ -206,7 +194,7 @@ Example: Run `triad` kernel. Each round executes 100 loops. Set `total_memsize` 
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
-**4) Nested Sequence**
+**3) Nested Sequence**
 
 Nest multiple variable parameters. After defining each variable parameter, define another variable parameter in braces. In command-line parsing, innermost parameter list calculated first. Note, currently not allowed to define same parameter name at different nesting levels.
 

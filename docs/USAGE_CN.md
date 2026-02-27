@@ -115,21 +115,9 @@ $ tpbcli run --kargs total_memsize=128,ntest=100 -k triad -k pchase --kargs=1000
 
 配置可变参数评测时，TPBench 按照预定义的取值序列逐个运行测试：每个取值都会执行一次内核，从而得到参数沿坐标轴变化时的结果（例如性能随某参数变化的曲线）。当指定一个评测内核 `--kernel <foo>` 时，在 `foo` 内核中可以通过 `--kargs` 配置的任一参数，均可以通过 `--kargs-dim` 配置为可变参数。若可变参数名与 `--kargs` 中配置的参数名重合，则 `--kargs` 中的同名参数将无效。
 
-目前，`tpbcli run` 支持配置单一参数线性序列、显式列表和递推序列。若需要遍历多个维度，则可以嵌套多个参数序列。
+目前，`tpbcli run` 支持配置显式列表和递推序列。若需要遍历多个维度，则可以嵌套多个参数序列。
 
-**1）线性序列**
-
-对于指定评测内核的一个参数，生成一个步长确定的连续序列。语法如下所示，对参数 `<parm_name>`，生成从 `st` 出发、步长为 `step` 的列表，参数值满足闭区间 `[st,en]`。
-
-语法：`--kargs-dim '<parm_name>=(st,en,step)'`
-
-示例：运行 `triad` 内核，使用 `double` 数据类型，每轮测试运行 100 次循环。配置内存总容量 `total_memsize` 为可变参数，该参数为线性序列，以 128KiB 为间隔，令 128KiB <= total_memsize <= 512KiB。TPBench 将运行 4 轮 `triad` 测试，分别将 `total_memsize` 参数设置为 128、256、384、512。
-
-```
-$ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'total_memsize=(128,512,128)'
-```
-
-**2）显式列表**
+**1）显式列表**
 
 对于指定评测内核的一个参数，生成一个显式指定元素的集合，依次使用集合中的每个元素运行评测。语法如下所示，对参数 `<parm_name>`，生成集合，包含元素 `a`、`b`、`c`……
 
@@ -141,7 +129,7 @@ $ tpbcli --kernel triad --kargs ntest=100,dtype=double --kargs-dim 'total_memsiz
 $ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim 'dtype=[double,float,iso-fp16]'
 ```
 
-**3）递推序列**
+**2）递推序列**
 
 对于指定评测内核的一个参数，生成一个递推参数序列。初值 `st`，使用计算 `<op>`，基于上一次测试的参数值 `@` 计算出新参数值。上述参数配置中，符号 `@` 表示递推变量；`op` 表示操作符，目前支持 add、sub、mul、div 和 pow；`st` 表示 `parm_name` 参数首次测试的值；`min`、`max` 和 `nlim` 分别表示递推结果的最小值、最大值和递推步数限制。当递推结果超出 `[min, max]` 区间，或递推步数高于 `nlim` 时，递推将终止。`nlim` 设置为 0 时，不限制递推步数。
 
@@ -153,7 +141,7 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim 'dtype=[
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'total_memsize=mul(@,2)(16,16,128,0)'
 ```
 
-**4）嵌套序列**
+**3）嵌套序列**
 
 嵌套多个可变参数，每个可变参数定义后，可以在大括号中定义另一个可变参数。在命令行解析中，最内层的参数列表将被优先计算。注意，目前不允许在不同嵌套层定义相同参数名。
 
