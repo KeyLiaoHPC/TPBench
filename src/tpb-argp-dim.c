@@ -97,93 +97,6 @@ is_numeric_string(const char *str)
 }
 
 /* ============================================================================
- * Linear Sequence Parser
- * ============================================================================ */
-
-int
-tpb_argp_parse_dim_lin(const char *spec, tpb_dim_config_t *cfg)
-{
-    char buf[TPBM_CLI_STR_MAX_LEN];
-    char *p;
-    char *end;
-    double st, en, step;
-
-    if (spec == NULL || cfg == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    /* spec should be: (st,en,step) */
-    snprintf(buf, sizeof(buf), "%s", spec);
-    p = trim_whitespace_dim(buf);
-
-    /* Check for opening parenthesis */
-    if (*p != '(') {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: expected '(' at start of '%s'\n", spec);
-        return TPBE_CLI_FAIL;
-    }
-    p++;
-
-    /* Find closing parenthesis */
-    end = find_matching_bracket(p, '(', ')');
-    if (end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: missing ')' in '%s'\n", spec);
-        return TPBE_CLI_FAIL;
-    }
-    *end = '\0';
-
-    /* Parse st, en, step */
-    char *saveptr;
-    char *tok;
-
-    tok = strtok_r(p, ",", &saveptr);
-    if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: missing start value\n");
-        return TPBE_CLI_FAIL;
-    }
-    st = strtod(trim_whitespace_dim(tok), NULL);
-
-    tok = strtok_r(NULL, ",", &saveptr);
-    if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: missing end value\n");
-        return TPBE_CLI_FAIL;
-    }
-    en = strtod(trim_whitespace_dim(tok), NULL);
-
-    tok = strtok_r(NULL, ",", &saveptr);
-    if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: missing step value\n");
-        return TPBE_CLI_FAIL;
-    }
-    step = strtod(trim_whitespace_dim(tok), NULL);
-
-    /* Validate */
-    if (step == 0.0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: step cannot be zero\n");
-        return TPBE_CLI_FAIL;
-    }
-
-    if ((step > 0 && st > en) || (step < 0 && st < en)) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid linear sequence: step direction mismatch "
-                   "(st=%g, en=%g, step=%g)\n", st, en, step);
-        return TPBE_CLI_FAIL;
-    }
-
-    cfg->type = TPB_DIM_LINEAR;
-    cfg->spec.linear.st = st;
-    cfg->spec.linear.en = en;
-    cfg->spec.linear.step = step;
-
-    return 0;
-}
-
-/* ============================================================================
  * Explicit List Parser
  * ============================================================================ */
 
@@ -621,8 +534,12 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
 
     /* Detect sequence type based on first character */
     if (*spec == '(') {
-        /* Linear sequence: (st, en, step) */
-        err = tpb_argp_parse_dim_lin(spec, *cfg);
+        /* Linear sequence format has been removed */
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Error: Linear sequence format (st,en,step) has been removed.\n"
+                   "Use recursive format instead: add(@,<step>)(<st>,<st>,<en>,<nlim>)\n"
+                   "Example: total_memsize=(128,512,128) -> total_memsize=add(@,128)(128,128,512,4)\n");
+        err = TPBE_CLI_FAIL;
     } else if (*spec == '[') {
         /* Explicit list: [a, b, c, ...] */
         err = tpb_argp_parse_list(spec, *cfg);
@@ -667,36 +584,6 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
     snprintf(val->parm_name, TPBM_NAME_STR_MAX_LEN, "%s", cfg->parm_name);
 
     switch (cfg->type) {
-    case TPB_DIM_LINEAR: {
-        double st = cfg->spec.linear.st;
-        double en = cfg->spec.linear.en;
-        double step = cfg->spec.linear.step;
-
-        /* Count values */
-        n = (int)floor((en - st) / step) + 1;
-        if (n > TPBM_DIM_MAX_VALUES) {
-            n = TPBM_DIM_MAX_VALUES;
-        }
-        if (n <= 0) {
-            n = 1;
-        }
-
-        val->values = (double *)malloc(sizeof(double) * n);
-        if (val->values == NULL) {
-            free(val);
-            return TPBE_MALLOC_FAIL;
-        }
-
-        for (int i = 0; i < n; i++) {
-            val->values[i] = st + i * step;
-        }
-
-        val->n = n;
-        val->is_string = 0;
-        val->str_values = NULL;
-        break;
-    }
-
     case TPB_DIM_LIST: {
         n = cfg->spec.list.n;
 
@@ -817,20 +704,6 @@ tpb_dim_get_total_count(tpb_dim_config_t *cfg)
     }
 
     switch (cfg->type) {
-    case TPB_DIM_LINEAR: {
-        double st = cfg->spec.linear.st;
-        double en = cfg->spec.linear.en;
-        double step = cfg->spec.linear.step;
-        count = (int)floor((en - st) / step) + 1;
-        if (count > TPBM_DIM_MAX_VALUES) {
-            count = TPBM_DIM_MAX_VALUES;
-        }
-        if (count <= 0) {
-            count = 1;
-        }
-        break;
-    }
-
     case TPB_DIM_LIST:
         count = cfg->spec.list.n;
         break;

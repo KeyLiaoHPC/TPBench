@@ -22,7 +22,6 @@
  * @brief Dimension sequence types.
  */
 typedef enum {
-    TPB_DIM_LINEAR,    /**< Linear sequence: (st, en, step) */
     TPB_DIM_LIST,      /**< Explicit list: [a, b, c, ...] */
     TPB_DIM_RECUR,     /**< Recursive sequence: op(@,x)(st,min,max,nlim) */
 } tpb_dim_type_t;
@@ -49,13 +48,6 @@ typedef struct tpb_dim_config {
     tpb_dim_type_t type;                     /**< Sequence type */
 
     union {
-        /** Linear sequence parameters: start, end, step */
-        struct {
-            double st;
-            double en;
-            double step;
-        } linear;
-
         /** Explicit list parameters */
         struct {
             int n;              /**< Number of values */
@@ -96,18 +88,6 @@ typedef struct tpb_dim_values {
 /* ============================================================================
  * Parsing Functions
  * ============================================================================ */
-
-/**
- * @brief Parse a linear sequence specification.
- *
- * Parses format: <parm_name>=(st,en,step)
- * Example: total_memsize=(128,512,128) generates [128, 256, 384, 512]
- *
- * @param spec Input specification string (after the '=' for linear).
- * @param cfg  Output configuration structure.
- * @return 0 on success, error code on failure.
- */
-int tpb_argp_parse_dim_lin(const char *spec, tpb_dim_config_t *cfg);
 
 /**
  * @brief Parse an explicit list specification.
