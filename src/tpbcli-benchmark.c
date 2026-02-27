@@ -19,11 +19,11 @@
 #include "tpbcli-benchmark.h"
 #include "tpb-bench-yaml.h"
 #include "tpb-bench-score.h"
-#include "tpb-io.h"
-#include "tpb-types.h"
-#include "tpb-driver.h"
-#include "tpb-dynloader.h"
-#include "tpb-argp.h"
+#include "corelib/tpb-io.h"
+#include "corelib/tpb-types.h"
+#include "corelib/tpb-driver.h"
+#include "corelib/tpb-dynloader.h"
+#include "corelib/tpb-argp.h"
 
 /* Error handling macro */
 #define __tpbm_exit_on_error(e, x) \

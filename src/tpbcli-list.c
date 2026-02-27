@@ -6,10 +6,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tpbcli-list.h"
-#include "tpb-driver.h"
-#include "tpb-impl.h"
-#include "tpb-io.h"
-#include "tpb-types.h"
+#include "corelib/tpb-driver.h"
+#include "corelib/tpb-impl.h"
+#include "corelib/tpb-io.h"
+#include "corelib/tpb-types.h"
 #include "kernels/kernels.h"
 
 /* Local Function Prototypes */

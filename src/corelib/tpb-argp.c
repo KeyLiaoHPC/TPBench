@@ -19,7 +19,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include "tpb-argp.h"
-#include "timers/timers.h"
+#include "../timers/timers.h"
 #include "tpb-impl.h"
 #include "tpb-driver.h"
 #include "tpb-io.h"

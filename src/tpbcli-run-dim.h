@@ -1,5 +1,5 @@
 /**
- * @file tpb-argp-dim.h
+ * @file tpbcli-run-dim.h
  * @brief Header for TPBench dimension argument parsing.
  *
  * This module provides utilities for parsing and generating variable
@@ -7,10 +7,10 @@
  * explicit lists, recursive sequences, and nested combinations.
  */
 
-#ifndef TPB_ARGP_DIM_H
-#define TPB_ARGP_DIM_H
+#ifndef TPBCLI_RUN_DIM_H
+#define TPBCLI_RUN_DIM_H
 
-#include "tpb-types.h"
+#include "corelib/tpb-types.h"
 
 /** Maximum number of values in a dimension sequence */
 #define TPBM_DIM_MAX_VALUES 4096
@@ -85,9 +85,7 @@ typedef struct tpb_dim_values {
     struct tpb_dim_values *nested;           /**< Nested dimension values */
 } tpb_dim_values_t;
 
-/* ============================================================================
- * Parsing Functions
- * ============================================================================ */
+/* Parsing Functions */
 
 /**
  * @brief Parse an explicit list specification.
@@ -138,9 +136,7 @@ int tpb_argp_parse_dim_nest(const char *spec, tpb_dim_config_t *cfg);
  */
 int tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg);
 
-/* ============================================================================
- * Value Generation Functions
- * ============================================================================ */
+/* Value Generation Functions */
 
 /**
  * @brief Generate value array from dimension configuration.
@@ -163,9 +159,7 @@ int tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values);
  */
 int tpb_dim_get_total_count(tpb_dim_config_t *cfg);
 
-/* ============================================================================
- * Cleanup Functions
- * ============================================================================ */
+/* Cleanup Functions */
 
 /**
  * @brief Free dimension configuration structure.
@@ -185,4 +179,4 @@ void tpb_dim_config_free(tpb_dim_config_t *cfg);
  */
 void tpb_dim_values_free(tpb_dim_values_t *values);
 
-#endif /* TPB_ARGP_DIM_H */
+#endif /* TPBCLI_RUN_DIM_H */

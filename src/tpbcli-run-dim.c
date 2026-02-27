@@ -1,5 +1,5 @@
 /*
- * tpb-argp-dim.c
+ * tpbcli-run-dim.c
  * TPBench dimension argument parsing implementation.
  * Provides parsing and value generation for variable parameter sequences.
  */
@@ -9,12 +9,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
-#include "tpb-argp-dim.h"
-#include "tpb-io.h"
+#include "tpbcli-run-dim.h"
+#include "corelib/tpb-io.h"
 
-/* ============================================================================
- * Local Helper Functions
- * ============================================================================ */
+/* Local Helper Functions */
 
 /**
  * @brief Trim leading and trailing whitespace from a string.
@@ -96,9 +94,7 @@ is_numeric_string(const char *str)
     return (*endptr == '\0');
 }
 
-/* ============================================================================
- * Explicit List Parser
- * ============================================================================ */
+/* Explicit List Parser */
 
 int
 tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
@@ -205,9 +201,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     return 0;
 }
 
-/* ============================================================================
- * Recursive Sequence Parser
- * ============================================================================ */
+/* Recursive Sequence Parser */
 
 int
 tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
@@ -376,9 +370,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     return 0;
 }
 
-/* ============================================================================
- * Nested Sequence Parser
- * ============================================================================ */
+/* Nested Sequence Parser */
 
 int
 tpb_argp_parse_dim_nest(const char *spec, tpb_dim_config_t *cfg)
@@ -460,9 +452,7 @@ tpb_argp_parse_dim_nest(const char *spec, tpb_dim_config_t *cfg)
     return 0;
 }
 
-/* ============================================================================
- * Main Entry Point
- * ============================================================================ */
+/* Main Entry Point */
 
 int
 tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
@@ -560,9 +550,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     return err;
 }
 
-/* ============================================================================
- * Value Generation
- * ============================================================================ */
+/* Value Generation */
 
 int
 tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
@@ -734,9 +722,7 @@ tpb_dim_get_total_count(tpb_dim_config_t *cfg)
     return count;
 }
 
-/* ============================================================================
- * Cleanup Functions
- * ============================================================================ */
+/* Cleanup Functions */
 
 void
 tpb_dim_config_free(tpb_dim_config_t *cfg)

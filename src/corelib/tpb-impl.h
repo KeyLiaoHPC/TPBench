@@ -10,10 +10,10 @@
 #include "tpb-io.h"
 
 /* Timers */
-#include "timers/timers.h"
+#include "../timers/timers.h"
 
 /* Kernels */
-#include "kernels/kernels.h"
+#include "../kernels/kernels.h"
 
 /* Error handling functions */
 

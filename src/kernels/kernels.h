@@ -6,7 +6,7 @@
 #ifndef _KERNELS_H
 #define _KERNELS_H
 
-#include "../tpb-types.h"
+#include "../corelib/tpb-types.h"
 
 /**
  * @brief Register triad kernel

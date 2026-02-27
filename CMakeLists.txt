@@ -95,37 +95,22 @@ else()
 endif()
 message(STATUS "TPB_DIR resolved to: ${TPB_DIR_RESOLVED}")
 
-# Main TPBench sources
-set(TPB_SOURCES
-    src/tpb-driver.c
-    src/tpb-io.c
-    src/tpb-stat.c
-    src/tpb-unitcast.c
-    src/tpb-impl.c
-    src/tpb-argp.c
-    src/tpb-argp-dim.c
-    src/tpb-dynloader.c
-)
-
-# Timer-related sources
+# Timer-related sources (absolute paths for use in sub-CMakeLists)
 set(TPB_TIMER_SOURCES
-    src/timers/clock_gettime.c
+    ${CMAKE_SOURCE_DIR}/src/timers/clock_gettime.c
 )
 
 # Add TSC timer for x86_64/amd64 platforms
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
-    list(APPEND TPB_TIMER_SOURCES src/timers/tsc_asym.c)
+    list(APPEND TPB_TIMER_SOURCES ${CMAKE_SOURCE_DIR}/src/timers/tsc_asym.c)
 endif()
 
-# Shared library for core TPBench implementation
-add_library(tpbench SHARED ${TPB_SOURCES} ${TPB_TIMER_SOURCES})
-target_include_directories(tpbench PUBLIC src src/include)
-target_link_libraries(tpbench PUBLIC m dl)
-target_compile_definitions(tpbench PRIVATE TPB_DIR="${TPB_DIR_RESOLVED}")
+# Core library (libtpbench.so) defined in sub-CMakeLists
+add_subdirectory(src/corelib)
 
 # Triad kernel as shared library (renamed to tpbk_triad for PLI consistency)
 add_library(tpbk_triad SHARED src/kernels/simple/tpbk_triad.c)
-target_include_directories(tpbk_triad PRIVATE src src/include)
+target_include_directories(tpbk_triad PRIVATE src)
 target_link_libraries(tpbk_triad PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_triad PRIVATE OpenMP::OpenMP_C)
@@ -133,7 +118,7 @@ endif()
 
 # Stream kernel as shared library
 add_library(tpbk_stream SHARED src/kernels/simple/tpbk_stream.c)
-target_include_directories(tpbk_stream PRIVATE src src/include)
+target_include_directories(tpbk_stream PRIVATE src)
 target_link_libraries(tpbk_stream PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_stream PRIVATE OpenMP::OpenMP_C)
@@ -141,7 +126,7 @@ endif()
 
 # Staxpy kernel as shared library
 add_library(tpbk_staxpy SHARED src/kernels/simple/tpbk_staxpy.c)
-target_include_directories(tpbk_staxpy PRIVATE src src/include)
+target_include_directories(tpbk_staxpy PRIVATE src)
 target_link_libraries(tpbk_staxpy PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_staxpy PRIVATE OpenMP::OpenMP_C)
@@ -149,7 +134,7 @@ endif()
 
 # Striad kernel as shared library
 add_library(tpbk_striad SHARED src/kernels/simple/tpbk_striad.c)
-target_include_directories(tpbk_striad PRIVATE src src/include)
+target_include_directories(tpbk_striad PRIVATE src)
 target_link_libraries(tpbk_striad PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_striad PRIVATE OpenMP::OpenMP_C)
@@ -157,7 +142,7 @@ endif()
 
 # Scale kernel as shared library
 add_library(tpbk_scale SHARED src/kernels/simple/tpbk_scale.c)
-target_include_directories(tpbk_scale PRIVATE src src/include)
+target_include_directories(tpbk_scale PRIVATE src)
 target_link_libraries(tpbk_scale PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_scale PRIVATE OpenMP::OpenMP_C)
@@ -165,7 +150,7 @@ endif()
 
 # AXPY kernel as shared library
 add_library(tpbk_axpy SHARED src/kernels/simple/tpbk_axpy.c)
-target_include_directories(tpbk_axpy PRIVATE src src/include)
+target_include_directories(tpbk_axpy PRIVATE src)
 target_link_libraries(tpbk_axpy PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_axpy PRIVATE OpenMP::OpenMP_C)
@@ -173,7 +158,7 @@ endif()
 
 # Repeat Triad kernel as shared library
 add_library(tpbk_rtriad SHARED src/kernels/simple/tpbk_rtriad.c)
-target_include_directories(tpbk_rtriad PRIVATE src src/include)
+target_include_directories(tpbk_rtriad PRIVATE src)
 target_link_libraries(tpbk_rtriad PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_rtriad PRIVATE OpenMP::OpenMP_C)
@@ -181,7 +166,7 @@ endif()
 
 # Sum kernel as shared library
 add_library(tpbk_sum SHARED src/kernels/simple/tpbk_sum.c)
-target_include_directories(tpbk_sum PRIVATE src src/include)
+target_include_directories(tpbk_sum PRIVATE src)
 target_link_libraries(tpbk_sum PRIVATE tpbench m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_sum PRIVATE OpenMP::OpenMP_C)
@@ -190,7 +175,7 @@ endif()
 # Stream MPI kernel (only built when MPI is enabled)
 if(MPI_C_FOUND)
     add_library(tpbk_stream_mpi SHARED src/kernels/simple/tpbk_stream_mpi.c)
-    target_include_directories(tpbk_stream_mpi PRIVATE src src/include)
+    target_include_directories(tpbk_stream_mpi PRIVATE src)
     target_link_libraries(tpbk_stream_mpi PRIVATE tpbench m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_stream_mpi PRIVATE OpenMP::OpenMP_C)
@@ -198,7 +183,7 @@ if(MPI_C_FOUND)
 
     # Scale MPI kernel
     add_library(tpbk_scale_mpi SHARED src/kernels/simple/tpbk_scale_mpi.c)
-    target_include_directories(tpbk_scale_mpi PRIVATE src src/include)
+    target_include_directories(tpbk_scale_mpi PRIVATE src)
     target_link_libraries(tpbk_scale_mpi PRIVATE tpbench m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_scale_mpi PRIVATE OpenMP::OpenMP_C)
@@ -206,7 +191,7 @@ if(MPI_C_FOUND)
 
     # AXPY MPI kernel
     add_library(tpbk_axpy_mpi SHARED src/kernels/simple/tpbk_axpy_mpi.c)
-    target_include_directories(tpbk_axpy_mpi PRIVATE src src/include)
+    target_include_directories(tpbk_axpy_mpi PRIVATE src)
     target_link_libraries(tpbk_axpy_mpi PRIVATE tpbench m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_axpy_mpi PRIVATE OpenMP::OpenMP_C)
@@ -214,7 +199,7 @@ if(MPI_C_FOUND)
 
     # Repeat Triad MPI kernel
     add_library(tpbk_rtriad_mpi SHARED src/kernels/simple/tpbk_rtriad_mpi.c)
-    target_include_directories(tpbk_rtriad_mpi PRIVATE src src/include)
+    target_include_directories(tpbk_rtriad_mpi PRIVATE src)
     target_link_libraries(tpbk_rtriad_mpi PRIVATE tpbench m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_rtriad_mpi PRIVATE OpenMP::OpenMP_C)
@@ -222,7 +207,7 @@ if(MPI_C_FOUND)
 
     # Sum MPI kernel
     add_library(tpbk_sum_mpi SHARED src/kernels/simple/tpbk_sum_mpi.c)
-    target_include_directories(tpbk_sum_mpi PRIVATE src src/include)
+    target_include_directories(tpbk_sum_mpi PRIVATE src)
     target_link_libraries(tpbk_sum_mpi PRIVATE tpbench m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_sum_mpi PRIVATE OpenMP::OpenMP_C)
@@ -233,39 +218,40 @@ endif()
 add_executable(tpbcli
     src/tpbcli.c
     src/tpbcli-run.c
+    src/tpbcli-run-dim.c
     src/tpbcli-list.c
     src/tpbcli-benchmark.c
     src/tpbcli-help.c
     src/tpb-bench-yaml.c
     src/tpb-bench-score.c
 )
-target_include_directories(tpbcli PRIVATE src src/include)
+target_include_directories(tpbcli PRIVATE src)
 target_link_libraries(tpbcli PRIVATE tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad tpbk_scale tpbk_axpy tpbk_rtriad tpbk_sum m)
 
 # PLI Executables (.tpbx) for triad and stream kernels
 add_executable(tpbk_triad.tpbx src/kernels/simple/tpbk_triad_main.c)
-target_include_directories(tpbk_triad.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_triad.tpbx PRIVATE src)
 target_link_libraries(tpbk_triad.tpbx PRIVATE tpbench tpbk_triad m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_triad.tpbx PRIVATE OpenMP::OpenMP_C)
 endif()
 
 add_executable(tpbk_stream.tpbx src/kernels/simple/tpbk_stream_main.c)
-target_include_directories(tpbk_stream.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_stream.tpbx PRIVATE src)
 target_link_libraries(tpbk_stream.tpbx PRIVATE tpbench tpbk_stream m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_stream.tpbx PRIVATE OpenMP::OpenMP_C)
 endif()
 
 add_executable(tpbk_staxpy.tpbx src/kernels/simple/tpbk_staxpy_main.c)
-target_include_directories(tpbk_staxpy.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_staxpy.tpbx PRIVATE src)
 target_link_libraries(tpbk_staxpy.tpbx PRIVATE tpbench tpbk_staxpy m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_staxpy.tpbx PRIVATE OpenMP::OpenMP_C)
 endif()
 
 add_executable(tpbk_striad.tpbx src/kernels/simple/tpbk_striad_main.c)
-target_include_directories(tpbk_striad.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_striad.tpbx PRIVATE src)
 target_link_libraries(tpbk_striad.tpbx PRIVATE tpbench tpbk_striad m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_striad.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -273,7 +259,7 @@ endif()
 
 # Scale PLI executable
 add_executable(tpbk_scale.tpbx src/kernels/simple/tpbk_scale_main.c)
-target_include_directories(tpbk_scale.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_scale.tpbx PRIVATE src)
 target_link_libraries(tpbk_scale.tpbx PRIVATE tpbench tpbk_scale m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_scale.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -281,7 +267,7 @@ endif()
 
 # AXPY PLI executable
 add_executable(tpbk_axpy.tpbx src/kernels/simple/tpbk_axpy_main.c)
-target_include_directories(tpbk_axpy.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_axpy.tpbx PRIVATE src)
 target_link_libraries(tpbk_axpy.tpbx PRIVATE tpbench tpbk_axpy m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_axpy.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -289,7 +275,7 @@ endif()
 
 # Repeat Triad PLI executable
 add_executable(tpbk_rtriad.tpbx src/kernels/simple/tpbk_rtriad_main.c)
-target_include_directories(tpbk_rtriad.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_rtriad.tpbx PRIVATE src)
 target_link_libraries(tpbk_rtriad.tpbx PRIVATE tpbench tpbk_rtriad m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_rtriad.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -297,7 +283,7 @@ endif()
 
 # Sum PLI executable
 add_executable(tpbk_sum.tpbx src/kernels/simple/tpbk_sum_main.c)
-target_include_directories(tpbk_sum.tpbx PRIVATE src src/include)
+target_include_directories(tpbk_sum.tpbx PRIVATE src)
 target_link_libraries(tpbk_sum.tpbx PRIVATE tpbench tpbk_sum m)
 if(OpenMP_C_FOUND)
     target_link_libraries(tpbk_sum.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -306,7 +292,7 @@ endif()
 # Stream MPI PLI executable (only built when MPI is enabled)
 if(MPI_C_FOUND)
     add_executable(tpbk_stream_mpi.tpbx src/kernels/simple/tpbk_stream_mpi_main.c)
-    target_include_directories(tpbk_stream_mpi.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_stream_mpi.tpbx PRIVATE src)
     target_link_libraries(tpbk_stream_mpi.tpbx PRIVATE tpbench tpbk_stream_mpi m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_stream_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -314,7 +300,7 @@ if(MPI_C_FOUND)
 
     # Scale MPI PLI executable
     add_executable(tpbk_scale_mpi.tpbx src/kernels/simple/tpbk_scale_mpi_main.c)
-    target_include_directories(tpbk_scale_mpi.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_scale_mpi.tpbx PRIVATE src)
     target_link_libraries(tpbk_scale_mpi.tpbx PRIVATE tpbench tpbk_scale_mpi m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_scale_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -322,7 +308,7 @@ if(MPI_C_FOUND)
 
     # AXPY MPI PLI executable
     add_executable(tpbk_axpy_mpi.tpbx src/kernels/simple/tpbk_axpy_mpi_main.c)
-    target_include_directories(tpbk_axpy_mpi.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_axpy_mpi.tpbx PRIVATE src)
     target_link_libraries(tpbk_axpy_mpi.tpbx PRIVATE tpbench tpbk_axpy_mpi m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_axpy_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -330,7 +316,7 @@ if(MPI_C_FOUND)
 
     # Repeat Triad MPI PLI executable
     add_executable(tpbk_rtriad_mpi.tpbx src/kernels/simple/tpbk_rtriad_mpi_main.c)
-    target_include_directories(tpbk_rtriad_mpi.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_rtriad_mpi.tpbx PRIVATE src)
     target_link_libraries(tpbk_rtriad_mpi.tpbx PRIVATE tpbench tpbk_rtriad_mpi m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_rtriad_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -338,7 +324,7 @@ if(MPI_C_FOUND)
 
     # Sum MPI PLI executable
     add_executable(tpbk_sum_mpi.tpbx src/kernels/simple/tpbk_sum_mpi_main.c)
-    target_include_directories(tpbk_sum_mpi.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_sum_mpi.tpbx PRIVATE src)
     target_link_libraries(tpbk_sum_mpi.tpbx PRIVATE tpbench tpbk_sum_mpi m MPI::MPI_C)
     if(OpenMP_C_FOUND)
         target_link_libraries(tpbk_sum_mpi.tpbx PRIVATE OpenMP::OpenMP_C)
@@ -368,7 +354,7 @@ if(TPB_USE_ROCM)
     # Roofline ROCm kernel as shared library
     add_library(tpbk_roofline_rocm SHARED
         src/kernels/rocm/tpbk_roofline_rocm.hip)
-    target_include_directories(tpbk_roofline_rocm PRIVATE src src/include)
+    target_include_directories(tpbk_roofline_rocm PRIVATE src)
     target_link_libraries(tpbk_roofline_rocm PRIVATE tpbench hip::device m)
     set_target_properties(tpbk_roofline_rocm PROPERTIES
         HIP_SEPARABLE_COMPILATION ON
@@ -382,7 +368,7 @@ if(TPB_USE_ROCM)
     # Roofline ROCm PLI executable (uses regular C++ compiler, links HIP runtime)
     add_executable(tpbk_roofline_rocm.tpbx
         src/kernels/rocm/tpbk_roofline_rocm_main.cpp)
-    target_include_directories(tpbk_roofline_rocm.tpbx PRIVATE src src/include)
+    target_include_directories(tpbk_roofline_rocm.tpbx PRIVATE src)
     target_link_libraries(tpbk_roofline_rocm.tpbx PRIVATE
         tpbench tpbk_roofline_rocm hip::host m)
     set_target_properties(tpbk_roofline_rocm.tpbx PROPERTIES
@@ -394,6 +380,16 @@ if(TPB_USE_ROCM)
         message(STATUS "TPB_K_DEBUG enabled for tpbk_roofline_rocm.tpbx")
     endif()
 endif()
+
+# Tests
+enable_testing()
+
+add_executable(test-cli-run-dimargs
+    tests/tpbcli/test-cli-run-dimargs.c
+    src/tpbcli-run-dim.c
+)
+target_link_libraries(test-cli-run-dimargs PRIVATE tpbench m)
+add_test(NAME cli-run-dimargs COMMAND test-cli-run-dimargs)
 
 # Install targets
 install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad tpbk_scale tpbk_axpy tpbk_rtriad tpbk_sum

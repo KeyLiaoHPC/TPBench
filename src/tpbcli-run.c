@@ -15,12 +15,12 @@
 #include <string.h>
 #include <inttypes.h>
 #include "tpbcli-run.h"
-#include "tpb-argp.h"
-#include "tpb-argp-dim.h"
-#include "tpb-driver.h"
-#include "tpb-impl.h"
-#include "tpb-io.h"
-#include "tpb-types.h"
+#include "corelib/tpb-argp.h"
+#include "tpbcli-run-dim.h"
+#include "corelib/tpb-driver.h"
+#include "corelib/tpb-impl.h"
+#include "corelib/tpb-io.h"
+#include "corelib/tpb-types.h"
 #include "kernels/kernels.h"
 
 /* Maximum number of dimension configs per kernel */
