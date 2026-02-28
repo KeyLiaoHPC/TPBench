@@ -382,14 +382,11 @@ if(TPB_USE_ROCM)
 endif()
 
 # Tests
-enable_testing()
-
-add_executable(test-cli-run-dimargs
-    tests/tpbcli/test-cli-run-dimargs.c
-    src/tpbcli-run-dim.c
-)
-target_link_libraries(test-cli-run-dimargs PRIVATE tpbench m)
-add_test(NAME cli-run-dimargs COMMAND test-cli-run-dimargs)
+option(BUILD_TESTING "Build test targets" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # Install targets
 install(TARGETS tpbench tpbk_triad tpbk_stream tpbk_staxpy tpbk_striad tpbk_scale tpbk_axpy tpbk_rtriad tpbk_sum
