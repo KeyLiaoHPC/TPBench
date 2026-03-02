@@ -236,7 +236,7 @@ tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
 }
 
 int
-tpb_run_kernel(tpb_k_rthdl_t *hdl)
+tpb_run_fli(tpb_k_rthdl_t *hdl)
 {
     int err;
 
@@ -1344,7 +1344,7 @@ build_pli_command(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_n
 
 /* Run a PLI kernel via fork/exec */
 static int
-tpb_driver_run_pli(tpb_k_rthdl_t *hdl)
+tpb_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
     char *full_cmd;
@@ -1470,12 +1470,12 @@ tpb_driver_run_all(void)
             /* PLI mode: fork and exec */
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
                        handle->kernel.info.name);
-            err = tpb_driver_run_pli(handle);
+            err = tpb_run_pli(handle);
         } else {
             /* FLI mode: call runner directly */
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
                        handle->kernel.info.name);
-            err = tpb_run_kernel(handle);
+            err = tpb_run_fli(handle);
             tpb_driver_clean_handle(handle);
         }
 

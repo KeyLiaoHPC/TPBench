@@ -520,12 +520,12 @@ int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
 
 ---
 
-### `tpb_run_kernel`
+### `tpb_run_fli`
 
 Run a registered kernel.
 
 ```c
-int tpb_run_kernel(tpb_k_rthdl_t *handle);
+int tpb_run_fli(tpb_k_rthdl_t *handle);
 ```
 
 **Parameters:**

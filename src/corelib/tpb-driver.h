@@ -148,7 +148,7 @@ int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
  * @param handle Runtime handle with kernel info, timer, parms, and result package
  * @return int Error code (0 on success)
  */
-int tpb_run_kernel(tpb_k_rthdl_t *handle);
+int tpb_run_fli(tpb_k_rthdl_t *handle);
 
 /* Kernel Registration API */
 
@@ -225,7 +225,7 @@ int tpb_k_add_runner(int (*runner)(void));
  *
  * This function must be called during kernel registration (after tpb_k_register,
  * before tpb_k_add_runner) to define output metrics. The output definitions are
- * stored and later copied to the runtime handle's respack when tpb_run_kernel
+ * stored and later copied to the runtime handle's respack when tpb_run_fli
  * is called.
  *
  * @param name   Output name (used to look up when allocating/reporting).
