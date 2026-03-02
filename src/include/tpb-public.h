@@ -326,6 +326,31 @@ int tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv);
  */
 int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
 
+/* ===== Kernel Runner API ===== */
+
+/**
+ * @brief Run a PLI kernel via fork/exec.
+ *
+ * Builds the execution command with environment variables, MPI arguments,
+ * and kernel parameters, then launches the .tpbx executable via shell.
+ * Captures and forwards stdout/stderr to both console and log file.
+ *
+ * @param hdl Runtime handle for the kernel (must be non-NULL).
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_run_pli(tpb_k_rthdl_t *hdl);
+
+/**
+ * @brief Run an FLI kernel by calling its runner function directly.
+ *
+ * Initializes output package from kernel registration, prints arguments,
+ * calls the kernel's k_run() function, and outputs results.
+ *
+ * @param hdl Runtime handle for the kernel (must be non-NULL).
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_run_fli(tpb_k_rthdl_t *hdl);
+
 /* ===== CLI Output Helpers ===== */
 
 /**

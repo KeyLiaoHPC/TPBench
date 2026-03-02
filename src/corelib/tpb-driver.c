@@ -1283,67 +1283,7 @@ tpb_driver_get_current_hdl_idx(void)
     return ihdl;
 }
 
-/**
- * @brief Build full command string for PLI execution.
- * Format: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...>
- * Environment variables are prepended explicitly for visibility and to avoid
- * polluting the parent process environment.
- */
-static char *
-build_pli_command(tpb_k_rthdl_t *hdl, const char *exec_path, const char *timer_name)
-{
-    char value_buf[256];
-    size_t cmd_size = 8192;  /* Initial buffer size */
-    char *cmd = (char *)malloc(cmd_size);
-    if (cmd == NULL) return NULL;
-    cmd[0] = '\0';
-
-    size_t pos = 0;
-
-    /* 1. Add environment variables as prefix */
-    /* TPBENCH_TIMER */
-    pos += snprintf(cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer_name);
-
-    /* envpack variables */
-    for (int i = 0; i < hdl->envpack.n; i++) {
-        pos += snprintf(cmd + pos, cmd_size - pos, "%s=%s ",
-                        hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
-    }
-
-    /* 2. Add mpirun and mpiargs if MPI is used */
-    if (hdl->mpipack.mpiargs != NULL && hdl->mpipack.mpiargs[0] != '\0') {
-        pos += snprintf(cmd + pos, cmd_size - pos, "mpirun %s ", hdl->mpipack.mpiargs);
-    }
-
-    /* 3. Add executable path and timer name */
-    pos += snprintf(cmd + pos, cmd_size - pos, "%s %s", exec_path, timer_name);
-
-    /* 4. Add kernel parameters */
-    for (int i = 0; i < hdl->argpack.n; i++) {
-        tpb_rt_parm_t *parm = &hdl->argpack.args[i];
-        uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
-
-        if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
-            snprintf(value_buf, sizeof(value_buf), "%.15g", parm->value.f64);
-        } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
-                   type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
-            snprintf(value_buf, sizeof(value_buf), "%" PRId64, parm->value.i64);
-        } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
-                   type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
-            snprintf(value_buf, sizeof(value_buf), "%" PRIu64, parm->value.u64);
-        } else if (type_code == TPB_CHAR_T) {
-            snprintf(value_buf, sizeof(value_buf), "%c", parm->value.c);
-        } else {
-            snprintf(value_buf, sizeof(value_buf), "0");
-        }
-        pos += snprintf(cmd + pos, cmd_size - pos, " %s", value_buf);
-    }
-
-    return cmd;
-}
-
-/* Run a PLI kernel via fork/exec */
-static int
+int
 tpb_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
@@ -1366,10 +1306,49 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         return TPBE_KERNEL_INCOMPLETE;
     }
 
-    /* Build full command string with env vars, mpiargs, and kernel params */
-    full_cmd = build_pli_command(hdl, exec_path, timer.name);
-    if (full_cmd == NULL) {
-        return TPBE_MALLOC_FAIL;
+    /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...> */
+    {
+        char value_buf[256];
+        size_t cmd_size = 8192;
+        full_cmd = (char *)malloc(cmd_size);
+        if (full_cmd == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        full_cmd[0] = '\0';
+        size_t pos = 0;
+
+        pos += snprintf(full_cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer.name);
+
+        for (int i = 0; i < hdl->envpack.n; i++) {
+            pos += snprintf(full_cmd + pos, cmd_size - pos, "%s=%s ",
+                            hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
+        }
+
+        if (hdl->mpipack.mpiargs != NULL && hdl->mpipack.mpiargs[0] != '\0') {
+            pos += snprintf(full_cmd + pos, cmd_size - pos, "mpirun %s ", hdl->mpipack.mpiargs);
+        }
+
+        pos += snprintf(full_cmd + pos, cmd_size - pos, "%s %s", exec_path, timer.name);
+
+        for (int i = 0; i < hdl->argpack.n; i++) {
+            tpb_rt_parm_t *parm = &hdl->argpack.args[i];
+            uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
+
+            if (type_code == TPB_FLOAT_T || type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
+                snprintf(value_buf, sizeof(value_buf), "%.15g", parm->value.f64);
+            } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
+                       type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
+                snprintf(value_buf, sizeof(value_buf), "%" PRId64, parm->value.i64);
+            } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
+                       type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
+                snprintf(value_buf, sizeof(value_buf), "%" PRIu64, parm->value.u64);
+            } else if (type_code == TPB_CHAR_T) {
+                snprintf(value_buf, sizeof(value_buf), "%c", parm->value.c);
+            } else {
+                snprintf(value_buf, sizeof(value_buf), "0");
+            }
+            pos += snprintf(full_cmd + pos, cmd_size - pos, " %s", value_buf);
+        }
     }
 
     /* Print full command for debugging/analysis */

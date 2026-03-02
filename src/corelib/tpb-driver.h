@@ -145,13 +145,6 @@ int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
  */
 int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
 
-/**
- * @brief Run a registered kernel
- * @param handle Runtime handle with kernel info, timer, parms, and result package
- * @return int Error code (0 on success)
- */
-int tpb_run_fli(tpb_k_rthdl_t *handle);
-
 /* PLI (Process-Level Integration) internal API */
 
 /**

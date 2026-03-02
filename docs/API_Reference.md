@@ -520,19 +520,46 @@ int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
 
 ---
 
-### `tpb_run_fli`
+### `tpb_run_pli`
 
-Run a registered kernel.
+Run a PLI kernel via fork/exec.  Builds the execution command with
+environment variables, MPI arguments, and kernel parameters, then launches the
+`.tpbx` executable via shell.  Captures and forwards stdout/stderr to both
+console and log file.
+
+Declared in `tpb-public.h`.
 
 ```c
-int tpb_run_fli(tpb_k_rthdl_t *handle);
+int tpb_run_pli(tpb_k_rthdl_t *hdl);
 ```
 
 **Parameters:**
-- `handle`: Runtime handle with kernel info, timer, parms, and result package
+- `hdl`: Runtime handle for the kernel (must be non-NULL)
 
 **Returns:**
-- Error code (0 on success)
+- `0` on success
+- Error code otherwise
+
+---
+
+### `tpb_run_fli`
+
+Run an FLI kernel by calling its runner function directly.  Initializes output
+package from kernel registration, prints arguments, calls the kernel's
+`k_run()` function, and outputs results.
+
+Declared in `tpb-public.h`.
+
+```c
+int tpb_run_fli(tpb_k_rthdl_t *hdl);
+```
+
+**Parameters:**
+- `hdl`: Runtime handle for the kernel (must be non-NULL)
+
+**Returns:**
+- `0` on success
+- Error code otherwise
 
 ---
 
