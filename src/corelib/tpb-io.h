@@ -72,18 +72,6 @@ void tpb_list(void);
 int tpb_mkdir(char *dirpath);
 
 /**
- * @brief TPBench format stdout module.
- *
- * Print message if tpmpi_info.myrank == 0.
- * Output syntax: YYYY-mm-dd HH:MM:SS [TAG] *msg
- *
- * @param mode_bit Mode bit for message and error header type.
- * @param fmt Format string.
- * @param ... Varargs for fmt printf.
- */
-void tpb_printf(uint64_t mode_bit, char *fmt, ...);
-
-/**
  * @brief Print overall help message.
  */
 void tpb_print_help_total(void);
@@ -98,27 +86,6 @@ void tpb_print_help_total(void);
  * @return 0 on success, error code otherwise.
  */
 int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
-
-/**
- * @brief Output kernel arguments to the command-line interface.
- *
- * This function prints the kernel name and runtime parameter settings.
- *
- * @param handle Pointer to the kernel runtime handle.
- * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
- */
-int tpb_cliout_args(tpb_k_rthdl_t *handle);
-
-/**
- * @brief Output kernel execution results to the command-line interface.
- *
- * This function prints test results based on the output shape attribute.
- * Casting is controlled per-output via TPB_UATTR_CAST_Y/N in the unit field.
- *
- * @param handle Pointer to the kernel runtime handle.
- * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
- */
-int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
 /**
  * @brief Set output formatting arguments for CLI display.

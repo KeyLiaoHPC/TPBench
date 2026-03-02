@@ -1,60 +1,22 @@
+/**
+ * @file tpbench.h
+ * @brief Public API header for TPBench kernel development.
+ *
+ * This is the single source of truth for all public types, macros, and
+ * function declarations used by kernel code.  Internal corelib headers
+ * include this file and add internal-only definitions on top.
+ */
+
 #ifndef TPBENCH_H
 #define TPBENCH_H
 
 #include <stdint.h>
 #include <stddef.h>
+#include "tpb-unitdefs.h"
 
-/* Minimal, flattened TPBench API for kernel development. */
-
-typedef uint64_t TPB_UNIT_T;
 typedef uint64_t TPB_DTYPE;
 typedef uint64_t TPB_MASK;
 typedef uint32_t TPB_DTYPE_U32;
-
-/* Unit attribution and shape */
-#define TPB_UATTR_MASK               ((TPB_UNIT_T)0xFFFF000000000000)
-#define TPB_UATTR_CAST_MASK          ((TPB_UNIT_T)(1ULL << 48))
-#define TPB_UATTR_CAST_Y             ((TPB_UNIT_T)(1ULL << 48))
-#define TPB_UATTR_CAST_N             ((TPB_UNIT_T)(0ULL << 48))
-#define TPB_UATTR_SHAPE_MASK         ((TPB_UNIT_T)(7ULL << 49))
-#define TPB_UATTR_SHAPE_POINT        ((TPB_UNIT_T)(0ULL << 49))
-#define TPB_UATTR_SHAPE_1D           ((TPB_UNIT_T)(1ULL << 49))
-#define TPB_UATTR_TRIM_MASK          ((TPB_UNIT_T)(1ULL << 52))
-#define TPB_UATTR_TRIM_N             ((TPB_UNIT_T)(1ULL << 52))
-#define TPB_UATTR_TRIM_Y             ((TPB_UNIT_T)(0ULL << 52))
-
-/* Unit kind/name encoding */
-#define TPB_UKIND_MASK          ((TPB_UNIT_T)0x0000F00000000000)
-#define TPB_UKIND_UNDEF         ((TPB_UNIT_T)0x0000000000000000)
-#define TPB_UKIND_TIME          ((TPB_UNIT_T)0x0000100000000000)
-#define TPB_UKIND_VOL           ((TPB_UNIT_T)0x0000200000000000)
-#define TPB_UKIND_VOLPTIME      ((TPB_UNIT_T)0x0000300000000000)
-#define TPB_UNAME_MASK          ((TPB_UNIT_T)0x0000FFF000000000)
-#define TPB_UNAME_UNDEF         ((TPB_UNIT_T)0x0000000000000000)
-#define TPB_UNAME_WALLTIME      (((TPB_UNIT_T)0x0000001000000000) | TPB_UKIND_TIME)
-#define TPB_UNAME_PHYSTIME      (((TPB_UNIT_T)0x0000002000000000) | TPB_UKIND_TIME)
-#define TPB_UNAME_TIMERTIME     (((TPB_UNIT_T)0x0000005000000000) | TPB_UKIND_TIME)
-#define TPB_UNAME_DATASIZE      (((TPB_UNIT_T)0x0000001000000000) | TPB_UKIND_VOL)
-#define TPB_UNAME_DATAPS        (((TPB_UNIT_T)0x0000006000000000) | TPB_UKIND_VOLPTIME)
-#define TPB_UNAME_BITPCY        (((TPB_UNIT_T)0x0000007000000000) | TPB_UKIND_VOLPTIME)
-
-/* Unit base encoding */
-#define TPB_UBASE_MASK          ((TPB_UNIT_T)0x0000000F00000000)
-#define TPB_UBASE_UNDEF         ((TPB_UNIT_T)0x0000000000000000)
-#define TPB_UBASE_BASE          ((TPB_UNIT_T)0x0000000100000000)
-#define TPB_UBASE_DEC_EXP_P     ((TPB_UNIT_T)0x0000000700000000)
-
-/* Units used by current kernels */
-#define TPB_UNIT_B         (((TPB_UNIT_T)0)  | TPB_UNAME_DATASIZE | TPB_UBASE_BASE)
-#define TPB_UNIT_MBPS      (((TPB_UNIT_T)6)  | TPB_UNAME_DATAPS | TPB_UBASE_DEC_EXP_P)
-#define TPB_UNIT_BYTEPCY   (((TPB_UNIT_T)0)  | TPB_UNAME_BITPCY | TPB_UBASE_BASE)
-#define TPB_UNIT_TIMER     (((TPB_UNIT_T)0)  | TPB_UNAME_TIMERTIME | TPB_UBASE_BASE)
-
-/* FLOPS units */
-#define TPB_UNAME_FLOPS    (((TPB_UNIT_T)0x0000002000000000) | TPB_UKIND_VOLPTIME)
-#define TPB_UNIT_FLOPS     (((TPB_UNIT_T)0)  | TPB_UNAME_FLOPS | TPB_UBASE_BASE)
-#define TPB_UNIT_GFLOPS    (((TPB_UNIT_T)9)  | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
-#define TPB_UNIT_TFLOPS    (((TPB_UNIT_T)12) | TPB_UNAME_FLOPS | TPB_UBASE_DEC_EXP_P)
 
 /* Limits */
 #define TPBM_CLI_STR_MAX_LEN 4096
@@ -235,23 +197,160 @@ typedef struct tpb_k_rthdl {
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
 
-/* Kernel registration and runtime APIs used by kernels */
+/* ===== Kernel Registration API ===== */
+
+/**
+ * @brief Register a new kernel with a name and description.
+ * @param name Kernel name (must be unique)
+ * @param note Kernel description
+ * @param kctrl Kernel attribution control bits
+ * @return 0 on success, error code otherwise
+ */
 int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
+
+/**
+ * @brief Add a runtime parameter to the current kernel.
+ *
+ * The dtype parameter uses a 32-bit encoding: 0xSSCCTTTT
+ *   - SS (bits 24-31): Parameter Source flags
+ *   - CC (bits 16-23): Check/Validation mode flags
+ *   - TTTT (bits 0-15): Type code (MPI-compatible)
+ *
+ * @param name Parameter name (used for CLI argument matching)
+ * @param note Human-readable parameter description
+ * @param default_value String representation of default value
+ * @param dtype Combined data type: source | check | type
+ * @param ... Variable arguments based on validation mode:
+ *            - TPB_PARM_RANGE: (lo, hi) range bounds
+ *            - TPB_PARM_LIST: (n, plist) valid values
+ *            - TPB_PARM_NOCHECK: no additional arguments
+ * @return 0 on success, error code otherwise
+ */
 int tpb_k_add_parm(const char *name, const char *note,
                    const char *default_value, TPB_DTYPE dtype, ...);
+
+/**
+ * @brief Set the runner function for the current kernel.
+ * @param runner Function pointer to kernel runner
+ * @return 0 on success, error code otherwise
+ */
 int tpb_k_add_runner(int (*runner)(void));
+
+/**
+ * @brief Register a new output data definition for the current kernel.
+ *
+ * Must be called during kernel registration (after tpb_k_register,
+ * before tpb_k_add_runner) to define output metrics.
+ *
+ * @param name   Output name (used to look up when allocating/reporting).
+ * @param note   Human-readable description.
+ * @param dtype  Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.).
+ * @param unit   Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.).
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit);
+
+/* ===== Kernel Runtime API ===== */
+
+/**
+ * @brief Get argument value from runtime handle.
+ * @param name Parameter name
+ * @param dtype Expected data type
+ * @param argptr Pointer to receive parameter value
+ * @return 0 on success, error code otherwise
+ */
 int tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr);
+
+/**
+ * @brief Get timer for the current kernel.
+ * @param timer Non-NULL pointer to receive timer via value-copy.
+ * @return 0 on success, error code otherwise
+ */
 int tpb_k_get_timer(tpb_timer_t *timer);
+
+/**
+ * @brief Allocate memory for output data in the TPB framework.
+ * @param name The name of an output variable.
+ * @param n The number of elements with 'dtype' defined in tpb_k_add_output.
+ * @param ptr Pointer to the header of allocated memory, NULL if failed.
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
+
+/* ===== PLI (Process-Level Integration) API ===== */
+
+/**
+ * @brief Finalize PLI kernel registration.
+ *
+ * For PLI kernels, this replaces tpb_k_add_runner(). It increments the kernel
+ * count without setting a runner function (PLI kernels use exec instead).
+ *
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_k_finalize_pli(void);
+
+/**
+ * @brief Set timer for PLI kernel executable.
+ *
+ * Intended to be called from .tpbx executables. Sets up the timer based
+ * on the provided timer name.
+ *
+ * @param timer_name Timer name (e.g., "clock_gettime", "tsc_asym")
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_k_pli_set_timer(const char *timer_name);
+
+/**
+ * @brief Build handle from positional arguments for PLI executable.
+ *
+ * Parses positional arguments (in parameter registration order) and
+ * builds a runtime handle. Called from .tpbx executables.
+ *
+ * @param handle Pointer to runtime handle to populate.
+ * @param argc Number of positional argument values.
+ * @param argv Array of argument value strings.
+ * @return 0 on success, error code otherwise.
+ */
 int tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv);
+
+/* ===== Driver Cleanup ===== */
+
+/**
+ * @brief Clean up and free all memory in the kernel runtime handle.
+ *
+ * Releases all dynamic allocations made for output variables and kernel
+ * arguments, ensuring no memory leaks after a kernel execution.
+ *
+ * @param handle Pointer to the kernel runtime handle.
+ * @return 0 on successful cleanup, or an error code if any issues occurred.
+ */
 int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
 
-/* CLI output helpers */
+/* ===== CLI Output Helpers ===== */
+
+/**
+ * @brief TPBench formatted stdout.
+ *
+ * Output syntax: YYYY-mm-dd HH:MM:SS [TAG] *msg
+ *
+ * @param mode_bit Mode bit for message and error header type.
+ * @param fmt Format string.
+ * @param ... Varargs for fmt printf.
+ */
 void tpb_printf(uint64_t mode_bit, char *fmt, ...);
+
+/**
+ * @brief Output kernel arguments to the command-line interface.
+ * @param handle Pointer to the kernel runtime handle.
+ * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
+ */
 int tpb_cliout_args(tpb_k_rthdl_t *handle);
+
+/**
+ * @brief Output kernel execution results to the command-line interface.
+ * @param handle Pointer to the kernel runtime handle.
+ * @return TPBE_SUCCESS on success, TPBE_NULLPTR_ARG if handle is NULL.
+ */
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
 #endif /* TPBENCH_H */
