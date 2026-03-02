@@ -1,0 +1,24 @@
+/**
+ * @file tpbench.h
+ * @brief Public API header for TPBench kernel development.
+ *
+ * This is a GENERATED flat header for end-user distribution.
+ * All content from tpb-unitdefs.h and tpb-public.h has been merged
+ * into this single self-contained header file.
+ *
+ * Source: CMake generates this from tpbench.h.in by embedding
+ * the contents of tpb-unitdefs.h and tpb-public.h.
+ */
+
+#ifndef TPBENCH_H
+#define TPBENCH_H
+
+/* ===== Embedded content from tpb-unitdefs.h ===== */
+@UNITDEFS_CONTENT@
+/* ===== End of embedded tpb-unitdefs.h ===== */
+
+/* ===== Embedded content from tpb-public.h (without its #include "tpb-unitdefs.h") ===== */
+@PUBLIC_CONTENT@
+/* ===== End of embedded tpb-public.h ===== */
+
+#endif /* TPBENCH_H */

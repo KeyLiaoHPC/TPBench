@@ -414,9 +414,32 @@ if(TPB_USE_ROCM)
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
-# Install public headers
-install(DIRECTORY src/include/
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# ============================================================================
+# Generate and Install Flat tpbench.h for End-User Distribution
+# ============================================================================
+
+# Read source header files
+file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-unitdefs.h UNITDEFS_CONTENT)
+file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-public.h PUBLIC_CONTENT)
+
+# Remove the #include "tpb-unitdefs.h" line from tpb-public.h content
+string(REPLACE "#include \"tpb-unitdefs.h\"\n" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
+string(REPLACE "#include \"tpb-unitdefs.h\"" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
+
+# Create output directory for generated headers
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
+
+# Generate the merged flat header using configure_file with @ONLY
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/include/tpbench.h.in
+    ${CMAKE_BINARY_DIR}/include/tpbench.h
+    @ONLY
+)
+
+# Install only the generated flat tpbench.h (not separate tpb-unitdefs.h or tpb-public.h)
+install(FILES ${CMAKE_BINARY_DIR}/include/tpbench.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
 
 # Copy YAML configuration files to build/etc directory
 add_custom_target(copy_yaml_files ALL
