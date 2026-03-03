@@ -12,25 +12,6 @@ set_target_properties(test-tpb-run-fli PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
 )
 
-# Helper: register one sub-case for an already-defined test executable.
-#   _prefix  : CTest name prefix (e.g. "A1")
-#   _case_id : Case id passed as argv[1] (e.g. "A1.1")
-#   _case_name: Human label appended to CTest name (e.g. "basic_success")
-#   _target  : CMake build target name
-#   _label   : CTest label
-macro(tpb_add_subcase _prefix _case_id _case_name _target _label)
-    add_test(
-        NAME "${_case_id}-${_case_name}"
-        COMMAND ${CMAKE_COMMAND}
-            -DBUILD_DIR=${CMAKE_BINARY_DIR}
-            -DBUILD_TARGET=${_target}
-            -DTEST_EXECUTABLE=$<TARGET_FILE:${_target}>
-            -DTEST_ARGS=${_case_id}
-            -P ${CMAKE_SOURCE_DIR}/tests/RunBuiltTest.cmake
-    )
-    set_tests_properties("${_case_id}-${_case_name}" PROPERTIES LABELS "${_label}")
-endmacro()
-
 # Pack A1 sub-cases
 tpb_add_subcase(A1 A1.1 basic_success   test-tpb-run-fli corelib)
 tpb_add_subcase(A1 A1.2 null_handle     test-tpb-run-fli corelib)
