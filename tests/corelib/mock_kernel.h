@@ -35,6 +35,10 @@ typedef struct {
     int (*func)(void);
 } test_case_t;
 
-int run_pack(const char *pack, test_case_t *cases, int n);
+/*
+ * Run a test pack. If filter is non-NULL, run only the case whose id
+ * matches filter; otherwise run all cases.  Returns number of failures.
+ */
+int run_pack(const char *pack, test_case_t *cases, int n, const char *filter);
 
 #endif /* MOCK_KERNEL_H */

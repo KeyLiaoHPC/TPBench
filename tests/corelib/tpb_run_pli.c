@@ -159,8 +159,11 @@ test_child_signaled(void)
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
+    const char *filter = (argc > 1) ? argv[1] : NULL;
+    atexit(cleanup_mock_scripts);
+
     test_case_t cases[] = {
         { "A2.1", "null_handle",        test_null_handle        },
         { "A2.2", "missing_exec",       test_missing_exec       },
@@ -169,8 +172,6 @@ main(void)
         { "A2.5", "child_signaled",     test_child_signaled     },
     };
     int n = sizeof(cases) / sizeof(cases[0]);
-    int fail = run_pack("A2", cases, n);
-
-    cleanup_mock_scripts();
+    int fail = run_pack("A2", cases, n, filter);
     return (fail > 0) ? 1 : 0;
 }

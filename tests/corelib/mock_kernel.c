@@ -154,14 +154,18 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
 /* ---- Test harness ---- */
 
 int
-run_pack(const char *pack, test_case_t *cases, int n)
+run_pack(const char *pack, test_case_t *cases, int n, const char *filter)
 {
-    int pass = 0, fail = 0;
+    int pass = 0, fail = 0, run = 0;
 
-    printf("Running test pack %s (%d cases)\n", pack, n);
+    if (filter == NULL)
+        printf("Running test pack %s (%d cases)\n", pack, n);
     printf("------------------------------------------------------\n");
 
     for (int i = 0; i < n; i++) {
+        if (filter != NULL && strcmp(filter, cases[i].id) != 0)
+            continue;
+        run++;
         int result = cases[i].func();
         if (result == 0) {
             printf("[%s] %-40s PASS\n", cases[i].id, cases[i].name);
@@ -172,7 +176,13 @@ run_pack(const char *pack, test_case_t *cases, int n)
         }
     }
 
+    if (filter != NULL && run == 0) {
+        fprintf(stderr, "No case matching '%s' in pack %s\n", filter, pack);
+        return 1;
+    }
+
     printf("------------------------------------------------------\n");
-    printf("Pack %s: %d passed, %d failed\n\n", pack, pass, fail);
+    if (filter == NULL)
+        printf("Pack %s: %d passed, %d failed\n\n", pack, pass, fail);
     return fail;
 }

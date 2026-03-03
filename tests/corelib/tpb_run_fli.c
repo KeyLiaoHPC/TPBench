@@ -118,8 +118,9 @@ test_param_retrieval(void)
 }
 
 int
-main(void)
+main(int argc, char **argv)
 {
+    const char *filter = (argc > 1) ? argv[1] : NULL;
     test_case_t cases[] = {
         { "A1.1", "basic_success",   test_basic_success   },
         { "A1.2", "null_handle",     test_null_handle     },
@@ -129,6 +130,6 @@ main(void)
         { "A1.6", "param_retrieval", test_param_retrieval },
     };
     int n = sizeof(cases) / sizeof(cases[0]);
-    int fail = run_pack("A1", cases, n);
+    int fail = run_pack("A1", cases, n, filter);
     return (fail > 0) ? 1 : 0;
 }

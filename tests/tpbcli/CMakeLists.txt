@@ -11,15 +11,25 @@ set_target_properties(test-cli-run-dimargs PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
 )
 
-add_test(
-    NAME cli-run-dimargs
-    COMMAND ${CMAKE_COMMAND}
-        -DBUILD_DIR=${CMAKE_BINARY_DIR}
-        -DBUILD_TARGET=test-cli-run-dimargs
-        -DTEST_EXECUTABLE=$<TARGET_FILE:test-cli-run-dimargs>
-        -P ${CMAKE_SOURCE_DIR}/tests/RunBuiltTest.cmake
-)
-set_tests_properties(cli-run-dimargs PROPERTIES LABELS tpbcli)
+macro(tpb_add_subcase _prefix _case_id _case_name _target _label)
+    add_test(
+        NAME "${_case_id}-${_case_name}"
+        COMMAND ${CMAKE_COMMAND}
+            -DBUILD_DIR=${CMAKE_BINARY_DIR}
+            -DBUILD_TARGET=${_target}
+            -DTEST_EXECUTABLE=$<TARGET_FILE:${_target}>
+            -DTEST_ARGS=${_case_id}
+            -P ${CMAKE_SOURCE_DIR}/tests/RunBuiltTest.cmake
+    )
+    set_tests_properties("${_case_id}-${_case_name}" PROPERTIES LABELS "${_label}")
+endmacro()
+
+# Pack B1 sub-cases
+tpb_add_subcase(B1 B1.1 list_expansion   test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.2 recur_expansion  test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.3 string_list      test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.4 nested_expansion test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.5 total_count      test-cli-run-dimargs tpbcli)
 
 add_custom_target(test_tpbcli
     DEPENDS test-cli-run-dimargs

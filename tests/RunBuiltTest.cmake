@@ -29,8 +29,13 @@ if(NOT build_result EQUAL 0)
     message(FATAL_ERROR "Failed to build target ${BUILD_TARGET}")
 endif()
 
+set(run_command "${TEST_EXECUTABLE}")
+if(DEFINED TEST_ARGS)
+    list(APPEND run_command ${TEST_ARGS})
+endif()
+
 execute_process(
-    COMMAND "${TEST_EXECUTABLE}"
+    COMMAND ${run_command}
     RESULT_VARIABLE test_result
 )
 
