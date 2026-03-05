@@ -116,27 +116,63 @@ int
 mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
 {
     tpb_kernel_t *kern = NULL;
-    int err;
 
     if (hdl == NULL || kernel_name == NULL)
         return TPBE_NULLPTR_ARG;
 
-    err = tpb_get_kernel(kernel_name, &kern);
-    if (err) return err;
+    /* Query kernel - allocates isolated copy */
+    tpb_query_kernel(-1, kernel_name, &kern);
+    if (kern == NULL)
+        return TPBE_LIST_NOT_FOUND;
 
     memset(hdl, 0, sizeof(tpb_k_rthdl_t));
-    memcpy(&hdl->kernel, kern, sizeof(tpb_kernel_t));
 
-    hdl->argpack.n = kern->info.nparms;
-    if (kern->info.nparms > 0) {
+    /* Transfer ownership of allocated data from kern to hdl->kernel.
+     * Struct assignment copies all fields including the allocated pointers.
+     * After this, hdl->kernel owns the data; kern is just an empty wrapper. */
+    hdl->kernel = *kern;
+
+    /* Free only the wrapper struct - the nested data is now owned by hdl->kernel.
+     * Cannot use tpb_free_kernel(&kern) because that would free the transferred data. */
+    free(kern);
+
+    /* Build argpack with separate allocations (deep copy plims) */
+    hdl->argpack.n = hdl->kernel.info.nparms;
+    if (hdl->kernel.info.nparms > 0) {
         hdl->argpack.args = (tpb_rt_parm_t *)malloc(
-            sizeof(tpb_rt_parm_t) * kern->info.nparms);
+            sizeof(tpb_rt_parm_t) * hdl->kernel.info.nparms);
         if (hdl->argpack.args == NULL)
             return TPBE_MALLOC_FAIL;
-        for (int i = 0; i < kern->info.nparms; i++) {
-            memcpy(&hdl->argpack.args[i], &kern->info.parms[i],
+        for (int i = 0; i < hdl->kernel.info.nparms; i++) {
+            /* Copy parameter struct */
+            memcpy(&hdl->argpack.args[i], &hdl->kernel.info.parms[i],
                    sizeof(tpb_rt_parm_t));
-            hdl->argpack.args[i].value = kern->info.parms[i].default_value;
+            hdl->argpack.args[i].value = hdl->kernel.info.parms[i].default_value;
+
+            /* Deep copy plims for argpack if present */
+            if (hdl->kernel.info.parms[i].plims != NULL &&
+                hdl->kernel.info.parms[i].nlims > 0) {
+                hdl->argpack.args[i].plims = (tpb_parm_value_t *)malloc(
+                    sizeof(tpb_parm_value_t) * hdl->kernel.info.parms[i].nlims);
+                if (hdl->argpack.args[i].plims == NULL) {
+                    /* Clean up already allocated plims */
+                    for (int j = 0; j < i; j++) {
+                        if (hdl->argpack.args[j].plims != NULL) {
+                            free(hdl->argpack.args[j].plims);
+                            hdl->argpack.args[j].plims = NULL;
+                        }
+                    }
+                    free(hdl->argpack.args);
+                    hdl->argpack.args = NULL;
+                    return TPBE_MALLOC_FAIL;
+                }
+                for (int j = 0; j < hdl->kernel.info.parms[i].nlims; j++) {
+                    hdl->argpack.args[i].plims[j] =
+                        hdl->kernel.info.parms[i].plims[j];
+                }
+            } else {
+                hdl->argpack.args[i].plims = NULL;
+            }
         }
     } else {
         hdl->argpack.args = NULL;

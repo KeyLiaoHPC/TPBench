@@ -123,23 +123,6 @@ int tpb_register_common();
  */
 int tpb_register_kernel();
 
-
-/**
- * @brief Get a registered kernel by name
- * @param name Kernel name
- * @param kernel_out Pointer to receive kernel address
- * @return 0 on success, error code otherwise
- */
-int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
-
-/**
- * @brief Get a registered kernel by index
- * @param idx Kernel index
- * @param kernel_out Pointer to receive kernel address
- * @return 0 on success, error code otherwise
- */
-int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
-
 /* PLI (Process-Level Integration) internal API */
 
 /**

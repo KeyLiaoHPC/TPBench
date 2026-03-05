@@ -37,6 +37,7 @@ test_basic_success(void)
     err = tpb_run_fli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == TPBE_SUCCESS) ? 0 : 1;
 }
 
@@ -63,6 +64,7 @@ test_empty_runner(void)
     err = tpb_run_fli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == TPBE_KERN_ARG_FAIL) ? 0 : 1;
 }
 
@@ -79,6 +81,7 @@ test_kernel_warn(void)
     err = tpb_run_fli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == TPBE_KERN_VERIFY_FAIL) ? 0 : 1;
 }
 
@@ -95,6 +98,7 @@ test_kernel_fail(void)
     err = tpb_run_fli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == TPBE_KERN_ARG_FAIL) ? 0 : 1;
 }
 
@@ -111,6 +115,7 @@ test_param_retrieval(void)
     err = tpb_run_fli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
 
     if (err != 0) return 1;
     if (mock_get_received_ntest() != 10) return 1;

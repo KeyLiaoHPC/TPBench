@@ -211,8 +211,8 @@ tpb_register_kernel()
     return 0;
 }
 
-int
-tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
+static int
+_tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
 {
     if (name == NULL || kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
@@ -308,8 +308,8 @@ tpb_run_fli(tpb_k_rthdl_t *hdl)
     return err;
 }
 
-int
-tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
+static int
+_tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 {
     if (kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
@@ -321,6 +321,232 @@ tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 
     *kernel_out = &kernel_all[idx];
     return 0;
+}
+
+/**
+ * @brief Deep copy kernel info from source to destination.
+ *
+ * Allocates and returns a new tpb_kernel_t with fully isolated copy:
+ * - All arrays (parms, plims, outs) are newly allocated
+ * - No pointers in dst point to driver-internal data
+ *
+ * @param src Source kernel (driver-internal)
+ * @return Allocated deep copy on success, NULL on failure
+ */
+static tpb_kernel_t *
+_tpb_kernel_deep_copy(const tpb_kernel_t *src)
+{
+    if (src == NULL) {
+        return NULL;
+    }
+
+    tpb_kernel_t *dst = (tpb_kernel_t *)malloc(sizeof(tpb_kernel_t));
+    if (dst == NULL) {
+        return NULL;
+    }
+
+    /* Copy scalar fields in info */
+    snprintf(dst->info.name, TPBM_NAME_STR_MAX_LEN, "%s", src->info.name);
+    snprintf(dst->info.note, TPBM_NOTE_STR_MAX_LEN, "%s", src->info.note);
+    dst->info.kctrl = src->info.kctrl;
+    dst->info.nparms = src->info.nparms;
+    dst->info.nouts = src->info.nouts;
+
+    /* Copy parms array */
+    if (src->info.nparms > 0 && src->info.parms != NULL) {
+        dst->info.parms = (tpb_rt_parm_t *)malloc(
+            sizeof(tpb_rt_parm_t) * src->info.nparms);
+        if (dst->info.parms == NULL) {
+            free(dst);
+            return NULL;
+        }
+
+        for (int i = 0; i < src->info.nparms; i++) {
+            /* Copy scalar fields */
+            snprintf(dst->info.parms[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
+                     src->info.parms[i].name);
+            snprintf(dst->info.parms[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
+                     src->info.parms[i].note);
+            dst->info.parms[i].value = src->info.parms[i].value;
+            dst->info.parms[i].default_value = src->info.parms[i].default_value;
+            dst->info.parms[i].ctrlbits = src->info.parms[i].ctrlbits;
+            dst->info.parms[i].nlims = src->info.parms[i].nlims;
+
+            /* Deep copy plims if present */
+            if (src->info.parms[i].plims != NULL && src->info.parms[i].nlims > 0) {
+                dst->info.parms[i].plims = (tpb_parm_value_t *)malloc(
+                    sizeof(tpb_parm_value_t) * src->info.parms[i].nlims);
+                if (dst->info.parms[i].plims == NULL) {
+                    /* Clean up already allocated plims */
+                    for (int j = 0; j < i; j++) {
+                        if (dst->info.parms[j].plims != NULL) {
+                            free(dst->info.parms[j].plims);
+                        }
+                    }
+                    free(dst->info.parms);
+                    free(dst);
+                    return NULL;
+                }
+                for (int j = 0; j < src->info.parms[i].nlims; j++) {
+                    dst->info.parms[i].plims[j] = src->info.parms[i].plims[j];
+                }
+            } else {
+                dst->info.parms[i].plims = NULL;
+            }
+        }
+    } else {
+        dst->info.parms = NULL;
+    }
+
+    /* Copy outs array */
+    if (src->info.nouts > 0 && src->info.outs != NULL) {
+        dst->info.outs = (tpb_k_output_t *)malloc(
+            sizeof(tpb_k_output_t) * src->info.nouts);
+        if (dst->info.outs == NULL) {
+            /* Clean up parms and plims */
+            if (dst->info.parms != NULL) {
+                for (int i = 0; i < dst->info.nparms; i++) {
+                    if (dst->info.parms[i].plims != NULL) {
+                        free(dst->info.parms[i].plims);
+                    }
+                }
+                free(dst->info.parms);
+            }
+            free(dst);
+            return NULL;
+        }
+
+        for (int i = 0; i < src->info.nouts; i++) {
+            snprintf(dst->info.outs[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
+                     src->info.outs[i].name);
+            snprintf(dst->info.outs[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
+                     src->info.outs[i].note);
+            dst->info.outs[i].dtype = src->info.outs[i].dtype;
+            dst->info.outs[i].unit = src->info.outs[i].unit;
+            dst->info.outs[i].n = src->info.outs[i].n;
+            dst->info.outs[i].p = NULL;  /* Runtime data, not static info */
+        }
+    } else {
+        dst->info.outs = NULL;
+    }
+
+    /* Copy function pointers */
+    dst->func.k_run = src->func.k_run;
+    dst->func.k_output_decorator = src->func.k_output_decorator;
+
+    return dst;
+}
+
+/**
+ * @brief Free memory allocated by tpb_query_kernel().
+ *
+ * Frees all nested structures (parms, plims, outs) within the kernel instance.
+ * Note: This does NOT free the kernel struct itself - that is the caller's
+ * responsibility. Use this for both heap-allocated (from tpb_query_kernel)
+ * and inline kernel structs (like hdl->kernel).
+ *
+ * To free a kernel allocated by tpb_query_kernel:
+ *   tpb_free_kernel(kernel);
+ *   free(kernel);  // if kernel was allocated on heap
+ *
+ * To clean up an inline kernel struct (like hdl->kernel):
+ *   tpb_free_kernel(&hdl->kernel);
+ *   // no free() needed - struct is inline
+ *
+ * @param kernel Kernel instance to clean up. Can be NULL (no-op).
+ */
+void
+tpb_free_kernel(tpb_kernel_t *kernel)
+{
+    if (kernel == NULL) {
+        return;
+    }
+
+    /* Free each parm's plims */
+    if (kernel->info.parms != NULL) {
+        for (int i = 0; i < kernel->info.nparms; i++) {
+            if (kernel->info.parms[i].plims != NULL) {
+                free(kernel->info.parms[i].plims);
+                kernel->info.parms[i].plims = NULL;
+            }
+        }
+        /* Free parms array */
+        free(kernel->info.parms);
+        kernel->info.parms = NULL;
+    }
+
+    /* Free outs array */
+    if (kernel->info.outs != NULL) {
+        free(kernel->info.outs);
+        kernel->info.outs = NULL;
+    }
+
+    /* Zero counts */
+    kernel->info.nparms = 0;
+    kernel->info.nouts = 0;
+}
+
+/**
+ * @brief Query kernel information by ID or name.
+ *
+ * Returns the total number of registered kernels. If kernel_out is non-NULL,
+ * attempts to look up a kernel and allocate a fully isolated copy.
+ *
+ * @param id Kernel index (>=0). If id >= 0, kernel_name is ignored.
+ *           If id < 0, kernel_name is used to look up the kernel.
+ * @param kernel_name Kernel name (used only when id < 0). Can be NULL if id >= 0.
+ * @param kernel_out Pointer to a NULL tpb_kernel_t* pointer. On success,
+ *                   *kernel_out will point to an allocated kernel copy.
+ *                   On failure or if kernel_out is NULL, *kernel_out is unchanged.
+ *                   Caller must free with tpb_free_kernel().
+ * @return Total number of registered kernels. Check *kernel_out to determine
+ *         if the specific kernel lookup succeeded (non-NULL) or failed (NULL).
+ */
+int
+tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out)
+{
+    const tpb_kernel_t *src = NULL;
+    int err;
+
+    /* Always return the total kernel count */
+    int count = nkern;
+
+    /* If kernel_out is NULL, just return count */
+    if (kernel_out == NULL) {
+        return count;
+    }
+
+    /* If *kernel_out is not NULL, it's an invalid call - return count */
+    if (*kernel_out != NULL) {
+        return count;
+    }
+
+    /* Lookup source kernel */
+    if (id >= 0) {
+        /* Use index - ignore kernel_name */
+        err = _tpb_get_kernel_by_index(id, (tpb_kernel_t **)&src);
+    } else {
+        /* Use name */
+        if (kernel_name == NULL) {
+            /* Invalid lookup, return count with *kernel_out still NULL */
+            return count;
+        }
+        err = _tpb_get_kernel(kernel_name, (tpb_kernel_t **)&src);
+    }
+
+    if (err != 0) {
+        /* Kernel not found, *kernel_out stays NULL */
+        return count;
+    }
+
+    /* Perform deep copy */
+    *kernel_out = _tpb_kernel_deep_copy(src);
+    if (*kernel_out == NULL) {
+        /* Allocation failed, *kernel_out stays NULL */
+        return count;
+    }
+
+    return count;
 }
 
 int
@@ -816,7 +1042,7 @@ tpb_driver_add_handle(const char *kernel_name)
     }
 
     /* Lookup kernel by name */
-    err = tpb_get_kernel(kernel_name, &kernel);
+    err = _tpb_get_kernel(kernel_name, &kernel);
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Kernel \'%s\' not found.\n", kernel_name);
@@ -932,7 +1158,7 @@ tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
     if (kernel_name != NULL) {
         /* Search in registered kernel */
         tpb_kernel_t *kernel = NULL;
-        int err = tpb_get_kernel(kernel_name, &kernel);
+        int err = _tpb_get_kernel(kernel_name, &kernel);
         if (err != 0) {
             return TPBE_KERNEL_NE_FAIL;
         }

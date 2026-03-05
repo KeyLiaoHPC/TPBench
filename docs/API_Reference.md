@@ -471,52 +471,88 @@ int tpb_register_kernel(void);
 
 ---
 
-### `tpb_get_kernel_count`
+### `tpb_get_nkern`
 
 Get the number of registered kernels.
 
 ```c
-int tpb_get_kernel_count(void);
+int tpb_get_nkern(void);
 ```
 
 **Returns:**
-- Kernel count
+- Number of registered kernels
 
 ---
 
-### `tpb_get_kernel`
+### `tpb_query_kernel`
 
-Get a registered kernel by name.
+Query kernel information by ID or name.
+
+Returns the total number of registered kernels. If `kernel_out` is non-NULL,
+attempts to look up a kernel and allocate a fully isolated copy.
 
 ```c
-int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
+int tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out);
 ```
 
 **Parameters:**
-- `name`: Kernel name
-- `kernel_out`: Pointer to receive kernel address
+- `id`: Kernel index (>=0). If id >= 0, kernel_name is ignored. If id < 0, kernel_name is used.
+- `kernel_name`: Kernel name (used only when id < 0). Can be NULL if id >= 0.
+- `kernel_out`: Pointer to a NULL `tpb_kernel_t*` pointer. On success, *kernel_out will point to an allocated kernel copy. On failure or if kernel_out is NULL, *kernel_out is unchanged. Caller must free with `tpb_free_kernel()` and `free()`.
 
 **Returns:**
-- `0` on success
-- Error code otherwise
+- Total number of registered kernels. Check *kernel_out to determine if the specific kernel lookup succeeded (non-NULL) or failed (NULL).
+
+**Example:**
+```c
+// Query kernel by index
+tpb_kernel_t *kernel = NULL;
+int nkern = tpb_query_kernel(0, NULL, &kernel);
+if (kernel != NULL) {
+    // Use kernel->info.name, etc.
+    tpb_free_kernel(kernel);  // Free nested data
+    free(kernel);             // Free struct
+}
+
+// Query kernel by name
+tpb_kernel_t *kernel = NULL;
+tp_kernel(-1, "my_kernel", &kernel);
+if (kernel != NULL) {
+    // Use kernel...
+    tpb_free_kernel(kernel);  // Free nested data
+    free(kernel);             // Free struct
+}
+```
 
 ---
 
-### `tpb_get_kernel_by_index`
+### `tpb_free_kernel`
 
-Get a registered kernel by index.
+Free memory allocated by `tpb_query_kernel()`.
+
+Frees all nested structures (parms, plims, outs) within the kernel instance.
+Note: This does NOT free the kernel struct itself.
 
 ```c
-int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
+void tpb_free_kernel(tpb_kernel_t *kernel);
 ```
 
 **Parameters:**
-- `idx`: Kernel index
-- `kernel_out`: Pointer to receive kernel address
+- `kernel`: Kernel instance to clean up. Can be NULL (no-op).
 
-**Returns:**
-- `0` on success
-- Error code otherwise
+**Example:**
+```c
+// For heap-allocated kernel from tpb_query_kernel:
+tp_kernel(-1, "my_kernel", &kernel);
+if (kernel != NULL) {
+    // Use kernel...
+    tpb_free_kernel(kernel);  // Free nested data
+    free(kernel);             // Free struct
+}
+
+// For inline kernel struct (like hdl->kernel):
+tpb_free_kernel(&hdl->kernel);  // Frees nested data only
+```
 
 ---
 
