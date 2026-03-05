@@ -420,13 +420,14 @@ tpb_check_kargs(char **common_tokens, int ncommon,
         return TPBE_KERN_ARG_FAIL;
     }
 
-    err = tpb_get_kernel("_tpb_common", &kernel_common);
-    if (err != 0) {
-        kernel_common = NULL;
-    }
+    /* Query common kernel parameters (allocates isolated copy) */
+    tpb_query_kernel(-1, "_tpb_common", &kernel_common);
+    /* kernel_common may be NULL if _tpb_common not found, that's OK */
 
     err = build_rt_parms(kernel, kernel_common, &rt_parms, nparms_out);
     if (err != 0) {
+        tpb_free_kernel(kernel_common);
+        free(kernel_common);
         return err;
     }
 
@@ -435,6 +436,8 @@ tpb_check_kargs(char **common_tokens, int ncommon,
                             kernel->info.name, 0);
     if (err != 0) {
         free(rt_parms);
+        tpb_free_kernel(kernel_common);
+        free(kernel_common);
         return err;
     }
 
@@ -443,10 +446,14 @@ tpb_check_kargs(char **common_tokens, int ncommon,
                             kernel->info.name, 1);
     if (err != 0) {
         free(rt_parms);
+        tpb_free_kernel(kernel_common);
+        free(kernel_common);
         return err;
     }
 
     *rt_parms_out = rt_parms;
+    tpb_free_kernel(kernel_common);
+    free(kernel_common);
     return 0;
 }
 

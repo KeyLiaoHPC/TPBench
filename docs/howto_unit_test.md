@@ -334,28 +334,42 @@ int
 mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
 {
     tpb_kernel_t *kern = NULL;
-    int err;
 
     if (hdl == NULL || kernel_name == NULL)
         return TPBE_NULLPTR_ARG;
 
-    /* Get registered kernel */
-    err = tpb_get_kernel(kernel_name, &kern);
-    if (err) return err;
+    /* Query registered kernel (allocates isolated copy) */
+    tpb_query_kernel(-1, kernel_name, &kern);
+    if (kern == NULL)
+        return TPBE_LIST_NOT_FOUND;
 
-    /* Copy kernel metadata */
+    /* Copy kernel metadata (transfers ownership of allocated data) */
     memset(hdl, 0, sizeof(tpb_k_rthdl_t));
-    memcpy(&hdl->kernel, kern, sizeof(tpb_kernel_t));
+    hdl->kernel = *kern;  /* struct copy - kern's pointers now owned by hdl->kernel */
 
-    /* Initialize argument package with defaults */
-    hdl->argpack.n = kern->info.nparms;
-    if (kern->info.nparms > 0) {
+    /* Free only the wrapper struct - the nested data is now owned by hdl->kernel.
+     * Cannot use tpb_free_kernel(&kern) because that would free the transferred data. */
+    free(kern);
+
+    /* Initialize argument package with defaults (deep copy plims) */
+    hdl->argpack.n = hdl->kernel.info.nparms;
+    if (hdl->kernel.info.nparms > 0) {
         hdl->argpack.args = (tpb_rt_parm_t *)malloc(
-            sizeof(tpb_rt_parm_t) * kern->info.nparms);
-        for (int i = 0; i < kern->info.nparms; i++) {
-            memcpy(&hdl->argpack.args[i], &kern->info.parms[i],
+            sizeof(tpb_rt_parm_t) * hdl->kernel.info.nparms);
+        for (int i = 0; i < hdl->kernel.info.nparms; i++) {
+            memcpy(&hdl->argpack.args[i], &hdl->kernel.info.parms[i],
                    sizeof(tpb_rt_parm_t));
-            hdl->argpack.args[i].value = kern->info.parms[i].default_value;
+            hdl->argpack.args[i].value = hdl->kernel.info.parms[i].default_value;
+            /* Deep copy plims if present */
+            if (hdl->kernel.info.parms[i].plims != NULL &&
+                hdl->kernel.info.parms[i].nlims > 0) {
+                hdl->argpack.args[i].plims = (tpb_parm_value_t *)malloc(
+                    sizeof(tpb_parm_value_t) * hdl->kernel.info.parms[i].nlims);
+                for (int j = 0; j < hdl->kernel.info.parms[i].nlims; j++) {
+                    hdl->argpack.args[i].plims[j] =
+                        hdl->kernel.info.parms[i].plims[j];
+                }
+            }
         }
     }
 
@@ -363,6 +377,7 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
     hdl->respack.n = 0;
     hdl->respack.outputs = NULL;
     hdl->envpack.n = 0;
+    hdl->envpack.envs = NULL;
     hdl->mpipack.mpiargs = NULL;
 
     return 0;

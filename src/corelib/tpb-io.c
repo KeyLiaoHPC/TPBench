@@ -428,12 +428,14 @@ tpb_print_help_total(void)
 void
 tpb_list()
 {
-    int nkern = tpb_get_kernel_count();
+    /* Get kernel count via tpb_query_kernel with NULL kernel_out */
+    int nkern = tpb_query_kernel(0, NULL, NULL);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Type    Description\n");
     for (int i = 0; i < nkern; i++) {
         tpb_kernel_t *kernel = NULL;
-        if (tpb_get_kernel_by_index(i, &kernel) != 0) {
+        tpb_query_kernel(i, NULL, &kernel);
+        if (kernel == NULL) {
             continue;
         }
         /* Determine integration type string */
@@ -448,6 +450,8 @@ tpb_list()
         }
         tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-7s %s\n",
                    kernel->info.name, type_str, kernel->info.note);
+        tpb_free_kernel(kernel);
+        free(kernel);
     }
 }
 

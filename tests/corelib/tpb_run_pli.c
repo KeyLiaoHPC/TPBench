@@ -99,6 +99,7 @@ test_missing_exec(void)
 
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == TPBE_KERNEL_INCOMPLETE) ? 0 : 1;
 }
 
@@ -117,6 +118,7 @@ test_basic_success(void)
 
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == 0) ? 0 : 1;
 }
 
@@ -135,6 +137,7 @@ test_child_nonzero_exit(void)
 
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     return (err == 42) ? 0 : 1;
 }
 
@@ -153,6 +156,7 @@ test_child_signaled(void)
 
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
     /* Signal death: either TPBE_KERN_ARG_FAIL or a non-zero exit code
        (shell may translate SIGKILL to exit 137) */
     return (err != 0) ? 0 : 1;

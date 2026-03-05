@@ -1101,7 +1101,7 @@ tpbcli_run(int argc, char **argv)
     __tpbm_exit_on_error(err, "At tpbcli-run.c: parse_run");
 
     /* Print kernels to run */
-    int nhdl = tpb_driver_get_nhdl();
+    int nhdl = tpb_get_nhdl();
     if (nhdl > 1) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Number of kernels to run: %d\n", nhdl - 1);
     }

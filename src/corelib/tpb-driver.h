@@ -29,13 +29,13 @@ int tpb_driver_get_timer(tpb_timer_t *timer);
  * @brief Get number of registered kernels.
  * @return Number of registered kernels.
  */
-int tpb_driver_get_nkern(void);
+int tpb_get_nkern(void);
 
 /**
  * @brief Get number of handles.
  * @return Number of handles.
  */
-int tpb_driver_get_nhdl(void);
+int tpb_get_nhdl(void);
 
 /**
  * @brief Get kernel parameter pointer and type.
@@ -122,28 +122,6 @@ int tpb_register_common();
  * @return Error code (0 on success)
  */
 int tpb_register_kernel();
-
-/**
- * @brief Get the number of registered kernels
- * @return Kernel count
- */
-int tpb_get_kernel_count(void);
-
-/**
- * @brief Get a registered kernel by name
- * @param name Kernel name
- * @param kernel_out Pointer to receive kernel address
- * @return 0 on success, error code otherwise
- */
-int tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out);
-
-/**
- * @brief Get a registered kernel by index
- * @param idx Kernel index
- * @param kernel_out Pointer to receive kernel address
- * @return 0 on success, error code otherwise
- */
-int tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
 
 /* PLI (Process-Level Integration) internal API */
 

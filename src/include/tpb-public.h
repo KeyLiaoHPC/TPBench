@@ -378,5 +378,42 @@ int tpb_cliout_args(tpb_k_rthdl_t *handle);
  */
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
+/* ===== Kernel Query API ===== */
+
+/**
+ * @brief Query kernel information by ID or name.
+ *
+ * Returns the total number of registered kernels. If kernel_out is non-NULL,
+ * attempts to look up a kernel and allocate a fully isolated copy.
+ *
+ * @param id Kernel index (>=0). If id >= 0, kernel_name is ignored.
+ *           If id < 0, kernel_name is used to look up the kernel.
+ * @param kernel_name Kernel name (used only when id < 0). Can be NULL if id >= 0.
+ * @param kernel_out Pointer to a NULL tpb_kernel_t* pointer. On success,
+ *                   *kernel_out will point to an allocated kernel copy.
+ *                   On failure or if kernel_out is NULL, *kernel_out is unchanged.
+ *                   Caller must free with tpb_free_kernel().
+ * @return Total number of registered kernels. Check *kernel_out to determine
+ *         if the specific kernel lookup succeeded (non-NULL) or failed (NULL).
+ */
+int tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out);
+
+/**
+ * @brief Free memory allocated by tpb_query_kernel().
+ *
+ * Frees all nested structures (parms, plims, outs) within the kernel instance.
+ * Note: This does NOT free the kernel struct itself.
+ *
+ * For heap-allocated kernel from tpb_query_kernel:
+ *   tpb_free_kernel(kernel);
+ *   free(kernel);
+ *
+ * For inline kernel struct (like hdl->kernel):
+ *   tpb_free_kernel(&hdl->kernel);
+ *
+ * @param kernel Kernel instance to clean up. Can be NULL (no-op).
+ */
+void tpb_free_kernel(tpb_kernel_t *kernel);
+
 #endif /* TPB_PUBLIC_H */
 
