@@ -75,6 +75,12 @@ tpb_driver_get_timer(tpb_timer_t *timer_out)
 }
 
 int
+tpb_k_get_timer(tpb_timer_t *timer_out)
+{
+    return tpb_driver_get_timer(timer_out);
+}
+
+int
 tpb_get_nkern(void)
 {
     return (int)nkern;
@@ -617,23 +623,7 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
     return 0;
 }
 
-int
-tpb_k_get_timer(tpb_timer_t *timer_out)
-{
-    if (timer_out == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
 
-    timer_out->init = timer.init;
-    timer_out->tick = timer.tick;
-    timer_out->tock = timer.tock;
-    timer_out->get_stamp = timer.get_stamp;
-    snprintf(timer_out->name, TPBM_NAME_STR_MAX_LEN, "%s", timer.name);
-    timer_out->unit = timer.unit;
-    timer_out->dtype = timer.dtype;
-
-    return 0;
-}
 
 int
 tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
