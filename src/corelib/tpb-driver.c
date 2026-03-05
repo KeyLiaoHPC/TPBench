@@ -26,7 +26,8 @@
 #include "tpb-argp.h"
 
 /* Module-level state variables */
-static uint64_t tpb_driver_nkern = 0;  // number of registered kernels
+static int nkern = 0, nhdl, ihdl;  // number of registered kernels，number of handles， handle id
+
 static tpb_kernel_t *kernel_all = NULL;  // array of all kernels
 static tpb_kernel_t *current_kernel = NULL;  // kernel being registered
 static tpb_k_rthdl_t *current_rthdl = NULL;  // runtime handle being tested
@@ -35,8 +36,6 @@ static tpb_timer_t timer;
 
 /* Handle management state */
 static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
-static int nhdl = 0;                       // number of handles
-static int ihdl = -1;                      // current handle index
 static int timer_set = 0;                  // flag to track if timer is set
 
 /* Integration mode: PLI (default) or FLI */
@@ -76,13 +75,13 @@ tpb_driver_get_timer(tpb_timer_t *timer_out)
 }
 
 int
-tpb_driver_get_nkern(void)
+tpb_get_nkern(void)
 {
-    return (int)tpb_driver_nkern;
+    return (int)nkern;
 }
 
 int
-tpb_driver_get_nhdl(void)
+tpb_get_nhdl(void)
 {
     return nhdl;
 }
@@ -218,7 +217,7 @@ tpb_get_kernel(const char *name, tpb_kernel_t **kernel_out)
         return 0;
     }
 
-    for (int i = 0; i < tpb_driver_nkern; i++) {
+    for (int i = 0; i < nkern; i++) {
         if (strcmp(kernel_all[i].info.name, name) == 0) {
             *kernel_out = &kernel_all[i];
             return 0;
@@ -240,7 +239,7 @@ tpb_run_fli(tpb_k_rthdl_t *hdl)
 
 
     /* Initialize handle\'s respack from kernel\'s registered outputs */
-    for (int i = 0; i < tpb_driver_nkern; i++) {
+    for (int i = 0; i < nkern; i++) {
         if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {
             int nouts = kernel_all[i].info.nouts;
             tpb_k_output_t *src_outs = kernel_all[i].info.outs;
@@ -304,19 +303,13 @@ tpb_run_fli(tpb_k_rthdl_t *hdl)
 }
 
 int
-tpb_get_kernel_count(void)
-{
-    return tpb_driver_nkern;
-}
-
-int
 tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 {
     if (kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
     }
 
-    if (idx < 0 || idx >= tpb_driver_nkern) {
+    if (idx < 0 || idx >= nkern) {
         return TPBE_LIST_NOT_FOUND;
     }
 
@@ -332,7 +325,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     }
     
     /* Check if name is unique */
-    for (int i = 0; i < tpb_driver_nkern; i++) {
+    for (int i = 0; i < nkern; i++) {
         if (strcmp(kernel_all[i].info.name, name) == 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
                       "At tpb_k_register: Kernel name \'%s\' already registered\n", name);
@@ -341,15 +334,15 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     }
     
     /* Reallocate kernel array */
-    kernel_all = (tpb_kernel_t *)realloc(kernel_all, sizeof(tpb_kernel_t) * (tpb_driver_nkern + 1));
+    kernel_all = (tpb_kernel_t *)realloc(kernel_all, sizeof(tpb_kernel_t) * (nkern + 1));
     if (kernel_all == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_register: realloc filed for kernel %s, "
-                   "current regisered kernel number is %llu\n", name, tpb_driver_nkern);
+                   "current regisered kernel number is %llu\n", name, nkern);
         return TPBE_MALLOC_FAIL;
     }
 
     /* Initialize new kernel */
-    current_kernel = &kernel_all[tpb_driver_nkern];
+    current_kernel = &kernel_all[nkern];
     memset(current_kernel, 0, sizeof(tpb_kernel_t));
     
     sprintf(current_kernel->info.name, "%s", name);
@@ -564,7 +557,7 @@ tpb_k_add_runner(int (*runner)(void))
     current_kernel->func.k_run = runner;
 
     /* Finalize registration: increment kernel count */
-    tpb_driver_nkern++;
+    nkern++;
     current_kernel = NULL;
 
     return 0;
@@ -1549,7 +1542,7 @@ tpb_k_finalize_pli(void)
     current_kernel->func.k_run = NULL;
 
     /* Finalize registration: increment kernel count */
-    tpb_driver_nkern++;
+    nkern++;
     current_kernel = NULL;
 
     return 0;
@@ -1577,12 +1570,12 @@ tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
     memset(handle, 0, sizeof(tpb_k_rthdl_t));
 
     /* The current_kernel should be set by the kernel's registration */
-    if (kernel_all == NULL || tpb_driver_nkern == 0) {
+    if (kernel_all == NULL || nkern == 0) {
         return TPBE_KERN_ARG_FAIL;
     }
 
     /* Use the most recently registered kernel */
-    tpb_kernel_t *kernel = &kernel_all[tpb_driver_nkern - 1];
+    tpb_kernel_t *kernel = &kernel_all[nkern - 1];
     memcpy(&handle->kernel, kernel, sizeof(tpb_kernel_t));
 
     /* Build argpack from positional arguments */

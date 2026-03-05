@@ -428,7 +428,7 @@ tpb_print_help_total(void)
 void
 tpb_list()
 {
-    int nkern = tpb_get_kernel_count();
+    int nkern = tpb_get_nkern();
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Type    Description\n");
     for (int i = 0; i < nkern; i++) {
