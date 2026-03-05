@@ -753,6 +753,8 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 int
 tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
 {
+    /* !!! DO NOT FREE ANYTHING IN hdl->kernel !!! */
+
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
     }
@@ -774,6 +776,14 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
 
     /* Free argpack.args (allocated per handle during tpb_driver_add_handle) */
     if (hdl->argpack.args != NULL) {
+        /* Free plims for each argument */
+        for (int i = 0; i < hdl->argpack.n; i++) {
+            if (hdl->argpack.args[i].plims != NULL) {
+                free(hdl->argpack.args[i].plims);
+                hdl->argpack.args[i].plims = NULL;
+            }
+            hdl->argpack.args[i].nlims = 0;
+        }
         free(hdl->argpack.args);
         hdl->argpack.args = NULL;
     }
