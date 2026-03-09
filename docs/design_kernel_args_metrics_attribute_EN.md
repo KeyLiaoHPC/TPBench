@@ -1,4 +1,4 @@
-# TPBench Core Library Design Document: Kernel Parameter and Metric Attribute Definitions
+# Kernel Parameter and Metric Attribute Definitions
 
 文档语言： [中文](docs/design_kernel_args_metrics_attribute_CN.md) | [English](docs/design_args_metrics_attribute_EN.md)
 

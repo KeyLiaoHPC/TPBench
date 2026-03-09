@@ -1,4 +1,4 @@
-# The Design of the TPBench Record Architecture
+# The Data Record Component Design
 
 TPBench record each kernel's test and help user to use and manage these records. A record is a set of data produced by a kernel invocation, which in corelib is directly derived from the execution of a run-time handle. Moreover, due to the nature that many people start to realize that the actual performance is highly sensitive to the program context and underlying environment, TPBench tags a record with ScoreRecordID, KernelRecordID, and TBatchID, for further analysis in conjunction with other kernels and underlying environment.
 
@@ -10,9 +10,9 @@ A task batch (tbatch) is the execution context initiated by a single TPBench fro
 **TBatchID**  
 A unique identifier for a run batch, generated as:
 ```
-SHA1("rbatch" + <UTC_timestamp> + <hostname> + <username> + <front_end_pid>)
+SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
 ```
-Example: `SHA1("rbatch20000308T130801Znode01testuser13249")`
+Example: `SHA1("tbatch20000308T130801Z3600000000000node01testuser13249")`
 
 ---
 
@@ -70,7 +70,42 @@ A Record is a persistent measurement artifact capturing the results of a single 
 
 | Record Type | ID Format | Description |
 |-------------|-----------|-------------|
-| **Kernel Record** | `SHA1("kernel" + <timestamp> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)` | One record per kernel invocation (handle execution) |
-| **Score Record** | `SHA1("score" + <timestamp> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
+| **Kernel Record** | `SHA1("kernel" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)` | One record per kernel invocation (handle execution) |
+| **Score Record** | `SHA1("score" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
 **Note:** The "handle" concept is an internal implementation detail. End users interact with "kernel invocations" without needing to understand handle management.
+
+## Record Backend
+
+TPBench's records are always kept under a workspace. TPBench uses two environment variables to guide component through the filesystem: `TPB_HOME` is the TPBench installation path, and `TPB_WORKSPACE` is the root folder of a TPBench project. TPBench will search through `TPB_WORKSPACE` By default, TPBench searches `$TPB_HOME/.tpb_workspace` and `$HOME/.tpb_workspace` for the `records/` folder. For more infomation related to the building and file system, refer to [design_build.md](./design_record.md).
+
+## Record Frontend
+
+### Examples
+
+**1. List records**
+
+List the latest 20 records, one record per line. 
+```bash
+### Following commands are equal.
+$ tpbcli record list
+$ tpbcli record ls
+$ tpbcli r list
+$ tpbcli r ls
+### --- Output ---
+TPBench v1.0
+2024-01-01T08:11:30 [I] TPB_HOME: /usr/local/tpbench
+2024-01-01T08:11:30 [I] TPB_WORKSPACE: /usr/local/tpbench
+2024-01-01T08:11:30 [I] Reading records from /usr/local/tpbench/.tpb_data ... Done
+2024-01-01T08:11:30 [I] List of latest 20 records
+===
+
+===
+2024-01-01T08:11:30 [I] TPBench exit.
+
+
+```
+
+## Record Backend: CSV
+
+## Record Backend: SQLite
