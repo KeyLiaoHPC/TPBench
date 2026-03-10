@@ -303,20 +303,58 @@ This section explains the design of integrated `rawdb` backend for building TPBe
 
 ``` C
 
-// 104-Byte task-record header
+// 112-Byte task-record header
 typedef struct task_record {
     unsigned char kernel_record_id[20]; /**< TaskRecordID */
     unsigned char dup_to[20];           /**< Init to 0, point to the other TaskRecordID if a duplicate-modify operation is executed. */
     unsigned char tbatch_id[20];        /**< TBatchID links to tbatch record that produces this record */
     unsigned char kernel_id[20];        /**< KernelID links to the kernel record that produces this record */
-    uint32_t utc_bin;                   /**< Dense Timestamp for ISO 8601 UTC */
-    uint64_t btime_ns;                  /**< Boot time in ns */
-    uint64_t duration;                  /**< kernel invocation duration */
+    tpb_dtbits_t utc_bits;              /**< Dense 64-bit datetime (tpb_dtbits_t): year-month-day-hour-min-sec-tz */
+    uint64_t btime_ns;                  /**< Boot time in nanoseconds (seconds*1e9 + nsec since system boot) */
+    uint64_t duration;                  /**< kernel invocation duration in nanoseconds */
     uint32_t exit_code;                 /**< Exit code */
-} task_record_t
-
+} task_record_t;
 
 ```
+
+**Note on `utc_bits` encoding:**
+
+The `tpb_dtbits_t` (uint64_t) packs datetime and timezone into a compact 64-bit representation:
+
+| Bit Range | Field | Size | Range |
+|-----------|-------|------|-------|
+| 0-5       | seconds | 6 bits | 0-59 |
+| 6-11      | minutes | 6 bits | 0-59 |
+| 12-16     | hours   | 5 bits | 0-23 |
+| 17-21     | day     | 5 bits | 1-31 |
+| 22-25     | month   | 4 bits | 1-12 |
+| 26-33     | year bias | 8 bits | 0-255 (1970-2225) |
+| 34-41     | timezone | 8 bits | 15-min increments |
+| 42-63     | reserved | 22 bits | unused |
+
+**Year encoding:** Year is stored as a bias from 1970 (e.g., year 2026 is stored as 56).
+
+**Timezone encoding:** Timezone bias is stored in 15-minute increments. The value is signed (two's complement), giving a range of approximately -32 to +31.75 hours.
+
+**Endianness notes:**
+The bit layout is defined by bit positions (0-63) and is independent of host byte order. Field access is performed via bit shifting and masking operations that produce identical results on both big-endian and little-endian systems:
+
+```c
+/* Example: extracting seconds (bits 0-5) */
+uint8_t sec = (uint8_t)((utc_bits >> 0) & 0x3F);  /* Works on any endianness */
+
+/* Example: extracting year bias (bits 26-33) */
+uint8_t year_bias = (uint8_t)((utc_bits >> 26) & 0xFF);
+uint16_t year = 1970 + year_bias;
+```
+
+When `utc_bits` is stored to disk or transmitted over the network, it is stored as a native `uint64_t` value. Readers should treat it as an opaque 64-bit integer and use the same bit extraction operations shown above. Do not cast the memory directly to byte arrays or assume specific byte ordering.
+
+**`btime_ns` vs datetime:**
+The `btime_ns` field stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
+- 24 hours per day
+- 730 hours per month (365/12 * 24)
+- 8760 hours per year (365 * 24)
 
 ## 3. Record Frontend
 

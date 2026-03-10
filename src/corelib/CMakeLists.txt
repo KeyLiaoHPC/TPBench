@@ -6,6 +6,7 @@ set(TPB_CORELIB_SOURCES
     tpb-impl.c
     tpb-argp.c
     tpb-dynloader.c
+    strftime.c
 )
 
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})
