@@ -95,9 +95,46 @@ Each domain records a specific aspect of system status that characterizes the st
 - `auto_collect`: Boolean flag to enable/disable automatic collection for a domain
 - `action`: Trigger condition for recording (e.g., `"kernel_invoke"`, `"user_invoke"`)
 
+Each record domain has two file types:
+- Domain Header (`<DomainName>.binh`): Recording headers of each single record in the workspace, starting with a 8-Byte TPBench domain magic signature.
+- Domain Record (`<RecordID>.bin`): Dynamic record data, constructing by front notes, metadata, and data. 
+
 ---
 
-**Domain Definitions:**
+**Matadata for Dynamic Keys and Values**
+
+**fcontent**: Byte position 0, size=xB, dtype=None
+- Front contents with any length. Can be any format content.
+
+**meta_magic**: Bpos=x, size=8B, dtype=uint64_t
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'S' 0x30 0x31 0xe0
+
+**metasize**: Bpos=x+8, size=8B, dtype=uint64_t
+- The size of the domain record's meta data in Bytes.
+
+**meta[0]**: Bpos=x+16, size=meta[0].size, dtype=struct
+- .block_size: Bpos=x+16, size=4B, dtype=uint32_t 
+    - Current meta block size in (0, 4294967295] Bytes. 
+- .name: Bpos=x+20, size=256B, dtype=unsigned char
+    - The dynamic key name, e.g. memsize. Length in [0, 256]
+- .ndim:
+- .type_bits:
+    - include size per element and TPB_*_T type, support custom type or custom struct. The plugin is requested for the custom type.
+- .dim[i]:
+    - name:
+    - length:
+
+- .reserve:
+**meta[i]**: Bpos=x+16+sum(meta[0:i-1].block_size), size=meta[i].size, dtype=struct
+
+**bin_magic**: Bpos=x, size=8B, dtype=uint64_t
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'B' 'I' 'N' 0xe0
+
+**end_magic**: Bpos=x, size=8B, dtype=uint64_t
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'E' 'N' 'D' 0xe0
+---
+
+**Static Keys for Domains:**
 
 **1) Domain: TaskBatch**
 
@@ -151,7 +188,7 @@ The TaskRecord domain stores the input arguments and output metrics from a singl
 | Duration | Execution duration in nanoseconds | uint64_t |
 | ExitCode | Kernel exit code (0 = success) | int32_t |
 
-**Link ID Formula:** `SHA1("kernel" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)`
+**TaskRecordID Formula:** `SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)`
 
 ---
 
