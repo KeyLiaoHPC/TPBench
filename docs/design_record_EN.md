@@ -101,38 +101,7 @@ Each record domain has two file types:
 
 ---
 
-**Matadata for Dynamic Keys and Values**
 
-**fcontent**: Byte position 0, size=xB, dtype=None
-- Front contents with any length. Can be any format content.
-
-**meta_magic**: Bpos=x, size=8B, dtype=uint64_t
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'S' 0x30 0x31 0xe0
-
-**metasize**: Bpos=x+8, size=8B, dtype=uint64_t
-- The size of the domain record's meta data in Bytes.
-
-**meta[0]**: Bpos=x+16, size=meta[0].size, dtype=struct
-- .block_size: Bpos=x+16, size=4B, dtype=uint32_t 
-    - Current meta block size in (0, 4294967295] Bytes. 
-- .name: Bpos=x+20, size=256B, dtype=unsigned char
-    - The dynamic key name, e.g. memsize. Length in [0, 256]
-- .ndim:
-- .type_bits:
-    - include size per element and TPB_*_T type, support custom type or custom struct. The plugin is requested for the custom type.
-- .dim[i]:
-    - name:
-    - length:
-
-- .reserve:
-**meta[i]**: Bpos=x+16+sum(meta[0:i-1].block_size), size=meta[i].size, dtype=struct
-
-**bin_magic**: Bpos=x, size=8B, dtype=uint64_t
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'B' 'I' 'N' 0xe0
-
-**end_magic**: Bpos=x, size=8B, dtype=uint64_t
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'E' 'N' 'D' 0xe0
----
 
 **Static Keys for Domains:**
 
@@ -338,6 +307,12 @@ The ChassisStatic domain stores static information about the system chassis/encl
 
 This section explains the design of integrated `rawdb` backend for building TPBench database and supporting CRUD operations to the database. Each domain has its own subdirectory under `${TPB_WORKSPACE}/rawdb/`.
 
+#### 2.2.1 Task Batch Record
+
+#### 2.2.2 Task Record
+
+**1) Header**
+
 ``` C
 
 // 112-Byte task-record header
@@ -392,6 +367,51 @@ The `btime_ns` field stores high-precision boot-time (nanoseconds since system b
 - 24 hours per day
 - 730 hours per month (365/12 * 24)
 - 8760 hours per year (365 * 24)
+
+**2) Metadata and Rawdata**
+
+**Matadata for Dynamic Headers and Values**
+
+**fcontent**: Byte position 0, size=xB, dtype="None"
+- Front contents with any length. Can be any format content.
+
+**meta_magic**: Bpos=x, size=8B, dtype="uint64_t"
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'S' 0x30 0x31 0xe0
+
+**metasize**: Bpos=x+8, size=8B, dtype="uint64_t"
+- The size of the domain record's meta data in Bytes. Including the meta_magic, bin_magic not included.
+
+**meta[0]**: Bpos=x+16, size=meta[0].block_size, dtype="struct"
+- .block_size: Bpos=x+16, size=4B, dtype="uint32_t"
+    - Current meta block size in (0, 4294967295] Bytes. 
+- .ndim: Bpos=x+20, size=4B, dtype="uint32_t"
+    - The number of dimensions. a dim=1 len=1 is a single point data. should be in [1,7].
+- .data_size: Bpos=x+24, size=8B, dtype="uint64_t"
+    - Total data size of the key's values 
+- .type_bits: Bpos=x+32, size=8B, dtype="uint64_t"
+    - include size of per element and TPB_*_T type, support custom type or custom struct. The plugin is requested for the custom type.
+- .name: Bpos=x+40, size=256B, dtype="unsigned char"
+    - The dynamic key name, e.g. memsize. Length in [0, 256]
+- .note: Bpos=x+296, size=1024B, dtype="unsigned char"
+- .dim[0..ndim]: bpos=x+1320, dtype="unsigned char", dim0 is always the innermost dimension
+    - name: size = 256B, header's name, can be [0, 256] characters.
+    - length: size = 8B, uint64_t. the number of elements
+- .reserve:
+**meta[i]**: Bpos=x+16+sum(meta[0:i-1].block_size), size=meta[i].size, dtype=struct
+
+**bin_magic**: Bpos=x+metasize, size=8B, dtype=uint64_t
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'B' 'I' 'N' 0xe0
+
+**datasize**: Bpos=x+metasize+8, size=8B, dtype=uint64_t
+
+**.data[i_meta][i_imeta_idim]
+
+**end_magic**: Bpos=x, size=8B, dtype=uint64_t
+- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'E' 'N' 'D' 0xe0
+---
+
+#### 2.2.3 Kernel Record
+
 
 ## 3. Record Frontend
 
