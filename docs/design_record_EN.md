@@ -1,8 +1,29 @@
 # The Data Record Component Design
 
+## 1. Introduction
+
+### 1.1. Rationale and Architecture
+
 TPBench records data that influences kernel test outputs and captures results produced by kernel invocations. Due to the nature that actual performance is highly sensitive to program context and underlying environment, TPBench tags each record with a dedicated ID for further analysis in conjunction with other kernels and environmental factors.
 
-## 1. Core Concepts
+Target metrics are measurements resulting from a complex co.tpbration of computing hardware states, software stack configurations, and workload input arguments/data. Theoretically, one could take snapshots of the entire system along with target metrics to build a comprehensive database covering performance, power, portability, accuracy, and resilience characteristics. However, the trade-off between overhead and observation granularity in computing systems is inevitable.
+
+Eventually, data recording frequency, technique varies between data aspects. TPBench uses multiple **data domains** to record different aspects of the computing system, such as system states, kernel definitions, input arguments, target metrics, etc. Different records have predefined recording trigger and are linked via SHA-1 IDs. This approach avoids recording complete snapshots for each test while maintaining traceability.
+
+Each domain has:
+- **Attribute**: Static attributes characterzing an instance in a domain, recorded in designated byte positions with predefined fixed names, definitions, format and parsers.
+- **Header**: Headers are used to define customizable structures to store run-time dynamic data. A header is the description section providing information of the record data it holds. (e.g.dimensions, names， data type)
+- **Record Data**: Data recorded by TPBench.
+
+Each domain records a specific aspect of system status that characterizes the states, inputs, and outputs of task batches and kernel invocations. However, recording all domains at every kernel invocation leads to significant overhead. Therefore, settings in `${TPB_WORKSPACE}/etc/config.json` can control recording behavior:
+- `auto_collect`: Boolean flag to enable/disable automatic collection for a domain
+- `action`: Trigger condition for recording (e.g., `"kernel_invoke"`, `"user_invoke"`)
+
+Each record domain has two file types:
+- Domain Header (`<DomainName>.tpbh`): Recording headers of each single record in the workspace, starting with a 8-Byte TPBench domain magic signature.
+- Domain Record (`<RecordID>.tpbr`): Dynamic record data, constructing by front notes, metadata, and data. 
+
+### 1.2. Concepts
 
 **Task Batch (TBatch)**: A task batch (tbatch) is the execution context initiated by a single TPBench front-end invocation (e.g., `tpbcli run`). A tbatch may execute one or more kernel invocations, each with its own input arguments. All kernel invocations within a tbatch share a common TBatchID, which tags all records produced during that execution. For valid test results, a tbatch requires stable run-time environment matching the actual scenario. Specifically:
 - If someone uses a script to invoke multiple `tpbcli` commands sequentially, each invocation should be treated as a separate tbatch.
@@ -50,21 +71,18 @@ Workload represents the *configurable* aspects of a benchmark execution. Hardwar
 
 ---
 
-**Domain / Record**: A Record stores data that influences kernel test outputs and results produced by kernel invocations. Each Record includes:
-- **Link ID**: A unique identifier for this record; other records reference it to establish relationships.
-- **Fixed keys and values**: Several fixed-name keys are defined by TPBench for each domain to enable tracing of similar parameters across platforms.
-- **Dynamic keys and values**: Many hardware and software designs have specific parameters; TPBench allows adding custom keys to records.
-
-Each record belongs to a domain, which classifies different kinds of records into different aspects, and allow different data to be accquired and recorded in different scenarios.
+**Domain / Record**: A Record stores data that influences kernel test outputs and results produced by kernel invocations. Each Record includes a unique SHA-1 ID and related ID to link and be linked. Each record belongs to a domain, which classifies different kinds of records into different aspects, and allow different data to be accquired and recorded in different scenarios.
 
 ---
 
 **Record Types and IDs**
 
-| Record Type | ID Format | Description |
+| Record Type | ID | Description |
 |-------------|-----------|-------------|
-| **Task Record** | `SHA1("kernel" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)` | One record per kernel invocation |
-| **Score Record** | `SHA1("score" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
+| **TBatch Record** | `SHA1("tbatch" + <UTC_timestamp> + <btime> + <hostname> + <username> + <front_end_pid>)` | One record per tbatch invocation |
+| **Kernel Record** | `SHA1("kernel" + <kernel_name> + <library_sha256> + .tpbrary_sha256>)` | Check or generate once a kernel is built. |
+| **Task Record** | `SHA1("task" + <UTC_timestamp> + <btime> + <hostname> + <username> + <kernel_name> + <kernel_pid> + <order_in_batch>)` | One record per kernel invocation |
+| **Score Record** | `SHA1("score" + <UTC_timestamp> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
 ## 2. The Design of Data Record Logic in TPBench Corelib
 
@@ -72,59 +90,167 @@ Each record belongs to a domain, which classifies different kinds of records int
 
 TPBench's records are stored and managed under a workspace, except for special cross-workspace tools. TPBench uses two environment variables to navigate the filesystem: `TPB_HOME` is the TPBench installation path, and `TPB_WORKSPACE` is the root folder of a TPBench project.
 
-**Workspace Resolution:**
+**1) Workspace Resolution:**
 1. If `${TPB_WORKSPACE}` environment variable is explicitly set, use that directory as the workspace.
 2. Otherwise, search `$TPB_HOME/.tpb_workspace/` for workspace configuration files.
 3. If not found there, search `$HOME/.tpb_workspace/`.
 
 For more information related to the build system and filesystem structure, refer to [design_build.md](./design_build.md).
 
----
+**2) File Structure**
 
-**Design Rationale:**
+TPBench implement a integrated `rawdb` backend for data management and operations. More backend (e.g. SQLite, HDF5) will be added in future.
 
-Target metrics are measurements resulting from a complex combination of computing hardware states, software stack configurations, and workload input arguments/data. Theoretically, one could take snapshots of the entire system along with target metrics to build a comprehensive database covering performance, power, portability, accuracy, and resilience characteristics. However, the trade-off between overhead and observation granularity in computing systems is inevitable.
+In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbh) and the TPBench record (.tpbr). `.tpbh` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
 
-Therefore, TPBench uses multiple **data domains** to record system states, kernel definitions, input arguments, target metrics, and related factors. Different domains are linked via SHA-1 IDs called **Link IDs** (similar to primary keys in relational databases). This approach avoids recording complete snapshots for each test while maintaining traceability.
+File tree:
+```
+${TPB_WORKSPACE}/rawdb/
+├── TaskBatch/
+│   ├── TaskBatch.tpbh 
+│   ├── <TBatchID>.tpbr
+│   └── ...
+├── Kernel/
+│   ├── Kernel.tpbh
+│   ├── <KernelID>.tpbr
+│   └── ...
+├── TaskRecord/
+│   ├── TaskRecord.tpbh
+│   ├── <TaskRecordID>.tpbr
+│   └── ...
+└── ... 
+```
 
-Each domain has:
-- **Static keys**: Fixed names and definitions established by TPBench
-- **Dynamic keys**: Customizable fields to accommodate varying hardware and software designs
+**`.tpbh` ：**
+- 创建时写入16-byte文件头（magic=0xED + version + reserve）
+- 每新增一个记录，向文件尾追加固定大小的 entry（TaskBatch=256B, Kernel=856B, TaskRecord=128B）
+- 读取时从offset 16开始顺序扫描所有entry
+- 通过匹配ID字段查找目标记录
+- 通过header中的信息定位到实际的`.tpbr`文件
 
-Each domain records a specific aspect of system status that characterizes the states, inputs, and outputs of task batches and kernel invocations. However, recording all domains at every kernel invocation leads to significant overhead. Therefore, settings in `${TPB_WORKSPACE}/etc/config.json` can control recording behavior:
-- `auto_collect`: Boolean flag to enable/disable automatic collection for a domain
-- `action`: Trigger condition for recording (e.g., `"kernel_invoke"`, `"user_invoke"`)
+**.tpbr 文件特点：**
+- 以`meta_magic`开始（type-specific: 0xe0/e1/e3）
+- 包含metasize（meta_magic到meta section结束的字节数）
+- 包含datasize（data_magic到end_magic的字节数）
+- 包含header blocks（原metadata blocks，1328字节/块）
+- 包含`data_magic`分隔符
+- 以`end_magic`结束（type-specific）
+- 可嵌入任意文件格式，通过magic识别边界
 
-Each record domain has two file types:
-- Domain Header (`<DomainName>.binh`): Recording headers of each single record in the workspace, starting with a 8-Byte TPBench domain magic signature.
-- Domain Record (`<RecordID>.bin`): Dynamic record data, constructing by front notes, metadata, and data. 
-
----
-
-
-
-**Static Keys for Domains:**
-
-**1) Domain: TaskBatch**
+### 2.2. Task Batch Record
 
 A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
 
-| Key | Definition | DataType |
-|-----|------------|----------|
-| TBatchID | Task batch SHA-1 Link ID | string |
-| TaskRecordIDn | List of task record IDs within this batch | list<string> |
-| ScoreRecordIDs | List of score record IDs within this batch | list<string> |
-| StartTimeUTC | Start time in ISO 8601 format (YYYY-MM-DDThh:mm:ssZ) | string |
-| StartMachineTime | Start time as nanoseconds since boot | uint64_t |
-| Duration | Total duration of the tbatch in nanoseconds | uint64_t |
-| Hostname | Hostname where the tbatch executed | string |
-| User | Username who initiated the tbatch | string |
+**1) Header Structure**
 
-**Link ID Formula:** `SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)`
+```c
+// 256-Byte task-batch header (version 1.0)
+typedef struct tbatch_header {
+    unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
+    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
+    tpb_dtbits_t start_utc_bits;        /**< Batch start datetime (64-bit compact encoding) */
+    uint64_t start_btime_ns;            /**< Boot time at batch start (nanoseconds since boot) */
+    uint64_t duration_ns;               /**< Total batch duration in nanoseconds */
+    char hostname[64];                  /**< Execution host name */
+    char username[64];                  /**< Username who initiated batch */
+    uint32_t front_pid;                 /**< Front-end process ID */
+    uint32_t ntask_records;             /**< Number of task records in this batch */
+    uint32_t nscore_records;            /**< Number of score records in this batch */
+    unsigned char reserve[92];          /**< Padding to 256 bytes total */
+} tbatch_header_t;
+```
 
----
+**2) Magic Signatures**
 
-**2) Domain: Kernel**
+| Magic      | Hex Value                      | Purpose              |
+| ---------- | ------------------------------ | -------------------- |
+| meta_magic | `E1 54 50 42 E0 53 31 E0`   | Meta section         |
+| data_magic | `E1 54 50 42 E0 44 31 E0`   | Record data section  |
+| end_magic  | `E1 54 50 42 E0 45 31 E0`   | End of tpbr          | 
+
+**3) Task Batch File Layout (`<TBatchID>.tpbr`)**
+
+新布局：metasize包含meta_magic+meta section，datasize包含data_magic+all data+end_magic
+
+```
++------------------------+  <- Byte 0
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x30 0x31 0xe0
++------------------------+  <- Byte 8
+| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
++------------------------+  <- Byte 16
+| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
++------------------------+  <- Byte 24
+| ntask_records (4B)     |  <- Number of task records
++------------------------+  <- Byte 28
+| nscore_records (4B)    |  <- Number of score records
++------------------------+  <- Byte 32
+| nheaders (4B)          |  <- Number of header blocks (ntask + nscore)
++------------------------+  <- Byte 36
+| reserve (4B)           |  <- Padding to 8-byte alignment
++------------------------+  <- Byte 40
+| header[0] (1328B)    |  <- First header block (task or score)
+| header[1] (1328B)      |  <- Second header block
+| ...                    |  <- Total: nheaders * 1328 bytes
++------------------------+  <- End of meta section
+| tbatch_header_t (256B) |  <- 256-byte fixed header with IDs embedded in header[]
++------------------------+  <- Variable (if IDs are in header blocks)
+| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'D' 0x30 0x31 0xe0
++------------------------+
+| all_dim_data[]         |  <- Raw data arrays per header block
++------------------------+
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x30 0x31 0xe0
++------------------------+
+```
+
+**Note**: ID arrays (TaskRecordIDs and ScoreRecordIDs) are now stored as header blocks within the meta section, not as raw bytes after the fixed header.
+
+**4) Task Batch Domain Header (`TaskBatch.tpbh`)**
+
+追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`tbatch_header_t`（256字节）。
+
+**`.tpbh` File Layout：**
+
+Domain header (`.tpbh`) uses type indicator **0xED** (Directory):
+
+```
++------------------------+  <- Byte 0
+| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
++------------------------+
+| version (4B)           |  <- 0x00010000 (version 1.0)
++------------------------+
+| reserve (4B)           |  <- Padding
++------------------------+  <- Byte 16 (start of entries)
+| tbatch_header_t [0]    |  <- First task batch record (256 bytes)
+| tbatch_header_t [1]   |  <- Second entry (256 bytes)
+| ...                    |  <- Appended sequentially
++------------------------+  <- End of file
+```
+
+读取时顺序扫描所有256-byte entry，匹配`tbatch_id`。
+
+**5) Static Keys**
+
+| Key              | DataType          | Description                                     |
+| ---------------- | ----------------- | ----------------------------------------------- |
+| TBatchID         | string (20B raw)  | Task batch SHA-1 Link ID                        |
+| TaskRecordIDn    | list              | List of task record IDs (ntask_records items)   |
+| ScoreRecordIDs   | list              | List of score record IDs (nscore_records items) |
+| StartTimeUTC     | string (ISO 8601) | Human-readable start time                       |
+| StartMachineTime | uint64_t          | Boot time nanoseconds at start                  |
+| Hostname         | string            | Execution host (max 63 chars + null)            |
+| User             | string            | Execution user (max 63 chars + null)            |
+| Duration         | uint64_t          | Total batch duration in nanoseconds             |
+
+**6) Link ID Formula**
+
+```
+SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
+```
+
+Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
+
+
+### 2.3. Kernel Record
 
 The Kernel domain stores metadata about a kernel being evaluated, including description, version, parameter definitions, and metric definitions. One record per unique kernel (shared across invocations).
 
@@ -136,14 +262,119 @@ The Kernel domain stores metadata about a kernel being evaluated, including desc
 | Description | Human-readable description of the kernel's purpose | string |
 | SourceFile | Path to source file used for compilation | string |
 | CompileDateUTC | Compilation timestamp in ISO 8601 format | string |
-| ParameterDefinitions | JSON array describing input parameters | string |
+| ParameterDefinitions | JSON array descr.tpbrg input parameters | string |
 | MetricDefinitions | JSON array defining measurable outputs | string |
 
-**Link ID Formula:** `SHA1("kernel_def" + <kernel_name> + <version> + <source_file_hash>)`
+**Link ID Formula:** `SHA1("kernel" + <kernel_name> + <library_sha256> + .tpbrary_sha256>)`
 
----
 
-**3) Domain: TaskRecord**
+Kernel Record存储被评估kernel的元数据，包括定义、参数、度量指标。
+
+**1) Header Structure**
+
+```c
+// 856-Byte kernel-record header (version 1.0)
+#define TPBM_NAME_STR_MAX_LEN 256
+#define TPBM_NOTE_STR_MAX_LEN 2048
+
+typedef struct kernel_record {
+    unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1) */
+    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID */
+    
+    char kernel_name[TPBM_NAME_STR_MAX_LEN];      /**< Kernel name (without tpbk_ prefix) */
+    char version[TPBM_NAME_STR_MAX_LEN];          /**< Version string */
+    char description[TPBM_NOTE_STR_MAX_LEN];       /**< Human-readable description */
+    
+    tpb_dtbits_t compile_utc_bits;      /**< Compilation datetime (64-bit compact encoding) */
+    unsigned char source_file_hash[32]; /**< SHA-256 hash of source file */
+    
+    uint32_t nparms;                    /**< Number of parameters from kernel definition */
+    uint32_t nouts;                     /**< Number of output metrics from kernel definition */
+    uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
+    uint32_t reserve;                   /**< Padding for 8-byte alignment */
+} kernel_record_t;
+```
+
+**字段说明：**
+- `source_file_hash[32]`：用于生成KernelID和完整性校验
+- `compile_utc_bits`：编译时间（非执行时间）
+- `kctrl`：复用`tpb-public.h`定义的`TPB_KTYPE_FLI/PLI/ALI`
+- `nparms`, `nouts`：来自kernel注册的参数和输出定义数量
+
+**2) Magic Signatures**
+
+| Magic      | Hex Value                   | Purpose              |
+| ---------- | --------------------------- | -------------------- |
+| meta_magic | `E1 54 50 42 E1 53 31 E0`   | Meta section         |
+| data_magic | `E1 54 50 42 E1 44 31 E0`   | Record data section  |
+| end_magic  | `E1 54 50 42 E1 45 31 E0`   | End of tpbr          | 
+
+**3) Kernel Record File Layout (`<KernelID>.tpbr`)**
+
+```
++------------------------+  <- Byte 0
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe3 'S' 0x30 0x31 0xe0
++------------------------+  <- Byte 8
+| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
++------------------------+  <- Byte 16
+| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
++------------------------+  <- Byte 24
+| kernel_record_t (856B)   |  <- Fixed header with kernel info
++------------------------+  <- Byte 880
+| header[0] (1328B)      |  <- First header block (parameter/metric definition)
+| header[1] (1328B)      |  <- Second header block
+| ...                    |  <- Dynamic metadata blocks
++------------------------+  <- End of meta section
+| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe3 'D' 0x30 0x31 0xe0
++------------------------+
+| all_dim_data[]         |  <- Raw data arrays per header block
++------------------------+
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe3 'E' 0x30 0x31 0xe0
++------------------------+
+```
+
+**4) Kernel Domain Header (`Kernel.tpbh`)**
+
+追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`kernel_record_t`（856字节）。
+
+**`.tpbh` File Layout：**
+
+```
++------------------------+  <- Byte 0
+| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
++------------------------+
+| version (4B)           |  <- 0x00010000 (version 1.0)
++------------------------+
+| reserve (4B)           |  <- Padding
++------------------------+  <- Byte 16 (start of entries)
+| kernel_record_t [0]    |  <- First kernel record (856 bytes)
+| kernel_record_t [1]    |  <- Second entry (856 bytes)
+| ...                    |  <- Appended sequentially
++------------------------+  <- End of file
+```
+
+读取时顺序扫描所有856-byte entry，匹配`kernel_id`。
+
+**5) Static Keys**
+
+| Key                  | DataType          | Description                                   |
+| -------------------- | ----------------- | --------------------------------------------- |
+| KernelID             | string (20B raw)  | Kernel SHA-1 ID                               |
+| KernelName           | string            | Kernel name (max 255 chars)                   |
+| Version              | string            | Version string (max 255 chars)                |
+| Description          | string            | Human-readable description (max 2047 chars)   |
+| SourceFile           | string            | Path to source file (in metadata)             |
+| CompileDateUTC       | string (ISO 8601) | Compilation timestamp (from compile_utc_bits) |
+| ParameterDefinitions | JSON string       | Parameter definitions array                   |
+| MetricDefinitions    | JSON string       | Output metrics definitions array              |
+
+**6) Link ID Formula**
+
+```
+SHA1("kernel_def" + <kernel_name> + <version> + <source_file_hash>)
+```
+
+### 2.4. Task Record
 
 The TaskRecord domain stores the input arguments and output metrics from a single kernel invocation. One record per handle execution.
 
@@ -159,175 +390,89 @@ The TaskRecord domain stores the input arguments and output metrics from a singl
 
 **TaskRecordID Formula:** `SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)`
 
----
 
-**4) Domain: ScoreRecord**
+**1) Header Structure**
 
-The ScoreRecord domain stores benchmark scores calculated through predefined formulas (e.g., from `stream.yaml`). One record per score or sub-score calculation.
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| ScoreRecordID | Score record's unique SHA-1 ID | string |
-| TBatchID | Parent task batch ID (foreign key) | string |
-| ScoreName | Name of the calculated score | string |
-| ScoreValue | Numeric value of the score | double |
-| BenchFile | Path to benchmark definition YAML file | string |
-| ScoreTimeUTC | Timestamp when score was computed | string |
-
-**Link ID Formula:** `SHA1("score" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <score_name> + <calc_order>)`
-
----
-
-**5) Domain: OS**
-
-The OS domain stores static information and runtime configuration/status of the operating system. One record per tbatch (or less frequently if `auto_collect=false`).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| OSID | OS record's unique SHA-1 ID | string |
-| OSType | Operating system family (Linux/Windows/macOS/BSD) | string |
-| Distribution | OS distribution name (e.g., Ubuntu, CentOS) | string |
-| Version | OS version string | string |
-| KernelVersion | Kernel version (for Unix-like systems) | string |
-
-**Link ID Formula:** `SHA1("os" + <UTC_timestamp> + <hostname> + <kernel_version>)`
-
----
-
-**6) Domain: CPUStatic**
-
-The CPUStatic domain stores static information about the CPU(s), including model name, SKU ID, vendor, and runtime configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| CPUStaticID | CPUStatic record's unique SHA-1 ID | string |
-| VendorID | CPU vendor identifier (e.g., GenuineIntel, AuthenticAMD) | string |
-| ModelName | Human-readable model name | string |
-| Family | CPU family number | int32_t |
-| Model | CPU model number | int32_t |
-| Stepping | CPU stepping revision | int32_t |
-| NumPhysicalCores | Number of physical cores | int32_t |
-| NumLogicalCores | Number of logical processors (threads) | int32_t |
-| BaseFrequency | Base clock frequency in MHz | uint32_t |
-| MaxTurboFrequency | Maximum turbo frequency in MHz | uint32_t |
-| L1CacheSize | L1 cache size per core in KB | uint32_t |
-| L2CacheSize | L2 cache size per core in KB | uint32_t |
-| L3CacheSize | L3 (shared) cache size in MB | uint32_t |
-| HBMSize | On-chip HBM size in MB | uint32_t |
-| ISAFlags | Supported instruction set flags (e.g., AVX, AVX2, SSE4.2) | string |
-
-**Link ID Formula:** `SHA1("cpu_static" + <UTC_timestamp> + <hostname> + <vendor_id>)`
-
----
-
-**7) Domain: MemoryStatic**
-
-The MemoryStatic domain stores static information about system memory configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| MemoryStaticID | MemoryStatic record's unique SHA-1 ID | string |
-| TotalSize | Total installed memory in MB | uint64_t |
-| NChannel | Number of memory channels (e.g., 2 for dual-channel) | int32_t |
-| ChannelType | Memory type (DDR3/DDR4/DDR5/LRDIMM) | string |
-| MainFrequency | Operating frequency in MHz | uint32_t |
-| NModule | Number of DIMM modules installed | int32_t |
-| ModuleSize | JSON array of individual module sizes | string |
-| ECCFlags | ECC technique flags, "None" or "N/A" for non-ECC memory. | string |
-
-**Link ID Formula:** `SHA1("memory_static" + <UTC_timestamp> + <hostname> + <total_capacity_mb>)`
-
----
-
-**8) Domain: AcceleratorStatic**
-
-The AcceleratorStatic domain stores static information about accelerators (GPU, FPGA, etc.). One record per accelerator device.
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| AcceleratorStaticID | AcceleratorStatic record's unique SHA-1 ID | string |
-| DeviceType | Type of accelerator (GPU/FPGA/ASIC) | string |
-| Vendor | Manufacturer name (e.g., NVIDIA, AMD, Intel) | string |
-| DeviceName | Model/product name | string |
-| DriverVersion | Driver version string | string |
-| NDevice | Number of such devices in system | int32_t |
-| MemorySize | Device memory size in MB | uint64_t |
-| NCore | Number of compute cores/units | int32_t |
-| BaseFrequency | Base clock frequency in MHz | uint32_t |
-
-**Link ID Formula:** `SHA1("accelerator_static" + <UTC_timestamp> + <hostname> + <vendor> + <device_name>)`
-
----
-
-**9) Domain: NetworkStatic**
-
-The NetworkStatic domain stores aggregated information about network adapters and interfaces. These values do not change during tbatch execution. One record per system (reused across tbatches).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| NetworkStaticID | NetworkStatic record's unique SHA-1 ID | string |
-| NInterface | Total number of network interfaces | int32_t |
-| IFTrios | JSON array of interface details (name, MAC, speed) | string |
-
-**Link ID Formula:** `SHA1("network_static" + <UTC_timestamp> + <hostname> + <primary_mac_address>)`
-
----
-
-**10) Domain: MotherBoardStatic**
-
-The MotherBoardStatic domain stores static information about the motherboard. These values do not change during tbatch execution. One record per system (reused across tbatches).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| MotherBoardStaticID | MotherBoardStatic record's unique SHA-1 ID | string |
-| Manufacturer | Motherboard manufacturer name | string |
-| Model | Motherboard model number | string |
-| BIOSVersion | BIOS/UEFI firmware version | string |
-| BIOSDateUTC | BIOS release date in ISO 8601 format | string |
-
-**Link ID Formula:** `SHA1("motherboard_static" + <UTC_timestamp> + <hostname> + <manufacturer> + <model>)`
-
----
-
-**11) Domain: ChassisStatic**
-
-The ChassisStatic domain stores static information about the system chassis/enclosure. These values do not change during tbatch execution. One record per system (reused across tbatches).
-
-| Key | Definition | DataType |
-|-----|------------|----------|
-| ChassisStaticID | ChassisStatic record's unique SHA-1 ID | string |
-| Type | Chassis type (Tower/Rack/Blade/Laptop/Desktop/Cluster) | string |
-| Manufacturer | Chassis manufacturer name | string |
-| Model | Chassis model description | string |
-| CoolType | Cooling system type | string |
-
-**Link ID Formula:** `SHA1("chassis_static" + <UTC_timestamp> + <hostname> + <manufacturer> + <model>)`
-
-### 2.2. Record Backend: `rawdb`
-
-This section explains the design of integrated `rawdb` backend for building TPBench database and supporting CRUD operations to the database. Each domain has its own subdirectory under `${TPB_WORKSPACE}/rawdb/`.
-
-#### 2.2.1 Task Batch Record
-
-#### 2.2.2 Task Record
-
-**1) Header**
-
-``` C
-
-// 112-Byte task-record header
+```c
+// 128-Byte task-record header (version 1.0)
 typedef struct task_record {
-    unsigned char kernel_record_id[20]; /**< TaskRecordID */
-    unsigned char dup_to[20];           /**< Init to 0, point to the other TaskRecordID if a duplicate-modify operation is executed. */
-    unsigned char tbatch_id[20];        /**< TBatchID links to tbatch record that produces this record */
-    unsigned char kernel_id[20];        /**< KernelID links to the kernel record that produces this record */
-    tpb_dtbits_t utc_bits;              /**< Dense 64-bit datetime (tpb_dtbits_t): year-month-day-hour-min-sec-tz */
-    uint64_t btime_ns;                  /**< Boot time in nanoseconds (seconds*1e9 + nsec since system boot) */
-    uint64_t duration;                  /**< kernel invocation duration in nanoseconds */
-    uint32_t exit_code;                 /**< Exit code */
+    unsigned char task_record_id[20];   /**< TaskRecordID - Primary Link ID (20-byte SHA-1) */
+    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TaskRecordID */
+    unsigned char tbatch_id[20];        /**< Foreign key: links to task batch that produced this record */
+    unsigned char kernel_id[20];        /**< Foreign key: links to kernel definition record */
+    
+    tpb_dtbits_t utc_bits;              /**< Invocation datetime (64-bit compact encoding) */
+    uint64_t btime_ns;                  /**< Boot time at invocation (nanoseconds since boot) */
+    uint64_t duration_ns;               /**< Kernel execution duration in nanoseconds */
+    
+    uint32_t exit_code;                 /**< Kernel exit code (0=success) */
+    uint32_t handle_index;              /**< Handle index within batch (0-based) */
+    int32_t  mpi_rank;                  /**< MPI rank (-1 if non-MPI, 0-N if MPI enabled) */
+    uint32_t reserve;                   /**< Padding to 8-byte alignment */
 } task_record_t;
+```
+
+**字段说明：**
+- `task_record_id`：本记录的主键ID（**注意**：原草案错误命名为`kernel_record_id`，已修正）
+- `tbatch_id`：外键，指向所属的TaskBatch
+- `kernel_id`：外键，指向Kernel记录
+- `handle_index`：标识这是batch中第几个handle的执行结果
+- `mpi_rank`：MPI并行时的rank，-1表示非MPI kernel
+- `duration_ns`：重命名为`duration_ns`（原`duration`），与task batch命名保持一致
+
+**2) Magic Signatures**
+
+| Magic      | Hex Value                   | Purpose              |
+| ---------- | --------------------------- | -------------------- |
+| meta_magic | `E1 54 50 42 E2 53 31 E0`   | Meta section         |
+| data_magic | `E1 54 50 42 E2 44 31 E0`   | Record data section  |
+| end_magic  | `E1 54 50 42 E2 45 31 E0`   | End of tpbr          | 
+
+**3) Task Record File Layout (`<TaskRecordID>.tpbr`)**
 
 ```
++------------------------+  <- Byte 0
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x30 0x31 0xe0
++------------------------+  <- Byte 8
+| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
++------------------------+  <- Byte 16
+| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
++------------------------+  <- Byte 24
+| task_record_t (128B)   |  <- Fixed header with task info
++------------------------+  <- Byte 152
+| header[0] (1328B)      |  <- First header block (input/output definition)
+| header[1] (1328B)      |  <- Second header block
+| ...                    |  <- Dynamic metadata blocks
++------------------------+  <- End of meta section
+| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe1 'D' 0x30 0x31 0xe0
++------------------------+
+| all_dim_data[]         |  <- Raw data arrays per header block
++------------------------+
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x30 0x31 0xe0
++------------------------+
+```
+
+**4) Task Record Domain Header (`TaskRecord.tpbh`)**
+
+追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`task_record_t`（128字节）。
+
+**`.tpbh` File Layout：**
+
+```
++------------------------+  <- Byte 0
+| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
++------------------------+
+| version (4B)           |  <- 0x00010000 (version 1.0)
++------------------------+
+| reserve (4B)           |  <- Padding
++------------------------+  <- Byte 16 (start of entries)
+| task_record_t [0]      |  <- First task record (128 bytes)
+| task_record_t [1]      |  <- Second entry (128 bytes)
+| ...                    |  <- Appended sequentially
++------------------------+  <- End of file
+```
+
+读取时顺序扫描所有128-byte entry，匹配`task_record_id`。
 
 **Note on `utc_bits` encoding:**
 
@@ -368,54 +513,177 @@ The `btime_ns` field stores high-precision boot-time (nanoseconds since system b
 - 730 hours per month (365/12 * 24)
 - 8760 hours per year (365 * 24)
 
-**2) Metadata and Rawdata**
+**5) Static Keys**
 
-**Matadata for Dynamic Headers and Values**
+| Key              | DataType          | Description                         |
+| ---------------- | ----------------- | ----------------------------------- |
+| TaskRecordID     | string (20B raw)  | Task record's SHA-1 ID              |
+| TBatchID         | string (20B raw)  | Foreign key to task batch           |
+| KernelID         | string (20B raw)  | Foreign key to kernel definition    |
+| StartTimeUTC     | string (ISO 8601) | Invocation start time               |
+| StartMachineTime | uint64_t          | Boot time nanoseconds at invocation |
+| Duration         | uint64_t          | Execution duration in nanoseconds   |
+| ExitCode         | int32_t           | Kernel exit code                    |
+| HandleIndex      | uint32_t          | Handle position within batch        |
+| MPIRank          | int32_t           | MPI rank or -1                      |
 
-**fcontent**: Byte position 0, size=xB, dtype="None"
-- Front contents with any length. Can be any format content.
+**6) Link ID Formula**
 
-**meta_magic**: Bpos=x, size=8B, dtype="uint64_t"
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'S' 0x30 0x31 0xe0
+```
+SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
+```
 
-**metasize**: Bpos=x+8, size=8B, dtype="uint64_t"
-- The size of the domain record's meta data in Bytes. Including the meta_magic, bin_magic not included.
 
-**meta[0]**: Bpos=x+16, size=meta[0].block_size, dtype="struct"
-- .block_size: Bpos=x+16, size=4B, dtype="uint32_t"
-    - Current meta block size in (0, 4294967295] Bytes. 
-- .ndim: Bpos=x+20, size=4B, dtype="uint32_t"
-    - The number of dimensions. a dim=1 len=1 is a single point data. should be in [1,7].
-- .data_size: Bpos=x+24, size=8B, dtype="uint64_t"
-    - Total data size of the key's values 
-- .type_bits: Bpos=x+32, size=8B, dtype="uint64_t"
-    - include size of per element and TPB_*_T type, support custom type or custom struct. The plugin is requested for the custom type.
-- .name: Bpos=x+40, size=256B, dtype="unsigned char"
-    - The dynamic key name, e.g. memsize. Length in [0, 256]
-- .note: Bpos=x+296, size=1024B, dtype="unsigned char"
-- .dim[0..ndim]: bpos=x+1320, dtype="unsigned char", dim0 is always the innermost dimension
-    - name: size = 256B, header's name, can be [0, 256] characters.
-    - length: size = 8B, uint64_t. the number of elements
-- .reserve:
-**meta[i]**: Bpos=x+16+sum(meta[0:i-1].block_size), size=meta[i].size, dtype=struct
+### 2.5. Score Record
 
-**bin_magic**: Bpos=x+metasize, size=8B, dtype=uint64_t
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'B' 'I' 'N' 0xe0
+The ScoreRecord domain stores benchmark scores calculated through predefined formulas (e.g., from `stream.yaml`). One record per score or sub-score calculation.
 
-**datasize**: Bpos=x+metasize+8, size=8B, dtype=uint64_t
+| Key | Definition | DataType |
+|-----|------------|----------|
+| ScoreRecordID | Score record's unique SHA-1 ID | string |
+| TBatchID | Parent task batch ID (foreign key) | string |
+| ScoreName | Name of the calculated score | string |
+| ScoreValue | Numeric value of the score | double |
+| BenchFile | Path to benchmark definition YAML file | string |
+| ScoreTimeUTC | Timestamp when score was computed | string |
 
-**.data[i_meta][i_imeta_idim]
+**Link ID Formula:** `SHA1("score" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <score_name> + <calc_order>)`
 
-**end_magic**: Bpos=x, size=8B, dtype=uint64_t
-- Magic signature: 0xe1 'T' 'P' 'B' 0xe2 'E' 'N' 'D' 0xe0
 ---
 
-#### 2.2.3 Kernel Record
+### 2.6. OS Record
+
+The OS domain stores static information and runtime configuration/status of the operating system. One record per tbatch (or less frequently if `auto_collect=false`).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| OSID | OS record's unique SHA-1 ID | string |
+| OSType | Operating system family (Linux/Windows/macOS/BSD) | string |
+| Distribution | OS distribution name (e.g., Ubuntu, CentOS) | string |
+| Version | OS version string | string |
+| KernelVersion | Kernel version (for Unix-like systems) | string |
+
+**Link ID Formula:** `SHA1("os" + <UTC_timestamp> + <hostname> + <kernel_version>)`
+
+---
+
+### 2.7. CPU Record
+
+The CPUStatic domain stores static information about the CPU(s), including model name, SKU ID, vendor, and runtime configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| CPUStaticID | CPUStatic record's unique SHA-1 ID | string |
+| VendorID | CPU vendor identifier (e.g., GenuineIntel, AuthenticAMD) | string |
+| ModelName | Human-readable model name | string |
+| Family | CPU family number | int32_t |
+| Model | CPU model number | int32_t |
+| Stepping | CPU stepping revision | int32_t |
+| NumPhysicalCores | Number of physical cores | int32_t |
+| NumLogicalCores | Number of logical processors (threads) | int32_t |
+| BaseFrequency | Base clock frequency in MHz | uint32_t |
+| MaxTurboFrequency | Maximum turbo frequency in MHz | uint32_t |
+| L1CacheSize | L1 cache size per core in KB | uint32_t |
+| L2CacheSize | L2 cache size per core in KB | uint32_t |
+| L3CacheSize | L3 (shared) cache size in MB | uint32_t |
+| HBMSize | On-chip HBM size in MB | uint32_t |
+| ISAFlags | Supported instruction set flags (e.g., AVX, AVX2, SSE4.2) | string |
+
+**Link ID Formula:** `SHA1("cpu_static" + <UTC_timestamp> + <hostname> + <vendor_id>)`
+
+---
+
+### 2.8. Memory Record
+
+The MemoryStatic domain stores static information about system memory configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| MemoryStaticID | MemoryStatic record's unique SHA-1 ID | string |
+| TotalSize | Total installed memory in MB | uint64_t |
+| NChannel | Number of memory channels (e.g., 2 for dual-channel) | int32_t |
+| ChannelType | Memory type (DDR3/DDR4/DDR5/LRDIMM) | string |
+| MainFrequency | Operating frequency in MHz | uint32_t |
+| NModule | Number of DIMM modules installed | int32_t |
+| ModuleSize | JSON array of individual module sizes | string |
+| ECCFlags | ECC technique flags, "None" or "N/A" for non-ECC memory. | string |
+
+**Link ID Formula:** `SHA1("memory_static" + <UTC_timestamp> + <hostname> + <total_capacity_mb>)`
+
+---
+
+### 2.9. Accelerator Record
+
+The AcceleratorStatic domain stores static information about accelerators (GPU, FPGA, etc.). One record per accelerator device.
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| AcceleratorStaticID | AcceleratorStatic record's unique SHA-1 ID | string |
+| DeviceType | Type of accelerator (GPU/FPGA/ASIC) | string |
+| Vendor | Manufacturer name (e.g., NVIDIA, AMD, Intel) | string |
+| DeviceName | Model/product name | string |
+| DriverVersion | Driver version string | string |
+| NDevice | Number of such devices in system | int32_t |
+| MemorySize | Device memory size in MB | uint64_t |
+| NCore | Number of compute cores/units | int32_t |
+| BaseFrequency | Base clock frequency in MHz | uint32_t |
+
+**Link ID Formula:** `SHA1("accelerator_static" + <UTC_timestamp> + <hostname> + <vendor> + <device_name>)`
+
+---
+
+### 2.10. Network Record
+
+The NetworkStatic domain stores aggregated information about network adapters and interfaces. These values do not change during tbatch execution. One record per system (reused across tbatches).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| NetworkStaticID | NetworkStatic record's unique SHA-1 ID | string |
+| NInterface | Total number of network interfaces | int32_t |
+| IFTrios | JSON array of interface details (name, MAC, speed) | string |
+
+**Link ID Formula:** `SHA1("network_static" + <UTC_timestamp> + <hostname> + <primary_mac_address>)`
+
+---
+
+### 2.11. Motherboard Record
+
+The MotherBoardStatic domain stores static information about the motherboard. These values do not change during tbatch execution. One record per system (reused across tbatches).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| MotherBoardStaticID | MotherBoardStatic record's unique SHA-1 ID | string |
+| Manufacturer | Motherboard manufacturer name | string |
+| Model | Motherboard model number | string |
+| BIOSVersion | BIOS/UEFI firmware version | string |
+| BIOSDateUTC | BIOS release date in ISO 8601 format | string |
+
+**Link ID Formula:** `SHA1("motherboard_static" + <UTC_timestamp> + <hostname> + <manufacturer> + <model>)`
+
+---
+
+### 2.12. Chassis Record
+
+The ChassisStatic domain stores static information about the system chassis/enclosure. These values do not change during tbatch execution. One record per system (reused across tbatches).
+
+| Key | Definition | DataType |
+|-----|------------|----------|
+| ChassisStaticID | ChassisStatic record's unique SHA-1 ID | string |
+| Type | Chassis type (Tower/Rack/Blade/Laptop/Desktop/Cluster) | string |
+| Manufacturer | Chassis manufacturer name | string |
+| Model | Chassis model description | string |
+| CoolType | Cooling system type | string |
+
+**Link ID Formula:** `SHA1("chassis_static" + <UTC_timestamp> + <hostname> + <manufacturer> + <model>)`
+
+## 3. Record Backend: `rawdb`
+
+This section explains the design of integrated `rawdb` backend for building TPBench database and supporting CRUD operations to the database. Each domain has its own subdirectory under `${TPB_WORKSPACE}/rawdb/`.
 
 
-## 3. Record Frontend
+## 4. Record Frontend
 
-### 3.1. List records
+### 4.1. List records
 
 List the latest 20 kernel or score records, one record per line. 
 ```bash
