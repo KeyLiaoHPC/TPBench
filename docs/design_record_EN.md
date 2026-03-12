@@ -154,9 +154,9 @@ A task batch (tbatch) is the execution context that invokes one or more kernels.
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
-    tpb_dtbits_t start_utc_bits;        /**< Batch start datetime (64-bit compact encoding) */
-    uint64_t start_btime;            /**< Boot time at batch start (nanoseconds since boot) */
-    uint64_t duration;               /**< Total batch duration in nanoseconds */
+    tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
+    uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
+    uint64_t duration;                  /**< Total batch duration in nanoseconds */
     char hostname[64];                  /**< Execution host name */
     char username[64];                  /**< Username who initiated batch */
     uint32_t front_pid;                 /**< Front-end process ID */
@@ -184,7 +184,9 @@ Fixed header members:
     - A non-repeated list of calculated scores of benchmarks in the tbatch.
     - ndim = 1, length = nscore
 
-TBatchID:
+**Note:**
+
+**1) TBatchID calculation**
 
 ```
 SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
@@ -192,7 +194,49 @@ SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <us
 
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
-#### 2.2.2. Entry Structure
+
+**2) Conversion between `btime` and datetime:**
+The `btime` field stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
+- 24 hours per day
+- 730 hours per month (365/12 * 24)
+- 8760 hours per year (365 * 24)
+
+**3) `utc_bits` encoding:**
+
+The `tpb_dtbits_t` (uint64_t) packs datetime and timezone into a compact 64-bit representation:
+
+| Bit Range | Field | Size | Range |
+|-----------|-------|------|-------|
+| 0-5       | seconds | 6 bits | 0-59 |
+| 6-11      | minutes | 6 bits | 0-59 |
+| 12-16     | hours   | 5 bits | 0-23 |
+| 17-21     | day     | 5 bits | 1-31 |
+| 22-25     | month   | 4 bits | 1-12 |
+| 26-33     | year bias | 8 bits | 0-255 (1970-2225) |
+| 34-41     | timezone | 8 bits | 15-min increments |
+| 42-63     | reserved | 22 bits | unused |
+
+Encoding methods:
+
+- **Year encoding:** Year is stored as a bias from 1970 (e.g., year 2026 is stored as 56).
+
+- **Timezone encoding:** Timezone bias is stored in 15-minute increments. The value is signed (two's complement), giving a range of approximately -32 to +31.75 hours.
+
+- **Endianness notes:**
+The bit layout is defined by bit positions (0-63) and is independent of host byte order. Field access is performed via bit shifting and masking operations that produce identical results on both big-endian and little-endian systems:
+
+```c
+/* Example: extracting seconds (bits 0-5) */
+uint8_t sec = (uint8_t)((utc_bits >> 0) & 0x3F);  /* Works on any endianness */
+
+/* Example: extracting year bias (bits 26-33) */
+uint8_t year_bias = (uint8_t)((utc_bits >> 26) & 0xFF);
+uint16_t year = 1970 + year_bias;
+```
+
+When `utc_bits` is stored to disk or transmitted over the network, it is stored as a native `uint64_t` value. Readers should treat it as an opaque 64-bit integer and use the same bit extraction operations shown above. Do not cast the memory directly to byte arrays or assume specific byte ordering.
+
+#### 2.2.2. Entry Structure (.tpbe)
 
 File structure:
 ```
@@ -226,7 +270,7 @@ Magic signature:
 | entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 D0 53 31 E0`   | Entry file begin |
 | entry_end_magic | . T P B . E 1 . |`E1 54 50 42 D0 45 31 E0`   | Entry file end |
 
-#### 2.2.3. Record Structure
+#### 2.2.3. Record Structure (.tpbr)
 
 A `.tpbr` record file consists of a **meta section** and a **record data section**. The meta section stores the batch attributes (from `tbatch_attr_t`, see 2.2.1) and the 3 fixed headers that describe the record data layout. The record data section stores data according to the dimension, size, and type defined by the fixed headers.
 
@@ -243,9 +287,9 @@ File structure:
 +-------------------44-+
 | dup_to               |  <- 20B
 +-------------------64-+
-| start_utc_bits       |  <- 8B
+| utc_bits             |  <- 8B
 +-------------------72-+
-| start_btime          |  <- 8B
+| btime                |  <- 8B
 +-------------------80-+
 | duration             |  <- 8B
 +-------------------88-+
@@ -342,6 +386,8 @@ Magic signature:
 | ----------------- | --------------- | ------------------------- | -------------------- |
 | entry_begin_magic | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Entry file begin     |
 | entry_end_magic   | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | Entry file end       |
+
+
 
 #### 2.3.2. Record Structure
 
@@ -493,44 +539,9 @@ Magic signature:
 | record_magic      | . T P B . D 2 . | `E2 54 50 42 E2 44 31 E0` | Record data section  |
 | end_magic         | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | End of tpbr          |
 
-**Note on `utc_bits` encoding:**
 
-The `tpb_dtbits_t` (uint64_t) packs datetime and timezone into a compact 64-bit representation:
 
-| Bit Range | Field | Size | Range |
-|-----------|-------|------|-------|
-| 0-5       | seconds | 6 bits | 0-59 |
-| 6-11      | minutes | 6 bits | 0-59 |
-| 12-16     | hours   | 5 bits | 0-23 |
-| 17-21     | day     | 5 bits | 1-31 |
-| 22-25     | month   | 4 bits | 1-12 |
-| 26-33     | year bias | 8 bits | 0-255 (1970-2225) |
-| 34-41     | timezone | 8 bits | 15-min increments |
-| 42-63     | reserved | 22 bits | unused |
 
-**Year encoding:** Year is stored as a bias from 1970 (e.g., year 2026 is stored as 56).
-
-**Timezone encoding:** Timezone bias is stored in 15-minute increments. The value is signed (two's complement), giving a range of approximately -32 to +31.75 hours.
-
-**Endianness notes:**
-The bit layout is defined by bit positions (0-63) and is independent of host byte order. Field access is performed via bit shifting and masking operations that produce identical results on both big-endian and little-endian systems:
-
-```c
-/* Example: extracting seconds (bits 0-5) */
-uint8_t sec = (uint8_t)((utc_bits >> 0) & 0x3F);  /* Works on any endianness */
-
-/* Example: extracting year bias (bits 26-33) */
-uint8_t year_bias = (uint8_t)((utc_bits >> 26) & 0xFF);
-uint16_t year = 1970 + year_bias;
-```
-
-When `utc_bits` is stored to disk or transmitted over the network, it is stored as a native `uint64_t` value. Readers should treat it as an opaque 64-bit integer and use the same bit extraction operations shown above. Do not cast the memory directly to byte arrays or assume specific byte ordering.
-
-**`btime_ns` vs datetime:**
-The `btime_ns` field stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
-- 24 hours per day
-- 730 hours per month (365/12 * 24)
-- 8760 hours per year (365 * 24)
 
 
 ### 2.5. Score Record
