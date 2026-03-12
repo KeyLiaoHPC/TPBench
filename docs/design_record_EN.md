@@ -82,7 +82,7 @@ Workload represents the *configurable* aspects of a benchmark execution. Hardwar
 | **Task Record** | `SHA1("task" + <UTC_timestamp> + <btime> + <hostname> + <username> + <kernel_name> + <kernel_pid> + <order_in_batch>)` | One record per kernel invocation |
 | **Score Record** | `SHA1("score" + <UTC_timestamp> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
-## 2. The Design of Data Record Logic in TPBench Corelib
+## 2. The Record Data Architecture
 
 ### 2.1. Logical Organization of Database
 
@@ -104,18 +104,18 @@ In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbe)
 File tree:
 ```
 ${TPB_WORKSPACE}/rawdb/
-├── TaskBatch/
-│   ├── TaskBatch.tpbe 
+├── task_batch/
+│   ├── task_batch.tpbe 
 │   ├── <TBatchID_0>.tpbr
 │   ├── <TBatchID_1>.tpbr
 │   └── ...
-├── Kernel/
-│   ├── Kernel.tpbe
+├── kernel/
+│   ├── kernel.tpbe
 │   ├── <KernelID_0>.tpbr
 │   ├── <KernelID_1>.tpbr
 │   └── ...
-├── TaskRecord/
-│   ├── TaskRecord.tpbe
+├── task/
+│   ├── task.tpbe
 │   ├── <TaskRecordID_0>.tpbr
 │   ├── <TaskRecordID_1>.tpbr
 │   └── ...
@@ -128,8 +128,8 @@ Various record data types are the main body of TPBench records. Each type is def
 
 ```c
 typedef struct tpb_dim_info{
-        unsigned char name[256];    /**< Dimension name, length in [0, 256] */
-        uint64_t length;            /**< Number of elements in this dimension */
+    unsigned char name[256];    /**< Dimension name, length in [0, 256], can be empty */
+    uint64_t length;            /**< Number of elements in this dimension >= 1 */
 } tpb_dim_info_t;                   /**< 262 Bytes */
 
 typedef struct tpb_meta_header {
@@ -139,7 +139,7 @@ typedef struct tpb_meta_header {
     uint64_t type_bits;         /**< Data type control bits, including element */
                                 /**< size and TPB_*_T type, supports custom types */
     unsigned char name[256];    /**< Name, length in [0, 256] */
-    unsigned char note[1024];   /**< Notes and descriptions */
+    unsigned char note[2048];   /**< Notes and descriptions */
     tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
 } tpb_meta_header_t;            /**< 1312 Bytes */
 ```
@@ -148,43 +148,41 @@ typedef struct tpb_meta_header {
 
 A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
 
-#### 2.2.1. Entry Structure
-
-File structure:
-```
-+----------------------0-+  
-| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xd0 'S' 0x31 0xe0
-+----------------------8-+ 
-| entry[0] (256B)        |
-+--------------------264-+
-| ...                    |
-+------------8+(N-1)*256-+
-| entry[N-1] (256B)      |
-+-----------------8+256N-+
-| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xd0 'E' 0x31 0xe0
-+----------------16+256N-+
-```
-
-
-
-Entry member:
+#### 2.2.1. Attributes
 
 ```c
-// 256-Byte task-batch header (version 1.0)
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
     tpb_dtbits_t start_utc_bits;        /**< Batch start datetime (64-bit compact encoding) */
-    uint64_t start_btime_ns;            /**< Boot time at batch start (nanoseconds since boot) */
-    uint64_t duration_ns;               /**< Total batch duration in nanoseconds */
+    uint64_t start_btime;            /**< Boot time at batch start (nanoseconds since boot) */
+    uint64_t duration;               /**< Total batch duration in nanoseconds */
     char hostname[64];                  /**< Execution host name */
     char username[64];                  /**< Username who initiated batch */
     uint32_t front_pid;                 /**< Front-end process ID */
-    uint32_t ntask_records;             /**< Number of task records in this batch */
-    uint32_t nscore_records;            /**< Number of score records in this batch */
-    unsigned char reserve[92];          /**< Padding to 256 bytes total */
+    uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
+    uint32_t ntask;                     /**< Number of task records in this batch */
+    uint32_t nscore;                    /**< Number of score records in this batch */
+    uint32_t nheader;                   /**< # of fixed headers. */
+    uint32_t nuheader;                  /**< # of user-defined headers. */
+    tpb_meta_header_t fixed_headers[3];
+    tpb_meta_header_t *uheaders;
 } tbatch_attr_t;
 ```
+
+Fixed header members:
+- header[0]: KernelRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of KernelRecordIDs of executed kernels in the tbatch, ordering from 0 to nkernel-1 from the oldest start-up time.
+    - ndim = 1, length = nkernel
+- header[1]: TaskRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of TaskRecordIDs of ended tasks in the tbatch.
+    - ndim = 1, length = ntask
+- header[2]: ScoreRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of calculated scores of benchmarks in the tbatch.
+    - ndim = 1, length = nscore
 
 TBatchID:
 
@@ -193,6 +191,33 @@ SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <us
 ```
 
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
+
+#### 2.2.2. Entry Structure
+
+File structure:
+```
++----------------------0-+  
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xd0 'S' 0x31 0xe0
++----------------------8-+ 
+| entry[0:N] (128B)      |
++-----------------8+128N-+
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xd0 'E' 0x31 0xe0
++----------------16+128N-+
+```
+
+Entry member:
+|name|size|
+|---|---|
+|tbatch_id | 20 |
+|start_utc_bits | 8 |
+|duration | 8 |
+|hostname | 64 |
+|nkernel | 4 |
+|ntask | 4 |
+|reserve | 20 |
+|**Total**|128|
+
+
 
 Magic signature:
 
@@ -201,54 +226,61 @@ Magic signature:
 | entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 D0 53 31 E0`   | Entry file begin |
 | entry_end_magic | . T P B . E 1 . |`E1 54 50 42 D0 45 31 E0`   | Entry file end |
 
-#### 2.2.2. Record Structure
+#### 2.2.3. Record Structure
+
+A `.tpbr` record file consists of a **meta section** and a **record data section**. The meta section stores the batch attributes (from `tbatch_attr_t`, see 2.2.1) and the 3 fixed headers that describe the record data layout. The record data section stores data according to the dimension, size, and type defined by the fixed headers.
 
 File structure:
 ```
 +--------------------0-+
-| meta_magic           |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x31 0xe0
+| meta_magic           |  <- 8B
 +--------------------8-+
-| metasize             |  <- Bytes of (meta_magic + meta section)
+| metasize             |  <- 8B, size of meta section
 +-------------------16-+
-| datasize             |  <- Bytes of (record_magic + all data + end_magic)
+| datasize             |  <- 8B, size of record data section
 +-------------------24-+
-| ntask_records        |  <- Number of task records
-+-------------------28-+
-| nscore_records       |  <- Number of score records
-+-------------------32-+
-| nheaders             |  <- Number of header blocks (ntask + nscore)
-+-------------------36-+
-| reserve              |  <- Padding to 8-byte alignment
+| tbatch_id            |  <- 20B
++-------------------44-+
+| dup_to               |  <- 20B
 +-------------------64-+
-| header[i]            |  <- First header block (task or score)
-+-----64+1312+ndim*262-+
-| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe0 'R' 0x31 0xe0
-+-----72+1312+ndim*262-+
-| record_data          |
-+----72+1328N+datasize-+
-| end_magic            |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x31 0xe0
-+----80+1328N+datasize-+
+| start_utc_bits       |  <- 8B
++-------------------72-+
+| start_btime          |  <- 8B
++-------------------80-+
+| duration             |  <- 8B
++-------------------88-+
+| hostname             |  <- 64B
++------------------152-+
+| username             |  <- 64B
++------------------216-+
+| front_pid            |  <- 4B
++------------------220-+
+| nkernel              |  <- 4B
++------------------224-+
+| ntask                |  <- 4B
++------------------228-+
+| nscore               |  <- 4B
++------------------232-+
+| nheader              |  <- 4B
++------------------236-+
+| 64-Byte reserve      |  <- Reserved for future. 
++------------------300-+
+| fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
++-------------metasize-+
+| record_magic         |  <- 8B
++-----------metasize+8-+
+| record_data          |  <- stored per dim, size, type in headers
++--metasize+datasize-8-+
+| end_magic            |  <- 8B
++----metasize+datasize-+
 ```
-
-Header member:
-- header[0]: KernelRecordIDs
-- header[1]: TaskRecordIDs
-- header[2]: ScoreRecordIDs
-
-TBatchID:
-
-```
-SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
-```
-
-Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
 Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
 | meta_magic        | . T P B . S 0 . | `E1 54 50 42 E0 53 31 E0` | Meta section begin   |
-| record_magic        | . T P B . D 0 . | `E1 54 50 42 E0 44 31 E0` | Record data section  |
+| record_magic      | . T P B . D 0 . | `E1 54 50 42 E0 44 31 E0` | Record data section  |
 | end_magic         | . T P B . E 0 . | `E1 54 50 42 E0 45 31 E0` | End of tpbr          |
 
 **Note**: ID arrays (TaskRecordIDs and ScoreRecordIDs) are now stored as header blocks within the meta section, not as raw bytes after the fixed header.
@@ -258,144 +290,129 @@ Magic signature:
 
 The Kernel domain stores metadata about a kernel being evaluated, including description, version, parameter definitions, and metric definitions. One record per unique kernel (shared across invocations).
 
-| Key | Definition | DataType |
-|-----|------------|----------|
-| KernelID | Kernel domain's unique identifier | string |
-| KernelName | Name of the kernel (without `tpbk_` prefix) | string |
-| Version | Kernel version string | string |
-| Description | Human-readable description of the kernel's purpose | string |
-| SourceFile | Path to source file used for compilation | string |
-| CompileDateUTC | Compilation timestamp in ISO 8601 format | string |
-| ParameterDefinitions | JSON array descr.tpbrg input parameters | string |
-| MetricDefinitions | JSON array defining measurable outputs | string |
+#### 2.3.1. Entry Structure
 
-**Link ID Formula:** `SHA1("kernel" + <kernel_name> + <library_sha256> + .tpbrary_sha256>)`
+File structure:
+```
++----------------------0-+
+| entry_begin_magic      |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
++----------------------8-+
+| entry[0:N]             |
++------------8+(N-1)*856-+
+| entry_end_magic        |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
++----------------24+856N-+
+```
 
-
-Kernel Record存储被评估kernel的元数据，包括定义、参数、度量指标。
-
-**1) Header Structure**
+Entry member:
 
 ```c
-// 856-Byte kernel-record header (version 1.0)
-#define TPBM_NAME_STR_MAX_LEN 256
-#define TPBM_NOTE_STR_MAX_LEN 2048
-
-typedef struct kernel_record {
+typedef struct kernel_attr {
     unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID */
+    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenate source file */
+    unsigned char so_sha1[20];          /**< SHA-1 hash of library file (alphabet name order) */
+    unsigned char bin_sha1[20];         /**< SHA-1 hash of binary file, 0 for FLI */
     
-    char kernel_name[TPBM_NAME_STR_MAX_LEN];      /**< Kernel name (without tpbk_ prefix) */
-    char version[TPBM_NAME_STR_MAX_LEN];          /**< Version string */
-    char description[TPBM_NOTE_STR_MAX_LEN];       /**< Human-readable description */
+    char kernel_name[256];              /**< Kernel name (without tpbk_ prefix) */
+    char version[64];                  /**< Version string */
+    char description[2048];             /**< Human-readable description */
     
-    tpb_dtbits_t compile_utc_bits;      /**< Compilation datetime (64-bit compact encoding) */
-    unsigned char source_file_hash[32]; /**< SHA-256 hash of source file */
-    
-    uint32_t nparms;                    /**< Number of parameters from kernel definition */
-    uint32_t nouts;                     /**< Number of output metrics from kernel definition */
+    uint32_t nparm;                     /**< Number of parameters from kernel definition */
+    uint32_t nmetric;                   /**< Number of output metrics from kernel definition */
     uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
-} kernel_record_t;
+} kernel_attr_t;
 ```
 
-**字段说明：**
-- `source_file_hash[32]`：用于生成KernelID和完整性校验
-- `compile_utc_bits`：编译时间（非执行时间）
-- `kctrl`：复用`tpb-public.h`定义的`TPB_KTYPE_FLI/PLI/ALI`
-- `nparms`, `nouts`：来自kernel注册的参数和输出定义数量
+Field descriptions:
+- `source_file_hash[32]`: Used for KernelID generation and integrity verification
+- `compile_utc_bits`: Compilation timestamp (not execution time)
+- `kctrl`: Reuses `TPB_KTYPE_FLI/PLI/ALI` definitions from `tpb-public.h`
+- `nparms`, `nouts`: Number of parameters and output definitions from kernel registration
 
-**2) Magic Signatures**
+KernelID:
 
-| Magic      | Hex Value                   | Purpose              |
-| ---------- | --------------------------- | -------------------- |
-| meta_magic | `E1 54 50 42 E1 53 31 E0`   | Meta section         |
-| record_magic | `E1 54 50 42 E1 44 31 E0`   | Record data section  |
-| end_magic  | `E1 54 50 42 E1 45 31 E0`   | End of tpbr          | 
+```
+SHA1("kernel" + <kernel_name> + <library_sha256> + <bin_sha256>)
+```
 
-**3) Kernel Record File Layout (`<KernelID>.tpbr`)**
+Magic signature:
 
+| Magic             | Text            | Hex Value                 | Purpose              |
+| ----------------- | --------------- | ------------------------- | -------------------- |
+| entry_begin_magic | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Entry file begin     |
+| entry_end_magic   | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | Entry file end       |
+
+#### 2.3.2. Record Structure
+
+File structure:
 ```
 +--------------------0-+
-| meta_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe3 'S' 0x30 0x31 0xe0
+| meta_magic           |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
 +--------------------8-+
-| metasize (8B)        |  <- Bytes of (meta_magic + meta section)
+| metasize             |  <- Bytes of (meta_magic + meta section)
 +-------------------16-+
-| datasize (8B)        |  <- Bytes of (record_magic + all data + end_magic)
+| datasize             |  <- Bytes of (record_magic + all data + end_magic)
 +-------------------24-+
-| kernel_record_t (856B) |  <- Fixed header with kernel info
-+------------------880-+
-| header[0] (1328B)    |  <- First header block (parameter/metric)
-| header[1] (1328B)    |  <- Second header block
-| ...                  |  <- Dynamic metadata blocks
-+------------880+1328N-+
-| record_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe3 'D' 0x30 0x31 0xe0
-+------------888+1328N-+
-| all_dim_data[]       |  <- Raw data arrays per header block
-+----------888+1328N+D-+
-| end_magic (8B)       |  <- 0xe1 'T' 'P' 'B' 0xe3 'E' 0x30 0x31 0xe0
-+----------896+1328N+D-+
+| nparms               |  <- Number of parameter definitions
++-------------------28-+
+| nouts                |  <- Number of output metric definitions
++-------------------32-+
+| nheaders             |  <- Number of header blocks (nparms + nouts)
++-------------------36-+
+| reserve              |  <- Padding to 8-byte alignment
++-------------------64-+
+| header[i]            |  <- First header block (parameter or metric)
++-----64+1312+ndim*262-+
+| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe1 'R' 0x31 0xe0
++-----72+1312+ndim*262-+
+| record_data          |
++----72+1328N+datasize-+
+| end_magic            |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
++----80+1328N+datasize-+
 ```
 
-**4) Kernel Domain Header (`Kernel.tpbe`)**
+Header member:
+- header[0..nparms-1]: Parameter definitions
+- header[nparms..nparms+nouts-1]: Metric definitions
 
-追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`kernel_record_t`（856字节）。
-
-**`.tpbe` File Layout：**
-
-```
-+--------------------0-+
-| magic (8B)           |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
-+--------------------8-+
-| version (4B)         |  <- 0x00010000 (version 1.0)
-+-------------------12-+
-| reserve (4B)         |  <- Padding
-+-------------------16-+
-| kernel_record_t [0]  |  <- First kernel record (856 bytes)
-| kernel_record_t [1]  |  <- Second entry (856 bytes)
-| ...                  |  <- Appended sequentially
-+--------------16+856N-+
-```
-
-读取时顺序扫描所有856-byte entry，匹配`kernel_id`。
-
-**5) Static Keys**
-
-| Key                  | DataType          | Description                                   |
-| -------------------- | ----------------- | --------------------------------------------- |
-| KernelID             | string (20B raw)  | Kernel SHA-1 ID                               |
-| KernelName           | string            | Kernel name (max 255 chars)                   |
-| Version              | string            | Version string (max 255 chars)                |
-| Description          | string            | Human-readable description (max 2047 chars)   |
-| SourceFile           | string            | Path to source file (in metadata)             |
-| CompileDateUTC       | string (ISO 8601) | Compilation timestamp (from compile_utc_bits) |
-| ParameterDefinitions | JSON string       | Parameter definitions array                   |
-| MetricDefinitions    | JSON string       | Output metrics definitions array              |
-
-**6) Link ID Formula**
+KernelID:
 
 ```
-SHA1("kernel_def" + <kernel_name> + <version> + <source_file_hash>)
+SHA1("kernel" + <kernel_name> + <library_sha256> + <library_sha256>)
 ```
+
+Magic signature:
+
+| Magic             | Text            | Hex Value                 | Purpose              |
+| ----------------- | --------------- | ------------------------- | -------------------- |
+| meta_magic        | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 1 . | `E1 54 50 42 E1 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | End of tpbr          |
+
 
 ### 2.4. Task Record
 
 The TaskRecord domain stores the input arguments and output metrics from a single kernel invocation. One record per handle execution.
 
-| Key | Definition | DataType |
-|-----|------------|----------|
-| TaskRecordID | Task record's unique SHA-1 ID | string |
-| TBatchID | Link to a tbatch record | string |
-| KernelID | Link to a kernel record | string |
-| StartTimeUTC | Invocation start time in ISO 8601 format | string |
-| StartMachineTime | Start time as nanoseconds since boot | uint64_t |
-| Duration | Execution duration in nanoseconds | uint64_t |
-| ExitCode | Kernel exit code (0 = success) | int32_t |
+#### 2.4.1. Entry Structure
 
-**TaskRecordID Formula:** `SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)`
+File structure:
+```
++----------------------0-+
+| meta_magic (8B)        |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
++----------------------8-+
+| entry[0] (128B)        |
++--------------------136-+
+| ...                    |
++------------8+(N-1)*128-+
+| entry[N-1] (128B)      |
++----------------16+128N-+
+| end_magic (8B)         |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
++----------------24+128N-+
+```
 
-
-**1) Header Structure**
+Entry member:
 
 ```c
 // 128-Byte task-record header (version 1.0)
@@ -406,8 +423,8 @@ typedef struct task_record {
     unsigned char kernel_id[20];        /**< Foreign key: links to kernel definition record */
     
     tpb_dtbits_t utc_bits;              /**< Invocation datetime (64-bit compact encoding) */
-    uint64_t btime_ns;                  /**< Boot time at invocation (nanoseconds since boot) */
-    uint64_t duration_ns;               /**< Kernel execution duration in nanoseconds */
+    uint64_t btime;                  /**< Boot time at invocation (nanoseconds since boot) */
+    uint64_t duration;               /**< Kernel execution duration in nanoseconds */
     
     uint32_t exit_code;                 /**< Kernel exit code (0=success) */
     uint32_t handle_index;              /**< Handle index within batch (0-based) */
@@ -416,67 +433,65 @@ typedef struct task_record {
 } task_record_t;
 ```
 
-**字段说明：**
-- `task_record_id`：本记录的主键ID（**注意**：原草案错误命名为`kernel_record_id`，已修正）
-- `tbatch_id`：外键，指向所属的TaskBatch
-- `kernel_id`：外键，指向Kernel记录
-- `handle_index`：标识这是batch中第几个handle的执行结果
-- `mpi_rank`：MPI并行时的rank，-1表示非MPI kernel
-- `duration_ns`：重命名为`duration_ns`（原`duration`），与task batch命名保持一致
-
-**2) Magic Signatures**
-
-| Magic      | Hex Value                   | Purpose              |
-| ---------- | --------------------------- | -------------------- |
-| meta_magic | `E1 54 50 42 E2 53 31 E0`   | Meta section         |
-| record_magic | `E1 54 50 42 E2 44 31 E0`   | Record data section  |
-| end_magic  | `E1 54 50 42 E2 45 31 E0`   | End of tpbr          | 
-
-**3) Task Record File Layout (`<TaskRecordID>.tpbr`)**
+TaskRecordID:
 
 ```
+SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
+```
+
+Magic signature:
+
+| Magic             | Text            | Hex Value                 | Purpose              |
+| ----------------- | --------------- | ------------------------- | -------------------- |
+| entry_begin_magic | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Entry file begin     |
+| entry_end_magic   | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | Entry file end       |
+
+#### 2.4.2. Record Structure
+
+File structure:
+```
 +--------------------0-+
-| meta_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
+| meta_magic           |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
 +--------------------8-+
-| metasize (8B)        |  <- Bytes of (meta_magic + meta section)
+| metasize             |  <- Bytes of (meta_magic + meta section)
 +-------------------16-+
-| datasize (8B)        |  <- Bytes of (record_magic + all data + end_magic)
+| datasize             |  <- Bytes of (record_magic + all data + end_magic)
 +-------------------24-+
-| task_record_t (128B) |  <- Fixed header with task info
-+------------------152-+
-| header[0] (1328B)    |  <- First header block (input/output definition)
-| header[1] (1328B)    |  <- Second header block
-| ...                  |  <- Dynamic metadata blocks
-+------------152+1328N-+
-| record_magic (8B)    |  <- 0xe1 'T' 'P' 'B' 0xe1 'R' 0x31 0xe0
-+------------160+1328N-+
-| all_dim_data[]       |  <- Raw data arrays per header block
-+----------160+1328N+D-+
-| end_magic (8B)       |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
-+----------168+1328N+D-+
+| ninputs              |  <- Number of input argument headers
++-------------------28-+
+| noutputs             |  <- Number of output metric headers
++-------------------32-+
+| nheaders             |  <- Number of header blocks (ninputs + noutputs)
++-------------------36-+
+| reserve              |  <- Padding to 8-byte alignment
++-------------------64-+
+| header[i]            |  <- First header block (input or output)
++-----64+1312+ndim*262-+
+| record_magic         |  <- 0xe2 'T' 'P' 'B' 0xe2 'R' 0x31 0xe0
++-----72+1312+ndim*262-+
+| record_data          |
++----72+1328N+datasize-+
+| end_magic            |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
++----80+1328N+datasize-+
 ```
 
-**4) Task Record Domain Header (`TaskRecord.tpbe`)**
+Header member:
+- header[0..ninputs-1]: Input argument data headers
+- header[ninputs..ninputs+noutputs-1]: Output metric data headers
 
-追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`task_record_t`（128字节）。
-
-**`.tpbe` File Layout：**
+TaskRecordID:
 
 ```
-+--------------------0-+
-| magic (8B)           |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
-+--------------------8-+
-| version (4B)         |  <- 0x00010000 (version 1.0)
-+-------------------12-+
-| reserve (4B)         |  <- Padding
-+-------------------16-+
-| task_record_t [0]    |  <- First task record (128 bytes)
-| task_record_t [1]    |  <- Second entry (128 bytes)
-| ...                  |  <- Appended sequentially
-+--------------16+128N-+
+SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
 ```
 
-读取时顺序扫描所有128-byte entry，匹配`task_record_id`。
+Magic signature:
+
+| Magic             | Text            | Hex Value                 | Purpose              |
+| ----------------- | --------------- | ------------------------- | -------------------- |
+| meta_magic        | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 2 . | `E2 54 50 42 E2 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | End of tpbr          |
 
 **Note on `utc_bits` encoding:**
 
@@ -516,26 +531,6 @@ The `btime_ns` field stores high-precision boot-time (nanoseconds since system b
 - 24 hours per day
 - 730 hours per month (365/12 * 24)
 - 8760 hours per year (365 * 24)
-
-**5) Static Keys**
-
-| Key              | DataType          | Description                         |
-| ---------------- | ----------------- | ----------------------------------- |
-| TaskRecordID     | string (20B raw)  | Task record's SHA-1 ID              |
-| TBatchID         | string (20B raw)  | Foreign key to task batch           |
-| KernelID         | string (20B raw)  | Foreign key to kernel definition    |
-| StartTimeUTC     | string (ISO 8601) | Invocation start time               |
-| StartMachineTime | uint64_t          | Boot time nanoseconds at invocation |
-| Duration         | uint64_t          | Execution duration in nanoseconds   |
-| ExitCode         | int32_t           | Kernel exit code                    |
-| HandleIndex      | uint32_t          | Handle position within batch        |
-| MPIRank          | int32_t           | MPI rank or -1                      |
-
-**6) Link ID Formula**
-
-```
-SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
-```
 
 
 ### 2.5. Score Record
