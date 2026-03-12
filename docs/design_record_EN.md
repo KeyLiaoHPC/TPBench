@@ -122,7 +122,11 @@ ${TPB_WORKSPACE}/rawdb/
 └── ... 
 ```
 
-**3) General Header**
+**3) Record Link Topology**
+
+![TPBench record link topology](./arts/record_link_topology.svg)
+
+**4) General Header**
 
 Various record data types are the main body of TPBench records. Each type is defined by a header. The tpb_meta_header structure describes the general header for dynamic record data. Each `.tpbr` file contains one metadata block which encloses headers (`header[i]`) that describe the dimensions, data type, and layout of the record data.
 
@@ -334,51 +338,56 @@ Magic signature:
 
 The Kernel domain stores metadata about a kernel being evaluated, including description, version, parameter definitions, and metric definitions. One record per unique kernel (shared across invocations).
 
-#### 2.3.1. Entry Structure
-
-File structure:
-```
-+----------------------0-+
-| entry_begin_magic      |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
-+----------------------8-+
-| entry[0:N]             |
-+------------8+(N-1)*856-+
-| entry_end_magic        |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
-+----------------24+856N-+
-```
-
-Entry member:
+#### 2.3.1. Attributes
 
 ```c
 typedef struct kernel_attr {
     unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID */
-    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenate source file */
-    unsigned char so_sha1[20];          /**< SHA-1 hash of library file (alphabet name order) */
-    unsigned char bin_sha1[20];         /**< SHA-1 hash of binary file, 0 for FLI */
-    
+    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files */
+    unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file */
+    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, all-zero for FLI-only kernels */
+
     char kernel_name[256];              /**< Kernel name (without tpbk_ prefix) */
-    char version[64];                  /**< Version string */
+    char version[64];                   /**< Version string */
     char description[2048];             /**< Human-readable description */
-    
-    uint32_t nparm;                     /**< Number of parameters from kernel definition */
-    uint32_t nmetric;                   /**< Number of output metrics from kernel definition */
-    uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
+
+    uint32_t nparm;                     /**< Number of registered parameters */
+    uint32_t nmetric;                   /**< Number of registered output metrics */
+    uint32_t kctrl;                     /**< Kernel control bits */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } kernel_attr_t;
 ```
 
-Field descriptions:
-- `source_file_hash[32]`: Used for KernelID generation and integrity verification
-- `compile_utc_bits`: Compilation timestamp (not execution time)
-- `kctrl`: Reuses `TPB_KTYPE_FLI/PLI/ALI` definitions from `tpb-public.h`
-- `nparms`, `nouts`: Number of parameters and output definitions from kernel registration
-
 KernelID:
+```
+SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
+```
 
+Notes:
+- `kctrl` reuses `TPB_KTYPE_FLI/TPB_KTYPE_PLI/TPB_KTYPE_ALI` from `tpb-public.h`.
+- `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
+
+#### 2.3.2. Entry Structure
+
+File structure:
 ```
-SHA1("kernel" + <kernel_name> + <library_sha256> + <bin_sha256>)
++------------------------------0-+
+| entry_begin_magic              |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
++------------------------------8-+
+| entry[0] (sizeof(kernel_attr)) |
++--------------------------------+
+| ...                            |
++--------------------------------+
+| entry[N-1]                     |
++--------------------------------+
+| entry_end_magic                |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
++--------------------------------+
 ```
+
+Entry member:
+- Each entry is a complete `kernel_attr_t`.
+- Entry count = `(tpbe_file_size - 16) / sizeof(kernel_attr_t)`.
 
 Magic signature:
 
@@ -387,9 +396,7 @@ Magic signature:
 | entry_begin_magic | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Entry file begin     |
 | entry_end_magic   | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | Entry file end       |
 
-
-
-#### 2.3.2. Record Structure
+#### 2.3.3. Record Structure
 
 File structure:
 ```
@@ -400,33 +407,31 @@ File structure:
 +-------------------16-+
 | datasize             |  <- Bytes of (record_magic + all data + end_magic)
 +-------------------24-+
-| nparms               |  <- Number of parameter definitions
+| nparm                |  <- Number of parameter definitions
 +-------------------28-+
-| nouts                |  <- Number of output metric definitions
+| nmetric              |  <- Number of output metric definitions
 +-------------------32-+
-| nheaders             |  <- Number of header blocks (nparms + nouts)
+| nheader              |  <- Number of header blocks (nparm + nmetric)
 +-------------------36-+
 | reserve              |  <- Padding to 8-byte alignment
 +-------------------64-+
 | header[i]            |  <- First header block (parameter or metric)
-+-----64+1312+ndim*262-+
-| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe1 'R' 0x31 0xe0
-+-----72+1312+ndim*262-+
++-------------metasize-+
+| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe1 'D' 0x31 0xe0
++-----------metasize+8-+
 | record_data          |
-+----72+1328N+datasize-+
++--metasize+datasize-8-+
 | end_magic            |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
-+----80+1328N+datasize-+
++----metasize+datasize-+
 ```
 
 Header member:
-- header[0..nparms-1]: Parameter definitions
-- header[nparms..nparms+nouts-1]: Metric definitions
+- header[0..nparm-1]: Parameter definitions
+- header[nparm..nparm+nmetric-1]: Metric definitions
 
-KernelID:
-
-```
-SHA1("kernel" + <kernel_name> + <library_sha256> + <library_sha256>)
-```
+Rules:
+- `nheader = nparm + nmetric`.
+- Header ordering is deterministic: all parameters first, then all metrics.
 
 Magic signature:
 
@@ -436,54 +441,59 @@ Magic signature:
 | record_magic      | . T P B . D 1 . | `E1 54 50 42 E1 44 31 E0` | Record data section  |
 | end_magic         | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | End of tpbr          |
 
-
 ### 2.4. Task Record
 
 The TaskRecord domain stores the input arguments and output metrics from a single kernel invocation. One record per handle execution.
 
-#### 2.4.1. Entry Structure
-
-File structure:
-```
-+----------------------0-+
-| meta_magic (8B)        |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
-+----------------------8-+
-| entry[0] (128B)        |
-+--------------------136-+
-| ...                    |
-+------------8+(N-1)*128-+
-| entry[N-1] (128B)      |
-+----------------16+128N-+
-| end_magic (8B)         |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+----------------24+128N-+
-```
-
-Entry member:
+#### 2.4.1. Attributes
 
 ```c
-// 128-Byte task-record header (version 1.0)
-typedef struct task_record {
+typedef struct task_attr {
     unsigned char task_record_id[20];   /**< TaskRecordID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TaskRecordID */
     unsigned char tbatch_id[20];        /**< Foreign key: links to task batch that produced this record */
     unsigned char kernel_id[20];        /**< Foreign key: links to kernel definition record */
-    
+
     tpb_dtbits_t utc_bits;              /**< Invocation datetime (64-bit compact encoding) */
-    uint64_t btime;                  /**< Boot time at invocation (nanoseconds since boot) */
-    uint64_t duration;               /**< Kernel execution duration in nanoseconds */
-    
+    uint64_t btime;                     /**< Boot time at invocation (nanoseconds since boot) */
+    uint64_t duration;                  /**< Kernel execution duration in nanoseconds */
+
     uint32_t exit_code;                 /**< Kernel exit code (0=success) */
     uint32_t handle_index;              /**< Handle index within batch (0-based) */
     int32_t  mpi_rank;                  /**< MPI rank (-1 if non-MPI, 0-N if MPI enabled) */
     uint32_t reserve;                   /**< Padding to 8-byte alignment */
-} task_record_t;
+} task_attr_t;
 ```
 
 TaskRecordID:
+```
+SHA1("task" + <tbatch_id> + <kernel_id> + <handle_index> + <utc_bits> + <btime>)
+```
 
+Notes:
+- `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
+- `dup_to` points to the canonical task record when deduplication is enabled.
+
+#### 2.4.2. Entry Structure
+
+File structure:
 ```
-SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
++----------------------------0-+
+| entry_begin_magic (8B)       |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
++----------------------------8-+
+| entry[0] (sizeof(task_attr)) |
++------------------------------+
+| ...                          |
++------------------------------+
+| entry[N-1]                   |
++------------------------------+
+| entry_end_magic (8B)         |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
++------------------------------+
 ```
+
+Entry member:
+- Each entry is a complete `task_attr_t`.
+- Entry count = `(tpbe_file_size - 16) / sizeof(task_attr_t)`.
 
 Magic signature:
 
@@ -492,7 +502,7 @@ Magic signature:
 | entry_begin_magic | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Entry file begin     |
 | entry_end_magic   | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | Entry file end       |
 
-#### 2.4.2. Record Structure
+#### 2.4.3. Record Structure
 
 File structure:
 ```
@@ -503,33 +513,32 @@ File structure:
 +-------------------16-+
 | datasize             |  <- Bytes of (record_magic + all data + end_magic)
 +-------------------24-+
-| ninputs              |  <- Number of input argument headers
+| ninput               |  <- Number of input argument headers
 +-------------------28-+
-| noutputs             |  <- Number of output metric headers
+| noutput              |  <- Number of output metric headers
 +-------------------32-+
-| nheaders             |  <- Number of header blocks (ninputs + noutputs)
+| nheader              |  <- Number of header blocks (ninput + noutput)
 +-------------------36-+
 | reserve              |  <- Padding to 8-byte alignment
 +-------------------64-+
 | header[i]            |  <- First header block (input or output)
-+-----64+1312+ndim*262-+
-| record_magic         |  <- 0xe2 'T' 'P' 'B' 0xe2 'R' 0x31 0xe0
-+-----72+1312+ndim*262-+
++-------------metasize-+
+| record_magic         |  <- 0xe2 'T' 'P' 'B' 0xe2 'D' 0x31 0xe0
++-----------metasize+8-+
 | record_data          |
-+----72+1328N+datasize-+
++--metasize+datasize-8-+
 | end_magic            |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+----80+1328N+datasize-+
++----metasize+datasize-+
 ```
 
 Header member:
-- header[0..ninputs-1]: Input argument data headers
-- header[ninputs..ninputs+noutputs-1]: Output metric data headers
+- header[0..ninput-1]: Input argument data headers
+- header[ninput..ninput+noutput-1]: Output metric data headers
 
-TaskRecordID:
-
-```
-SHA1("task" + <UTC_timestamp> + <machine_start_nanoseconds> + <duration> + <hostname> + <username> + <kernel_name> + <pid> + <order_in_batch>)
-```
+Rules:
+- `nheader = ninput + noutput`.
+- Header ordering is deterministic: all input headers first, then output headers.
+- `record_data` stores header payloads in the same order as their headers.
 
 Magic signature:
 
