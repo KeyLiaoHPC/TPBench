@@ -10,18 +10,18 @@ Target metrics are measurements resulting from a complex co.tpbration of computi
 
 Eventually, data recording frequency, technique varies between data aspects. TPBench uses multiple **data domains** to record different aspects of the computing system, such as system states, kernel definitions, input arguments, target metrics, etc. Different records have predefined recording trigger and are linked via SHA-1 IDs. This approach avoids recording complete snapshots for each test while maintaining traceability.
 
-Each domain has:
+Each domain has fixed-name record and dynamic record. Fixed-named records are attributes used to characterize the basic information of each piece of record in a domain, and dynamic record is named by configurable record headers with real-time record data:
 - **Attribute**: Static attributes characterzing an instance in a domain, recorded in designated byte positions with predefined fixed names, definitions, format and parsers.
 - **Header**: Headers are used to define customizable structures to store run-time dynamic data. A header is the description section providing information of the record data it holds. (e.g.dimensions, names， data type)
 - **Record Data**: Data recorded by TPBench.
 
+In the **rawdb** backend, the **attributes**, **headers** and **record data** are stored in the TPBench entry files and TPBench record files:
+- **TPBench Entry File** (`<DomainName>.tpbe`): Recording attributes of each single record in the workspace, starting with a 8-Byte TPBench magic signature as a notation to the file type and the domain. All attribute values in the data is stored posisional with fixed data size. Each new record appends a set of attrubutes as an entry to the record file.
+- **TPBench Record File** (`<RecordID>.tpbr`): Dynamic record data, constructing by a metadata section, and data sections. Data in the record file is self explained and self pointed. Each new record generate a new record file.
+
 Each domain records a specific aspect of system status that characterizes the states, inputs, and outputs of task batches and kernel invocations. However, recording all domains at every kernel invocation leads to significant overhead. Therefore, settings in `${TPB_WORKSPACE}/etc/config.json` can control recording behavior:
 - `auto_collect`: Boolean flag to enable/disable automatic collection for a domain
 - `action`: Trigger condition for recording (e.g., `"kernel_invoke"`, `"user_invoke"`)
-
-Each record domain has two file types:
-- Domain Header (`<DomainName>.tpbh`): Recording headers of each single record in the workspace, starting with a 8-Byte TPBench domain magic signature.
-- Domain Record (`<RecordID>.tpbr`): Dynamic record data, constructing by front notes, metadata, and data. 
 
 ### 1.2. Concepts
 
@@ -35,8 +35,6 @@ SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <us
 ```
 Where `<machine_start_nanoseconds>` is the number of nanoseconds since system boot (uint64_t).
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
-
----
 
 **Kernel**: A kernel is a program or code module that users wish to evaluate. Kernels reside in `${TPB_HOME}/lib` or `${TPB_WORKSPACE}/lib/` and are named `tpbk_<kernel_name>.<so|x>`.
 
@@ -101,51 +99,57 @@ For more information related to the build system and filesystem structure, refer
 
 TPBench implement a integrated `rawdb` backend for data management and operations. More backend (e.g. SQLite, HDF5) will be added in future.
 
-In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbh) and the TPBench record (.tpbr). `.tpbh` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
+In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbe) and the TPBench record (.tpbr). `.tpbh` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
 
 File tree:
 ```
 ${TPB_WORKSPACE}/rawdb/
 ├── TaskBatch/
-│   ├── TaskBatch.tpbh 
-│   ├── <TBatchID>.tpbr
+│   ├── TaskBatch.tpbe 
+│   ├── <TBatchID_0>.tpbr
+│   ├── <TBatchID_1>.tpbr
 │   └── ...
 ├── Kernel/
-│   ├── Kernel.tpbh
-│   ├── <KernelID>.tpbr
+│   ├── Kernel.tpbe
+│   ├── <KernelID_0>.tpbr
+│   ├── <KernelID_1>.tpbr
 │   └── ...
 ├── TaskRecord/
-│   ├── TaskRecord.tpbh
-│   ├── <TaskRecordID>.tpbr
+│   ├── TaskRecord.tpbe
+│   ├── <TaskRecordID_0>.tpbr
+│   ├── <TaskRecordID_1>.tpbr
 │   └── ...
 └── ... 
 ```
-
-**`.tpbh` ：**
-- 创建时写入16-byte文件头（magic=0xED + version + reserve）
-- 每新增一个记录，向文件尾追加固定大小的 entry（TaskBatch=256B, Kernel=856B, TaskRecord=128B）
-- 读取时从offset 16开始顺序扫描所有entry
-- 通过匹配ID字段查找目标记录
-- 通过header中的信息定位到实际的`.tpbr`文件
-
-**.tpbr 文件特点：**
-- 以`meta_magic`开始（type-specific: 0xe0/e1/e3）
-- 包含metasize（meta_magic到meta section结束的字节数）
-- 包含datasize（data_magic到end_magic的字节数）
-- 包含header blocks（原metadata blocks，1328字节/块）
-- 包含`data_magic`分隔符
-- 以`end_magic`结束（type-specific）
-- 可嵌入任意文件格式，通过magic识别边界
 
 ### 2.2. Task Batch Record
 
 A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
 
-**1) Header Structure**
+**1) Entry Structure**
+
+File structure:
+```
++------------------------+  <- Byte 0
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xd0 'S' 0x31 0xe0
++------------------------+  <- Byte 8
+| entry[0] (256B)        |
++------------------------+
+| ...                    |
++------------------------+
+| entry[N-1] (256B)      |
++------------------------+
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xd0 'E' 0x31 0xe0
++------------------------+
+```
+
+
+
+Entry member:
 
 ```c
 // 256-Byte task-batch header (version 1.0)
-typedef struct tbatch_header {
+typedef struct tbatch_attr {
     unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
     tpb_dtbits_t start_utc_bits;        /**< Batch start datetime (64-bit compact encoding) */
@@ -157,10 +161,25 @@ typedef struct tbatch_header {
     uint32_t ntask_records;             /**< Number of task records in this batch */
     uint32_t nscore_records;            /**< Number of score records in this batch */
     unsigned char reserve[92];          /**< Padding to 256 bytes total */
-} tbatch_header_t;
+} tbatch_attr_t;
 ```
 
-**2) Magic Signatures**
+TBatchID:
+
+```
+SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
+```
+
+Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
+
+Magic signature:
+
+| Magic      | Text |Hex Value                      | Purpose              |
+| ---------- | ---  |------------------------------ | -------------------- |
+| entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 D0 53 31 E0`   | Entry file begin |
+| entry_end_magic | . T P B . E 1 . |`E1 54 50 42 D0 45 31 E0`   | Entry file end |
+
+**2) Record Structure**
 
 | Magic      | Hex Value                      | Purpose              |
 | ---------- | ------------------------------ | -------------------- |
@@ -204,13 +223,13 @@ typedef struct tbatch_header {
 
 **Note**: ID arrays (TaskRecordIDs and ScoreRecordIDs) are now stored as header blocks within the meta section, not as raw bytes after the fixed header.
 
-**4) Task Batch Domain Header (`TaskBatch.tpbh`)**
+**4) Task Batch Domain Header (`TaskBatch.tpbe`)**
 
-追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`tbatch_header_t`（256字节）。
+追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`tbatch_header_t`（256字节）。
 
-**`.tpbh` File Layout：**
+**`.tpbe` File Layout：**
 
-Domain header (`.tpbh`) uses type indicator **0xED** (Directory):
+Domain header (`.tpbe`) uses type indicator **0xED** (Directory):
 
 ```
 +------------------------+  <- Byte 0
@@ -228,26 +247,9 @@ Domain header (`.tpbh`) uses type indicator **0xED** (Directory):
 
 读取时顺序扫描所有256-byte entry，匹配`tbatch_id`。
 
-**5) Static Keys**
-
-| Key              | DataType          | Description                                     |
-| ---------------- | ----------------- | ----------------------------------------------- |
-| TBatchID         | string (20B raw)  | Task batch SHA-1 Link ID                        |
-| TaskRecordIDn    | list              | List of task record IDs (ntask_records items)   |
-| ScoreRecordIDs   | list              | List of score record IDs (nscore_records items) |
-| StartTimeUTC     | string (ISO 8601) | Human-readable start time                       |
-| StartMachineTime | uint64_t          | Boot time nanoseconds at start                  |
-| Hostname         | string            | Execution host (max 63 chars + null)            |
-| User             | string            | Execution user (max 63 chars + null)            |
-| Duration         | uint64_t          | Total batch duration in nanoseconds             |
-
 **6) Link ID Formula**
 
-```
-SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
-```
 
-Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
 
 ### 2.3. Kernel Record
@@ -333,11 +335,11 @@ typedef struct kernel_record {
 +------------------------+
 ```
 
-**4) Kernel Domain Header (`Kernel.tpbh`)**
+**4) Kernel Domain Header (`Kernel.tpbe`)**
 
-追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`kernel_record_t`（856字节）。
+追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`kernel_record_t`（856字节）。
 
-**`.tpbh` File Layout：**
+**`.tpbe` File Layout：**
 
 ```
 +------------------------+  <- Byte 0
@@ -452,11 +454,11 @@ typedef struct task_record {
 +------------------------+
 ```
 
-**4) Task Record Domain Header (`TaskRecord.tpbh`)**
+**4) Task Record Domain Header (`TaskRecord.tpbe`)**
 
-追加模式：每个新记录创建时，直接向`.tpbh`文件追加完整的`task_record_t`（128字节）。
+追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`task_record_t`（128字节）。
 
-**`.tpbh` File Layout：**
+**`.tpbe` File Layout：**
 
 ```
 +------------------------+  <- Byte 0
