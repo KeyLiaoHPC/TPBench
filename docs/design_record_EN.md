@@ -354,10 +354,22 @@ typedef struct kernel_attr {
 
     uint32_t nparm;                     /**< Number of registered parameters */
     uint32_t nmetric;                   /**< Number of registered output metrics */
-    uint32_t kctrl;                     /**< Kernel control bits */
+    uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
+    uint32_t nheader;                   /**< # of fixed headers (= nparm + nmetric) */
+    uint32_t nuheader;                  /**< # of user-defined headers */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } kernel_attr_t;
 ```
+
+Fixed header members:
+- header[0..nparm-1]: Parameter definitions
+    - Each `tpb_meta_header_t` describes one parameter: name, dtype, ndim, dims.
+    - Record data: default value for each parameter.
+    - ndim >= 1, length determined by parameter definition.
+- header[nparm..nparm+nmetric-1]: Metric definitions
+    - Each `tpb_meta_header_t` describes one output metric: name, dtype, ndim, dims.
+    - Record data: unit encoding for each metric.
+    - ndim >= 1, length determined by metric definition.
 
 KernelID:
 ```
@@ -368,26 +380,31 @@ Notes:
 - `kctrl` reuses `TPB_KTYPE_FLI/TPB_KTYPE_PLI/TPB_KTYPE_ALI` from `tpb-public.h`.
 - `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
 
-#### 2.3.2. Entry Structure
+#### 2.3.2. Entry Structure (.tpbe)
 
 File structure:
 ```
-+------------------------------0-+
-| entry_begin_magic              |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
-+------------------------------8-+
-| entry[0] (sizeof(kernel_attr)) |
-+--------------------------------+
-| ...                            |
-+--------------------------------+
-| entry[N-1]                     |
-+--------------------------------+
-| entry_end_magic                |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
-+--------------------------------+
++----------------------0-+
+| entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
++----------------------8-+
+| entry[0:N] (128B)      |
++-----------------8+128N-+
+| entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
++----------------16+128N-+
 ```
 
-Entry member:
-- Each entry is a complete `kernel_attr_t`.
-- Entry count = `(tpbe_file_size - 16) / sizeof(kernel_attr_t)`.
+Entry member (slim subset of `kernel_attr_t`):
+
+| name | size |
+|---|---|
+| kernel_id | 20 |
+| kernel_name | 64 |
+| so_sha1 | 20 |
+| kctrl | 4 |
+| nparm | 4 |
+| nmetric | 4 |
+| reserve | 12 |
+| **Total** | **128** |
 
 Magic signature:
 
@@ -396,32 +413,52 @@ Magic signature:
 | entry_begin_magic | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Entry file begin     |
 | entry_end_magic   | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | Entry file end       |
 
-#### 2.3.3. Record Structure
+#### 2.3.3. Record Structure (.tpbr)
+
+A `.tpbr` record file consists of a **meta section** and a **record data section**. The meta section stores the kernel attributes (from `kernel_attr_t`, see 2.3.1) and the fixed headers that describe the record data layout. The record data section stores data according to the dimension, size, and type defined by the fixed headers.
 
 File structure:
 ```
 +--------------------0-+
-| meta_magic           |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
+| meta_magic           |  <- 8B
 +--------------------8-+
-| metasize             |  <- Bytes of (meta_magic + meta section)
+| metasize             |  <- 8B, size of meta section
 +-------------------16-+
-| datasize             |  <- Bytes of (record_magic + all data + end_magic)
+| datasize             |  <- 8B, size of record data section
 +-------------------24-+
-| nparm                |  <- Number of parameter definitions
-+-------------------28-+
-| nmetric              |  <- Number of output metric definitions
-+-------------------32-+
-| nheader              |  <- Number of header blocks (nparm + nmetric)
-+-------------------36-+
-| reserve              |  <- Padding to 8-byte alignment
+| kernel_id            |  <- 20B
++-------------------44-+
+| dup_to               |  <- 20B
 +-------------------64-+
-| header[i]            |  <- First header block (parameter or metric)
+| src_sha1             |  <- 20B
++-------------------84-+
+| so_sha1              |  <- 20B
++------------------104-+
+| bin_sha1             |  <- 20B
++------------------124-+
+| kernel_name          |  <- 256B
++------------------380-+
+| version              |  <- 64B
++------------------444-+
+| description          |  <- 2048B
++-----------------2492-+
+| nparm                |  <- 4B
++-----------------2496-+
+| nmetric              |  <- 4B
++-----------------2500-+
+| kctrl                |  <- 4B
++-----------------2504-+
+| nheader              |  <- 4B
++-----------------2508-+
+| 64-Byte reserve      |  <- Reserved for future.
++-----------------2572-+
+| fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + user headers
 +-------------metasize-+
-| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe1 'D' 0x31 0xe0
+| record_magic         |  <- 8B
 +-----------metasize+8-+
-| record_data          |
+| record_data          |  <- stored per dim, size, type in headers
 +--metasize+datasize-8-+
-| end_magic            |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
+| end_magic            |  <- 8B
 +----metasize+datasize-+
 ```
 
@@ -430,8 +467,8 @@ Header member:
 - header[nparm..nparm+nmetric-1]: Metric definitions
 
 Rules:
-- `nheader = nparm + nmetric`.
-- Header ordering is deterministic: all parameters first, then all metrics.
+- `nheader >= nparm + nmetric`. Extra headers beyond `nparm + nmetric` are user-defined.
+- Header ordering is deterministic: all parameters first, then all metrics, then user-defined.
 
 Magic signature:
 
@@ -461,9 +498,23 @@ typedef struct task_attr {
     uint32_t exit_code;                 /**< Kernel exit code (0=success) */
     uint32_t handle_index;              /**< Handle index within batch (0-based) */
     int32_t  mpi_rank;                  /**< MPI rank (-1 if non-MPI, 0-N if MPI enabled) */
-    uint32_t reserve;                   /**< Padding to 8-byte alignment */
+    uint32_t ninput;                    /**< # of input argument headers */
+    uint32_t noutput;                   /**< # of output metric headers */
+    uint32_t nheader;                   /**< # of fixed headers (= ninput + noutput) */
+    uint32_t nuheader;                  /**< # of user-defined headers */
+    uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } task_attr_t;
 ```
+
+Fixed header members:
+- header[0..ninput-1]: Input arguments
+    - Each `tpb_meta_header_t` describes one input argument: name, dtype, ndim, dims.
+    - Record data: the actual argument value used in this invocation.
+    - ndim >= 1, length determined by argument definition.
+- header[ninput..ninput+noutput-1]: Output metrics
+    - Each `tpb_meta_header_t` describes one output metric: name, dtype, ndim, dims.
+    - Record data: the actual measured result from this invocation.
+    - ndim >= 1, length determined by metric definition.
 
 TaskRecordID:
 ```
@@ -474,26 +525,33 @@ Notes:
 - `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
 - `dup_to` points to the canonical task record when deduplication is enabled.
 
-#### 2.4.2. Entry Structure
+#### 2.4.2. Entry Structure (.tpbe)
 
 File structure:
 ```
-+----------------------------0-+
-| entry_begin_magic (8B)       |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
-+----------------------------8-+
-| entry[0] (sizeof(task_attr)) |
-+------------------------------+
-| ...                          |
-+------------------------------+
-| entry[N-1]                   |
-+------------------------------+
-| entry_end_magic (8B)         |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+------------------------------+
++----------------------0-+
+| entry_begin_magic (8B) |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
++----------------------8-+
+| entry[0:N] (128B)      |
++-----------------8+128N-+
+| entry_end_magic (8B)   |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
++----------------16+128N-+
 ```
 
-Entry member:
-- Each entry is a complete `task_attr_t`.
-- Entry count = `(tpbe_file_size - 16) / sizeof(task_attr_t)`.
+Entry member (slim subset of `task_attr_t`):
+
+| name | size |
+|---|---|
+| task_record_id | 20 |
+| tbatch_id | 20 |
+| kernel_id | 20 |
+| utc_bits | 8 |
+| duration | 8 |
+| exit_code | 4 |
+| handle_index | 4 |
+| mpi_rank | 4 |
+| reserve | 40 |
+| **Total** | **128** |
 
 Magic signature:
 
@@ -502,32 +560,54 @@ Magic signature:
 | entry_begin_magic | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Entry file begin     |
 | entry_end_magic   | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | Entry file end       |
 
-#### 2.4.3. Record Structure
+#### 2.4.3. Record Structure (.tpbr)
+
+A `.tpbr` record file consists of a **meta section** and a **record data section**. The meta section stores the task attributes (from `task_attr_t`, see 2.4.1) and the fixed headers that describe the record data layout. The record data section stores data according to the dimension, size, and type defined by the fixed headers.
 
 File structure:
 ```
 +--------------------0-+
-| meta_magic           |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
+| meta_magic           |  <- 8B
 +--------------------8-+
-| metasize             |  <- Bytes of (meta_magic + meta section)
+| metasize             |  <- 8B, size of meta section
 +-------------------16-+
-| datasize             |  <- Bytes of (record_magic + all data + end_magic)
+| datasize             |  <- 8B, size of record data section
 +-------------------24-+
-| ninput               |  <- Number of input argument headers
-+-------------------28-+
-| noutput              |  <- Number of output metric headers
-+-------------------32-+
-| nheader              |  <- Number of header blocks (ninput + noutput)
-+-------------------36-+
-| reserve              |  <- Padding to 8-byte alignment
+| task_record_id       |  <- 20B
++-------------------44-+
+| dup_to               |  <- 20B
 +-------------------64-+
-| header[i]            |  <- First header block (input or output)
+| tbatch_id            |  <- 20B
++-------------------84-+
+| kernel_id            |  <- 20B
++------------------104-+
+| utc_bits             |  <- 8B
++------------------112-+
+| btime                |  <- 8B
++------------------120-+
+| duration             |  <- 8B
++------------------128-+
+| exit_code            |  <- 4B
++------------------132-+
+| handle_index         |  <- 4B
++------------------136-+
+| mpi_rank             |  <- 4B
++------------------140-+
+| ninput               |  <- 4B
++------------------144-+
+| noutput              |  <- 4B
++------------------148-+
+| nheader              |  <- 4B
++------------------152-+
+| 64-Byte reserve      |  <- Reserved for future.
++------------------216-+
+| headers[i]           |  <- (ninput + noutput) x tpb_meta_header_t + user headers
 +-------------metasize-+
-| record_magic         |  <- 0xe2 'T' 'P' 'B' 0xe2 'D' 0x31 0xe0
+| record_magic         |  <- 8B
 +-----------metasize+8-+
-| record_data          |
+| record_data          |  <- stored per dim, size, type in headers
 +--metasize+datasize-8-+
-| end_magic            |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
+| end_magic            |  <- 8B
 +----metasize+datasize-+
 ```
 
@@ -536,8 +616,8 @@ Header member:
 - header[ninput..ninput+noutput-1]: Output metric data headers
 
 Rules:
-- `nheader = ninput + noutput`.
-- Header ordering is deterministic: all input headers first, then output headers.
+- `nheader >= ninput + noutput`. Extra headers beyond `ninput + noutput` are user-defined.
+- Header ordering is deterministic: all input headers first, then output headers, then user-defined.
 - `record_data` stores header payloads in the same order as their headers.
 
 Magic signature:
