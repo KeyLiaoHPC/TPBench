@@ -122,25 +122,47 @@ ${TPB_WORKSPACE}/rawdb/
 └── ... 
 ```
 
+**3) General Header**
+
+Various record data types are the main body of TPBench records. Each type is defined by a header. The tpb_meta_header structure describes the general header for dynamic record data. Each `.tpbr` file contains one metadata block which encloses headers (`header[i]`) that describe the dimensions, data type, and layout of the record data.
+
+```c
+typedef struct tpb_dim_info{
+        unsigned char name[256];    /**< Dimension name, length in [0, 256] */
+        uint64_t length;            /**< Number of elements in this dimension */
+} tpb_dim_info_t;                   /**< 262 Bytes */
+
+typedef struct tpb_meta_header {
+    uint32_t block_size;        /**< The header size in Bytes */
+    uint32_t ndim;              /**< Number of dimensions, in [1, 7] */
+    uint64_t data_size;         /**< The header's record data size in Bytes */
+    uint64_t type_bits;         /**< Data type control bits, including element */
+                                /**< size and TPB_*_T type, supports custom types */
+    unsigned char name[256];    /**< Name, length in [0, 256] */
+    unsigned char note[1024];   /**< Notes and descriptions */
+    tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
+} tpb_meta_header_t;            /**< 1312 Bytes */
+```
+
 ### 2.2. Task Batch Record
 
 A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
 
-**1) Entry Structure**
+#### 2.2.1. Entry Structure
 
 File structure:
 ```
-+------------------------+  <- Byte 0
++----------------------0-+  
 | meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xd0 'S' 0x31 0xe0
-+------------------------+  <- Byte 8
++----------------------8-+ 
 | entry[0] (256B)        |
-+------------------------+
++--------------------264-+
 | ...                    |
-+------------------------+
++------------8+(N-1)*256-+
 | entry[N-1] (256B)      |
-+------------------------+
++-----------------8+256N-+
 | end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xd0 'E' 0x31 0xe0
-+------------------------+
++----------------16+256N-+
 ```
 
 
@@ -179,77 +201,57 @@ Magic signature:
 | entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 D0 53 31 E0`   | Entry file begin |
 | entry_end_magic | . T P B . E 1 . |`E1 54 50 42 D0 45 31 E0`   | Entry file end |
 
-**2) Record Structure**
+#### 2.2.2. Record Structure
 
-| Magic      | Hex Value                      | Purpose              |
-| ---------- | ------------------------------ | -------------------- |
-| meta_magic | `E1 54 50 42 E0 53 31 E0`   | Meta section         |
-| data_magic | `E1 54 50 42 E0 44 31 E0`   | Record data section  |
-| end_magic  | `E1 54 50 42 E0 45 31 E0`   | End of tpbr          | 
+File structure:
+```
++--------------------0-+
+| meta_magic           |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x31 0xe0
++--------------------8-+
+| metasize             |  <- Bytes of (meta_magic + meta section)
++-------------------16-+
+| datasize             |  <- Bytes of (record_magic + all data + end_magic)
++-------------------24-+
+| ntask_records        |  <- Number of task records
++-------------------28-+
+| nscore_records       |  <- Number of score records
++-------------------32-+
+| nheaders             |  <- Number of header blocks (ntask + nscore)
++-------------------36-+
+| reserve              |  <- Padding to 8-byte alignment
++-------------------64-+
+| header[i]            |  <- First header block (task or score)
++-----64+1312+ndim*262-+
+| record_magic         |  <- 0xe1 'T' 'P' 'B' 0xe0 'R' 0x31 0xe0
++-----72+1312+ndim*262-+
+| record_data          |
++----72+1328N+datasize-+
+| end_magic            |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x31 0xe0
++----80+1328N+datasize-+
+```
 
-**3) Task Batch File Layout (`<TBatchID>.tpbr`)**
+Header member:
+- header[0]: KernelRecordIDs
+- header[1]: TaskRecordIDs
+- header[2]: ScoreRecordIDs
 
-新布局：metasize包含meta_magic+meta section，datasize包含data_magic+all data+end_magic
+TBatchID:
 
 ```
-+------------------------+  <- Byte 0
-| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x30 0x31 0xe0
-+------------------------+  <- Byte 8
-| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
-+------------------------+  <- Byte 16
-| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
-+------------------------+  <- Byte 24
-| ntask_records (4B)     |  <- Number of task records
-+------------------------+  <- Byte 28
-| nscore_records (4B)    |  <- Number of score records
-+------------------------+  <- Byte 32
-| nheaders (4B)          |  <- Number of header blocks (ntask + nscore)
-+------------------------+  <- Byte 36
-| reserve (4B)           |  <- Padding to 8-byte alignment
-+------------------------+  <- Byte 40
-| header[0] (1328B)    |  <- First header block (task or score)
-| header[1] (1328B)      |  <- Second header block
-| ...                    |  <- Total: nheaders * 1328 bytes
-+------------------------+  <- End of meta section
-| tbatch_header_t (256B) |  <- 256-byte fixed header with IDs embedded in header[]
-+------------------------+  <- Variable (if IDs are in header blocks)
-| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'D' 0x30 0x31 0xe0
-+------------------------+
-| all_dim_data[]         |  <- Raw data arrays per header block
-+------------------------+
-| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x30 0x31 0xe0
-+------------------------+
+SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
 ```
+
+Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
+
+Magic signature:
+
+| Magic             | Text            | Hex Value                 | Purpose              |
+| ----------------- | --------------- | ------------------------- | -------------------- |
+| meta_magic        | . T P B . S 0 . | `E1 54 50 42 E0 53 31 E0` | Meta section begin   |
+| record_magic        | . T P B . D 0 . | `E1 54 50 42 E0 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 0 . | `E1 54 50 42 E0 45 31 E0` | End of tpbr          |
 
 **Note**: ID arrays (TaskRecordIDs and ScoreRecordIDs) are now stored as header blocks within the meta section, not as raw bytes after the fixed header.
-
-**4) Task Batch Domain Header (`TaskBatch.tpbe`)**
-
-追加模式：每个新记录创建时，直接向`.tpbe`文件追加完整的`tbatch_header_t`（256字节）。
-
-**`.tpbe` File Layout：**
-
-Domain header (`.tpbe`) uses type indicator **0xED** (Directory):
-
-```
-+------------------------+  <- Byte 0
-| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
-+------------------------+
-| version (4B)           |  <- 0x00010000 (version 1.0)
-+------------------------+
-| reserve (4B)           |  <- Padding
-+------------------------+  <- Byte 16 (start of entries)
-| tbatch_header_t [0]    |  <- First task batch record (256 bytes)
-| tbatch_header_t [1]   |  <- Second entry (256 bytes)
-| ...                    |  <- Appended sequentially
-+------------------------+  <- End of file
-```
-
-读取时顺序扫描所有256-byte entry，匹配`tbatch_id`。
-
-**6) Link ID Formula**
-
-
 
 
 ### 2.3. Kernel Record
@@ -308,31 +310,31 @@ typedef struct kernel_record {
 | Magic      | Hex Value                   | Purpose              |
 | ---------- | --------------------------- | -------------------- |
 | meta_magic | `E1 54 50 42 E1 53 31 E0`   | Meta section         |
-| data_magic | `E1 54 50 42 E1 44 31 E0`   | Record data section  |
+| record_magic | `E1 54 50 42 E1 44 31 E0`   | Record data section  |
 | end_magic  | `E1 54 50 42 E1 45 31 E0`   | End of tpbr          | 
 
 **3) Kernel Record File Layout (`<KernelID>.tpbr`)**
 
 ```
-+------------------------+  <- Byte 0
-| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe3 'S' 0x30 0x31 0xe0
-+------------------------+  <- Byte 8
-| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
-+------------------------+  <- Byte 16
-| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
-+------------------------+  <- Byte 24
-| kernel_record_t (856B)   |  <- Fixed header with kernel info
-+------------------------+  <- Byte 880
-| header[0] (1328B)      |  <- First header block (parameter/metric definition)
-| header[1] (1328B)      |  <- Second header block
-| ...                    |  <- Dynamic metadata blocks
-+------------------------+  <- End of meta section
-| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe3 'D' 0x30 0x31 0xe0
-+------------------------+
-| all_dim_data[]         |  <- Raw data arrays per header block
-+------------------------+
-| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe3 'E' 0x30 0x31 0xe0
-+------------------------+
++--------------------0-+
+| meta_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe3 'S' 0x30 0x31 0xe0
++--------------------8-+
+| metasize (8B)        |  <- Bytes of (meta_magic + meta section)
++-------------------16-+
+| datasize (8B)        |  <- Bytes of (record_magic + all data + end_magic)
++-------------------24-+
+| kernel_record_t (856B) |  <- Fixed header with kernel info
++------------------880-+
+| header[0] (1328B)    |  <- First header block (parameter/metric)
+| header[1] (1328B)    |  <- Second header block
+| ...                  |  <- Dynamic metadata blocks
++------------880+1328N-+
+| record_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe3 'D' 0x30 0x31 0xe0
++------------888+1328N-+
+| all_dim_data[]       |  <- Raw data arrays per header block
++----------888+1328N+D-+
+| end_magic (8B)       |  <- 0xe1 'T' 'P' 'B' 0xe3 'E' 0x30 0x31 0xe0
++----------896+1328N+D-+
 ```
 
 **4) Kernel Domain Header (`Kernel.tpbe`)**
@@ -342,17 +344,17 @@ typedef struct kernel_record {
 **`.tpbe` File Layout：**
 
 ```
-+------------------------+  <- Byte 0
-| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
-+------------------------+
-| version (4B)           |  <- 0x00010000 (version 1.0)
-+------------------------+
-| reserve (4B)           |  <- Padding
-+------------------------+  <- Byte 16 (start of entries)
-| kernel_record_t [0]    |  <- First kernel record (856 bytes)
-| kernel_record_t [1]    |  <- Second entry (856 bytes)
-| ...                    |  <- Appended sequentially
-+------------------------+  <- End of file
++--------------------0-+
+| magic (8B)           |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
++--------------------8-+
+| version (4B)         |  <- 0x00010000 (version 1.0)
++-------------------12-+
+| reserve (4B)         |  <- Padding
++-------------------16-+
+| kernel_record_t [0]  |  <- First kernel record (856 bytes)
+| kernel_record_t [1]  |  <- Second entry (856 bytes)
+| ...                  |  <- Appended sequentially
++--------------16+856N-+
 ```
 
 读取时顺序扫描所有856-byte entry，匹配`kernel_id`。
@@ -427,31 +429,31 @@ typedef struct task_record {
 | Magic      | Hex Value                   | Purpose              |
 | ---------- | --------------------------- | -------------------- |
 | meta_magic | `E1 54 50 42 E2 53 31 E0`   | Meta section         |
-| data_magic | `E1 54 50 42 E2 44 31 E0`   | Record data section  |
+| record_magic | `E1 54 50 42 E2 44 31 E0`   | Record data section  |
 | end_magic  | `E1 54 50 42 E2 45 31 E0`   | End of tpbr          | 
 
 **3) Task Record File Layout (`<TaskRecordID>.tpbr`)**
 
 ```
-+------------------------+  <- Byte 0
-| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x30 0x31 0xe0
-+------------------------+  <- Byte 8
-| metasize (8B)          |  <- Bytes of (meta_magic + meta section)
-+------------------------+  <- Byte 16
-| datasize (8B)          |  <- Bytes of (data_magic + all data + end_magic)
-+------------------------+  <- Byte 24
-| task_record_t (128B)   |  <- Fixed header with task info
-+------------------------+  <- Byte 152
-| header[0] (1328B)      |  <- First header block (input/output definition)
-| header[1] (1328B)      |  <- Second header block
-| ...                    |  <- Dynamic metadata blocks
-+------------------------+  <- End of meta section
-| data_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe1 'D' 0x30 0x31 0xe0
-+------------------------+
-| all_dim_data[]         |  <- Raw data arrays per header block
-+------------------------+
-| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x30 0x31 0xe0
-+------------------------+
++--------------------0-+
+| meta_magic (8B)      |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
++--------------------8-+
+| metasize (8B)        |  <- Bytes of (meta_magic + meta section)
++-------------------16-+
+| datasize (8B)        |  <- Bytes of (record_magic + all data + end_magic)
++-------------------24-+
+| task_record_t (128B) |  <- Fixed header with task info
++------------------152-+
+| header[0] (1328B)    |  <- First header block (input/output definition)
+| header[1] (1328B)    |  <- Second header block
+| ...                  |  <- Dynamic metadata blocks
++------------152+1328N-+
+| record_magic (8B)    |  <- 0xe1 'T' 'P' 'B' 0xe1 'R' 0x31 0xe0
++------------160+1328N-+
+| all_dim_data[]       |  <- Raw data arrays per header block
++----------160+1328N+D-+
+| end_magic (8B)       |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
++----------168+1328N+D-+
 ```
 
 **4) Task Record Domain Header (`TaskRecord.tpbe`)**
@@ -461,17 +463,17 @@ typedef struct task_record {
 **`.tpbe` File Layout：**
 
 ```
-+------------------------+  <- Byte 0
-| magic (8B)             |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
-+------------------------+
-| version (4B)           |  <- 0x00010000 (version 1.0)
-+------------------------+
-| reserve (4B)           |  <- Padding
-+------------------------+  <- Byte 16 (start of entries)
-| task_record_t [0]      |  <- First task record (128 bytes)
-| task_record_t [1]      |  <- Second entry (128 bytes)
-| ...                    |  <- Appended sequentially
-+------------------------+  <- End of file
++--------------------0-+
+| magic (8B)           |  <- 0xe1 'T' 'P' 'B' 0xED 'D' 'I' 'R' 0x00
++--------------------8-+
+| version (4B)         |  <- 0x00010000 (version 1.0)
++-------------------12-+
+| reserve (4B)         |  <- Padding
++-------------------16-+
+| task_record_t [0]    |  <- First task record (128 bytes)
+| task_record_t [1]    |  <- Second entry (128 bytes)
+| ...                  |  <- Appended sequentially
++--------------16+128N-+
 ```
 
 读取时顺序扫描所有128-byte entry，匹配`task_record_id`。
