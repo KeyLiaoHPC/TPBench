@@ -120,6 +120,8 @@ ${TPB_WORKSPACE}/rawdb/
 
 ![TPBench record link topology](./arts/record_link_topology.svg)
 
+The `.tpbr` files are named with ID of the corresponding entry `.tpbe`, the `corelib` handles cross-domain and cross-file access through IDs.
+
 ---
 
 **4) General Header**
@@ -130,7 +132,7 @@ Various record data types are the main body of TPBench records. Each type is def
 typedef struct tpb_dim_info {
     unsigned char name[256];    /**< Dimension name, length in [0, 256], can be empty */
     uint64_t n;                 /**< Number of elements in this dimension >= 1 */
-} tpb_dim_info_t;                   /**< 262 Bytes */
+} tpb_dim_info_t;               /**< 264 Bytes */
 
 typedef struct tpb_meta_header {
     uint32_t block_size;        /**< The header size in Bytes */
@@ -230,8 +232,8 @@ typedef struct tbatch_attr {
     tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
     uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
     uint64_t duration;                  /**< Total batch duration in nanoseconds */
-    char hostname[64];                  /**< Execution host name */
-    char username[64];                  /**< Username who initiated batch */
+    char hostname[64];                  /**< Execution host name, ASCII */
+    char username[64];                  /**< Username who initiated batch, ASCII */
     uint32_t front_pid;                 /**< Front-end process ID */
     uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
     uint32_t ntask;                     /**< Number of task records in this batch */
@@ -370,15 +372,15 @@ The Kernel domain stores metadata about a kernel being evaluated, including desc
 
 ```c
 typedef struct kernel_attr {
-    unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1) */
-    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID */
-    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files */
-    unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file */
-    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, all-zero for FLI-only kernels */
+    unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1), ASCII */
+    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID, ASCII */
+    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files, ASCII */
+    unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file, ASCII */
+    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, all-zero for FLI-only kernels, ASCII */
 
-    char kernel_name[256];              /**< Kernel name (without tpbk_ prefix) */
-    char version[64];                   /**< Version string */
-    char description[2048];             /**< Human-readable description */
+    char kernel_name[256];              /**< Kernel name (without tpbk_ prefix), utf-8 */
+    char version[64];                   /**< Version string, utf-8 */
+    char description[2048];             /**< Human-readable description, utf-8 */
 
     uint32_t nparm;                     /**< Number of registered parameters */
     uint32_t nmetric;                   /**< Number of registered output metrics */
