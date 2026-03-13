@@ -6,7 +6,7 @@
 
 TPBench records data that influences kernel test outputs and captures results produced by kernel invocations. Due to the nature that actual performance is highly sensitive to program context and underlying environment, TPBench tags each record with a dedicated ID for further analysis in conjunction with other kernels and environmental factors.
 
-Target metrics are measurements resulting from a complex co.tpbration of computing hardware states, software stack configurations, and workload input arguments/data. Theoretically, one could take snapshots of the entire system along with target metrics to build a comprehensive database covering performance, power, portability, accuracy, and resilience characteristics. However, the trade-off between overhead and observation granularity in computing systems is inevitable.
+Target metrics are measurements resulting from a complex parameter space of computing hardware states, software stack configurations, and workload input arguments/data. Theoretically, one could take snapshots of the entire system along with target metrics to build a comprehensive database covering performance, power, portability, accuracy, and resilience characteristics. However, the trade-off between overhead and observation granularity in computing systems is inevitable.
 
 Eventually, data recording frequency, technique varies between data aspects. TPBench uses multiple **data domains** to record different aspects of the computing system, such as system states, kernel definitions, input arguments, target metrics, etc. Different records have predefined recording trigger and are linked via SHA-1 IDs. This approach avoids recording complete snapshots for each test while maintaining traceability.
 
@@ -16,7 +16,7 @@ Each domain has fixed-name record and dynamic record. Fixed-named records are at
 - **Record Data**: Data recorded by TPBench.
 
 In the **rawdb** backend, the **attributes**, **headers** and **record data** are stored in the TPBench entry files and TPBench record files:
-- **TPBench Entry File** (`<DomainName>.tpbe`): Recording attributes of each single record in the workspace, starting with a 8-Byte TPBench magic signature as a notation to the file type and the domain. All attribute values in the data is stored posisional with fixed data size. Each new record appends a set of attrubutes as an entry to the record file.
+- **TPBench Entry File** (`<DomainName>.tpbe`): Recording attributes of each single record in the workspace, starting with a 8-Byte TPBench magic signature as a notation to the file type and the domain. All attribute values in the data is stored positional with fixed data size. Each new record appends a set of attributes as an entry to the record file.
 - **TPBench Record File** (`<RecordID>.tpbr`): Dynamic record data, constructing by a metadata section, and data sections. Data in the record file is self explained and self pointed. Each new record generate a new record file.
 
 Each domain records a specific aspect of system status that characterizes the states, inputs, and outputs of task batches and kernel invocations. However, recording all domains at every kernel invocation leads to significant overhead. Therefore, settings in `${TPB_WORKSPACE}/etc/config.json` can control recording behavior:
@@ -143,7 +143,7 @@ typedef struct tpb_meta_header {
     tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
 } tpb_meta_header_t;            /**< 2336 Bytes */
 ```
-The pointer `dim_info` points to a ndim `tpb_dim_info_t` array which stores the information's name and length of each dimension which helps get size and mapping purpose of each dimension of the header. For example, if we measure a kernel's running time for multiple times for each core, then the dim_info will be used to record the mapping relationship between running time data's dimention, core number and loop number. For multi-dimension record, the dimension 0 is the innermost dimention. For a 2D array X[2][4] with dim[0].n=4 and dim[1].n=2, the record data file's layout is:
+The pointer `dim_info` points to a ndim `tpb_dim_info_t` array which stores the information's name and length of each dimension which helps get size and mapping purpose of each dimension of the header. For example, if we measure a kernel's running time for multiple times for each core, then the dim_info will be used to record the mapping relationship between running time data's dimension, core number and loop number. For multi-dimension record, the dimension 0 is the innermost dimension. For a 2D array X[2][4] with dim[0].n=4 and dim[1].n=2, the record data file's layout is:
 ```
 Address: 0x00    0x01    0x02    0x03    0x04    0x05    0x06    0x07
 Data:    X[0][0] X[0][1] X[0][2] X[0][3] X[1][0] X[1][1] X[1][2] X[1][3]
@@ -152,12 +152,12 @@ Data:    X[0][0] X[0][1] X[0][2] X[0][3] X[1][0] X[1][1] X[1][2] X[1][3]
 ---
 
 **5) Timestamp**
-A uint64_t utc_bits is used to encode date time and ready for ISO-8601 representation. And a uint64_t `btime` is used to store stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
+A uint64_t utc_bits is used to encode date time and ready for ISO-8601 representation. And a uint64_t `btime` is used to store high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
 - 24 hours per day
 - 730 hours per month (365/12 * 24)
 - 8760 hours per year (365 * 24)
 
-The `tpb_dtbits_t` (uint64_t) packs datetime and timezone into a compact 64-bit representation:
+The `typedef uint64_t tpb_dtbits_t` packs datetime and timezone into a compact 64-bit representation:
 
 | Bit Range | Field | Size | Range |
 |-----------|-------|------|-------|
@@ -193,6 +193,8 @@ When `utc_bits` is stored to disk or transmitted over the network, it is stored 
 ---
 
 **6) Record Types and IDs**
+
+Each ID is a 20-byte SHA1 has string stored in a 20-byte unsigned char variable.
 
 | Record Type | ID | Description |
 |-------------|-----------|-------------|
@@ -235,12 +237,11 @@ typedef struct tbatch_attr {
     uint32_t ntask;                     /**< Number of task records in this batch */
     uint32_t nscore;                    /**< Number of score records in this batch */
     uint32_t nheader;                   /**< # of headers. */
-    tpb_meta_header_t fixed_headers[3];
-    tpb_meta_header_t *uheaders;
+    tpb_meta_header_t *headers;
 } tbatch_attr_t;
 ```
 
-Fixed header members:
+The implementation program takes responsibility to add and manage fixed headers in corresponding domain files. In task batch records, there are three fixed header members:
 - header[0]: KernelRecordIDs
     - 20-byte unsigned char
     - A non-repeated list of KernelRecordIDs of executed kernels in the tbatch, ordering from 0 to nkernel-1 from the oldest start-up time.
@@ -554,11 +555,11 @@ Notes:
 File structure:
 ```
 +----------------------0-+
-| entry_begin_magic (8B) |  <- 0xe2 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
+| entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
 +----------------------8-+
 | entry[0:N] (128B)      |
 +-----------------8+128N-+
-| entry_end_magic (8B)   |  <- 0xe2 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
+| entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
 +----------------16+128N-+
 ```
 
@@ -581,8 +582,8 @@ Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
-| entry_begin_magic | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Entry file begin     |
-| entry_end_magic   | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | Entry file end       |
+| entry_begin_magic | . T P B . S 1 . | `E1 54 50 42 E2 53 31 E0` | Entry file begin     |
+| entry_end_magic   | . T P B . E 1 . | `E1 54 50 42 E2 45 31 E0` | Entry file end       |
 
 #### 2.4.3. Record Structure (.tpbr)
 
@@ -647,16 +648,14 @@ Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
-| meta_magic        | . T P B . S 2 . | `E2 54 50 42 D2 53 31 E0` | Meta section begin   |
-| record_magic      | . T P B . D 2 . | `E2 54 50 42 D2 44 31 E0` | Record data section  |
-| end_magic         | . T P B . E 2 . | `E2 54 50 42 D2 45 31 E0` | End of tpbr          |
-
-
-
-
+| meta_magic        | . T P B . S 1 . | `E1 54 50 42 D2 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 1 . | `E1 54 50 42 D2 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 1 . | `E1 54 50 42 D2 45 31 E0` | End of tpbr          |
 
 
 ### 2.5. Score Record
+
+**TODO: This section is not implemented in current version, need further design.**
 
 The ScoreRecord domain stores benchmark scores calculated through predefined formulas (e.g., from `stream.yaml`). One record per score or sub-score calculation.
 
@@ -675,6 +674,8 @@ The ScoreRecord domain stores benchmark scores calculated through predefined for
 
 ### 2.6. OS Record
 
+**TODO: This section is not implemented in current version, need further design.**
+
 The OS domain stores static information and runtime configuration/status of the operating system. One record per tbatch (or less frequently if `auto_collect=false`).
 
 | Key | Definition | DataType |
@@ -690,6 +691,9 @@ The OS domain stores static information and runtime configuration/status of the 
 ---
 
 ### 2.7. CPU Record
+
+
+**TODO: This section is not implemented in current version, need further design.**
 
 The CPUStatic domain stores static information about the CPU(s), including model name, SKU ID, vendor, and runtime configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
 
@@ -717,6 +721,9 @@ The CPUStatic domain stores static information about the CPU(s), including model
 
 ### 2.8. Memory Record
 
+
+**TODO: This section is not implemented in current version, need further design.**
+
 The MemoryStatic domain stores static information about system memory configuration. These values do not change during tbatch execution. One record per system (reused across tbatches).
 
 | Key | Definition | DataType |
@@ -735,6 +742,8 @@ The MemoryStatic domain stores static information about system memory configurat
 ---
 
 ### 2.9. Accelerator Record
+
+**TODO: This section is not implemented in current version, need further design.**
 
 The AcceleratorStatic domain stores static information about accelerators (GPU, FPGA, etc.). One record per accelerator device.
 
@@ -756,6 +765,8 @@ The AcceleratorStatic domain stores static information about accelerators (GPU, 
 
 ### 2.10. Network Record
 
+**TODO: This section is not implemented in current version, need further design.**
+
 The NetworkStatic domain stores aggregated information about network adapters and interfaces. These values do not change during tbatch execution. One record per system (reused across tbatches).
 
 | Key | Definition | DataType |
@@ -769,6 +780,8 @@ The NetworkStatic domain stores aggregated information about network adapters an
 ---
 
 ### 2.11. Motherboard Record
+
+**TODO: This section is not implemented in current version, need further design.**
 
 The MotherBoardStatic domain stores static information about the motherboard. These values do not change during tbatch execution. One record per system (reused across tbatches).
 
@@ -786,6 +799,8 @@ The MotherBoardStatic domain stores static information about the motherboard. Th
 
 ### 2.12. Chassis Record
 
+**TODO: This section is not implemented in current version, need further design.**
+
 The ChassisStatic domain stores static information about the system chassis/enclosure. These values do not change during tbatch execution. One record per system (reused across tbatches).
 
 | Key | Definition | DataType |
@@ -800,10 +815,9 @@ The ChassisStatic domain stores static information about the system chassis/encl
 
 ## 3. Record Backend: `rawdb`
 
-This section explains the design of integrated `rawdb` backend for building TPBench database and supporting CRUD operations to the database. Each domain has its own subdirectory under `${TPB_WORKSPACE}/rawdb/`.
+TODO.
 
-
-## 4. Record Frontend
+## 4. Record Frontend (TODO)
 
 ### 4.1. List records
 
