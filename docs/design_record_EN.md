@@ -12,7 +12,7 @@ Eventually, data recording frequency, technique varies between data aspects. TPB
 
 Each domain has fixed-name record and dynamic record. Fixed-named records are attributes used to characterize the basic information of each piece of record in a domain, and dynamic record is named by configurable record headers with real-time record data:
 - **Attribute**: Static attributes characterzing an instance in a domain, recorded in designated byte positions with predefined fixed names, definitions, format and parsers.
-- **Header**: Headers are used to define customizable structures to store run-time dynamic data. A header is the description section providing information of the record data it holds. (e.g.dimensions, names， data type)
+- **Header**: Headers are used to define the name and purpose of a single- or multi-dimension record data, including the fixed headers and customize headers. A header is the description section providing information of the record data it holds.
 - **Record Data**: Data recorded by TPBench.
 
 In the **rawdb** backend, the **attributes**, **headers** and **record data** are stored in the TPBench entry files and TPBench record files:
@@ -31,9 +31,8 @@ Each domain records a specific aspect of system status that characterizes the st
 
 **TBatchID**: A unique identifier for a task batch, generated as:
 ```
-SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
+SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>)
 ```
-Where `<machine_start_nanoseconds>` is the number of nanoseconds since system boot (uint64_t).
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
 **Kernel**: A kernel is a program or code module that users wish to evaluate. Kernels reside in `${TPB_HOME}/lib` or `${TPB_WORKSPACE}/lib/` and are named `tpbk_<kernel_name>.<so|x>`.
@@ -71,16 +70,7 @@ Workload represents the *configurable* aspects of a benchmark execution. Hardwar
 
 **Domain / Record**: A Record stores data that influences kernel test outputs and results produced by kernel invocations. Each Record includes a unique SHA-1 ID and related ID to link and be linked. Each record belongs to a domain, which classifies different kinds of records into different aspects, and allow different data to be accquired and recorded in different scenarios.
 
----
 
-**Record Types and IDs**
-
-| Record Type | ID | Description |
-|-------------|-----------|-------------|
-| **TBatch Record** | `SHA1("tbatch" + <UTC_timestamp> + <btime> + <hostname> + <username> + <front_end_pid>)` | One record per tbatch invocation |
-| **Kernel Record** | `SHA1("kernel" + <kernel_name> + <library_sha256> + .tpbrary_sha256>)` | Check or generate once a kernel is built. |
-| **Task Record** | `SHA1("task" + <UTC_timestamp> + <btime> + <hostname> + <username> + <kernel_name> + <kernel_pid> + <order_in_batch>)` | One record per kernel invocation |
-| **Score Record** | `SHA1("score" + <UTC_timestamp> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
 ## 2. The Record Data Architecture
 
@@ -95,11 +85,13 @@ TPBench's records are stored and managed under a workspace, except for special c
 
 For more information related to the build system and filesystem structure, refer to [design_build.md](./design_build.md).
 
+---
+
 **2) File Structure**
 
 TPBench implement a integrated `rawdb` backend for data management and operations. More backend (e.g. SQLite, HDF5) will be added in future.
 
-In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbe) and the TPBench record (.tpbr). `.tpbh` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
+In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbe) and the TPBench record (.tpbr). `.tpbe` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
 
 File tree:
 ```
@@ -122,18 +114,22 @@ ${TPB_WORKSPACE}/rawdb/
 └── ... 
 ```
 
+---
+
 **3) Record Link Topology**
 
 ![TPBench record link topology](./arts/record_link_topology.svg)
 
+---
+
 **4) General Header**
 
-Various record data types are the main body of TPBench records. Each type is defined by a header. The tpb_meta_header structure describes the general header for dynamic record data. Each `.tpbr` file contains one metadata block which encloses headers (`header[i]`) that describe the dimensions, data type, and layout of the record data.
+Various record data types are the main body of TPBench records. Each type is defined by a header. The tpb_meta_header structure stores the header's information. Each `.tpbr` file contains one metadata block which encloses headers (`header[i]`) that describe the dimensions, data type, and layout of the record data.
 
 ```c
-typedef struct tpb_dim_info{
+typedef struct tpb_dim_info {
     unsigned char name[256];    /**< Dimension name, length in [0, 256], can be empty */
-    uint64_t length;            /**< Number of elements in this dimension >= 1 */
+    uint64_t n;                 /**< Number of elements in this dimension >= 1 */
 } tpb_dim_info_t;                   /**< 262 Bytes */
 
 typedef struct tpb_meta_header {
@@ -145,67 +141,21 @@ typedef struct tpb_meta_header {
     unsigned char name[256];    /**< Name, length in [0, 256] */
     unsigned char note[2048];   /**< Notes and descriptions */
     tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
-} tpb_meta_header_t;            /**< 1312 Bytes */
+} tpb_meta_header_t;            /**< 2336 Bytes */
 ```
-
-### 2.2. Task Batch Record
-
-A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
-
-#### 2.2.1. Attributes
-
-```c
-typedef struct tbatch_attr {
-    unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
-    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
-    tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
-    uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
-    uint64_t duration;                  /**< Total batch duration in nanoseconds */
-    char hostname[64];                  /**< Execution host name */
-    char username[64];                  /**< Username who initiated batch */
-    uint32_t front_pid;                 /**< Front-end process ID */
-    uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
-    uint32_t ntask;                     /**< Number of task records in this batch */
-    uint32_t nscore;                    /**< Number of score records in this batch */
-    uint32_t nheader;                   /**< # of fixed headers. */
-    uint32_t nuheader;                  /**< # of user-defined headers. */
-    tpb_meta_header_t fixed_headers[3];
-    tpb_meta_header_t *uheaders;
-} tbatch_attr_t;
+The pointer `dim_info` points to a ndim `tpb_dim_info_t` array which stores the information's name and length of each dimension which helps get size and mapping purpose of each dimension of the header. For example, if we measure a kernel's running time for multiple times for each core, then the dim_info will be used to record the mapping relationship between running time data's dimention, core number and loop number. For multi-dimension record, the dimension 0 is the innermost dimention. For a 2D array X[2][4] with dim[0].n=4 and dim[1].n=2, the record data file's layout is:
 ```
+Address: 0x00    0x01    0x02    0x03    0x04    0x05    0x06    0x07
+Data:    X[0][0] X[0][1] X[0][2] X[0][3] X[1][0] X[1][1] X[1][2] X[1][3]
+``` 
 
-Fixed header members:
-- header[0]: KernelRecordIDs
-    - 20-byte unsigned char
-    - A non-repeated list of KernelRecordIDs of executed kernels in the tbatch, ordering from 0 to nkernel-1 from the oldest start-up time.
-    - ndim = 1, length = nkernel
-- header[1]: TaskRecordIDs
-    - 20-byte unsigned char
-    - A non-repeated list of TaskRecordIDs of ended tasks in the tbatch.
-    - ndim = 1, length = ntask
-- header[2]: ScoreRecordIDs
-    - 20-byte unsigned char
-    - A non-repeated list of calculated scores of benchmarks in the tbatch.
-    - ndim = 1, length = nscore
+---
 
-**Note:**
-
-**1) TBatchID calculation**
-
-```
-SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
-```
-
-Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
-
-
-**2) Conversion between `btime` and datetime:**
-The `btime` field stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
+**5) Timestamp**
+A uint64_t utc_bits is used to encode date time and ready for ISO-8601 representation. And a uint64_t `btime` is used to store stores high-precision boot-time (nanoseconds since system boot), which is independent of calendar datetime. For rough conversion from boot-time seconds to calendar datetime:
 - 24 hours per day
 - 730 hours per month (365/12 * 24)
 - 8760 hours per year (365 * 24)
-
-**3) `utc_bits` encoding:**
 
 The `tpb_dtbits_t` (uint64_t) packs datetime and timezone into a compact 64-bit representation:
 
@@ -239,6 +189,83 @@ uint16_t year = 1970 + year_bias;
 ```
 
 When `utc_bits` is stored to disk or transmitted over the network, it is stored as a native `uint64_t` value. Readers should treat it as an opaque 64-bit integer and use the same bit extraction operations shown above. Do not cast the memory directly to byte arrays or assume specific byte ordering.
+
+---
+
+**6) Record Types and IDs**
+
+| Record Type | ID | Description |
+|-------------|-----------|-------------|
+| **TBatch Record** | `SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>)` | One record per tbatch invocation |
+| **Kernel Record** | `SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)` | Check or generate once a kernel is built. |
+| **Task Record** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)` | One record per kernel invocation |
+| **Score Record** | `SHA1("score" + <utc_bits> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
+
+**Magic Signature**
+
+Magic signature is a special 8-byte unsigned char strings tagging the boundary of `.tpbe` and `.tpbr`, including the start/end of the whole entries block, the start of meta block and the start/end of the record data block. The format of magic signature is:
+|Byte Position|00|01|02|03|04|05|06|07|
+|---|---|---|---|---|---|---|---|---|
+|Hex|E1|54|50|42|\<X\>|\<Y\>|31|E0|
+|ASCII text|.|T|P|B|.|S/D/E|1|.|
+
+**X**: Domain mark, constructing with two 4-bit mark: `0x<HI><LO>`. E.g. The start of tbatch `.tpbe` file is marked by `0xE1 0x54 0x50 0x42 0xD0 0x53 0x31 0xE0`.
+- HI: The high 4 bits. File type mark. `.tpbe: 0xD`; `.tpbr: 0xE`.
+- LO: The low 4 bits. Domain type mark. TBatch: `0`; kernel: `1`, task: `2`.
+
+**Y**: Position mark. File start: `0x53 ('S')`. File end: `0x45 ('E')`. Block splitter: `0x44 ('D')`.
+
+### 2.2. Task Batch Record
+
+A task batch (tbatch) is the execution context that invokes one or more kernels. Each `tpbcli` call or dedicated kernel execution (e.g., directly invoking `tpbk_<stream>.x`) creates a new tbatch. TBatchID serves as the Link ID for each tbatch record.
+
+#### 2.2.1. Attributes
+
+```c
+typedef struct tbatch_attr {
+    unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
+    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
+    tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
+    uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
+    uint64_t duration;                  /**< Total batch duration in nanoseconds */
+    char hostname[64];                  /**< Execution host name */
+    char username[64];                  /**< Username who initiated batch */
+    uint32_t front_pid;                 /**< Front-end process ID */
+    uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
+    uint32_t ntask;                     /**< Number of task records in this batch */
+    uint32_t nscore;                    /**< Number of score records in this batch */
+    uint32_t nheader;                   /**< # of headers. */
+    tpb_meta_header_t fixed_headers[3];
+    tpb_meta_header_t *uheaders;
+} tbatch_attr_t;
+```
+
+Fixed header members:
+- header[0]: KernelRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of KernelRecordIDs of executed kernels in the tbatch, ordering from 0 to nkernel-1 from the oldest start-up time.
+    - ndim = 1, length = nkernel
+- header[1]: TaskRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of TaskRecordIDs of ended tasks in the tbatch.
+    - ndim = 1, length = ntask
+- header[2]: ScoreRecordIDs
+    - 20-byte unsigned char
+    - A non-repeated list of calculated scores of benchmarks in the tbatch.
+    - ndim = 1, length = nscore
+
+**Note:**
+
+**1) TBatchID calculation**
+
+```
+SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <username> + <front_end_pid>)
+```
+
+Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
+
+
+
 
 #### 2.2.2. Entry Structure (.tpbe)
 
@@ -310,7 +337,7 @@ File structure:
 | nscore               |  <- 4B
 +------------------232-+
 | nheader              |  <- 4B
-+------------------236-+
++------------------246-+
 | 64-Byte reserve      |  <- Reserved for future. 
 +------------------300-+
 | fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
@@ -355,8 +382,7 @@ typedef struct kernel_attr {
     uint32_t nparm;                     /**< Number of registered parameters */
     uint32_t nmetric;                   /**< Number of registered output metrics */
     uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
-    uint32_t nheader;                   /**< # of fixed headers (= nparm + nmetric) */
-    uint32_t nuheader;                  /**< # of user-defined headers */
+    uint32_t nheader;                   /**< # of headers (= nparm + nmetric) */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } kernel_attr_t;
 ```
@@ -467,7 +493,6 @@ Header member:
 - header[nparm..nparm+nmetric-1]: Metric definitions
 
 Rules:
-- `nheader >= nparm + nmetric`. Extra headers beyond `nparm + nmetric` are user-defined.
 - Header ordering is deterministic: all parameters first, then all metrics, then user-defined.
 
 Magic signature:
@@ -500,8 +525,7 @@ typedef struct task_attr {
     int32_t  mpi_rank;                  /**< MPI rank (-1 if non-MPI, 0-N if MPI enabled) */
     uint32_t ninput;                    /**< # of input argument headers */
     uint32_t noutput;                   /**< # of output metric headers */
-    uint32_t nheader;                   /**< # of fixed headers (= ninput + noutput) */
-    uint32_t nuheader;                  /**< # of user-defined headers */
+    uint32_t nheader;                   /**< # of headers (= ninput + noutput) */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } task_attr_t;
 ```
@@ -518,7 +542,7 @@ Fixed header members:
 
 TaskRecordID:
 ```
-SHA1("task" + <tbatch_id> + <kernel_id> + <handle_index> + <utc_bits> + <btime>)
+SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)
 ```
 
 Notes:
@@ -616,7 +640,6 @@ Header member:
 - header[ninput..ninput+noutput-1]: Output metric data headers
 
 Rules:
-- `nheader >= ninput + noutput`. Extra headers beyond `ninput + noutput` are user-defined.
 - Header ordering is deterministic: all input headers first, then output headers, then user-defined.
 - `record_data` stores header payloads in the same order as their headers.
 
