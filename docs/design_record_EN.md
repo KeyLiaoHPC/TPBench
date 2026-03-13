@@ -209,8 +209,8 @@ Magic signature is a special 8-byte unsigned char strings tagging the boundary o
 |Hex|E1|54|50|42|\<X\>|\<Y\>|31|E0|
 |ASCII text|.|T|P|B|.|S/D/E|1|.|
 
-**X**: Domain mark, constructing with two 4-bit mark: `0x<HI><LO>`. E.g. The start of tbatch `.tpbe` file is marked by `0xE1 0x54 0x50 0x42 0xD0 0x53 0x31 0xE0`.
-- HI: The high 4 bits. File type mark. `.tpbe: 0xD`; `.tpbr: 0xE`.
+**X**: Domain mark, constructing with two 4-bit mark: `0x<HI><LO>`. E.g. The start of tbatch `.tpbe` file is marked by `0xE1 0x54 0x50 0x42 0xE0 0x53 0x31 0xE0`.
+- HI: The high 4 bits. File type mark. `.tpbe: 0xE`; `.tpbr: 0xD`.
 - LO: The low 4 bits. Domain type mark. TBatch: `0`; kernel: `1`, task: `2`.
 
 **Y**: Position mark. File start: `0x53 ('S')`. File end: `0x45 ('E')`. Block splitter: `0x44 ('D')`.
@@ -272,11 +272,11 @@ Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 File structure:
 ```
 +----------------------0-+  
-| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xd0 'S' 0x31 0xe0
+| meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x31 0xe0
 +----------------------8-+ 
 | entry[0:N] (128B)      |
 +-----------------8+128N-+
-| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xd0 'E' 0x31 0xe0
+| end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x31 0xe0
 +----------------16+128N-+
 ```
 
@@ -298,8 +298,8 @@ Magic signature:
 
 | Magic      | Text |Hex Value                      | Purpose              |
 | ---------- | ---  |------------------------------ | -------------------- |
-| entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 D0 53 31 E0`   | Entry file begin |
-| entry_end_magic | . T P B . E 1 . |`E1 54 50 42 D0 45 31 E0`   | Entry file end |
+| entry_begin_magic | . T P B . S 1 . |`E1 54 50 42 E0 53 31 E0`   | Entry file begin |
+| entry_end_magic | . T P B . E 1 . |`E1 54 50 42 E0 45 31 E0`   | Entry file end |
 
 #### 2.2.3. Record Structure (.tpbr)
 
@@ -337,7 +337,7 @@ File structure:
 | nscore               |  <- 4B
 +------------------232-+
 | nheader              |  <- 4B
-+------------------246-+
++------------------236-+
 | 64-Byte reserve      |  <- Reserved for future. 
 +------------------300-+
 | fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
@@ -354,9 +354,9 @@ Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
-| meta_magic        | . T P B . S 0 . | `E1 54 50 42 E0 53 31 E0` | Meta section begin   |
-| record_magic      | . T P B . D 0 . | `E1 54 50 42 E0 44 31 E0` | Record data section  |
-| end_magic         | . T P B . E 0 . | `E1 54 50 42 E0 45 31 E0` | End of tpbr          |
+| meta_magic        | . T P B . S 0 . | `E1 54 50 42 D0 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 0 . | `E1 54 50 42 D0 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 0 . | `E1 54 50 42 D0 45 31 E0` | End of tpbr          |
 
 **Note**: ID arrays (TaskRecordIDs and ScoreRecordIDs) are now stored as header blocks within the meta section, not as raw bytes after the fixed header.
 
@@ -499,9 +499,9 @@ Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
-| meta_magic        | . T P B . S 1 . | `E1 54 50 42 E1 53 31 E0` | Meta section begin   |
-| record_magic      | . T P B . D 1 . | `E1 54 50 42 E1 44 31 E0` | Record data section  |
-| end_magic         | . T P B . E 1 . | `E1 54 50 42 E1 45 31 E0` | End of tpbr          |
+| meta_magic        | . T P B . S 1 . | `E1 54 50 42 D1 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 1 . | `E1 54 50 42 D1 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 1 . | `E1 54 50 42 D1 45 31 E0` | End of tpbr          |
 
 ### 2.4. Task Record
 
@@ -647,9 +647,9 @@ Magic signature:
 
 | Magic             | Text            | Hex Value                 | Purpose              |
 | ----------------- | --------------- | ------------------------- | -------------------- |
-| meta_magic        | . T P B . S 2 . | `E2 54 50 42 E2 53 31 E0` | Meta section begin   |
-| record_magic      | . T P B . D 2 . | `E2 54 50 42 E2 44 31 E0` | Record data section  |
-| end_magic         | . T P B . E 2 . | `E2 54 50 42 E2 45 31 E0` | End of tpbr          |
+| meta_magic        | . T P B . S 2 . | `E2 54 50 42 D2 53 31 E0` | Meta section begin   |
+| record_magic      | . T P B . D 2 . | `E2 54 50 42 D2 44 31 E0` | Record data section  |
+| end_magic         | . T P B . E 2 . | `E2 54 50 42 D2 45 31 E0` | End of tpbr          |
 
 
 
