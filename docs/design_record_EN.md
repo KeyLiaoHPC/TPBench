@@ -80,8 +80,7 @@ TPBench's records are stored and managed under a workspace, except for special c
 
 **1) Workspace Resolution:**
 1. If `${TPB_WORKSPACE}` environment variable is explicitly set, use that directory as the workspace.
-2. Otherwise, search `$TPB_HOME/.tpb_workspace/` for workspace configuration files.
-3. If not found there, search `$HOME/.tpb_workspace/`.
+2. Otherwise, search `$HOME/.tpbench/`.
 
 For more information related to the build system and filesystem structure, refer to [design_build.md](./design_build.md).
 
