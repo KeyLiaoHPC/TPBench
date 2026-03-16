@@ -1553,9 +1553,9 @@ Dimension information for multi-dimensional data.
 
 ```c
 typedef struct tpb_dim_info {
-    char name[256];             // Dimension name
-    uint64_t n;                 // Number of elements >= 1
-} tpb_dim_info_t;               // 264 bytes
+    char name[TPBM_NAME_STR_MAX_LEN];   // Dimension name
+    uint64_t n;                         // Number of elements >= 1
+} tpb_dim_info_t;                     // 264 bytes
 ```
 
 ---
@@ -1566,13 +1566,13 @@ Metadata header describing record data layout.
 
 ```c
 typedef struct tpb_meta_header {
-    uint32_t block_size;        // Total header size on disk
-    uint32_t ndim;              // Number of dimensions [1, 7]
-    uint64_t data_size;         // Record data size in bytes
-    uint64_t type_bits;         // Data type control bits (TPB_*_T)
-    char name[256];             // Header name
-    char note[2048];            // Description
-    tpb_dim_info_t *dim_info;   // Pointer to ndim dimension info
+    uint32_t block_size;                // Total header size on disk
+    uint32_t ndim;                      // Number of dimensions [1, 7]
+    uint64_t data_size;                 // Record data size in bytes
+    uint64_t type_bits;                 // Data type control bits (TPB_*_T)
+    char name[TPBM_NAME_STR_MAX_LEN];   // Header name
+    char note[TPBM_NOTE_STR_MAX_LEN];   // Description
+    tpb_dim_info_t *dim_info;           // Pointer to ndim dimension info
 } tpb_meta_header_t;
 ```
 

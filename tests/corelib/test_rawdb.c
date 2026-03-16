@@ -480,8 +480,8 @@ make_test_header(const char *name, uint32_t ndim,
     h.ndim = ndim;
     h.data_size = data_size;
     h.type_bits = 0x0000083e; /* TPB_UINT64_T */
-    snprintf(h.name, 256, "%s", name);
-    snprintf(h.note, 2048, "Test header %s", name);
+    snprintf(h.name, TPBM_NAME_STR_MAX_LEN, "%s", name);
+    snprintf(h.note, TPBM_NOTE_STR_MAX_LEN, "Test header %s", name);
     h.block_size = TPB_RAWDB_HDR_FIXED_SIZE
                  + ndim * TPB_RAWDB_DIMINFO_SIZE;
 
@@ -489,7 +489,7 @@ make_test_header(const char *name, uint32_t ndim,
         h.dim_info = (tpb_dim_info_t *)calloc(
             ndim, sizeof(tpb_dim_info_t));
         for (j = 0; j < ndim; j++) {
-            snprintf(h.dim_info[j].name, 256, "dim%u", j);
+            snprintf(h.dim_info[j].name, TPBM_NAME_STR_MAX_LEN, "dim%u", j);
             h.dim_info[j].n = (j + 1) * 4;
         }
     } else {
@@ -679,7 +679,7 @@ test_header_1d(void)
 
     tpb_meta_header_t h = make_test_header("single", 1, 32);
     h.dim_info[0].n = 4;
-    snprintf(h.dim_info[0].name, 256, "elements");
+    snprintf(h.dim_info[0].name, TPBM_NAME_STR_MAX_LEN, "elements");
     attr.headers = &h;
 
     uint64_t data[4] = {10, 20, 30, 40};
@@ -726,9 +726,9 @@ test_header_multidim(void)
     h.dim_info[0].n = 2;
     h.dim_info[1].n = 3;
     h.dim_info[2].n = 4;
-    snprintf(h.dim_info[0].name, 256, "cols");
-    snprintf(h.dim_info[1].name, 256, "rows");
-    snprintf(h.dim_info[2].name, 256, "layers");
+    snprintf(h.dim_info[0].name, TPBM_NAME_STR_MAX_LEN, "cols");
+    snprintf(h.dim_info[1].name, TPBM_NAME_STR_MAX_LEN, "rows");
+    snprintf(h.dim_info[2].name, TPBM_NAME_STR_MAX_LEN, "layers");
     attr.headers = &h;
 
     uint64_t data[12];

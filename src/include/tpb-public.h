@@ -20,6 +20,7 @@ typedef uint32_t TPB_DTYPE_U32;
 
 /* Limits */
 #define TPBM_CLI_STR_MAX_LEN 4096
+#define TPBM_NAME_UNIX_MAX_LEN 64
 #define TPBM_NAME_STR_MAX_LEN 256
 #define TPBM_NOTE_STR_MAX_LEN 2048
 
@@ -385,19 +386,19 @@ typedef uint64_t tpb_dtbits_t;
 
 /** @brief Dimension info for multi-dimensional record data */
 typedef struct tpb_dim_info {
-    char name[256]; /**< Dimension name */
-    uint64_t n;     /**< Number of elements >= 1 */
+    char name[TPBM_NAME_STR_MAX_LEN]; /**< Dimension name */
+    uint64_t n;                       /**< Number of elements >= 1 */
 } tpb_dim_info_t;   /* 264 Bytes */
 
 /** @brief Metadata header describing one record data block */
 typedef struct tpb_meta_header {
-    uint32_t block_size;  /**< Header size on disk in bytes */
-    uint32_t ndim;        /**< Number of dimensions, in [1, 7] */
-    uint64_t data_size;   /**< Record data size in bytes */
-    uint64_t type_bits;     /**< Data type control bits */
-    char name[256];       /**< Header name */
-    char note[2048];      /**< Notes and descriptions */
-    tpb_dim_info_t *dim_info; /**< Pointer to ndim dim_info entries */
+    uint32_t block_size;                      /**< Header size on disk in bytes */
+    uint32_t ndim;                            /**< Number of dimensions, in [1, 7] */
+    uint64_t data_size;                       /**< Record data size in bytes */
+    uint64_t type_bits;                       /**< Data type control bits */
+    char name[TPBM_NAME_STR_MAX_LEN];         /**< Header name */
+    char note[TPBM_NOTE_STR_MAX_LEN];         /**< Notes and descriptions */
+    tpb_dim_info_t *dim_info;                 /**< Pointer to ndim dim_info entries */
 } tpb_meta_header_t;
 
 /* TBatch type */

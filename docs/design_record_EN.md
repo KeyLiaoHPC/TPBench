@@ -129,20 +129,20 @@ Various record data types are the main body of TPBench records. Each type is def
 
 ```c
 typedef struct tpb_dim_info {
-    char name[256];             /**< Dimension name, length in [0, 256], can be empty */
-    uint64_t n;                 /**< Number of elements in this dimension >= 1 */
-} tpb_dim_info_t;               /**< 264 Bytes */
+    char name[TPBM_NAME_STR_MAX_LEN];   /**< Dimension name, length in [0, TPBM_NAME_STR_MAX_LEN], can be empty */
+    uint64_t n;                         /**< Number of elements in this dimension >= 1 */
+} tpb_dim_info_t;                       /**< 264 Bytes */
 
 typedef struct tpb_meta_header {
-    uint32_t block_size;        /**< The header size in Bytes */
-    uint32_t ndim;              /**< Number of dimensions, in [1, 7] */
-    uint64_t data_size;         /**< The header's record data size in Bytes */
-    uint64_t type_bits;         /**< Data type control bits, including element */
-                                /**< size and TPB_*_T type, supports custom types */
-    char name[256];             /**< Name, length in [0, 256] */
-    char note[2048];            /**< Notes and descriptions */
-    tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
-} tpb_meta_header_t;            /**< 2336 Bytes */
+    uint32_t block_size;                /**< The header size in Bytes */
+    uint32_t ndim;                      /**< Number of dimensions, in [1, 7] */
+    uint64_t data_size;                 /**< The header's record data size in Bytes */
+    uint64_t type_bits;                 /**< Data type control bits, including element */
+                                        /**< size and TPB_*_T type, supports custom types */
+    char name[TPBM_NAME_STR_MAX_LEN];   /**< Name, length in [0, TPBM_NAME_STR_MAX_LEN] */
+    char note[TPBM_NOTE_STR_MAX_LEN];   /**< Notes and descriptions */
+    tpb_dim_info_t *dim_info;           /**< Pointer to dimensions info */
+} tpb_meta_header_t;                    /**< 2336 Bytes */
 ```
 The pointer `dim_info` points to a ndim `tpb_dim_info_t` array which stores the information's name and length of each dimension which helps get size and mapping purpose of each dimension of the header. For example, if we measure a kernel's running time for multiple times for each core, then the dim_info will be used to record the mapping relationship between running time data's dimension, core number and loop number. For multi-dimension record, the dimension 0 is the innermost dimension. For a 2D array X[2][4] with dim[0].n=4 and dim[1].n=2, the record data file's layout is:
 ```
