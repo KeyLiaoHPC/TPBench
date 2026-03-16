@@ -129,7 +129,7 @@ Various record data types are the main body of TPBench records. Each type is def
 
 ```c
 typedef struct tpb_dim_info {
-    unsigned char name[256];    /**< Dimension name, length in [0, 256], can be empty */
+    char name[256];             /**< Dimension name, length in [0, 256], can be empty */
     uint64_t n;                 /**< Number of elements in this dimension >= 1 */
 } tpb_dim_info_t;               /**< 264 Bytes */
 
@@ -139,8 +139,8 @@ typedef struct tpb_meta_header {
     uint64_t data_size;         /**< The header's record data size in Bytes */
     uint64_t type_bits;         /**< Data type control bits, including element */
                                 /**< size and TPB_*_T type, supports custom types */
-    unsigned char name[256];    /**< Name, length in [0, 256] */
-    unsigned char note[2048];   /**< Notes and descriptions */
+    char name[256];             /**< Name, length in [0, 256] */
+    char note[2048];            /**< Notes and descriptions */
     tpb_dim_info_t *dim_info;   /**< Pointer to dimensions info */
 } tpb_meta_header_t;            /**< 2336 Bytes */
 ```
