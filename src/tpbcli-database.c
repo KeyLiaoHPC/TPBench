@@ -1,6 +1,6 @@
 /*
- * tpbcli_record.c
- * Front-end for `tpbcli record` subcommand.
+ * tpbcli-database.c
+ * Front-end for `tpbcli database` subcommand.
  */
 
 #include <stdio.h>
@@ -10,7 +10,7 @@
 #include "corelib/tpb-io.h"
 #include "corelib/strftime.h"
 #include "corelib/raw_db/tpb-rawdb-types.h"
-#include "tpbcli_record.h"
+#include "tpbcli-database.h"
 
 /* Local Function Prototypes */
 static int record_list(const char *workspace);
@@ -100,7 +100,7 @@ record_list(const char *workspace)
 }
 
 int
-tpbcli_record(int argc, char **argv)
+tpbcli_database(int argc, char **argv)
 {
     char workspace[TPB_RAWDB_PATH_MAX];
     int err;
@@ -115,7 +115,7 @@ tpbcli_record(int argc, char **argv)
 
     if (argc < 3) {
         tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Usage: tpbcli record <list|ls>\n");
+                   "Usage: tpbcli log <list|ls>\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -125,8 +125,8 @@ tpbcli_record(int argc, char **argv)
     }
 
     tpb_printf(TPBM_PRTN_M_DIRECT,
-               "Unknown record action: %s\n"
-               "Usage: tpbcli record <list|ls>\n",
+               "Unknown log action: %s\n"
+               "Usage: tpbcli log <list|ls>\n",
                argv[2]);
     return TPBE_CLI_FAIL;
 }

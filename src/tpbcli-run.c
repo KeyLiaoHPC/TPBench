@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #ifdef __linux__
 #include <linux/limits.h>
 #else
@@ -1107,6 +1108,10 @@ tpbcli_run(int argc, char **argv)
     }
 
     /* Run all handles using driver */
+
+    // Sleep 1.x seconds to prevent tbatch conflicting.
+    usleep((useconds_t)(1000000 + (rand() % 1000) * 1000));
+
     err = tpb_driver_run_all();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_driver_run_all");
 

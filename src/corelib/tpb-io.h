@@ -20,9 +20,9 @@
 #define TPBM_HELP_DOC_TOTAL \
     "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
     "Usage: tpbcli <action> <option>\n" \
-    "Action: run, benchmark, list, help\n" \
+    "Action: run/r, benchmark/b, database/d, list/l, help/h\n" \
     "Options and explanation for each action:\n" \
-    "    run: Run one or more benchmark kernels.\n" \
+    "    r, run: Run one or more benchmark kernels.\n" \
     "        -P          Use Process-Level Integration mode (default). Kernels run as\n" \
     "                    separate processes via fork/exec.\n" \
     "        -F          Use Function-Level Integration mode. Kernels run as linked\n" \
@@ -47,14 +47,15 @@
     "                    Optional. Timer name. Supported: clock_gettime, tsc_asym.\n" \
     "        -l          List available kernels.\n" \
     "        -h, --help  Print usages of the `tpbcli run` subcommand.\n" \
-    "    benchmark: Run predefined benchmark suites.\n" \
+    "    b, benchmark: Run predefined benchmark suites.\n" \
     "        --suite     <PATH> (Default: $CWD/workspace)\n" \
     "        --workdir   <PATH> (Optional. Default: $CWD/workspace)\n" \
     "                    Path to the directory of the workspace. \n" \
     "        --outdir    <PATH> (Optional. Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
     "                    Path to the data directory of the current test. \n" \
     "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
-    "    list: List available kernels.\n" \
+    "    d, database: Read and manage TPBench database.\n" \
+    "    l, list: List objects.\n" \
     "        -P          Use Process-Level Integration mode (default).\n" \
     "        -F          Use Function-Level Integration mode.\n" \
     "    help: Print help message for an object and exit.\n" \
