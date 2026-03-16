@@ -7,6 +7,12 @@ set(TPB_CORELIB_SOURCES
     tpb-argp.c
     tpb-dynloader.c
     strftime.c
+    raw_db/tpb-rawdb-workspace.c
+    raw_db/tpb-rawdb-magic.c
+    raw_db/tpb-rawdb-entry.c
+    raw_db/tpb-rawdb-record.c
+    raw_db/tpb-rawdb-id.c
+    raw_db/tpb-sha1.c
 )
 
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})

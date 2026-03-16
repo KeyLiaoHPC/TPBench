@@ -237,6 +237,7 @@ typedef struct tbatch_attr {
     uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
     uint32_t ntask;                     /**< Number of task records in this batch */
     uint32_t nscore;                    /**< Number of score records in this batch */
+    uint32_t batch_type;                /**< 0=run, 1=benchmark */
     uint32_t nheader;                   /**< # of headers. */
     tpb_meta_header_t *headers;
 } tbatch_attr_t;
@@ -291,7 +292,9 @@ Entry member:
 |hostname | 64 |
 |nkernel | 4 |
 |ntask | 4 |
-|reserve | 20 |
+|nscore | 4 |
+|batch_type | 4 |
+|reserve | 12 |
 |**Total**|128|
 
 
@@ -338,10 +341,12 @@ File structure:
 +------------------228-+
 | nscore               |  <- 4B
 +------------------232-+
-| nheader              |  <- 4B
+| batch_type           |  <- 4B
 +------------------236-+
+| nheader              |  <- 4B
++------------------240-+
 | 64-Byte reserve      |  <- Reserved for future. 
-+------------------300-+
++------------------304-+
 | fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -816,28 +821,112 @@ The ChassisStatic domain stores static information about the system chassis/encl
 
 ## 3. Record Backend: `rawdb`
 
-TODO.
+### 3.1. Module Structure
 
-## 4. Record Frontend (TODO)
+The `rawdb` backend is implemented as a set of C source files in `src/corelib/raw_db/`:
+
+```
+src/corelib/raw_db/
+├── tpb-rawdb-types.h      # Internal constants, magic defs, file path defs
+├── tpb-rawdb-workspace.c  # Workspace resolution, init, config.json R/W
+├── tpb-rawdb-magic.c      # Magic signature build, validate, scan
+├── tpb-rawdb-entry.c      # .tpbe append/read/list for all 3 domains
+├── tpb-rawdb-record.c     # .tpbr write/read for all 3 domains
+├── tpb-rawdb-id.c         # SHA1-based ID generation
+├── tpb-sha1.c             # Pure-C SHA1 implementation (RFC 3174)
+└── tpb-sha1.h             # SHA1 internal header
+```
+
+All public types and function declarations are in `src/include/tpb-public.h`, exposed via `src/include/tpbench.h`.
+
+### 3.2. Workspace Resolution
+
+`tpb_rawdb_resolve_workspace()` is called at the start of every `tpbcli` subcommand. Resolution order:
+
+1. If `$TPB_WORKSPACE` is set and non-empty, use that directory.
+2. If `$HOME/.tpbench/etc/config.json` exists and contains a `"name"` field, use `$HOME/.tpbench/`.
+3. Otherwise, create a default workspace at `$HOME/.tpbench/` with `etc/config.json` (`{"name": "default"}`) and `rawdb/{task_batch,kernel,task}/` directories.
+
+### 3.3. API Summary
+
+Workspace:
+- `tpb_rawdb_resolve_workspace(out_path, pathlen)` -- resolve workspace path
+- `tpb_rawdb_init_workspace(workspace_path)` -- create directory structure and config
+
+Magic:
+- `tpb_rawdb_build_magic(ftype, domain, pos, out)` -- construct 8-byte magic
+- `tpb_rawdb_validate_magic(magic, ftype, domain, pos)` -- validate magic bytes
+- `tpb_rawdb_magic_scan(buf, len, offsets, nfound, max)` -- scan buffer for magic signatures
+
+Entry (.tpbe):
+- `tpb_rawdb_entry_append_{tbatch,kernel,task}(workspace, entry)` -- append entry
+- `tpb_rawdb_entry_list_{tbatch,kernel,task}(workspace, entries, count)` -- list all entries
+
+Record (.tpbr):
+- `tpb_rawdb_record_write_{tbatch,kernel,task}(workspace, attr, data, datasize)` -- write record
+- `tpb_rawdb_record_read_{tbatch,kernel,task}(workspace, id, attr, data, datasize)` -- read record
+- `tpb_rawdb_free_headers(headers, nheader)` -- free allocated header arrays
+
+ID Generation:
+- `tpb_rawdb_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
+- `tpb_rawdb_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
+- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, id_out)` -- TaskRecordID
+- `tpb_rawdb_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string
+
+### 3.4. Header Serialization
+
+On-disk format per `tpb_meta_header_t`:
+
+```
+block_size   (4B)   -- total header size = 2328 + ndim * 264
+ndim         (4B)
+data_size    (8B)
+type_bits    (8B)
+name         (256B)
+note         (2048B)
+dim_info[0]  (264B) -- name(256B) + n(8B)
+dim_info[1]  (264B)
+...
+dim_info[ndim-1] (264B)
+```
+
+### 3.5. Memory Safety
+
+- Entry structs (128 bytes) are stack-allocated or caller-provided.
+- `tpb_meta_header_t.dim_info` is heap-allocated during read; freed via `tpb_rawdb_free_headers()`.
+- All pointer arguments are NULL-checked; functions return `TPBE_NULLPTR_ARG` on failure.
+- File I/O uses explicit size checks; no buffer overruns.
+
+## 4. Record Frontend
+
+The record frontend is implemented in `src/tpbcli_record.c` and dispatched via the `record` (or `r`) subcommand in `src/tpbcli.c`.
 
 ### 4.1. List records
 
-List the latest 20 kernel or score records, one record per line. 
+`tpbcli record list` (aliases: `tpbcli record ls`, `tpbcli r list`, `tpbcli r ls`) lists the latest 20 tbatch entries from the workspace, sorted by start time (newest first).
+
 ```bash
-### Following commands are equal.
 $ tpbcli record list
-$ tpbcli record ls
-$ tpbcli r list
-$ tpbcli r ls
 ### --- Output ---
 TPBench v1.0
-2024-01-01T08:11:30 [I] TPB_HOME: /usr/local/tpbench
-2024-01-01T08:11:30 [I] TPB_WORKSPACE: /usr/local/tpbench
-2024-01-01T08:11:30 [I] Reading records from /usr/local/tpbench/.tpb_data ... Done
-2024-01-01T08:11:30 [I] List of latest 20 records
+YYYY-MM-DDThh:mm:ss [I] TPB_WORKSPACE: /home/user/.tpbench
+YYYY-MM-DDThh:mm:ss [I] Reading records ... Done
+YYYY-MM-DDThh:mm:ss [I] List of latest 20 tbatch records
 ===
-BatchTime,RecordTime,Duration,NumArg,Num
+Start Time (UTC)     TBatch ID                                 Type        NTask  NKernel  NScore  Duration (s)
+2026-03-15T08:11:30Z a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2 run             3        2       0         1.234
+2026-03-14T10:05:00Z f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2 benchmark       6        3       0        12.567
 ===
-2024-01-01T08:11:30 [I] TPBench exit.
-
 ```
+
+Column details:
+
+| Column | Source | Format |
+|--------|--------|--------|
+| Start Time (UTC) | `start_utc_bits` decoded | `YYYY-MM-DDThh:mm:ssZ` (ISO 8601) |
+| TBatch ID | `tbatch_id` | 40-character hex string |
+| Type | `batch_type` | `run` (0) or `benchmark` (1) |
+| NTask | `ntask` | integer |
+| NKernel | `nkernel` | integer |
+| NScore | `nscore` | integer (always 0 for now) |
+| Duration (s) | `duration` nanoseconds | seconds with 3 decimal digits |

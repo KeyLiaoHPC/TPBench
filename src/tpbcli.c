@@ -8,6 +8,7 @@
 #include "tpbcli-list.h"
 #include "tpbcli-benchmark.h"
 #include "tpbcli-help.h"
+#include "tpbcli_record.h"
 #include "corelib/tpb-io.h"
 #include "corelib/tpb-types.h"
 
@@ -23,11 +24,14 @@ tpbcli_main(int argc, char **argv)
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v%g\n", TPB_VERSION);
 
-    if (strcmp(argv[1], "run") == 0 || strcmp(argv[1], "r") == 0) {
+    if (strcmp(argv[1], "run") == 0) {
         return tpbcli_run(argc, argv);
     }
     if (strcmp(argv[1], "benchmark") == 0 || strcmp(argv[1], "bench") == 0) {
         return tpbcli_benchmark(argc, argv);
+    }
+    if (strcmp(argv[1], "record") == 0 || strcmp(argv[1], "r") == 0) {
+        return tpbcli_record(argc, argv);
     }
     if (strcmp(argv[1], "list") == 0 || strcmp(argv[1], "ls") == 0) {
         return tpbcli_list(argc, argv);

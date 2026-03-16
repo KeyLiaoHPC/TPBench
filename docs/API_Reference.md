@@ -22,6 +22,7 @@ TPBench (Test Performance Benchmark) is a flexible benchmarking framework that p
 8. [Statistics Functions](#statistics-functions)
 9. [Unit Conversion Functions](#unit-conversion-functions)
 10. [Error Handling](#error-handling)
+11. [Record Database API (rawdb)](#record-database-api-rawdb)
 
 ---
 
@@ -1109,6 +1110,591 @@ int tpb_char_is_legal_fp(double lower, double upper, char *str);
 **Returns:**
 - `1` if legal
 - `0` otherwise
+
+---
+
+## Record Database API (rawdb)
+
+Functions for workspace management, record entry operations, and record file I/O. Declared in `tpb-public.h`.
+
+### Workspace Management
+
+#### `tpb_rawdb_resolve_workspace`
+
+Resolve the current TPBench workspace path using the following priority:
+1. `$TPB_WORKSPACE` environment variable (if set and non-empty)
+2. `$HOME/.tpbench/` if `etc/config.json` exists with a `"name"` field
+3. Create default workspace at `$HOME/.tpbench/` with `etc/config.json` and rawdb subdirectories
+
+```c
+int tpb_rawdb_resolve_workspace(char *out_path, size_t pathlen);
+```
+
+**Parameters:**
+- `out_path`: Buffer to receive the resolved workspace path
+- `pathlen`: Size of the output buffer (should be at least `PATH_MAX`)
+
+**Returns:**
+- `TPBE_SUCCESS` (0) on success
+- `TPBE_NULLPTR_ARG` if arguments are NULL
+- `TPBE_FILE_IO_FAIL` on file system errors
+
+---
+
+#### `tpb_rawdb_init_workspace`
+
+Initialize workspace directory structure. Creates `etc/config.json` and `rawdb/{task_batch,kernel,task}/` directories.
+
+```c
+int tpb_rawdb_init_workspace(const char *workspace_path);
+```
+
+**Parameters:**
+- `workspace_path`: Root workspace directory path
+
+**Returns:**
+- `TPBE_SUCCESS` (0) on success or if already initialized
+- `TPBE_NULLPTR_ARG` if path is NULL
+- `TPBE_FILE_IO_FAIL` on directory creation errors
+
+---
+
+### Magic Signature Operations
+
+#### `tpb_rawdb_build_magic`
+
+Construct an 8-byte TPBench magic signature.
+
+```c
+void tpb_rawdb_build_magic(uint8_t ftype, uint8_t domain,
+                           uint8_t pos, unsigned char out[8]);
+```
+
+**Parameters:**
+- `ftype`: File type (`TPB_RAWDB_FTYPE_ENTRY=0xE0` or `TPB_RAWDB_FTYPE_RECORD=0xD0`)
+- `domain`: Domain (`TPB_RAWDB_DOM_TBATCH=0`, `TPB_RAWDB_DOM_KERNEL=1`, `TPB_RAWDB_DOM_TASK=2`)
+- `pos`: Position mark (`TPB_RAWDB_POS_START=0x53`, `TPB_RAWDB_POS_SPLIT=0x44`, `TPB_RAWDB_POS_END=0x45`)
+- `out`: Output buffer (8 bytes)
+
+**Magic Format:** `E1 54 50 42 <X> <Y> 31 E0` where X = ftype|domain, Y = position
+
+---
+
+#### `tpb_rawdb_validate_magic`
+
+Validate an 8-byte magic signature against expected values.
+
+```c
+int tpb_rawdb_validate_magic(const unsigned char magic[8],
+                             uint8_t ftype, uint8_t domain,
+                             uint8_t pos);
+```
+
+**Parameters:**
+- `magic`: 8-byte magic signature to validate
+- `ftype`: Expected file type
+- `domain`: Expected domain
+- `pos`: Expected position
+
+**Returns:**
+- `1` if valid
+- `0` if invalid
+
+---
+
+#### `tpb_rawdb_magic_scan`
+
+Scan a buffer for TPBench magic signatures.
+
+```c
+int tpb_rawdb_magic_scan(const void *buf, size_t len,
+                         size_t *offsets, int *nfound,
+                         int max_results);
+```
+
+**Parameters:**
+- `buf`: Buffer to scan
+- `len`: Buffer length in bytes
+- `offsets`: Output array for found magic offsets (must be pre-allocated)
+- `nfound`: Output: total number of magic signatures found
+- `max_results`: Maximum results to store in `offsets`
+
+**Returns:**
+- `TPBE_SUCCESS` on success
+- `TPBE_NULLPTR_ARG` if required arguments are NULL
+
+---
+
+### Entry Operations (.tpbe)
+
+Entry files store 128-byte fixed-size record summaries for fast indexing.
+
+#### `tpb_rawdb_entry_append_tbatch`
+
+Append a tbatch entry to `rawdb/task_batch/task_batch.tpbe`.
+
+```c
+int tpb_rawdb_entry_append_tbatch(const char *workspace,
+                                  const tbatch_entry_t *entry);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `entry`: Pointer to 128-byte `tbatch_entry_t` structure
+
+**Returns:**
+- `TPBE_SUCCESS` on success
+- `TPBE_NULLPTR_ARG` if arguments are NULL
+- `TPBE_FILE_IO_FAIL` on file errors
+
+---
+
+#### `tpb_rawdb_entry_append_kernel`
+
+Append a kernel entry to `rawdb/kernel/kernel.tpbe`.
+
+```c
+int tpb_rawdb_entry_append_kernel(const char *workspace,
+                                  const kernel_entry_t *entry);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `entry`: Pointer to 128-byte `kernel_entry_t` structure
+
+---
+
+#### `tpb_rawdb_entry_append_task`
+
+Append a task entry to `rawdb/task/task.tpbe`.
+
+```c
+int tpb_rawdb_entry_append_task(const char *workspace,
+                                const task_entry_t *entry);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `entry`: Pointer to 128-byte `task_entry_t` structure
+
+---
+
+#### `tpb_rawdb_entry_list_tbatch`
+
+List all tbatch entries from the .tpbe file.
+
+```c
+int tpb_rawdb_entry_list_tbatch(const char *workspace,
+                                tbatch_entry_t **entries,
+                                int *count);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `entries`: Output: allocated array of entries (caller must `free()`)
+- `count`: Output: number of entries
+
+**Returns:**
+- `TPBE_SUCCESS` on success (even if no entries)
+- `TPBE_NULLPTR_ARG` if arguments are NULL
+- `TPBE_FILE_IO_FAIL` on file errors
+- `TPBE_MALLOC_FAIL` on allocation failure
+
+**Note:** Returns empty list (entries=NULL, count=0) if file doesn't exist.
+
+---
+
+#### `tpb_rawdb_entry_list_kernel`
+
+List all kernel entries from `rawdb/kernel/kernel.tpbe`.
+
+```c
+int tpb_rawdb_entry_list_kernel(const char *workspace,
+                                kernel_entry_t **entries,
+                                int *count);
+```
+
+---
+
+#### `tpb_rawdb_entry_list_task`
+
+List all task entries from `rawdb/task/task.tpbe`.
+
+```c
+int tpb_rawdb_entry_list_task(const char *workspace,
+                              task_entry_t **entries,
+                              int *count);
+```
+
+---
+
+### Record Operations (.tpbr)
+
+Record files store full attributes, headers, and data for each record.
+
+#### `tpb_rawdb_record_write_tbatch`
+
+Write a complete tbatch record to `<TBatchID>.tpbr`.
+
+```c
+int tpb_rawdb_record_write_tbatch(const char *workspace,
+                                  const tbatch_attr_t *attr,
+                                  const void *data,
+                                  uint64_t datasize);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `attr`: TBatch attributes with populated `headers` array
+- `data`: Record data buffer (may be NULL if `datasize==0`)
+- `datasize`: Size of data in bytes
+
+**Returns:**
+- `TPBE_SUCCESS` on success
+- `TPBE_NULLPTR_ARG` if required arguments are NULL
+- `TPBE_FILE_IO_FAIL` on write errors
+
+---
+
+#### `tpb_rawdb_record_read_tbatch`
+
+Read a tbatch record from `<TBatchID>.tpbr`.
+
+```c
+int tpb_rawdb_record_read_tbatch(const char *workspace,
+                                 const unsigned char tbatch_id[20],
+                                 tbatch_attr_t *attr,
+                                 void **data,
+                                 uint64_t *datasize);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `tbatch_id`: 20-byte TBatchID
+- `attr`: Output attributes (headers allocated internally)
+- `data`: Output data buffer (caller must `free()`, may be NULL)
+- `datasize`: Output data size
+
+**Returns:**
+- `TPBE_SUCCESS` on success
+- `TPBE_FILE_IO_FAIL` on read errors
+- `TPBE_MALLOC_FAIL` on allocation failure
+
+**Note:** Use `tpb_rawdb_free_headers()` to free `attr->headers`.
+
+---
+
+#### `tpb_rawdb_record_write_kernel`
+
+Write a kernel record to `<KernelID>.tpbr`.
+
+```c
+int tpb_rawdb_record_write_kernel(const char *workspace,
+                                  const kernel_attr_t *attr,
+                                  const void *data,
+                                  uint64_t datasize);
+```
+
+---
+
+#### `tpb_rawdb_record_read_kernel`
+
+Read a kernel record from `<KernelID>.tpbr`.
+
+```c
+int tpb_rawdb_record_read_kernel(const char *workspace,
+                                 const unsigned char kernel_id[20],
+                                 kernel_attr_t *attr,
+                                 void **data,
+                                 uint64_t *datasize);
+```
+
+---
+
+#### `tpb_rawdb_record_write_task`
+
+Write a task record to `<TaskRecordID>.tpbr`.
+
+```c
+int tpb_rawdb_record_write_task(const char *workspace,
+                                const task_attr_t *attr,
+                                const void *data,
+                                uint64_t datasize);
+```
+
+---
+
+#### `tpb_rawdb_record_read_task`
+
+Read a task record from `<TaskRecordID>.tpbr`.
+
+```c
+int tpb_rawdb_record_read_task(const char *workspace,
+                               const unsigned char task_id[20],
+                               task_attr_t *attr,
+                               void **data,
+                               uint64_t *datasize);
+```
+
+---
+
+#### `tpb_rawdb_free_headers`
+
+Free header array allocated by record read functions.
+
+```c
+void tpb_rawdb_free_headers(tpb_meta_header_t *headers,
+                            uint32_t nheader);
+```
+
+**Parameters:**
+- `headers`: Header array (may be NULL, in which case no-op)
+- `nheader`: Number of headers
+
+---
+
+### ID Generation
+
+All IDs are 20-byte SHA1 hashes. Use `tpb_rawdb_id_to_hex()` to convert to 40-char hex string.
+
+#### `tpb_rawdb_gen_tbatch_id`
+
+Generate TBatchID from execution context.
+
+```c
+int tpb_rawdb_gen_tbatch_id(tpb_dtbits_t utc_bits,
+                            uint64_t btime,
+                            const char *hostname,
+                            const char *username,
+                            uint32_t front_pid,
+                            unsigned char id_out[20]);
+```
+
+**Formula:** `SHA1("tbatch" + utc_bits + btime + hostname + username + front_pid)`
+
+---
+
+#### `tpb_rawdb_gen_kernel_id`
+
+Generate KernelID from kernel artifacts.
+
+```c
+int tpb_rawdb_gen_kernel_id(const char *kernel_name,
+                            const unsigned char so_sha1[20],
+                            const unsigned char bin_sha1[20],
+                            unsigned char id_out[20]);
+```
+
+**Formula:** `SHA1("kernel" + kernel_name + so_sha1 + bin_sha1)`
+
+---
+
+#### `tpb_rawdb_gen_task_id`
+
+Generate TaskRecordID from invocation context.
+
+```c
+int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
+                          uint64_t btime,
+                          const char *hostname,
+                          const char *username,
+                          const unsigned char tbatch_id[20],
+                          const unsigned char kernel_id[20],
+                          uint32_t order,
+                          unsigned char id_out[20]);
+```
+
+**Formula:** `SHA1("task" + utc_bits + btime + hostname + username + tbatch_id + kernel_id + order)`
+
+---
+
+#### `tpb_rawdb_id_to_hex`
+
+Convert 20-byte ID to 40-character hex string.
+
+```c
+void tpb_rawdb_id_to_hex(const unsigned char id[20],
+                         char hex[41]);
+```
+
+**Parameters:**
+- `id`: 20-byte binary ID
+- `hex`: Output buffer (41 bytes: 40 hex chars + null terminator)
+
+---
+
+### Record Data Types
+
+#### `tpb_dtbits_t`
+
+64-bit compact datetime representation.
+
+```c
+typedef uint64_t tpb_dtbits_t;
+```
+
+Bit layout:
+- Bits 0-5: seconds (0-59)
+- Bits 6-11: minutes (0-59)
+- Bits 12-16: hours (0-23)
+- Bits 17-21: day (1-31)
+- Bits 22-25: month (1-12)
+- Bits 26-33: year bias from 1970 (0-255)
+- Bits 34-41: timezone in 15-min increments
+- Bits 42-63: reserved
+
+Use `tpb_ts_bits_to_isoutc()` to convert to ISO 8601 string.
+
+---
+
+#### `tpb_dim_info_t`
+
+Dimension information for multi-dimensional data.
+
+```c
+typedef struct tpb_dim_info {
+    unsigned char name[256];    // Dimension name
+    uint64_t n;                 // Number of elements >= 1
+} tpb_dim_info_t;               // 264 bytes
+```
+
+---
+
+#### `tpb_meta_header_t`
+
+Metadata header describing record data layout.
+
+```c
+typedef struct tpb_meta_header {
+    uint32_t block_size;        // Total header size on disk
+    uint32_t ndim;              // Number of dimensions [1, 7]
+    uint64_t data_size;         // Record data size in bytes
+    uint64_t type_bits;         // Data type control bits (TPB_*_T)
+    unsigned char name[256];    // Header name
+    unsigned char note[2048];   // Description
+    tpb_dim_info_t *dim_info;   // Pointer to ndim dimension info
+} tpb_meta_header_t;
+```
+
+**On-disk size:** `2328 + ndim * 264` bytes
+
+---
+
+#### Entry Structures
+
+**`tbatch_entry_t`** (128 bytes) - Slim tbatch summary:
+
+```c
+typedef struct tbatch_entry {
+    unsigned char tbatch_id[20];    // TBatchID
+    tpb_dtbits_t start_utc_bits;    // Start datetime
+    uint64_t duration;              // Duration in nanoseconds
+    char hostname[64];              // Hostname
+    uint32_t nkernel;               // Number of kernels
+    uint32_t ntask;                 // Number of tasks
+    uint32_t nscore;                // Number of scores (always 0 for now)
+    uint32_t batch_type;            // 0=run, 1=benchmark
+    unsigned char reserve[12];      // Reserved
+} tbatch_entry_t;
+```
+
+**`kernel_entry_t`** (128 bytes) - Slim kernel summary:
+
+```c
+typedef struct kernel_entry {
+    unsigned char kernel_id[20];    // KernelID
+    char kernel_name[64];           // Kernel name
+    unsigned char so_sha1[20];    // Shared library SHA1
+    uint32_t kctrl;                 // Kernel control bits
+    uint32_t nparm;                 // Number of parameters
+    uint32_t nmetric;               // Number of metrics
+    unsigned char reserve[12];      // Reserved
+} kernel_entry_t;
+```
+
+**`task_entry_t`** (128 bytes) - Slim task summary:
+
+```c
+typedef struct task_entry {
+    unsigned char task_record_id[20];   // TaskRecordID
+    unsigned char tbatch_id[20];        // TBatchID
+    unsigned char kernel_id[20];        // KernelID
+    tpb_dtbits_t utc_bits;              // Invocation datetime
+    uint64_t duration;                  // Duration (ns)
+    uint32_t exit_code;                 // Exit code
+    uint32_t handle_index;              // Handle index
+    int32_t mpi_rank;                   // MPI rank (-1 if non-MPI)
+    unsigned char reserve[40];          // Reserved
+} task_entry_t;
+```
+
+---
+
+#### Attribute Structures
+
+**`tbatch_attr_t`** - Full tbatch attributes for .tpbr:
+
+```c
+typedef struct tbatch_attr {
+    unsigned char tbatch_id[20];    // Primary Link ID
+    unsigned char dup_to[20];       // Duplicate tracking
+    tpb_dtbits_t utc_bits;          // Start datetime
+    uint64_t btime;                 // Boot time (ns)
+    uint64_t duration;              // Duration (ns)
+    char hostname[64];              // Hostname
+    char username[64];              // Username
+    uint32_t front_pid;             // Front-end PID
+    uint32_t nkernel;               // Kernel count
+    uint32_t ntask;                 // Task count
+    uint32_t nscore;                // Score count
+    uint32_t batch_type;            // 0=run, 1=benchmark
+    uint32_t nheader;               // Number of headers
+    tpb_meta_header_t *headers;     // Header array
+} tbatch_attr_t;
+```
+
+**`kernel_attr_t`** - Full kernel attributes:
+
+```c
+typedef struct kernel_attr {
+    unsigned char kernel_id[20];    // KernelID
+    unsigned char dup_to[20];       // Duplicate tracking
+    unsigned char src_sha1[20];     // Source SHA1
+    unsigned char so_sha1[20];     // Shared library SHA1
+    unsigned char bin_sha1[20];    // Executable SHA1
+    char kernel_name[256];          // Kernel name
+    char version[64];               // Version string
+    char description[2048];          // Description
+    uint32_t nparm;                 // Parameter count
+    uint32_t nmetric;               // Metric count
+    uint32_t kctrl;                 // Control bits (FLI/PLI/ALI)
+    uint32_t nheader;               // Header count
+    uint32_t reserve;               // Padding
+    tpb_meta_header_t *headers;     // Header array
+} kernel_attr_t;
+```
+
+**`task_attr_t`** - Full task attributes:
+
+```c
+typedef struct task_attr {
+    unsigned char task_record_id[20];   // TaskRecordID
+    unsigned char dup_to[20];           // Duplicate tracking
+    unsigned char tbatch_id[20];        // Foreign key: TBatchID
+    unsigned char kernel_id[20];        // Foreign key: KernelID
+    tpb_dtbits_t utc_bits;              // Invocation datetime
+    uint64_t btime;                     // Boot time (ns)
+    uint64_t duration;                  // Duration (ns)
+    uint32_t exit_code;                 // Exit code
+    uint32_t handle_index;              // Handle index
+    int32_t mpi_rank;                   // MPI rank (-1 if non-MPI)
+    uint32_t ninput;                    // Input headers count
+    uint32_t noutput;                   // Output headers count
+    uint32_t nheader;                   // Total headers
+    uint32_t reserve;                   // Padding
+    tpb_meta_header_t *headers;         // Header array
+} task_attr_t;
+```
 
 ---
 

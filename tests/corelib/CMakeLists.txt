@@ -75,9 +75,42 @@ tpb_add_subcase(A3 A3.15 null_pointer       test-strftime corelib)
 tpb_add_subcase(A3 A3.16 year_range         test-strftime corelib)
 tpb_add_subcase(A3 A3.17 timezone_bias      test-strftime corelib)
 
+# --- rawdb test executable (Pack A4) ---
+add_executable(test-rawdb EXCLUDE_FROM_ALL
+    test_rawdb.c
+)
+target_include_directories(test-rawdb PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-rawdb PRIVATE tpbench m)
+set_target_properties(test-rawdb PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+# Pack A4 sub-cases
+tpb_add_subcase(A4 A4.1  magic_construct    test-rawdb corelib)
+tpb_add_subcase(A4 A4.2  magic_validate_ok  test-rawdb corelib)
+tpb_add_subcase(A4 A4.3  magic_validate_bad test-rawdb corelib)
+tpb_add_subcase(A4 A4.4  magic_scan_tpbe    test-rawdb corelib)
+tpb_add_subcase(A4 A4.5  magic_scan_tpbr    test-rawdb corelib)
+tpb_add_subcase(A4 A4.6  id_tbatch          test-rawdb corelib)
+tpb_add_subcase(A4 A4.7  id_kernel          test-rawdb corelib)
+tpb_add_subcase(A4 A4.8  id_task            test-rawdb corelib)
+tpb_add_subcase(A4 A4.9  id_uniqueness      test-rawdb corelib)
+tpb_add_subcase(A4 A4.10 entry_tbatch       test-rawdb corelib)
+tpb_add_subcase(A4 A4.11 entry_kernel       test-rawdb corelib)
+tpb_add_subcase(A4 A4.12 entry_task         test-rawdb corelib)
+tpb_add_subcase(A4 A4.13 entry_multi        test-rawdb corelib)
+tpb_add_subcase(A4 A4.14 record_tbatch      test-rawdb corelib)
+tpb_add_subcase(A4 A4.15 record_kernel      test-rawdb corelib)
+tpb_add_subcase(A4 A4.16 record_task        test-rawdb corelib)
+tpb_add_subcase(A4 A4.17 header_1d          test-rawdb corelib)
+tpb_add_subcase(A4 A4.18 header_multidim    test-rawdb corelib)
+tpb_add_subcase(A4 A4.19 header_mixed       test-rawdb corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
-    DEPENDS test-tpb-run-fli test-tpb-run-pli test-strftime
+    DEPENDS test-tpb-run-fli test-tpb-run-pli test-strftime test-rawdb
 )
 
 add_custom_target(check_corelib
