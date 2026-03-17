@@ -75,7 +75,6 @@ typedef struct tpb_rt_parm {
     char name[TPBM_NAME_STR_MAX_LEN];        // Parameter name
     char note[TPBM_NOTE_STR_MAX_LEN];        // Description
     tpb_parm_value_t value;                  // Current value
-    tpb_parm_value_t default_value;          // Default value
     TPB_DTYPE ctrlbits;                      // Control bits
     int nlims;                               // Number of limits
     tpb_parm_value_t *plims;                 // Limit values
@@ -647,13 +646,13 @@ Add a runtime parameter to the current kernel.
 
 ```c
 int tpb_k_add_parm(const char *name, const char *note,
-                   const char *default_value, TPB_DTYPE dtype, ...);
+                   const char *default_val, TPB_DTYPE dtype, ...);
 ```
 
 **Parameters:**
 - `name`: Parameter name (used for CLI argument matching)
 - `note`: Human-readable parameter description
-- `default_value`: String representation of default value
+- `default_val`: String representation of default value
 - `dtype`: Combined data type: source | check | type
 - `...`: Variable arguments based on validation mode
 

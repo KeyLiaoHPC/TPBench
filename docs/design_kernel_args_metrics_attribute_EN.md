@@ -63,7 +63,6 @@ typedef struct tpb_rt_parm {
     char name[TPBM_NAME_STR_MAX_LEN];      // Parameter name (max 256 chars)
     char note[TPBM_NOTE_STR_MAX_LEN];      // Parameter description (max 2048 chars)
     tpb_parm_value_t value;                // Current value
-    tpb_parm_value_t default_value;        // Default value
     TPB_DTYPE ctrlbits;                    // Control bits (source|check|type)
     int nlims;                             // Number of limit values
     tpb_parm_value_t *plims;               // Limit value array (range bounds or list values)
@@ -266,7 +265,7 @@ tpb_k_add_output("data_size", "Total data processed",
 |--------------------|-----------------|------------------|
 | **Name** | `name` (256 chars) | `name` (256 chars) |
 | **Description** | `note` (2048 chars) | `note` (2048 chars) |
-| **Value/Data** | `value` + `default_value` | `p` (pointer) + `n` (count) |
+| **Value/Data** | `value` | `p` (pointer) + `n` (count) |
 | **Type** | `ctrlbits` (32-bit encoding) | `dtype` (data type) |
 | **Validation** | `nlims` + `plims` | None |
 | **Unit** | None | `unit` (64-bit encoding) |

@@ -284,10 +284,6 @@ build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
         }
     }
 
-    for (int i = 0; i < nparms; i++) {
-        rt_parms[i].value = rt_parms[i].default_value;
-    }
-
     *rt_parms_out = rt_parms;
     *nparms_out = nparms;
     return 0;

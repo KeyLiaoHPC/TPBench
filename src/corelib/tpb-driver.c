@@ -123,7 +123,6 @@ _tpb_deep_copy_kernel(const tpb_kernel_t *src)
             snprintf(dst->info.parms[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
                      src->info.parms[i].note);
             dst->info.parms[i].value = src->info.parms[i].value;
-            dst->info.parms[i].default_value = src->info.parms[i].default_value;
             dst->info.parms[i].ctrlbits = src->info.parms[i].ctrlbits;
             dst->info.parms[i].nlims = src->info.parms[i].nlims;
 
@@ -264,7 +263,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
     snprintf(kernel_common.info.parms[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
     kernel_common.info.parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[0].default_value.i64 = 10;
     kernel_common.info.parms[0].value.i64 = 10;
     kernel_common.info.parms[0].nlims = 2;
     kernel_common.info.parms[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -278,7 +276,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "twarm");
     snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Warm-up time in milliseconds");
     kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[1].default_value.i64 = 100;
     kernel_common.info.parms[1].value.i64 = 100;
     kernel_common.info.parms[1].nlims = 2;
     kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -293,7 +290,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "total_memsize");
     snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
     kernel_common.info.parms[2].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[2].default_value.u64 = 32;
     kernel_common.info.parms[2].value.u64 = 32;
     kernel_common.info.parms[2].nlims = 2;
     kernel_common.info.parms[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -593,7 +589,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
 
 int
 tpb_k_add_parm(const char *name, const char *note,
-               const char *default_value, TPB_DTYPE dtype, ...)
+               const char *default_val, TPB_DTYPE dtype, ...)
 {
     int tpberr = 0;
     int nparms;
@@ -609,7 +605,7 @@ tpb_k_add_parm(const char *name, const char *note,
                    "tpb_k_add_parm cannot be called during kernel execution.\n");
         return TPBE_ILLEGAL_CALL;
     }
-    if (name == NULL || default_value == NULL || note == NULL) {
+    if (name == NULL || default_val == NULL || note == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
@@ -650,27 +646,22 @@ tpb_k_add_parm(const char *name, const char *note,
         case TPB_INT16_T:
         case TPB_INT32_T:
         case TPB_INT64_T:
-            parm->default_value.i64 = atoll(default_value);
-            parm->value.i64 = parm->default_value.i64;
+            parm->value.i64 = atoll(default_val);
             break;
         case TPB_UINT8_T:
         case TPB_UINT16_T:
         case TPB_UINT32_T:
         case TPB_UINT64_T:
-            parm->default_value.u64 = strtoull(default_value, NULL, 10);
-            parm->value.u64 = parm->default_value.u64;
+            parm->value.u64 = strtoull(default_val, NULL, 10);
             break;
         case TPB_FLOAT_T:
-            parm->default_value.f32 = (float)atof(default_value);
-            parm->value.f32 = parm->default_value.f32;
+            parm->value.f32 = (float)atof(default_val);
             break;
         case TPB_DOUBLE_T:
-            parm->default_value.f64 = atof(default_value);
-            parm->value.f64 = parm->default_value.f64;
+            parm->value.f64 = atof(default_val);
             break;
         case TPB_CHAR_T:
-            parm->default_value.c = default_value[0];
-            parm->value.c = default_value[0];
+            parm->value.c = default_val[0];
             break;
         default:
             va_end(args);
@@ -1085,11 +1076,9 @@ tpb_driver_add_handle(const char *kernel_name)
         }
         hdl->argpack.n = k_nparms;
 
-        /* Step 1: Copy kernel-specific parameters with their default values */
+        /* Step 1: Copy kernel-specific parameters (value already holds the default) */
         for (int i = 0; i < k_nparms; i++) {
             memcpy(&hdl->argpack.args[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
-            /* Set value to default_value */
-            hdl->argpack.args[i].value = kernel->info.parms[i].default_value;
         }
 
         /* Step 2: Check each argument's name and set common argument from pseudo handle */
@@ -1835,10 +1824,8 @@ tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
                 } else if (type_code == TPB_CHAR_T) {
                     value->c = argv[i][0];
                 }
-            } else {
-                /* Use default value */
-                handle->argpack.args[i].value = kernel->info.parms[i].default_value;
             }
+            /* else: memcpy already set value to the default from kernel template */
         }
     } else {
         handle->argpack.n = 0;

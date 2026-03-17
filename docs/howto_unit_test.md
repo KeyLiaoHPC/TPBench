@@ -359,7 +359,6 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
         for (int i = 0; i < hdl->kernel.info.nparms; i++) {
             memcpy(&hdl->argpack.args[i], &hdl->kernel.info.parms[i],
                    sizeof(tpb_rt_parm_t));
-            hdl->argpack.args[i].value = hdl->kernel.info.parms[i].default_value;
             /* Deep copy plims if present */
             if (hdl->kernel.info.parms[i].plims != NULL &&
                 hdl->kernel.info.parms[i].nlims > 0) {

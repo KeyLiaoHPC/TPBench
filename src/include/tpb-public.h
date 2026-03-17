@@ -122,7 +122,6 @@ typedef struct tpb_rt_parm {
     char name[TPBM_NAME_STR_MAX_LEN];
     char note[TPBM_NOTE_STR_MAX_LEN];
     tpb_parm_value_t value;
-    tpb_parm_value_t default_value;
     TPB_DTYPE ctrlbits;
     int nlims;
     tpb_parm_value_t *plims;
@@ -219,7 +218,7 @@ int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
  *
  * @param name Parameter name (used for CLI argument matching)
  * @param note Human-readable parameter description
- * @param default_value String representation of default value
+ * @param default_val String representation of default value
  * @param dtype Combined data type: source | check | type
  * @param ... Variable arguments based on validation mode:
  *            - TPB_PARM_RANGE: (lo, hi) range bounds
@@ -228,7 +227,7 @@ int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
  * @return 0 on success, error code otherwise
  */
 int tpb_k_add_parm(const char *name, const char *note,
-                   const char *default_value, TPB_DTYPE dtype, ...);
+                   const char *default_val, TPB_DTYPE dtype, ...);
 
 /**
  * @brief Set the runner function for the current kernel.
