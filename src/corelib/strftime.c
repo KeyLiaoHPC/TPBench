@@ -232,7 +232,9 @@ tpb_ts_bits_to_datetime(tpb_dtbits_t bits, tpb_datetime_t *dt,
 
     /* Decode timezone bias from 15-min increments */
     if (tz_bias_min != NULL) {
-        int8_t tz_inc = (int8_t)((bits & TPB_TS_MASK_TZ) >> TPB_TS_BIT_TZ);
+        uint8_t tz_inc_u = (uint8_t)((bits & TPB_TS_MASK_TZ) >> TPB_TS_BIT_TZ);
+        int8_t tz_inc = (tz_inc_u <= 127) ? (int8_t)tz_inc_u : (int8_t)(tz_inc_u - 256);
+        // int8_t tz_inc = (int8_t)((bits & TPB_TS_MASK_TZ) >> TPB_TS_BIT_TZ);
         *tz_bias_min = (int16_t)tz_inc * TPB_TS_TZ_INCREMENT;
     }
 
