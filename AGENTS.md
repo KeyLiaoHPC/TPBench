@@ -121,7 +121,6 @@ TPBench/
     │   ├── test_rawdb.c        # Raw database tests
     │   ├── test_strftime.c     # Time formatting tests
     │   ├── mock_*.c/h          # Mock implementations for testing
-    │   ├── tpb_run_fli.c       # FLI interface tests
     │   └── tpb_run_pli.c       # PLI interface tests
     └── tpbcli/
         └── test-cli-run-dimargs.c  # CLI dimension argument tests

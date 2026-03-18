@@ -71,9 +71,7 @@ typedef uint32_t TPB_DTYPE_U32;
 /* Kernel integration types */
 typedef uint32_t TPB_K_CTRL;
 #define TPB_KTYPE_MASK      ((TPB_K_CTRL)0x0000000F)
-#define TPB_KTYPE_FLI       ((TPB_K_CTRL)(1 << 0))
 #define TPB_KTYPE_PLI       ((TPB_K_CTRL)(1 << 1))
-#define TPB_KTYPE_ALI       ((TPB_K_CTRL)(1 << 2))
 
 /* Error codes */
 enum _tpb_errno {
@@ -161,7 +159,6 @@ typedef struct tpb_k_static_info {
 
 /** @brief Kernel function pointers */
 typedef struct tpb_k_func {
-    int (*k_run)(void);
     int (*k_output_decorator)(void);
 } tpb_k_func_t;
 
@@ -229,18 +226,13 @@ int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
 int tpb_k_add_parm(const char *name, const char *note,
                    const char *default_val, TPB_DTYPE dtype, ...);
 
-/**
- * @brief Set the runner function for the current kernel.
- * @param runner Function pointer to kernel runner
- * @return 0 on success, error code otherwise
- */
-int tpb_k_add_runner(int (*runner)(void));
+
 
 /**
  * @brief Register a new output data definition for the current kernel.
  *
  * Must be called during kernel registration (after tpb_k_register,
- * before tpb_k_add_runner) to define output metrics.
+ * before tpb_k_finalize_pli) to define output metrics.
  *
  * @param name   Output name (used to look up when allocating/reporting).
  * @param note   Human-readable description.
@@ -280,10 +272,10 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
 /* ===== PLI (Process-Level Integration) API ===== */
 
 /**
- * @brief Finalize PLI kernel registration.
+ * @brief Finalize kernel registration.
  *
- * For PLI kernels, this replaces tpb_k_add_runner(). It increments the kernel
- * count without setting a runner function (PLI kernels use exec instead).
+ * Increments the kernel count and completes registration. Called after all
+ * parameters and outputs have been added via tpb_k_add_parm/tpb_k_add_output.
  *
  * @return 0 on success, error code otherwise.
  */
@@ -339,17 +331,6 @@ int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
  * @return 0 on success, error code otherwise.
  */
 int tpb_run_pli(tpb_k_rthdl_t *hdl);
-
-/**
- * @brief Run an FLI kernel by calling its runner function directly.
- *
- * Initializes output package from kernel registration, prints arguments,
- * calls the kernel's k_run() function, and outputs results.
- *
- * @param hdl Runtime handle for the kernel (must be non-NULL).
- * @return 0 on success, error code otherwise.
- */
-int tpb_run_fli(tpb_k_rthdl_t *hdl);
 
 /* ===== CLI Output Helpers ===== */
 

@@ -48,7 +48,7 @@ main(int argc, char **argv)
         return err;
     }
 
-    /* 3. Register kernel (FLI registration for full functionality) */
+    /* 3. Register kernel (PLI registration with outputs and runner) */
     err = _tpbk_register_stream();
     if (err != 0) {
         fprintf(stderr, "Error: Failed to register kernel\n");

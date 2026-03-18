@@ -380,7 +380,7 @@ typedef struct kernel_attr {
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID, ASCII */
     unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files, ASCII */
     unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file, ASCII */
-    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, all-zero for FLI-only kernels, ASCII */
+    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, ASCII */
 
     char kernel_name[256];              /**< Kernel name (without tpbk_ prefix), utf-8 */
     char version[64];                   /**< Version string, utf-8 */
@@ -388,7 +388,7 @@ typedef struct kernel_attr {
 
     uint32_t nparm;                     /**< Number of registered parameters */
     uint32_t nmetric;                   /**< Number of registered output metrics */
-    uint32_t kctrl;                     /**< Kernel control bits (FLI=1, PLI=2, ALI=4) */
+    uint32_t kctrl;                     /**< Kernel control bits (PLI=2) */
     uint32_t nheader;                   /**< # of headers (= nparm + nmetric) */
     uint32_t reserve;                   /**< Padding for 8-byte alignment */
 } kernel_attr_t;
@@ -410,7 +410,7 @@ SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
 ```
 
 Notes:
-- `kctrl` reuses `TPB_KTYPE_FLI/TPB_KTYPE_PLI/TPB_KTYPE_ALI` from `tpb-public.h`.
+- `kctrl` uses `TPB_KTYPE_PLI` from `tpb-public.h`. `TPB_KTYPE_FLI` and `TPB_KTYPE_ALI` are deprecated aliases for `TPB_KTYPE_PLI`.
 - `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
 
 #### 2.3.2. Entry Structure (.tpbe)

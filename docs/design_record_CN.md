@@ -603,7 +603,7 @@ typedef struct kernel_record {
     
     uint32_t nparms;                    /**< kernel定义中的参数数量 */
     uint32_t nouts;                     /**< kernel定义中的输出指标数量 */
-    uint32_t kctrl;                     /**< kernel控制位（FLI=1, PLI=2, ALI=4） */
+    uint32_t kctrl;                     /**< kernel控制位（PLI=2） */
     uint32_t reserve;                   /**< 填充至8字节对齐 */
 } kernel_record_t;
 ```
@@ -611,7 +611,7 @@ typedef struct kernel_record {
 **字段说明：**
 - `source_file_hash[32]`：用于生成KernelID和完整性校验
 - `compile_utc_bits`：编译时间（非执行时间）
-- `kctrl`：复用`tpb-public.h`定义的`TPB_KTYPE_FLI/PLI/ALI`
+- `kctrl`：使用`tpb-public.h`定义的`TPB_KTYPE_PLI`。`TPB_KTYPE_FLI`和`TPB_KTYPE_ALI`已废弃，均为`TPB_KTYPE_PLI`的别名
 - `nparms`, `nouts`：来自kernel注册的参数和输出定义数量
 
 **2) Magic签名（Kernel的类型=0xe3）**

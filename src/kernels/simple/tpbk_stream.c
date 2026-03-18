@@ -42,7 +42,6 @@
 static double epsilon = 1.e-8;
 
 // Forward declarations
-int register_stream(void);
 int _tpbk_register_stream(void);
 int _tpbk_run_stream(void);
 int tpbk_pli_register_stream(void);
@@ -52,13 +51,6 @@ static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_si
                    uint32_t *array_size_out, double *copy_bw, double *scale_bw,
                    double *add_bw, double *triad_bw);
 static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
-
-int
-register_stream(void)
-{
-    /* Wrapper function for backward compatibility */
-    return _tpbk_register_stream();
-}
 
 /* PLI registration: register only name, note, and parameters (no outputs, no runner) */
 int
@@ -70,7 +62,7 @@ tpbk_pli_register_stream(void)
     err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_PLI);
     if (err != 0) return err;
 
-    /* Kernel input parameters - same as FLI registration */
+    /* Kernel input parameters */
     err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
@@ -99,8 +91,8 @@ _tpbk_register_stream(void)
 {
     int err;
     
-    /* Register to TPBench */
-    err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_FLI);
+    /* Register to TPBench as PLI kernel */
+    err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_PLI);
     if(err != 0) return err;
 
     /* Kernel input parameters */
@@ -140,11 +132,8 @@ _tpbk_register_stream(void)
     err = tpb_k_add_output("array_size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if(err != 0) return err;
-    // Set runner function.
-    err = tpb_k_add_runner(_tpbk_run_stream);
-    if(err != 0) return err;
-    
-    return 0;
+
+    return tpb_k_finalize_pli();
 }
 
 int

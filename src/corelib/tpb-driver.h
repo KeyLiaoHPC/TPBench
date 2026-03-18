@@ -150,17 +150,4 @@ void tpb_driver_disable_kernel_reg(void);
  */
 int tpb_driver_reset_handles(void);
 
-/**
- * @brief Set the integration mode for the driver.
- * @param mode TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI
- * @return 0 on success, error code otherwise.
- */
-int tpb_driver_set_integ_mode(int mode);
-
-/**
- * @brief Get the current integration mode.
- * @return Current integration mode (TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI).
- */
-int tpb_driver_get_integ_mode(void);
-
 #endif /* TPB_DRIVER_H */

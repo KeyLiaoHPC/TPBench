@@ -113,7 +113,6 @@ typedef struct tpb_kernel {
 } tpb_kernel_t;
 
 typedef struct tpb_k_func {
-    int (*k_run)(void);                         // Runner function
     int (*k_output_decorator)(void);            // Output decorator
 } tpb_k_func_t;
 ```
@@ -578,27 +577,6 @@ int tpb_run_pli(tpb_k_rthdl_t *hdl);
 
 ---
 
-### `tpb_run_fli`
-
-Run an FLI kernel by calling its runner function directly.  Initializes output
-package from kernel registration, prints arguments, calls the kernel's
-`k_run()` function, and outputs results.
-
-Declared in `tpb-public.h`.
-
-```c
-int tpb_run_fli(tpb_k_rthdl_t *hdl);
-```
-
-**Parameters:**
-- `hdl`: Runtime handle for the kernel (must be non-NULL)
-
-**Returns:**
-- `0` on success
-- Error code otherwise
-
----
-
 ### `tpb_driver_clean_handle`
 
 Clean up and free all memory in the kernel runtime handle.
@@ -707,16 +685,18 @@ tpb_k_add_parm("epsilon", "Convergence threshold", "1e-6",
 
 ---
 
-### `tpb_k_add_runner`
+### `tpb_k_add_runner` (Deprecated)
 
-Set the runner function for the current kernel.
+Deprecated compatibility wrapper. Ignores the runner pointer and calls
+`tpb_k_finalize_pli()` internally. Kept so that existing kernel sources
+compile without changes.
 
 ```c
 int tpb_k_add_runner(int (*runner)(void));
 ```
 
 **Parameters:**
-- `runner`: Function pointer to kernel runner
+- `runner`: Function pointer (ignored)
 
 **Returns:**
 - `0` on success
@@ -743,7 +723,7 @@ int tpb_k_add_output(const char *name, const char *note,
 - `0` on success
 - Error code otherwise
 
-**Note:** Must be called during kernel registration (after `tpb_k_register`, before `tpb_k_add_runner`).
+**Note:** Must be called during kernel registration (after `tpb_k_register`, before `tpb_k_finalize_pli`).
 
 ---
 
@@ -1666,7 +1646,7 @@ typedef struct kernel_attr {
     char description[2048];          // Description
     uint32_t nparm;                 // Parameter count
     uint32_t nmetric;               // Metric count
-    uint32_t kctrl;                 // Control bits (FLI/PLI/ALI)
+    uint32_t kctrl;                 // Control bits (PLI=2)
     uint32_t nheader;               // Header count
     uint32_t reserve;               // Padding
     tpb_meta_header_t *headers;     // Header array
@@ -1748,8 +1728,8 @@ void register_my_kernel(void) {
     // Add output
     tpb_k_add_output("time", "Execution time", TPB_DOUBLE_T, TPB_UNIT_NS);
     
-    // Set runner
-    tpb_k_add_runner(my_kernel_runner);
+    // Finalize registration
+    tpb_k_finalize_pli();
 }
 
 int main(void) {

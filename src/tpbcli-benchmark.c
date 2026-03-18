@@ -407,9 +407,6 @@ tpbcli_benchmark(int argc, char **argv)
     tpb_printf(TPBM_PRTN_M_DIRECT, "Batches: %d, Scores: %d\n", 
                bench.nbatches, bench.nscores);
     
-    /* Set PLI integration mode */
-    tpb_driver_set_integ_mode(TPB_INTEG_MODE_PLI);
-    
     /* Set default timer (same as tpbcli-run) */
     err = tpb_argp_set_timer("clock_gettime");
     __tpbm_exit_on_error(err, "At tpbcli-benchmark.c: tpb_argp_set_timer");

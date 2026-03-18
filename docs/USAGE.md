@@ -70,7 +70,7 @@ tpbcli run <tpbench_options> <default_args> \
 ```
 
 `<tpbench_options>` supported options include:
-- `-P/-F`: Select PLI-integrated kernels or FLI-integrated kernels, default is `-P`.
+- `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.

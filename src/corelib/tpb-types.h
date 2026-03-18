@@ -23,10 +23,6 @@
 /** @brief Maximum number of kernels */
 #define TPBM_CLI_K_MAX 128
 
-/** Integration mode for driver */
-#define TPB_INTEG_MODE_FLI  0
-#define TPB_INTEG_MODE_PLI  1
-
 typedef struct _tpb_error {
     tpb_errno_t err_code;
     unsigned err_type;

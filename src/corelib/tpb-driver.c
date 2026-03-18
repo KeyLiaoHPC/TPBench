@@ -38,9 +38,6 @@ static tpb_timer_t timer;
 static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
 static int timer_set = 0;                  // flag to track if timer is set
 
-/* Integration mode: PLI (default) or FLI */
-static int integration_mode = TPB_INTEG_MODE_PLI;
-
 static int
 _tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
 {
@@ -185,7 +182,6 @@ _tpb_deep_copy_kernel(const tpb_kernel_t *src)
     }
 
     /* Copy function pointers */
-    dst->func.k_run = src->func.k_run;
     dst->func.k_output_decorator = src->func.k_output_decorator;
 
     return dst;
@@ -325,15 +321,11 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Register kernels based on integration mode */
-    if (integration_mode == TPB_INTEG_MODE_PLI) {
-        /* PLI mode: dynamically scan for kernels */
-        err = tpb_dl_scan();
-        if (err != 0) {
-            return err;
-        }
+    /* Dynamically scan for kernel shared libraries */
+    err = tpb_dl_scan();
+    if (err != 0) {
+        return err;
     }
-    /* FLI mode: kernels are registered by tpbcli after this call */
 
     /* Create pseudo handle (ihdl=0) for _tpb_common */
     handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));
@@ -358,81 +350,6 @@ tpb_register_kernel()
     current_kernel = &kernel_common;
 
     return 0;
-}
-
-int
-tpb_run_fli(tpb_k_rthdl_t *hdl)
-{
-    int err;
-
-    if (hdl == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-    current_rthdl = hdl;
-
-
-    /* Initialize handle\'s respack from kernel\'s registered outputs */
-    for (int i = 0; i < nkern; i++) {
-        if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {
-            int nouts = kernel_all[i].info.nouts;
-            tpb_k_output_t *src_outs = kernel_all[i].info.outs;
-            if (nouts > 0 && src_outs != NULL) {
-                hdl->respack.n = nouts;
-                hdl->respack.outputs = (tpb_k_output_t *)malloc(
-                    sizeof(tpb_k_output_t) * nouts);
-                if (hdl->respack.outputs == NULL) {
-                    return TPBE_MALLOC_FAIL;
-                }
-                for (int j = 0; j < nouts; j++) {
-                    memcpy(&hdl->respack.outputs[j], &src_outs[j],
-                           sizeof(tpb_k_output_t));
-                    hdl->respack.outputs[j].p = NULL;
-                    hdl->respack.outputs[j].n = 0;
-
-                    /* Resolve TPB_UNIT_TIMER: use the timer\'s unit, preserve attributes */
-                    TPB_UNIT_T base_unit = src_outs[j].unit & ~TPB_UATTR_MASK;
-                    if (base_unit == TPB_UNIT_TIMER) {
-                        TPB_UNIT_T attrs = src_outs[j].unit & TPB_UATTR_MASK;
-                        hdl->respack.outputs[j].unit = timer.unit | attrs;
-                    }
-                }
-            }
-            break;
-        }
-    }
-
-    if (hdl->kernel.func.k_run == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s has empty runner.\n", hdl->kernel.info.name);
-        return TPBE_KERN_ARG_FAIL;
-    }
-
-    /* Print running message and kernel arguments */
-    tpb_printf(TPBM_PRTN_M_TSTAG, "Running Kernel %s\n", hdl->kernel.info.name);
-    tpb_cliout_args(hdl);
-
-    /* Call kernel runner */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
-    err = hdl->kernel.func.k_run();
-    if (err) {
-        if (tpb_get_err_exit_flag(err) == TPBE_WARN) {
-            /* WARN case - print warning but continue */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, "Kernel %s: %s\n",
-                       hdl->kernel.info.name, tpb_get_err_msg(err));
-        } else {
-            /* FAIL case - return immediately */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed: %s\n",
-                       hdl->kernel.info.name, tpb_get_err_msg(err));
-            current_rthdl = NULL;
-            return err;
-        }
-    }
-
-    /* Print results and success message */
-    tpb_cliout_results(hdl);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s finished successfully.\n",
-               hdl->kernel.info.name);
-    current_rthdl = NULL;
-    return err;
 }
 
 /**
@@ -1644,23 +1561,12 @@ tpb_driver_run_all(void)
     /* Loop from ihdl=1 to nhdl-1 (skip pseudo handle at index 0) */
     for (int i = 1; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
-        TPB_K_CTRL ktype = handle->kernel.info.kctrl & TPB_KTYPE_MASK;
-
         /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
         tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i, nhdl - 1);
 
-        if (ktype == TPB_KTYPE_PLI) {
-            /* PLI mode: fork and exec */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
-                       handle->kernel.info.name);
-            err = tpb_run_pli(handle);
-        } else {
-            /* FLI mode: call runner directly */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
-                       handle->kernel.info.name);
-            err = tpb_run_fli(handle);
-            tpb_driver_clean_handle(handle);
-        }
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
+                   handle->kernel.info.name);
+        err = tpb_run_pli(handle);
 
         if (err != 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed.\n",
@@ -1732,22 +1638,6 @@ tpb_driver_reset_handles(void)
 }
 
 int
-tpb_driver_set_integ_mode(int mode)
-{
-    if (mode != TPB_INTEG_MODE_FLI && mode != TPB_INTEG_MODE_PLI) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-    integration_mode = mode;
-    return 0;
-}
-
-int
-tpb_driver_get_integ_mode(void)
-{
-    return integration_mode;
-}
-
-int
 tpb_k_finalize_pli(void)
 {
     if (current_kernel == NULL) {
@@ -1755,9 +1645,6 @@ tpb_k_finalize_pli(void)
                    "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
     }
-
-    /* PLI kernels don't have a runner function */
-    current_kernel->func.k_run = NULL;
 
     /* Finalize registration: increment kernel count */
     nkern++;

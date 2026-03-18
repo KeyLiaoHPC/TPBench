@@ -349,7 +349,7 @@ test_entry_kernel(void)
     memset(e.kernel_id, 0xBB, 20);
     snprintf(e.kernel_name, 64, "triad");
     memset(e.so_sha1, 0xCC, 20);
-    e.kctrl = TPB_KTYPE_FLI;
+    e.kctrl = TPB_KTYPE_PLI;
     e.nparm = 3;
     e.nmetric = 1;
 
@@ -583,7 +583,7 @@ test_record_kernel(void)
     snprintf(attr.description, 2048, "Test kernel");
     attr.nparm = 2;
     attr.nmetric = 1;
-    attr.kctrl = TPB_KTYPE_FLI;
+    attr.kctrl = TPB_KTYPE_PLI;
     attr.nheader = 1;
 
     tpb_meta_header_t h = make_test_header("ntest", 1, 8);

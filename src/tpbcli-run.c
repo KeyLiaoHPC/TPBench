@@ -65,24 +65,6 @@ static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
 
 /* Local Function Implementations */
 
-static void
-parse_integ_mode(int argc, char **argv)
-{
-    /* Default is PLI mode */
-    int mode = TPB_INTEG_MODE_PLI;
-
-    /* Scan for -P or -F switches */
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "-P") == 0) {
-            mode = TPB_INTEG_MODE_PLI;
-        } else if (strcmp(argv[i], "-F") == 0) {
-            mode = TPB_INTEG_MODE_FLI;
-        }
-    }
-
-    tpb_driver_set_integ_mode(mode);
-}
-
 static int
 parse_outargs_string(const char *outargs_str)
 {
@@ -159,15 +141,7 @@ parse_run(int argc, char **argv)
     }
 
     for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "-P") == 0) {
-            /* Already handled in parse_integ_mode */
-            continue;
-
-        } else if (strcmp(argv[i], "-F") == 0) {
-            /* Already handled in parse_integ_mode */
-            continue;
-
-        } else if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
+        if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
             /* Before adding new kernel, expand any pending dimension config */
             if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
                 err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
@@ -1073,31 +1047,9 @@ tpbcli_run(int argc, char **argv)
         return TPBE_EXIT_ON_HELP;
     }
 
-    /* Parse integration mode BEFORE registering kernels */
-    parse_integ_mode(argc, argv);
-
-    /* Print integration mode */
-    int mode = tpb_driver_get_integ_mode();
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench kernel integration mode: %s\n",
-               mode == TPB_INTEG_MODE_PLI ? "PLI" : "FLI");
-
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
-
-    /* For FLI mode, register the statically linked kernels */
-    if (mode == TPB_INTEG_MODE_FLI) {
-        tpb_driver_enable_kernel_reg();
-#ifdef TPB_HAS_KERNEL_TRIAD
-        err = register_triad();
-        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_triad");
-#endif
-#ifdef TPB_HAS_KERNEL_STREAM
-        err = register_stream();
-        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_stream");
-#endif
-        tpb_driver_disable_kernel_reg();
-    }
 
     err = parse_run(argc, argv);
     if (err == TPBE_EXIT_ON_HELP) {

@@ -1,25 +1,3 @@
-# --- FLI test executable (Pack A1) ---
-add_executable(test-tpb-run-fli EXCLUDE_FROM_ALL
-    tpb_run_fli.c
-    mock_kernel.c
-    mock_timer.c
-)
-target_include_directories(test-tpb-run-fli PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test-tpb-run-fli PRIVATE tpbench m)
-set_target_properties(test-tpb-run-fli PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
-    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
-    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
-)
-
-# Pack A1 sub-cases
-tpb_add_subcase(A1 A1.1 basic_success   test-tpb-run-fli corelib)
-tpb_add_subcase(A1 A1.2 null_handle     test-tpb-run-fli corelib)
-tpb_add_subcase(A1 A1.3 empty_runner    test-tpb-run-fli corelib)
-tpb_add_subcase(A1 A1.4 kernel_warn     test-tpb-run-fli corelib)
-tpb_add_subcase(A1 A1.5 kernel_fail     test-tpb-run-fli corelib)
-tpb_add_subcase(A1 A1.6 param_retrieval test-tpb-run-fli corelib)
-
 # --- PLI test executable (Pack A2) -- mock_dynloader.c interposes tpb_dl_* ---
 add_executable(test-tpb-run-pli EXCLUDE_FROM_ALL
     tpb_run_pli.c
@@ -110,7 +88,7 @@ tpb_add_subcase(A4 A4.19 header_mixed       test-rawdb corelib)
 
 # Aggregate targets
 add_custom_target(test_corelib
-    DEPENDS test-tpb-run-fli test-tpb-run-pli test-strftime test-rawdb
+    DEPENDS test-tpb-run-pli test-strftime test-rawdb
 )
 
 add_custom_target(check_corelib

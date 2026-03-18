@@ -438,18 +438,8 @@ tpb_list()
         if (kernel == NULL) {
             continue;
         }
-        /* Determine integration type string */
-        const char *type_str = "UNK";
-        TPB_K_CTRL ktype = kernel->info.kctrl & TPB_KTYPE_MASK;
-        if (ktype == TPB_KTYPE_FLI) {
-            type_str = "FLI";
-        } else if (ktype == TPB_KTYPE_PLI) {
-            type_str = "PLI";
-        } else if (ktype == TPB_KTYPE_ALI) {
-            type_str = "ALI";
-        }
         tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-7s %s\n",
-                   kernel->info.name, type_str, kernel->info.note);
+                   kernel->info.name, "PLI", kernel->info.note);
         tpb_free_kernel(kernel);
         free(kernel);
     }

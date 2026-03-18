@@ -12,7 +12,6 @@ tests/
 ├── RunBuiltTest.cmake          # Helper script for building and running tests
 ├── corelib/                    # Core library unit tests
 │   ├── CMakeLists.txt          # Corelib test build config
-│   ├── tpb_run_fli.c           # Test pack A1: FLI kernel runner tests
 │   ├── tpb_run_pli.c           # Test pack A2: PLI kernel runner tests
 │   ├── mock_kernel.c/.h        # Mock kernel implementations
 │   ├── mock_timer.c/.h         # Mock timer implementation
@@ -28,7 +27,6 @@ Tests are organized into **test packs**, each containing multiple **sub-cases**:
 
 | Pack | Name | Description | Executable |
 |------|------|-------------|------------|
-| A1 | FLI Kernel Runner | Tests for `tpb_run_fli()` function | `test-tpb-run-fli` |
 | A2 | PLI Kernel Runner | Tests for `tpb_run_pli()` function | `test-tpb-run-pli` |
 | B1 | Dimension Arguments | Tests for dimension argument parsing | `test-cli-run-dimargs` |
 
@@ -187,7 +185,7 @@ tpb_add_subcase(<ID> <ID>.2 case_name_2 test-<name> corelib)
 
 # Add to aggregate target (append to existing DEPENDS line)
 add_custom_target(test_corelib
-    DEPENDS test-tpb-run-fli test-tpb-run-pli test-<name>
+    DEPENDS test-tpb-run-pli test-<name>
 )
 ```
 
@@ -203,38 +201,38 @@ add_custom_target(check
 )
 ```
 
-### 2.2 Example: Adding a New FLI Test Case
+### 2.2 Example: Adding a New PLI Test Case
 
-Suppose you want to add test case `A1.7` that tests parameter validation in `tpb_run_fli`:
+Suppose you want to add test case `A2.7` that tests parameter validation in `tpb_run_pli`:
 
-**In `tests/corelib/tpb_run_fli.c`:**
+**In `tests/corelib/tpb_run_pli.c`:**
 ```c
-/* A1.7: Kernel with invalid parameter type returns error */
+/* A2.7: Kernel with invalid parameter type returns error */
 static int
 test_param_type_mismatch(void)
 {
     if (ensure_setup()) return 1;
 
     tpb_k_rthdl_t hdl;
-    int err = mock_build_handle("mock_fli_ok", &hdl);
+    int err = mock_build_handle("mock_pli_ok", &hdl);
     if (err) return 1;
 
     /* Corrupt parameter type to trigger validation error */
     hdl.argpack.args[0].ctrlbits = TPB_INT8_T;  /* Wrong type */
 
-    err = tpb_run_fli(&hdl);
+    err = tpb_run_pli(&hdl);
     tpb_driver_clean_handle(&hdl);
     free(hdl.argpack.args);
     return (err == TPBE_KERN_ARG_FAIL) ? 0 : 1;
 }
 
 /* In main(), add to cases array: */
-{ "A1.7", "param_type_mismatch", test_param_type_mismatch },
+{ "A2.7", "param_type_mismatch", test_param_type_mismatch },
 ```
 
 **In `tests/corelib/CMakeLists.txt`:**
 ```cmake
-tpb_add_subcase(A1 A1.7 param_type_mismatch test-tpb-run-fli corelib)
+tpb_add_subcase(A2 A2.7 param_type_mismatch test-tpb-run-pli corelib)
 ```
 
 ## 3 Mock Implementation Patterns
@@ -249,8 +247,7 @@ mock_setup_driver(void)
 {
     int err;
 
-    /* Set integration mode and timer */
-    tpb_driver_set_integ_mode(0 /* TPB_INTEG_MODE_FLI */);
+    /* Set timer */
     tpb_driver_set_timer(mock_get_timer());
 
     /* Initialize kernel registry */
@@ -260,15 +257,15 @@ mock_setup_driver(void)
     /* Enable kernel registration */
     tpb_driver_enable_kernel_reg();
 
-    /* Register mock FLI kernel */
-    err = tpb_k_register("mock_fli_ok", "Mock FLI success kernel", TPB_KTYPE_FLI);
+    /* Register mock PLI kernel */
+    err = tpb_k_register("mock_pli_ok", "Mock PLI success kernel", TPB_KTYPE_PLI);
     if (err) return err;
     err = tpb_k_add_parm("ntest", "Number of iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_NOCHECK);
     if (err) return err;
     err = tpb_k_add_output("elapsed", "Elapsed time", TPB_INT64_T, TPB_UNIT_NS);
     if (err) return err;
-    err = tpb_k_add_runner(mock_fli_success);
+    err = tpb_k_finalize_pli();
     if (err) return err;
 
     /* Register more mock kernels... */
@@ -423,11 +420,11 @@ cmake --build . --target check_tpbcli
 
 ```bash
 # Run all cases in a test pack
-./tests/bin/test-tpb-run-fli
+./tests/bin/test-tpb-run-pli
 
 # Run specific case by ID
-./tests/bin/test-tpb-run-fli A1.1    # Run only basic_success
-./tests/bin/test-tpb-run-pli A2.3    # Run only basic_success for PLI
+./tests/bin/test-tpb-run-pli A2.1    # Run only basic_success
+./tests/bin/test-tpb-run-pli A2.3    # Run only a specific PLI case
 ```
 
 ### 4.5 Test Output Format
@@ -435,16 +432,16 @@ cmake --build . --target check_tpbcli
 Each test outputs results in this format:
 
 ```
-Running test pack A1 (6 cases)
+Running test pack A2 (6 cases)
 ------------------------------------------------------
-[A1.1] basic_success                        PASS
-[A1.2] null_handle                          PASS
-[A1.3] empty_runner                         PASS
-[A1.4] kernel_warn                          PASS
-[A1.5] kernel_fail                          PASS
-[A1.6] param_retrieval                      PASS
+[A2.1] basic_success                        PASS
+[A2.2] null_handle                          PASS
+[A2.3] basic_success                        PASS
+[A2.4] kernel_warn                          PASS
+[A2.5] kernel_fail                          PASS
+[A2.6] param_retrieval                      PASS
 ------------------------------------------------------
-Pack A1: 6 passed, 0 failed
+Pack A2: 6 passed, 0 failed
 ```
 
 ## 5 CMake Configuration Details
@@ -541,7 +538,7 @@ test_example(void)
     if (err) return 1;
 
     /* Test logic */
-    err = tpb_run_fli(&hdl);
+    err = tpb_run_pli(&hdl);
 
     /* Cleanup before returning */
     tpb_driver_clean_handle(&hdl);
@@ -579,10 +576,10 @@ main(int argc, char **argv)
 
 ```bash
 # Run with ctest verbose mode
-ctest -V -R A1.1
+ctest -V -R A2.1
 
 # Or run executable directly to see all output
-./tests/bin/test-tpb-run-fli A1.1
+./tests/bin/test-tpb-run-pli A2.1
 ```
 
 ### 7.2 Add Debug Prints
@@ -596,7 +593,7 @@ test_debug_example(void)
     printf("[DEBUG] Starting test...\n");
 
     tpb_k_rthdl_t hdl;
-    int err = mock_build_handle("mock_fli_ok", &hdl);
+    int err = mock_build_handle("mock_pli_ok", &hdl);
     printf("[DEBUG] Handle build result: %d\n", err);
     if (err) return 1;
 
@@ -610,18 +607,17 @@ test_debug_example(void)
 
 ```bash
 # Run test executable in gdb
-gdb ./tests/bin/test-tpb-run-fli -ex "run A1.1"
+gdb ./tests/bin/test-tpb-run-pli -ex "run A2.1"
 
 # Set breakpoint at specific test function
-gdb ./tests/bin/test-tpb-run-fli -ex "break test_basic_success" -ex "run"
+gdb ./tests/bin/test-tpb-run-pli -ex "break test_basic_success" -ex "run"
 ```
 
 ## 8 Reference Files
 
 | File | Purpose |
 |------|---------|
-| [`tests/corelib/tpb_run_fli.c`](tests/corelib/tpb_run_fli.c:1) | Example FLI kernel runner tests (pack A1) |
-| [`tests/corelib/tpb_run_pli.c`](tests/corelib/tpb_run_pli.c:1) | Example PLI kernel runner tests (pack A2) |
+| [`tests/corelib/tpb_run_pli.c`](tests/corelib/tpb_run_pli.c:1) | PLI kernel runner tests (pack A2) |
 | [`tests/corelib/mock_kernel.c`](tests/corelib/mock_kernel.c:1) | Mock kernel registration and handle builder |
 | [`tests/corelib/mock_timer.c`](tests/corelib/mock_timer.c:1) | Mock timer implementation |
 | [`tests/corelib/mock_dynloader.c`](tests/corelib/mock_dynloader.c:1) | ELF symbol interposition for PLI tests |

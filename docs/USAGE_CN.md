@@ -65,7 +65,7 @@ tpbcli run <tpbench_options> <default_args> \
 [--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
 \<tpbench_options\>支持的选项包括：
-- `-P/-F`: 选择PLI集成内核或FLI集成内核，默认为-P。
+- `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。
 - `--outargs`: 日志及数据输出格式设置
     - `unit_cast=[0/1]`: 是否进行自动单位转换，默认为0，不进行转换。

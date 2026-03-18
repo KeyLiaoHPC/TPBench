@@ -126,12 +126,6 @@ add_executable(tpbcli
 target_include_directories(tpbcli PRIVATE src)
 target_link_libraries(tpbcli PRIVATE tpbench ${TPB_BUILT_KERNEL_LIBS} m)
 
-# Pass TPB_HAS_KERNEL_<NAME> defines so tpbcli-run.c can guard FLI registration
-foreach(_kname IN LISTS TPB_BUILT_KERNEL_NAMES)
-    string(TOUPPER "${_kname}" _kname_upper)
-    target_compile_definitions(tpbcli PRIVATE "TPB_HAS_KERNEL_${_kname_upper}")
-endforeach()
-
 # ============================================================================
 # ROCm/HIP GPU Support
 # ============================================================================
