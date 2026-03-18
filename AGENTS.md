@@ -32,3 +32,133 @@ Step 2: Run a single-core kernel. If the kernel does not finish normally and pri
 # Execute in the root folder of the workspace.
 $ ./build/bin/tpbcli run --kernel stream --kargs total_memsize=524288,ntest=100
 ```
+
+### 1.1.3 Project Structure
+
+The following file tree shows the source code organization. Items in `.gitignore` (build artifacts, binaries, data files) are excluded.
+
+```
+TPBench/
+├── CMakeLists.txt              # Root CMake configuration
+├── cmake/
+│   ├── TPBenchConfig.cmake.in  # CMake package config template
+│   └── TPBenchKernel.cmake     # Kernel registration module
+│
+├── docs/
+│   ├── API_Reference.md        # Public API documentation
+│   ├── STYLE_GUIDE.md          # Code style guidelines
+│   ├── USAGE*.md               # User manual (EN/CN)
+│   ├── design_*.md             # Design documents
+│   └── howto_*.md              # How-to guides
+│
+├── setup/
+│   ├── Make.*                  # Platform-specific Makefiles
+│   └── yaml/
+│       ├── default.yml         # Default benchmark configuration
+│       └── *_template.yml      # Benchmark templates
+│
+├── src/
+│   ├── tpbcli.c                # CLI entry point
+│   ├── tpbcli-*.c/h            # CLI subcommands (run/list/benchmark/help)
+│   ├── tpb-bench-*.c/h         # Benchmark execution engine
+│   ├── tpb-timer.c/h           # Timer abstraction
+│   │
+│   ├── include/
+│   │   ├── tpb-public.h        # Public API header
+│   │   ├── tpb-unitdefs.h      # Unit definitions
+│   │   └── tpbench.h*          # Version header (generated)
+│   │
+│   ├── corelib/
+│   │   ├── CMakeLists.txt      # Core library build config
+│   │   ├── tpb-driver.c/h      # Kernel driver (load/execute kernels)
+│   │   ├── tpb-dynloader.c/h   # Dynamic library loader
+│   │   ├── tpb-impl.c/h        # Internal implementation
+│   │   ├── tpb-io.c/h          # I/O utilities
+│   │   ├── tpb-stat.c/h        # Statistics collection
+│   │   ├── tpb-argp.c/h        # Argument parsing
+│   │   ├── tpb-unitcast.c/h    # Unit conversion
+│   │   ├── strftime.c/h        # Time formatting
+│   │   └── raw_db/             # Raw database backend
+│   │       ├── tpb-rawdb-*.c/h # Database operations
+│   │       └── tpb-sha1.c/h    # SHA-1 checksum
+│   │
+│   ├── kernels/
+│   │   ├── CMakeLists.txt      # Kernel build configuration
+│   │   ├── kernels.h           # Kernel registration
+│   │   ├── simple/             # Simple CPU kernels
+│   │   │   ├── tpbk_stream*.c  # STREAM benchmark (memcpy/trimadd/scale/axpy)
+│   │   │   ├── tpbk_triad*.c   # TRIAD benchmark
+│   │   │   ├── tpbk_rtriad*.c  # Reverse TRIAD
+│   │   │   ├── tpbk_striad*.c  # Strided TRIAD
+│   │   │   ├── tpbk_sum*.c     # SUM reduction
+│   │   │   └── tpbk_staxpy*.c  # Strided AXPY
+│   │   └── rocm/               # ROCm GPU kernels
+│   │       └── tpbk_roofline*.hip/cpp # Roofline model kernel
+│   │
+│   ├── libpfc/                 # Performance counter library (3rd party)
+│   │   ├── include/libpfc*.h   # PMU counter headers
+│   │   ├── src/                # Library implementation
+│   │   └── kmod/               # Kernel module for TSC access
+│   │
+│   ├── pmu/                    # PMU enable utilities
+│   │   ├── armv8/enable_pmu.c  # ARMv8 PMU enabler
+│   │   └── x86-64/pfckmod.c    # x86 performance counter module
+│   │
+│   ├── timers/                 # Timer implementations
+│   │   ├── clock_gettime.c     # POSIX timer
+│   │   ├── tsc_asym.c          # TSC-based timer
+│   │   └── timers.h            # Timer interface
+│   │
+│   └── utils/                  # Utility programs
+│       ├── pchase*.c           # Cache line ping-pong latency test
+│       ├── get_time_error.c    # Timer error measurement
+│       └── watch_cy_armv8.c    # Cycle counter monitor
+│
+└── tests/
+    ├── CMakeLists.txt          # Test suite configuration
+    ├── RunBuiltTest.cmake      # Test runner script
+    ├── corelib/
+    │   ├── test_rawdb.c        # Raw database tests
+    │   ├── test_strftime.c     # Time formatting tests
+    │   ├── mock_*.c/h          # Mock implementations for testing
+    │   ├── tpb_run_fli.c       # FLI interface tests
+    │   └── tpb_run_pli.c       # PLI interface tests
+    └── tpbcli/
+        └── test-cli-run-dimargs.c  # CLI dimension argument tests
+```
+
+#### 1.1.3.1 Key Components
+
+| Component | Path | Purpose |
+|-----------|------|---------|
+| CLI Frontend | `src/tpbcli*.c` | Command-line interface for running benchmarks |
+| Core Library | `src/corelib/` | Kernel loading, execution, and result collection |
+| Benchmark Kernels | `src/kernels/simple/` | CPU benchmark implementations (STREAM, TRIAD, etc.) |
+| GPU Kernels | `src/kernels/rocm/` | ROCm GPU benchmark implementations |
+| Raw Database | `src/corelib/raw_db/` | Persistent storage for benchmark results |
+| Timer Backend | `src/timers/` | High-resolution timing implementations |
+| PMU Support | `src/libpfc/`, `src/pmu/` | Hardware performance counter access |
+
+#### 1.1.3.2 Build Output Structure
+
+After building with `cmake --build build`, the output structure is:
+
+```
+build/
+├── bin/
+│   ├── tpbcli              # Main CLI executable
+│   ├── tpbk_*.tpbx         # Kernel PLI executables (e.g., tpbk_stream.tpbx)
+│   └── tests/              # Test executables
+├── lib/
+│   ├── libtpbench.so       # Core TPBench library
+│   └── libtpbk_*.so        # Kernel shared libraries
+└── etc/
+    └── yaml/               # Installed configuration files
+```
+
+### 1.1.4 Development Guidelines
+
+1. **Kernel Development**: Place new kernels in `src/kernels/` with corresponding CMakeLists.txt entries
+2. **CLI Commands**: Add new subcommands in `src/tpbcli-<cmd>.c/h` and register in [`tpbcli.c`](src/tpbcli.c)
+3. **Corelib Feature Extensions**: Extend [`src/corelib/`](src/corelib/) for new TPBench features
+4. **Tests**: Add unit tests in `tests/` following existing patterns. Ask users for the index.
