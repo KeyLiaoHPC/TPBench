@@ -57,10 +57,14 @@ tpbcli_list(int argc, char **argv)
     int mode = tpb_driver_get_integ_mode();
     if (mode == TPB_INTEG_MODE_FLI) {
         tpb_driver_enable_kernel_reg();
+#ifdef TPB_HAS_KERNEL_TRIAD
         err = register_triad();
         __tpbm_exit_on_error(err, "At tpbcli-list.c: register_triad");
+#endif
+#ifdef TPB_HAS_KERNEL_STREAM
         err = register_stream();
         __tpbm_exit_on_error(err, "At tpbcli-list.c: register_stream");
+#endif
         tpb_driver_disable_kernel_reg();
     }
 

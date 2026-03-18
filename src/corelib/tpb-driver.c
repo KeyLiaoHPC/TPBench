@@ -984,6 +984,7 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
             free(hdl->respack.outputs[i].p);
             hdl->respack.outputs[i].p = NULL;
         }
+
     }
 
     /* Free the outputs array itself */

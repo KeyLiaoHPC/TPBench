@@ -1088,10 +1088,14 @@ tpbcli_run(int argc, char **argv)
     /* For FLI mode, register the statically linked kernels */
     if (mode == TPB_INTEG_MODE_FLI) {
         tpb_driver_enable_kernel_reg();
+#ifdef TPB_HAS_KERNEL_TRIAD
         err = register_triad();
         __tpbm_exit_on_error(err, "At tpbcli-run.c: register_triad");
+#endif
+#ifdef TPB_HAS_KERNEL_STREAM
         err = register_stream();
         __tpbm_exit_on_error(err, "At tpbcli-run.c: register_stream");
+#endif
         tpb_driver_disable_kernel_reg();
     }
 
