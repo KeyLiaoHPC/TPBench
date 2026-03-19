@@ -42,8 +42,8 @@
 #define TPB_SHA1_HEX_LEN        40
 
 /* On-disk header size (fixed size with embedded dimension info) */
-/* block_size(4) + ndim(4) + data_size(8) + type_bits(8) + name(256) + note(2048) + dimsizes[7](56) + dimnames[7][64](448) */
-#define TPB_RAWDB_HDR_FIXED_SIZE 2832
+/* block_size(4) + ndim(4) + data_size(8) + type_bits(4) + _reserve(4) + uattr_bits(8) + name(256) + note(2048) + dimsizes[7](56) + dimnames[7][64](448) */
+#define TPB_RAWDB_HDR_FIXED_SIZE 2840
 
 /* Reserved block size in .tpbr meta section */
 #define TPB_RAWDB_RESERVE_SIZE   64

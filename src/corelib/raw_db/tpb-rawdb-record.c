@@ -92,8 +92,9 @@ build_record_path(const char *workspace, uint8_t domain,
 
 /*
  * Serialize headers to file. Each header on disk:
- *   block_size(4) + ndim(4) + data_size(8) + type_bits(8) +
- *   name(256) + note(2048) + dimsizes[ndim](8*ndim) + dimnames[ndim][64](64*ndim)
+ *   block_size(4) + ndim(4) + data_size(8) + type_bits(4) + _reserve(4) +
+ *   uattr_bits(8) + name(256) + note(2048) +
+ *   dimsizes[ndim](8*ndim) + dimnames[ndim][64](64*ndim)
  */
 static int
 write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
@@ -107,7 +108,9 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
         if (write_u32(fp, bs) != 0) return -1;
         if (write_u32(fp, hdrs[i].ndim) != 0) return -1;
         if (write_u64(fp, hdrs[i].data_size) != 0) return -1;
-        if (write_u64(fp, hdrs[i].type_bits) != 0) return -1;
+        if (write_u32(fp, hdrs[i].type_bits) != 0) return -1;
+        if (write_u32(fp, hdrs[i]._reserve) != 0) return -1;
+        if (write_u64(fp, hdrs[i].uattr_bits) != 0) return -1;
         if (fwrite(hdrs[i].name, 1, 256, fp) != 256) return -1;
         if (fwrite(hdrs[i].note, 1, 2048, fp) != 2048) {
             return -1;
@@ -149,7 +152,9 @@ read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
         if (read_u32(fp, &hdrs[i].block_size) != 0) goto fail;
         if (read_u32(fp, &hdrs[i].ndim) != 0) goto fail;
         if (read_u64(fp, &hdrs[i].data_size) != 0) goto fail;
-        if (read_u64(fp, &hdrs[i].type_bits) != 0) goto fail;
+        if (read_u32(fp, &hdrs[i].type_bits) != 0) goto fail;
+        if (read_u32(fp, &hdrs[i]._reserve) != 0) goto fail;
+        if (read_u64(fp, &hdrs[i].uattr_bits) != 0) goto fail;
         if (fread(hdrs[i].name, 1, 256, fp) != 256) goto fail;
         if (fread(hdrs[i].note, 1, 2048, fp) != 2048) goto fail;
 

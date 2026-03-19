@@ -407,7 +407,9 @@ typedef struct tpb_meta_header {
     uint32_t block_size;                      /**< Header size on disk in bytes */
     uint32_t ndim;                            /**< Number of dimensions, in [0, TPBM_DATA_NDIM_MAX] */
     uint64_t data_size;                       /**< Record data size in bytes */
-    uint64_t type_bits;                       /**< Data type control bits */
+    uint32_t type_bits;                       /**< Data type control bits: TPB_PARM_SOURCE_MASK|TPB_PARM_CHECK_MASK|TPB_PARM_TYPE_MASK */
+    uint32_t _reserve;                        /**< Reserved padding for alignment */
+    uint64_t uattr_bits;                      /**< Metric unit encoding, aligned to TPB_UNIT_T */
     char name[TPBM_NAME_STR_MAX_LEN];       /**< Header name (256 bytes) */
     char note[TPBM_NOTE_STR_MAX_LEN];       /**< Notes and descriptions (2048 bytes) */
     uint64_t dimsizes[TPBM_DATA_NDIM_MAX];  /**< Dimension sizes: dimsizes[0]=innermost (d0) */

@@ -480,6 +480,7 @@ make_test_header(const char *name, uint32_t ndim,
     h.ndim = ndim;
     h.data_size = data_size;
     h.type_bits = 0x0000083e; /* TPB_UINT64_T */
+    h.uattr_bits = TPB_UNIT_NS;
     snprintf(h.name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(h.note, TPBM_NOTE_STR_MAX_LEN, "Test header %s", name);
     h.block_size = TPB_RAWDB_HDR_FIXED_SIZE;
@@ -695,6 +696,8 @@ test_header_1d(void)
         strcmp(rattr.headers[0].dimnames[0], "elements") != 0) {
         fail = 1;
     }
+    if (rattr.nheader >= 1 && rattr.headers[0].type_bits != 0x0000083e) fail = 1;
+    if (rattr.nheader >= 1 && rattr.headers[0].uattr_bits != TPB_UNIT_NS) fail = 1;
     if (rsize != 32) fail = 1;
 
     tpb_rawdb_free_headers(rattr.headers, rattr.nheader);

@@ -128,23 +128,26 @@ The `.tpbr` files are named with ID of the corresponding entry `.tpbe`, the `cor
 Various record data types are the main body of TPBench records. Each type is defined by a header. The tpb_meta_header structure stores the header's information. Each `.tpbr` file contains one metadata block which encloses headers (`header[i]`) that describe the dimensions, data type, and layout of the record data.
 
 ```c
-typedef struct tpb_dim_info {
-    char name[TPBM_NAME_STR_MAX_LEN];   /**< Dimension name, length in [0, TPBM_NAME_STR_MAX_LEN], can be empty */
-    uint64_t n;                         /**< Number of elements in this dimension >= 1 */
-} tpb_dim_info_t;                       /**< 264 Bytes */
-
 typedef struct tpb_meta_header {
-    uint32_t block_size;                /**< The header size in Bytes */
-    uint32_t ndim;                      /**< Number of dimensions, in [1, 7] */
-    uint64_t data_size;                 /**< The header's record data size in Bytes */
-    uint64_t type_bits;                 /**< Data type control bits, including element */
-                                        /**< size and TPB_*_T type, supports custom types */
-    char name[TPBM_NAME_STR_MAX_LEN];   /**< Name, length in [0, TPBM_NAME_STR_MAX_LEN] */
-    char note[TPBM_NOTE_STR_MAX_LEN];   /**< Notes and descriptions */
-    tpb_dim_info_t *dim_info;           /**< Pointer to dimensions info */
-} tpb_meta_header_t;                    /**< 2336 Bytes */
+    uint32_t block_size;                          /**< The header size in Bytes */
+    uint32_t ndim;                                /**< Number of dimensions, in [0, TPBM_DATA_NDIM_MAX] */
+    uint64_t data_size;                           /**< The header's record data size in Bytes */
+    uint32_t type_bits;                           /**< Data type control bits: TPB_PARM_SOURCE_MASK | */
+                                                  /**< TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK */
+    uint32_t _reserve;                            /**< Reserved padding for alignment */
+    uint64_t uattr_bits;                          /**< Metric unit encoding, aligned to TPB_UNIT_T */
+    char name[TPBM_NAME_STR_MAX_LEN];            /**< Name, length in [0, TPBM_NAME_STR_MAX_LEN] */
+    char note[TPBM_NOTE_STR_MAX_LEN];            /**< Notes and descriptions */
+    uint64_t dimsizes[TPBM_DATA_NDIM_MAX];       /**< Dimension sizes: dimsizes[0]=innermost (d0) */
+    char dimnames[TPBM_DATA_NDIM_MAX][64];       /**< Dimension names, parallel to dimsizes */
+} tpb_meta_header_t;                              /**< 2840 Bytes (fixed size on disk) */
 ```
-The pointer `dim_info` points to a ndim `tpb_dim_info_t` array which stores the information's name and length of each dimension which helps get size and mapping purpose of each dimension of the header. For example, if we measure a kernel's running time for multiple times for each core, then the dim_info will be used to record the mapping relationship between running time data's dimension, core number and loop number. For multi-dimension record, the dimension 0 is the innermost dimension. For a 2D array X[2][4] with dim[0].n=4 and dim[1].n=2, the record data file's layout is:
+
+The `dimsizes` and `dimnames` arrays are fixed-width inline arrays with `TPBM_DATA_NDIM_MAX` (7) slots. Only the first `ndim` slots are meaningful; unused slots are zero-filled. Each slot in `dimnames` is a 64-byte fixed-width string. Each slot in `dimsizes` stores the number of elements in that dimension.
+
+The `type_bits` field encodes the data type using 32-bit masks: `TPB_PARM_SOURCE_MASK` (bits 24-31), `TPB_PARM_CHECK_MASK` (bits 16-23), and `TPB_PARM_TYPE_MASK` (bits 0-15). The `uattr_bits` field encodes the metric unit using the `TPB_UNIT_T` encoding from `tpb-unitdefs.h`.
+
+For multi-dimension record, dimension 0 is the innermost dimension. For a 2D array X[2][4] with dimsizes[0]=4 and dimsizes[1]=2, the record data file's layout is:
 ```
 Address: 0x00    0x01    0x02    0x03    0x04    0x05    0x06    0x07
 Data:    X[0][0] X[0][1] X[0][2] X[0][3] X[1][0] X[1][1] X[1][2] X[1][3]
@@ -875,25 +878,25 @@ ID Generation:
 
 ### 3.4. Header Serialization
 
-On-disk format per `tpb_meta_header_t`:
+On-disk format per `tpb_meta_header_t` (fixed 2840 bytes):
 
 ```
-block_size   (4B)   -- total header size = 2328 + ndim * 264
-ndim         (4B)
-data_size    (8B)
-type_bits    (8B)
-name         (256B)
-note         (2048B)
-dim_info[0]  (264B) -- name(256B) + n(8B)
-dim_info[1]  (264B)
-...
-dim_info[ndim-1] (264B)
+block_size       (4B)
+ndim             (4B)
+data_size        (8B)
+type_bits        (4B)   -- TPB_PARM_SOURCE_MASK | TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK
+_reserve         (4B)   -- reserved padding
+uattr_bits       (8B)   -- metric unit encoding (TPB_UNIT_T)
+name             (256B)
+note             (2048B)
+dimsizes[0..6]   (56B)  -- 7 x uint64_t, only first ndim slots are meaningful
+dimnames[0..6]   (448B) -- 7 x 64-byte strings, parallel to dimsizes
 ```
 
 ### 3.5. Memory Safety
 
 - Entry structs (128 bytes) are stack-allocated or caller-provided.
-- `tpb_meta_header_t.dim_info` is heap-allocated during read; freed via `tpb_rawdb_free_headers()`.
+- `tpb_meta_header_t` arrays are heap-allocated during record read; freed via `tpb_rawdb_free_headers()`.
 - All pointer arguments are NULL-checked; functions return `TPBE_NULLPTR_ARG` on failure.
 - File I/O uses explicit size checks; no buffer overruns.
 

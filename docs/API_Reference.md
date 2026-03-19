@@ -1526,36 +1526,26 @@ Use `tpb_ts_bits_to_isoutc()` to convert to ISO 8601 string.
 
 ---
 
-#### `tpb_dim_info_t`
-
-Dimension information for multi-dimensional data.
-
-```c
-typedef struct tpb_dim_info {
-    char name[TPBM_NAME_STR_MAX_LEN];   // Dimension name
-    uint64_t n;                         // Number of elements >= 1
-} tpb_dim_info_t;                     // 264 bytes
-```
-
----
-
 #### `tpb_meta_header_t`
 
-Metadata header describing record data layout.
+Metadata header describing record data layout. Dimensions use fixed-width inline arrays.
 
 ```c
 typedef struct tpb_meta_header {
-    uint32_t block_size;                // Total header size on disk
-    uint32_t ndim;                      // Number of dimensions [1, 7]
-    uint64_t data_size;                 // Record data size in bytes
-    uint64_t type_bits;                 // Data type control bits (TPB_*_T)
-    char name[TPBM_NAME_STR_MAX_LEN];   // Header name
-    char note[TPBM_NOTE_STR_MAX_LEN];   // Description
-    tpb_dim_info_t *dim_info;           // Pointer to ndim dimension info
+    uint32_t block_size;                      // Total header size on disk (2840)
+    uint32_t ndim;                            // Number of dimensions [0, TPBM_DATA_NDIM_MAX]
+    uint64_t data_size;                       // Record data size in bytes
+    uint32_t type_bits;                       // Data type control bits: SOURCE|CHECK|TYPE
+    uint32_t _reserve;                        // Reserved padding for alignment
+    uint64_t uattr_bits;                      // Metric unit encoding (TPB_UNIT_T)
+    char name[TPBM_NAME_STR_MAX_LEN];        // Header name (256 bytes)
+    char note[TPBM_NOTE_STR_MAX_LEN];        // Description (2048 bytes)
+    uint64_t dimsizes[TPBM_DATA_NDIM_MAX];   // Dimension sizes (7 slots, 56 bytes)
+    char dimnames[TPBM_DATA_NDIM_MAX][64];   // Dimension names (7 x 64 bytes = 448 bytes)
 } tpb_meta_header_t;
 ```
 
-**On-disk size:** `2328 + ndim * 264` bytes
+**On-disk size:** 2840 bytes (fixed)
 
 ---
 
