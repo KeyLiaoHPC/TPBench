@@ -391,21 +391,26 @@ int tpb_cliout_results(tpb_k_rthdl_t *handle);
 /** @brief 64-bit bit-packed datetime representation */
 typedef uint64_t tpb_dtbits_t;
 
-/** @brief Dimension info for multi-dimensional record data */
-typedef struct tpb_dim_info {
-    char name[TPBM_NAME_STR_MAX_LEN]; /**< Dimension name */
-    uint64_t n;                       /**< Number of elements >= 1 */
-} tpb_dim_info_t;   /* 264 Bytes */
+/** @brief Maximum number of dimensions for record data */
+#define TPBM_DATA_NDIM_MAX 7
 
-/** @brief Metadata header describing one record data block */
+/**
+ * @brief Metadata header describing one record data block
+ *
+ * Dimension layout: dimsizes[0] is the innermost dimension (d0),
+ * dimsizes[ndim-1] is the outermost dimension.
+ * For a 7D array: data[d6][d5][d4][d3][d2][d1][d0] where
+ *   dimsizes[0]=d0, dimsizes[1]=d1, ..., dimsizes[6]=d6
+ */
 typedef struct tpb_meta_header {
     uint32_t block_size;                      /**< Header size on disk in bytes */
-    uint32_t ndim;                            /**< Number of dimensions, in [1, 7] */
+    uint32_t ndim;                            /**< Number of dimensions, in [0, TPBM_DATA_NDIM_MAX] */
     uint64_t data_size;                       /**< Record data size in bytes */
     uint64_t type_bits;                       /**< Data type control bits */
-    char name[TPBM_NAME_STR_MAX_LEN];         /**< Header name */
-    char note[TPBM_NOTE_STR_MAX_LEN];         /**< Notes and descriptions */
-    tpb_dim_info_t *dim_info;                 /**< Pointer to ndim dim_info entries */
+    char name[TPBM_NAME_STR_MAX_LEN];       /**< Header name (256 bytes) */
+    char note[TPBM_NOTE_STR_MAX_LEN];       /**< Notes and descriptions (2048 bytes) */
+    uint64_t dimsizes[TPBM_DATA_NDIM_MAX];  /**< Dimension sizes: dimsizes[0]=innermost (d0) */
+    char dimnames[TPBM_DATA_NDIM_MAX][64];  /**< Dimension names, parallel to dimsizes */
 } tpb_meta_header_t;
 
 /* TBatch type */

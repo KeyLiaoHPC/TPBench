@@ -93,7 +93,7 @@ build_record_path(const char *workspace, uint8_t domain,
 /*
  * Serialize headers to file. Each header on disk:
  *   block_size(4) + ndim(4) + data_size(8) + type_bits(8) +
- *   name(256) + note(2048) + ndim * dim_info(264)
+ *   name(256) + note(2048) + dimsizes[ndim](8*ndim) + dimnames[ndim][64](64*ndim)
  */
 static int
 write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
@@ -102,8 +102,7 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
     uint32_t i, j;
 
     for (i = 0; i < n; i++) {
-        uint32_t bs = TPB_RAWDB_HDR_FIXED_SIZE
-                    + hdrs[i].ndim * TPB_RAWDB_DIMINFO_SIZE;
+        uint32_t bs = TPB_RAWDB_HDR_FIXED_SIZE;
 
         if (write_u32(fp, bs) != 0) return -1;
         if (write_u32(fp, hdrs[i].ndim) != 0) return -1;
@@ -115,12 +114,12 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
         }
 
         for (j = 0; j < hdrs[i].ndim; j++) {
-            if (!hdrs[i].dim_info) return -1;
-            if (fwrite(hdrs[i].dim_info[j].name, 1, 256, fp)
-                != 256) {
+            if (write_u64(fp, hdrs[i].dimsizes[j]) != 0) {
                 return -1;
             }
-            if (write_u64(fp, hdrs[i].dim_info[j].n) != 0) {
+        }
+        for (j = 0; j < hdrs[i].ndim; j++) {
+            if (fwrite(hdrs[i].dimnames[j], 1, 64, fp) != 64) {
                 return -1;
             }
         }
@@ -129,7 +128,7 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
 }
 
 /*
- * Read headers from file and allocate dim_info arrays.
+ * Read headers from file.
  */
 static int
 read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
@@ -154,22 +153,15 @@ read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
         if (fread(hdrs[i].name, 1, 256, fp) != 256) goto fail;
         if (fread(hdrs[i].note, 1, 2048, fp) != 2048) goto fail;
 
-        if (hdrs[i].ndim > 0) {
-            hdrs[i].dim_info = (tpb_dim_info_t *)calloc(
-                hdrs[i].ndim, sizeof(tpb_dim_info_t));
-            if (!hdrs[i].dim_info) goto fail;
-
-            for (j = 0; j < hdrs[i].ndim; j++) {
-                if (fread(hdrs[i].dim_info[j].name, 1, 256, fp)
-                    != 256) {
-                    goto fail;
-                }
-                if (read_u64(fp, &hdrs[i].dim_info[j].n) != 0) {
-                    goto fail;
-                }
+        for (j = 0; j < hdrs[i].ndim; j++) {
+            if (read_u64(fp, &hdrs[i].dimsizes[j]) != 0) {
+                goto fail;
             }
-        } else {
-            hdrs[i].dim_info = NULL;
+        }
+        for (j = 0; j < hdrs[i].ndim; j++) {
+            if (fread(hdrs[i].dimnames[j], 1, 64, fp) != 64) {
+                goto fail;
+            }
         }
     }
 
@@ -177,7 +169,7 @@ read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
     return 0;
 
 fail:
-    tpb_rawdb_free_headers(hdrs, n);
+    free(hdrs);
     return -1;
 }
 
@@ -218,12 +210,7 @@ void
 tpb_rawdb_free_headers(tpb_meta_header_t *headers,
                        uint32_t nheader)
 {
-    uint32_t i;
-    if (!headers) return;
-    for (i = 0; i < nheader; i++) {
-        free(headers[i].dim_info);
-        headers[i].dim_info = NULL;
-    }
+    (void)nheader;
     free(headers);
 }
 
@@ -252,10 +239,7 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
     /* Calculate metasize: fixed attrs + reserve + headers */
     /* Fixed: 20+20+8+8+8+64+64+4+4+4+4+4+4 = 216 bytes */
     metasize = 216 + TPB_RAWDB_RESERVE_SIZE;
-    for (i = 0; i < attr->nheader; i++) {
-        metasize += TPB_RAWDB_HDR_FIXED_SIZE
-                  + attr->headers[i].ndim * TPB_RAWDB_DIMINFO_SIZE;
-    }
+    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     /* meta_magic */
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
@@ -458,10 +442,7 @@ tpb_rawdb_record_write_kernel(const char *workspace,
 
     /* Fixed attrs: 5*20 + 256 + 64 + 2048 + 5*4 = 2488 */
     metasize = 2488 + TPB_RAWDB_RESERVE_SIZE;
-    for (i = 0; i < attr->nheader; i++) {
-        metasize += TPB_RAWDB_HDR_FIXED_SIZE
-                  + attr->headers[i].ndim * TPB_RAWDB_DIMINFO_SIZE;
-    }
+    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
                           TPB_RAWDB_DOM_KERNEL,
@@ -656,10 +637,7 @@ tpb_rawdb_record_write_task(const char *workspace,
 
     /* Fixed: 4*20 + 3*8 + 7*4 = 132 bytes */
     metasize = 132 + TPB_RAWDB_RESERVE_SIZE;
-    for (i = 0; i < attr->nheader; i++) {
-        metasize += TPB_RAWDB_HDR_FIXED_SIZE
-                  + attr->headers[i].ndim * TPB_RAWDB_DIMINFO_SIZE;
-    }
+    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
                           TPB_RAWDB_DOM_TASK,

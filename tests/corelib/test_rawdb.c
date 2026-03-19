@@ -482,18 +482,11 @@ make_test_header(const char *name, uint32_t ndim,
     h.type_bits = 0x0000083e; /* TPB_UINT64_T */
     snprintf(h.name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(h.note, TPBM_NOTE_STR_MAX_LEN, "Test header %s", name);
-    h.block_size = TPB_RAWDB_HDR_FIXED_SIZE
-                 + ndim * TPB_RAWDB_DIMINFO_SIZE;
+    h.block_size = TPB_RAWDB_HDR_FIXED_SIZE;
 
-    if (ndim > 0) {
-        h.dim_info = (tpb_dim_info_t *)calloc(
-            ndim, sizeof(tpb_dim_info_t));
-        for (j = 0; j < ndim; j++) {
-            snprintf(h.dim_info[j].name, TPBM_NAME_STR_MAX_LEN, "dim%u", j);
-            h.dim_info[j].n = (j + 1) * 4;
-        }
-    } else {
-        h.dim_info = NULL;
+    for (j = 0; j < ndim; j++) {
+        snprintf(h.dimnames[j], 64, "dim%u", j);
+        h.dimsizes[j] = (j + 1) * 4;
     }
 
     return h;
@@ -502,8 +495,7 @@ make_test_header(const char *name, uint32_t ndim,
 static void
 free_test_header(tpb_meta_header_t *h)
 {
-    free(h->dim_info);
-    h->dim_info = NULL;
+    (void)h;
 }
 
 /* A4.14: record_tbatch */
@@ -555,8 +547,8 @@ test_record_tbatch(void)
     if (rattr.nheader != 1) fail = 1;
     if (rsize != 20) fail = 1;
     if (rdata && memcmp(rdata, data, 20) != 0) fail = 1;
-    if (rattr.headers && rattr.headers[0].ndim != 1) fail = 1;
-    if (rattr.headers &&
+    if (rattr.nheader < 1 || rattr.headers[0].ndim != 1) fail = 1;
+    if (rattr.nheader >= 1 &&
         strcmp(rattr.headers[0].name, "KernelIDs") != 0) {
         fail = 1;
     }
@@ -678,8 +670,8 @@ test_header_1d(void)
     attr.nheader = 1;
 
     tpb_meta_header_t h = make_test_header("single", 1, 32);
-    h.dim_info[0].n = 4;
-    snprintf(h.dim_info[0].name, TPBM_NAME_STR_MAX_LEN, "elements");
+    h.dimsizes[0] = 4;
+    snprintf(h.dimnames[0], 64, "elements");
     attr.headers = &h;
 
     uint64_t data[4] = {10, 20, 30, 40};
@@ -697,10 +689,10 @@ test_header_1d(void)
     if (err) { cleanup_test_dir(); return 1; }
 
     int fail = 0;
-    if (rattr.headers[0].ndim != 1) fail = 1;
-    if (rattr.headers[0].dim_info[0].n != 4) fail = 1;
-    if (strcmp(rattr.headers[0].dim_info[0].name,
-              "elements") != 0) {
+    if (rattr.nheader < 1 || rattr.headers[0].ndim != 1) fail = 1;
+    if (rattr.nheader >= 1 && rattr.headers[0].dimsizes[0] != 4) fail = 1;
+    if (rattr.nheader >= 1 &&
+        strcmp(rattr.headers[0].dimnames[0], "elements") != 0) {
         fail = 1;
     }
     if (rsize != 32) fail = 1;
@@ -723,12 +715,12 @@ test_header_multidim(void)
     attr.nheader = 1;
 
     tpb_meta_header_t h = make_test_header("matrix", 3, 96);
-    h.dim_info[0].n = 2;
-    h.dim_info[1].n = 3;
-    h.dim_info[2].n = 4;
-    snprintf(h.dim_info[0].name, TPBM_NAME_STR_MAX_LEN, "cols");
-    snprintf(h.dim_info[1].name, TPBM_NAME_STR_MAX_LEN, "rows");
-    snprintf(h.dim_info[2].name, TPBM_NAME_STR_MAX_LEN, "layers");
+    h.dimsizes[0] = 2;
+    h.dimsizes[1] = 3;
+    h.dimsizes[2] = 4;
+    snprintf(h.dimnames[0], 64, "cols");
+    snprintf(h.dimnames[1], 64, "rows");
+    snprintf(h.dimnames[2], 64, "layers");
     attr.headers = &h;
 
     uint64_t data[12];
@@ -749,12 +741,12 @@ test_header_multidim(void)
     if (err) { cleanup_test_dir(); return 1; }
 
     int fail = 0;
-    if (rattr.headers[0].ndim != 3) fail = 1;
-    if (rattr.headers[0].dim_info[0].n != 2) fail = 1;
-    if (rattr.headers[0].dim_info[1].n != 3) fail = 1;
-    if (rattr.headers[0].dim_info[2].n != 4) fail = 1;
-    if (strcmp(rattr.headers[0].dim_info[2].name,
-              "layers") != 0) {
+    if (rattr.nheader < 1 || rattr.headers[0].ndim != 3) fail = 1;
+    if (rattr.nheader >= 1 && rattr.headers[0].dimsizes[0] != 2) fail = 1;
+    if (rattr.nheader >= 1 && rattr.headers[0].dimsizes[1] != 3) fail = 1;
+    if (rattr.nheader >= 1 && rattr.headers[0].dimsizes[2] != 4) fail = 1;
+    if (rattr.nheader >= 1 &&
+        strcmp(rattr.headers[0].dimnames[2], "layers") != 0) {
         fail = 1;
     }
 
@@ -778,12 +770,12 @@ test_header_mixed(void)
 
     tpb_meta_header_t hdrs[3];
     hdrs[0] = make_test_header("KernelIDs", 1, 40);
-    hdrs[0].dim_info[0].n = 2;
+    hdrs[0].dimsizes[0] = 2;
     hdrs[1] = make_test_header("TaskIDs", 1, 60);
-    hdrs[1].dim_info[0].n = 3;
+    hdrs[1].dimsizes[0] = 3;
     hdrs[2] = make_test_header("custom_metric", 2, 48);
-    hdrs[2].dim_info[0].n = 4;
-    hdrs[2].dim_info[1].n = 6;
+    hdrs[2].dimsizes[0] = 4;
+    hdrs[2].dimsizes[1] = 6;
 
     attr.nheader = 3;
     attr.headers = hdrs;
@@ -820,9 +812,9 @@ test_header_mixed(void)
               "custom_metric") != 0) {
         fail = 1;
     }
-    if (rattr.headers[2].ndim != 2) fail = 1;
-    if (rattr.headers[2].dim_info[0].n != 4) fail = 1;
-    if (rattr.headers[2].dim_info[1].n != 6) fail = 1;
+    if (rattr.nheader < 3 || rattr.headers[2].ndim != 2) fail = 1;
+    if (rattr.nheader >= 3 && rattr.headers[2].dimsizes[0] != 4) fail = 1;
+    if (rattr.nheader >= 3 && rattr.headers[2].dimsizes[1] != 6) fail = 1;
     if (rsize != 148) fail = 1;
     if (rdata) {
         unsigned char *rp = (unsigned char *)rdata;
