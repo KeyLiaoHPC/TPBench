@@ -52,21 +52,48 @@ typedef uint32_t TPB_DTYPE_U32;
 
 /* Parameter type flags (bits 0-15) */
 #define TPB_PARM_TYPE_MASK  ((TPB_MASK)0x0000FFFF)
-#define TPB_INT_T           ((TPB_DTYPE)0x00000405)
-#define TPB_INT8_T          ((TPB_DTYPE)0x00000137)
-#define TPB_INT16_T         ((TPB_DTYPE)0x00000238)
-#define TPB_INT32_T         ((TPB_DTYPE)0x00000439)
-#define TPB_INT64_T         ((TPB_DTYPE)0x0000083a)
-#define TPB_UINT8_T         ((TPB_DTYPE)0x0000013b)
-#define TPB_UINT16_T        ((TPB_DTYPE)0x0000023c)
-#define TPB_UINT32_T        ((TPB_DTYPE)0x0000043d)
-#define TPB_UINT64_T        ((TPB_DTYPE)0x0000083e)
-#define TPB_FLOAT_T         ((TPB_DTYPE)0x0000040a)
-#define TPB_DOUBLE_T        ((TPB_DTYPE)0x0000080b)
-#define TPB_LONG_DOUBLE_T   ((TPB_DTYPE)0x0000100c)
+
+/* 1-byte types (sorted by type bits) */
 #define TPB_CHAR_T          ((TPB_DTYPE)0x00000101)
-#define TPB_STRING_T        ((TPB_DTYPE)0x00001000)
+#define TPB_UNSIGNED_CHAR_T ((TPB_DTYPE)0x00000102)
+#define TPB_BYTE_T          ((TPB_DTYPE)0x0000010d)
+#define TPB_PACKED_T        ((TPB_DTYPE)0x0000010f)
+#define TPB_SIGNED_CHAR_T   ((TPB_DTYPE)0x00000118)
+#define TPB_INT8_T          ((TPB_DTYPE)0x00000137)
+#define TPB_UINT8_T         ((TPB_DTYPE)0x0000013b)
+
+/* 2-byte types (sorted by type bits) */
+#define TPB_SHORT_T         ((TPB_DTYPE)0x00000201)
+#define TPB_UNSIGNED_SHORT_T ((TPB_DTYPE)0x00000202)
+#define TPB_INT16_T         ((TPB_DTYPE)0x00000238)
+#define TPB_UINT16_T        ((TPB_DTYPE)0x0000023c)
+
+/* 4-byte types (sorted by type bits) */
+#define TPB_INT_T           ((TPB_DTYPE)0x00000405)
+#define TPB_UNSIGNED_T      ((TPB_DTYPE)0x00000406)
+#define TPB_FLOAT_T         ((TPB_DTYPE)0x0000040a)
+#define TPB_WCHAR_T         ((TPB_DTYPE)0x0000040e)
+#define TPB_INT32_T         ((TPB_DTYPE)0x00000439)
+#define TPB_UINT32_T        ((TPB_DTYPE)0x0000043d)
+
+/* 8-byte types (sorted by type bits) */
+#define TPB_LONG_T          ((TPB_DTYPE)0x00000807)
+#define TPB_UNSIGNED_LONG_T ((TPB_DTYPE)0x00000808)
+#define TPB_LONG_LONG_T     ((TPB_DTYPE)0x00000809)
+#define TPB_UNSIGNED_LONG_LONG_T ((TPB_DTYPE)0x00000819)
+#define TPB_DOUBLE_T        ((TPB_DTYPE)0x0000080b)
+#define TPB_C_FLOAT_COMPLEX_T ((TPB_DTYPE)0x00000823)
+#define TPB_INT64_T         ((TPB_DTYPE)0x0000083a)
+#define TPB_UINT64_T        ((TPB_DTYPE)0x0000083e)
 #define TPB_DTYPE_TIMER_T   ((TPB_DTYPE)0x0000083F)
+
+/* 16-byte types (sorted by type bits) */
+#define TPB_STRING_T        ((TPB_DTYPE)0x00001000)
+#define TPB_LONG_DOUBLE_T   ((TPB_DTYPE)0x0000100c)
+#define TPB_C_DOUBLE_COMPLEX_T ((TPB_DTYPE)0x00001024)
+
+/* 32-byte types */
+#define TPB_C_LONG_DOUBLE_COMPLEX_T ((TPB_DTYPE)0x00002025)
 
 /* Kernel integration types */
 typedef uint32_t TPB_K_CTRL;

@@ -683,28 +683,6 @@ tpb_k_add_parm(const char *name, const char *note,
     return 0;
 }
 
-int
-tpb_k_add_runner(int (*runner)(void))
-{
-    if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
-                  "No kernel registered. Call tpb_k_register first.\n");
-        return TPBE_KERN_ARG_FAIL;
-    }
-    
-    if (runner == NULL) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-    
-    current_kernel->func.k_run = runner;
-
-    /* Finalize registration: increment kernel count */
-    nkern++;
-    current_kernel = NULL;
-
-    return 0;
-}
-
 
 int
 tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit)
