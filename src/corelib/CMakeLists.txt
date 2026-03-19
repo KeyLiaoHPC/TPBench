@@ -6,6 +6,7 @@ set(TPB_CORELIB_SOURCES
     tpb-impl.c
     tpb-argp.c
     tpb-dynloader.c
+    tpb-autorecord.c
     strftime.c
     raw_db/tpb-rawdb-workspace.c
     raw_db/tpb-rawdb-magic.c

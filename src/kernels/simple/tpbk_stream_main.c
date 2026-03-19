@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tpbench.h"
+#include "corelib/tpb-autorecord.h"
 
 /* External declarations from tpbk_stream.c */
 extern int _tpbk_register_stream(void);
@@ -78,7 +79,10 @@ main(int argc, char **argv)
     tpb_cliout_results(&handle);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel stream finished successfully.\n");
 
-    /* 8. Clean up */
+    /* 8. Write task record (reads TPB_TBATCH_ID from env, or zero) */
+    tpb_record_write_task(&handle, 0);
+
+    /* 9. Clean up */
     tpb_driver_clean_handle(&handle);
 
     return 0;

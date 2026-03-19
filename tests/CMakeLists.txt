@@ -23,6 +23,7 @@ endmacro()
 
 add_subdirectory(corelib)
 add_subdirectory(tpbcli)
+add_subdirectory(integration)
 
 add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure

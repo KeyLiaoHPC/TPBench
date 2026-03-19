@@ -22,6 +22,7 @@
 #include "corelib/tpb-impl.h"
 #include "corelib/tpb-io.h"
 #include "corelib/tpb-types.h"
+#include "corelib/tpb-autorecord.h"
 #include "kernels/kernels.h"
 
 /* Maximum number of dimension configs per kernel */
@@ -1068,8 +1069,25 @@ tpbcli_run(int argc, char **argv)
     // Sleep 1.x seconds to prevent tbatch conflicting.
     usleep((useconds_t)(1000000 + (rand() % 1000) * 1000));
 
+    /* Begin auto-record batch */
+    int rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
+    if (rec_err) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Auto-record: begin_batch failed (%d), continuing without recording.\n", rec_err);
+    }
+
     err = tpb_driver_run_all();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_driver_run_all");
+
+    /* End auto-record batch */
+    if (!rec_err) {
+        int ntask = (nhdl > 1) ? nhdl - 1 : 0;
+        rec_err = tpb_record_end_batch(ntask);
+        if (rec_err) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Auto-record: end_batch failed (%d)\n", rec_err);
+        }
+    }
 
     return err;
 }

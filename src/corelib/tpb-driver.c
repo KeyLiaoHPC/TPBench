@@ -24,6 +24,7 @@
 #include "tpb-types.h"
 #include "tpb-dynloader.h"
 #include "tpb-argp.h"
+#include "tpb-autorecord.h"
 
 /* Module-level state variables */
 static int nkern = 0, nhdl, ihdl;  // number of registered kernels，number of handles， handle id
@@ -37,6 +38,7 @@ static tpb_timer_t timer;
 /* Handle management state */
 static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
 static int timer_set = 0;                  // flag to track if timer is set
+static int s_pli_handle_index = 0;         // 0-based handle index for auto-record
 
 static int
 _tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
@@ -1418,6 +1420,20 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
 
         pos += snprintf(full_cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer.name);
 
+        /* Inject auto-record env vars if a batch is active */
+        const char *ar_bid = tpb_record_get_tbatch_id_hex();
+        const char *ar_ws = tpb_record_get_workspace();
+        if (ar_bid != NULL) {
+            pos += snprintf(full_cmd + pos, cmd_size - pos,
+                            "TPB_TBATCH_ID=%s ", ar_bid);
+            pos += snprintf(full_cmd + pos, cmd_size - pos,
+                            "TPB_HANDLE_INDEX=%d ", s_pli_handle_index);
+            if (ar_ws != NULL) {
+                pos += snprintf(full_cmd + pos, cmd_size - pos,
+                                "TPB_WORKSPACE=%s ", ar_ws);
+            }
+        }
+
         for (int i = 0; i < hdl->envpack.n; i++) {
             pos += snprintf(full_cmd + pos, cmd_size - pos, "%s=%s ",
                             hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
@@ -1544,6 +1560,7 @@ tpb_driver_run_all(void)
 
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
                    handle->kernel.info.name);
+        s_pli_handle_index = i - 1;
         err = tpb_run_pli(handle);
 
         if (err != 0) {
