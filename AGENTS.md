@@ -161,3 +161,4 @@ build/
 2. **CLI Commands**: Add new subcommands in `src/tpbcli-<cmd>.c/h` and register in [`tpbcli.c`](src/tpbcli.c)
 3. **Corelib Feature Extensions**: Extend [`src/corelib/`](src/corelib/) for new TPBench features
 4. **Tests**: Add unit tests in `tests/` following existing patterns. Ask users for the index.
+5. **Limited Kernel Modification**: Unless explicit requests, only modify and test [`tpbk_stream.c`](str/kernels/simple/tpbk_stream.c) and [`tpbk_stream_main.c`](str/kernels/simple/tpbk_stream_main.c), do not touch other kernels.

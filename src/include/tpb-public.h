@@ -37,11 +37,12 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPBE_UNKN   0x30
 
 /* Parameter source flags (bits 24-31) */
-#define TPB_PARM_SOURCE_MASK    ((TPB_MASK)0xFF000000)
-#define TPB_PARM_CLI            ((TPB_DTYPE)0x01000000)
-#define TPB_PARM_MACRO          ((TPB_DTYPE)0x02000000)
-#define TPB_PARM_FILE           ((TPB_DTYPE)0x04000000)
-#define TPB_PARM_ENV            ((TPB_DTYPE)0x08000000)
+#define TPB_PARM_SOURCE_MASK    ((TPB_MASK)0xFF000000)      // The import source of paramters
+#define TPB_PARM_CLI            ((TPB_DTYPE)0x01000000)     // Command-line parameters.
+#define TPB_PARM_MACRO          ((TPB_DTYPE)0x02000000)     // Predefined macros, might trigger kernel rebuild.
+#define TPB_PARM_WRAPPER_CLI    ((TPB_DTYPE)0x03000000)     // Parameters set to the wrapper/launcher of kernel execution, e.g. MPI.
+#define TPB_PARM_FILE           ((TPB_DTYPE)0x04000000)     // Parameters from files.
+#define TPB_PARM_ENV            ((TPB_DTYPE)0x08000000)     // Environmental variables.
 
 /* Parameter validation/check mode flags (bits 16-23) */
 #define TPB_PARM_CHECK_MASK ((TPB_MASK)0x00FF0000)
