@@ -297,6 +297,19 @@ int tpb_k_get_timer(tpb_timer_t *timer);
  */
 int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
 
+/**
+ * @brief Write a task record after kernel execution.
+ *
+ * Records kernel inputs and outputs to the raw database.
+ * Reads TPB_TBATCH_ID / TPB_HANDLE_INDEX / TPB_WORKSPACE from env.
+ * Outputs are written as 1-D arrays.
+ *
+ * @param hdl       Runtime handle with argpack and respack populated.
+ * @param exit_code Kernel exit code (0 = success).
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code);
+
 /* ===== PLI (Process-Level Integration) API ===== */
 
 /**

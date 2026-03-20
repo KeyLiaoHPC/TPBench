@@ -793,9 +793,47 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
 }
 
 int
+tpb_dtype_elem_size(TPB_DTYPE dtype, size_t *out)
+{
+    if (!out) return TPBE_NULLPTR_ARG;
+
+    switch (dtype & TPB_PARM_TYPE_MASK) {
+        case TPB_INT_T:
+            *out = sizeof(int);
+            break;
+        case TPB_INT8_T:
+        case TPB_UINT8_T:
+        case TPB_CHAR_T:
+            *out = 1;
+            break;
+        case TPB_INT16_T:
+        case TPB_UINT16_T:
+            *out = 2;
+            break;
+        case TPB_INT32_T:
+        case TPB_UINT32_T:
+            *out = 4;
+            break;
+        case TPB_FLOAT_T:
+            *out = sizeof(float);
+            break;
+        case TPB_INT64_T:
+        case TPB_UINT64_T:
+        case TPB_DOUBLE_T:
+            *out = sizeof(double);
+            break;
+        case TPB_LONG_DOUBLE_T:
+            *out = sizeof(long double);
+            break;
+        default:
+            return TPBE_LIST_NOT_FOUND;
+    }
+    return 0;
+}
+
+int
 tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 {
-    int tpberr = 0;
     size_t elem_size = 0;
 
     if (current_rthdl == NULL || name == NULL || ptr == NULL) {
@@ -810,54 +848,21 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 
     for (int i = 0; i < current_rthdl->respack.n; i++) {
         if (strcmp(current_rthdl->respack.outputs[i].name, name) == 0) {
-            /* Determine element size based on dtype */
-            TPB_DTYPE dtype = current_rthdl->respack.outputs[i].dtype;
-            switch (dtype & TPB_PARM_TYPE_MASK) {
-                case TPB_INT_T:
-                    elem_size = sizeof(int);
-                    break;
-                case TPB_INT8_T:
-                case TPB_UINT8_T:
-                case TPB_CHAR_T:
-                    elem_size = 1;
-                    break;
-                case TPB_INT16_T:
-                case TPB_UINT16_T:
-                    elem_size = 2;
-                    break;
-                case TPB_INT32_T:
-                case TPB_UINT32_T:
-                    elem_size = 4;
-                    break;
-                case TPB_FLOAT_T:
-                    elem_size = sizeof(float);
-                    break;
-                case TPB_INT64_T:
-                case TPB_UINT64_T:
-                case TPB_DOUBLE_T:
-                    elem_size = sizeof(double);
-                    break;
-                case TPB_LONG_DOUBLE_T:
-                    elem_size = sizeof(long double);
-                    break;
-                case TPB_STRING_T:
-                    elem_size = sizeof(char *);
-                    break;
-                default:
-                    tpb_printf(TPBM_PRTN_M_DIRECT,
-                               "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
-                               dtype);
-                    return TPBE_LIST_NOT_FOUND;
+            int err = tpb_dtype_elem_size(current_rthdl->respack.outputs[i].dtype,
+                                          &elem_size);
+            if (err != 0) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
+                           (unsigned long long)current_rthdl->respack.outputs[i].dtype);
+                return TPBE_LIST_NOT_FOUND;
             }
 
-            /* Allocate memory for output data */
             current_rthdl->respack.outputs[i].p = malloc(n * elem_size);
             if (current_rthdl->respack.outputs[i].p == NULL) {
                 return TPBE_MALLOC_FAIL;
             }
             current_rthdl->respack.outputs[i].n = n;
 
-            /* Return pointer to caller */
             *((void **)ptr) = current_rthdl->respack.outputs[i].p;
             return 0;
         }

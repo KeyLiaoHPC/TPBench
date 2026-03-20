@@ -150,4 +150,12 @@ void tpb_driver_disable_kernel_reg(void);
  */
 int tpb_driver_reset_handles(void);
 
+/**
+ * @brief Get element size in bytes for a given TPB_DTYPE.
+ * @param dtype Data type (masked with TPB_PARM_TYPE_MASK internally).
+ * @param out   Non-NULL pointer to receive element size.
+ * @return 0 on success, TPBE_LIST_NOT_FOUND for unsupported types.
+ */
+int tpb_dtype_elem_size(TPB_DTYPE dtype, size_t *out);
+
 #endif /* TPB_DRIVER_H */

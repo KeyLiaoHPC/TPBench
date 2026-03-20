@@ -86,9 +86,31 @@ tpb_add_subcase(A4 A4.17 header_1d          test-rawdb corelib)
 tpb_add_subcase(A4 A4.18 header_multidim    test-rawdb corelib)
 tpb_add_subcase(A4 A4.19 header_mixed       test-rawdb corelib)
 
+# --- 1D array write/read test (Pack A5) ---
+add_executable(test-1d-array EXCLUDE_FROM_ALL
+    test_1d_array_write.c
+    mock_kernel.c
+    mock_timer.c
+)
+target_include_directories(test-1d-array PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-1d-array PRIVATE tpbench m)
+set_target_properties(test-1d-array PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+# Pack A5 sub-cases
+tpb_add_subcase(A5 A5.1  write_read_doubles    test-1d-array corelib)
+tpb_add_subcase(A5 A5.2  write_read_floats     test-1d-array corelib)
+tpb_add_subcase(A5 A5.3  write_read_int64      test-1d-array corelib)
+tpb_add_subcase(A5 A5.4  write_read_int32      test-1d-array corelib)
+tpb_add_subcase(A5 A5.5  write_read_random_len test-1d-array corelib)
+tpb_add_subcase(A5 A5.6  write_read_multi      test-1d-array corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
-    DEPENDS test-tpb-run-pli test-strftime test-rawdb
+    DEPENDS test-tpb-run-pli test-strftime test-rawdb test-1d-array
 )
 
 add_custom_target(check_corelib
