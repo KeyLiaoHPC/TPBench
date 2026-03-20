@@ -19,35 +19,18 @@
 #   cmake -B build -DTPB_KERNELS=default -DTPB_KERNEL_TAGS=stanza  # stream + staxpy + striad
 # ============================================================================
 
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
+
 set(TPB_KERNELS "default" CACHE STRING "Kernel selection: comma-separated names, 'all', or 'default'")
 set(TPB_KERNEL_TAGS "" CACHE STRING "Comma-separated tags to select kernels (union with TPB_KERNELS)")
 
 # ---------------------------------------------------------------------------
-# Kernel registry
+# CPU kernel registry: TPB_CPU_KERNEL_DEFS in TPBenchKernelRegistry.cmake
 #
 # Each entry: NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION_VAR
-# Fields separated by '|' to avoid CMake list-separator conflicts.
-#
 # Source convention:
 #   Library  -> simple/tpbk_<name>.c
 #   PLI main -> simple/tpbk_<name>_main.c
-# ---------------------------------------------------------------------------
-set(TPB_KERNEL_DEFS
-    "stream|default,bandwidth||"
-    "triad|bandwidth||"
-    "scale|bandwidth||"
-    "axpy|bandwidth||"
-    "rtriad|bandwidth||"
-    "sum|bandwidth||"
-    "staxpy|bandwidth,stanza||"
-    "striad|bandwidth,stanza||"
-    "stream_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "scale_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "axpy_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "rtriad_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "sum_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-)
-
 # ---------------------------------------------------------------------------
 # Parse selection inputs into CMake lists
 # ---------------------------------------------------------------------------
@@ -60,7 +43,7 @@ set(TPB_BUILT_KERNEL_EXES "")
 set(TPB_BUILT_KERNEL_NAMES "")
 set(TPB_SKIPPED_KERNEL_NAMES "")
 
-foreach(_def IN LISTS TPB_KERNEL_DEFS)
+foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
     # Split on '|'
     string(REPLACE "|" ";" _parts "${_def}")
     list(GET _parts 0 _kname)

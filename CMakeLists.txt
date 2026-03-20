@@ -95,6 +95,8 @@ else()
 endif()
 message(STATUS "TPB_DIR resolved to: ${TPB_DIR_RESOLVED}")
 
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
+
 # Timer-related sources (absolute paths for use in sub-CMakeLists)
 set(TPB_TIMER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/timers/clock_gettime.c
@@ -110,6 +112,13 @@ add_subdirectory(src/corelib)
 
 # Kernels (.so + .tpbx) with name/tag-based selection
 add_subdirectory(src/kernels)
+
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchCmakeHelp.cmake)
+
+add_custom_target(tpb_cmake_help
+    COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/tpb_cmake_help.txt"
+    COMMENT "TPBench CMake options and kernel catalog"
+    VERBATIM)
 
 # Main CLI executable and subcommands
 add_executable(tpbcli
@@ -146,34 +155,7 @@ if(TPB_USE_ROCM)
         message(FATAL_ERROR "HIP not found but TPB_USE_ROCM is ON")
     endif()
 
-    # Roofline ROCm kernel as shared library
-    add_library(tpbk_roofline_rocm SHARED
-        src/kernels/rocm/tpbk_roofline_rocm.hip)
-    target_include_directories(tpbk_roofline_rocm PRIVATE src)
-    target_link_libraries(tpbk_roofline_rocm PRIVATE tpbench hip::device m)
-    set_target_properties(tpbk_roofline_rocm PROPERTIES
-        HIP_SEPARABLE_COMPILATION ON
-        POSITION_INDEPENDENT_CODE ON)
-    # Enable debug logging if TPB_SHOW_DEBUG is ON
-    if(TPB_SHOW_DEBUG)
-        target_compile_definitions(tpbk_roofline_rocm PRIVATE TPB_K_DEBUG=1)
-        message(STATUS "TPB_K_DEBUG enabled for tpbk_roofline_rocm")
-    endif()
-
-    # Roofline ROCm PLI executable (uses regular C++ compiler, links HIP runtime)
-    add_executable(tpbk_roofline_rocm.tpbx
-        src/kernels/rocm/tpbk_roofline_rocm_main.cpp)
-    target_include_directories(tpbk_roofline_rocm.tpbx PRIVATE src)
-    target_link_libraries(tpbk_roofline_rocm.tpbx PRIVATE
-        tpbench tpbk_roofline_rocm hip::host m)
-    set_target_properties(tpbk_roofline_rocm.tpbx PROPERTIES
-        LINKER_LANGUAGE CXX
-        CXX_STANDARD 11)
-    # Enable debug logging if TPB_SHOW_DEBUG is ON
-    if(TPB_SHOW_DEBUG)
-        target_compile_definitions(tpbk_roofline_rocm.tpbx PRIVATE TPB_K_DEBUG=1)
-        message(STATUS "TPB_K_DEBUG enabled for tpbk_roofline_rocm.tpbx")
-    endif()
+    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchGpuKernelsRocm.cmake)
 endif()
 
 # Tests
@@ -191,16 +173,7 @@ install(TARGETS tpbcli
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Kernel install rules are handled inside src/kernels/CMakeLists.txt
-
-# Conditional install for ROCm targets
-if(TPB_USE_ROCM)
-    install(TARGETS tpbk_roofline_rocm
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-    install(TARGETS tpbk_roofline_rocm.tpbx
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-endif()
-
+# ROCm kernel install rules are in cmake/TPBenchGpuKernelsRocm.cmake
 
 # ============================================================================
 # Generate and Install Flat tpbench.h for End-User Distribution
