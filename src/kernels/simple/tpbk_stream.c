@@ -42,7 +42,6 @@
 static double epsilon = 1.e-8;
 
 // Forward declarations
-int _tpbk_register_stream(void);
 int _tpbk_run_stream(void);
 int tpbk_pli_register_stream(void);
 static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
@@ -52,13 +51,11 @@ static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_si
                    double *add_bw, double *triad_bw);
 static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
-/* PLI registration: register only name, note, and parameters (no outputs, no runner) */
 int
 tpbk_pli_register_stream(void)
 {
     int err;
 
-    /* Register to TPBench as PLI kernel */
     err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_PLI);
     if (err != 0) return err;
 
@@ -80,58 +77,25 @@ tpbk_pli_register_stream(void)
                          (int64_t)0, (int64_t)10000);
     if (err != 0) return err;
 
-    /* NO outputs registered here - kernel registers them in its own process */
-    /* NO runner function - PLI uses exec */
-
-    return tpb_k_finalize_pli();
-}
-
-int
-_tpbk_register_stream(void)
-{
-    int err;
-    
-    /* Register to TPBench as PLI kernel */
-    err = tpb_k_register("stream", "The STREAM benchmark with OpenMP enabled.", TPB_KTYPE_PLI);
-    if(err != 0) return err;
-
-    /* Kernel input parameters */
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)100000);
-    if(err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
-                         0.0009765625, DBL_MAX);
-    if(err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
-                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)4294967295);
-    if(err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)10000);
-    if (err != 0) return err;
-
-    /* Kernel outputs - 4 separate timing sections */
+    /* Kernel outputs */
     err = tpb_k_add_output("copy_time", "Measured runtime of copy operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if(err != 0) return err;
+    if (err != 0) return err;
     err = tpb_k_add_output("scale_time", "Measured runtime of scale operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if(err != 0) return err;
+    if (err != 0) return err;
     err = tpb_k_add_output("add_time", "Measured runtime of add operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if(err != 0) return err;
+    if (err != 0) return err;
     err = tpb_k_add_output("triad_time", "Measured runtime of triad operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if(err != 0) return err;
+    if (err != 0) return err;
     err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of three stream arrays.",
-                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT );
-    if(err != 0) return err;
+                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
     err = tpb_k_add_output("array_size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
-    if(err != 0) return err;
+    if (err != 0) return err;
 
     return tpb_k_finalize_pli();
 }
@@ -433,3 +397,62 @@ check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, d
 
     return err;
 }
+
+/* =========================================================================
+ * PLI executable entry point (only compiled into .tpbx, not into .so)
+ * ========================================================================= */
+#ifdef TPB_K_BUILD_MAIN
+int
+main(int argc, char **argv)
+{
+    int err;
+
+    const char *timer_name = NULL;
+    if (argc >= 2) {
+        timer_name = argv[1];
+    } else {
+        timer_name = getenv("TPBENCH_TIMER");
+    }
+    if (timer_name == NULL) {
+        fprintf(stderr, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        return TPBE_CLI_FAIL;
+    }
+
+    err = tpb_k_pli_set_timer(timer_name);
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        return err;
+    }
+
+    err = tpbk_pli_register_stream();
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to register kernel\n");
+        return err;
+    }
+
+    tpb_k_rthdl_t handle;
+    err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to build handle\n");
+        return err;
+    }
+
+    tpb_cliout_args(&handle);
+
+    tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
+    err = _tpbk_run_stream();
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel stream failed: %d\n", err);
+        return err;
+    }
+
+    tpb_cliout_results(&handle);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel stream finished successfully.\n");
+
+    tpb_k_write_task(&handle, 0);
+
+    tpb_driver_clean_handle(&handle);
+
+    return 0;
+}
+#endif /* TPB_K_BUILD_MAIN */

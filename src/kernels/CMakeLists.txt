@@ -28,9 +28,9 @@ set(TPB_KERNEL_TAGS "" CACHE STRING "Comma-separated tags to select kernels (uni
 # CPU kernel registry: TPB_CPU_KERNEL_DEFS in TPBenchKernelRegistry.cmake
 #
 # Each entry: NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION_VAR
-# Source convention:
-#   Library  -> simple/tpbk_<name>.c
-#   PLI main -> simple/tpbk_<name>_main.c
+# Source convention (single-file kernel):
+#   Both .so and .tpbx are built from simple/tpbk_<name>.c
+#   The .tpbx target defines TPB_K_BUILD_MAIN to enable main()
 # ---------------------------------------------------------------------------
 # Parse selection inputs into CMake lists
 # ---------------------------------------------------------------------------
@@ -112,10 +112,11 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
         target_compile_definitions(${_lib_target} PRIVATE TPB_K_DEBUG=1)
     endif()
 
-    # PLI executable (.tpbx)
-    add_executable(${_exec_target} "${_src_dir}/tpbk_${_kname}_main.c")
+    # PLI executable (.tpbx) — same source, with TPB_K_BUILD_MAIN to enable main()
+    add_executable(${_exec_target} "${_src_dir}/tpbk_${_kname}.c")
+    target_compile_definitions(${_exec_target} PRIVATE TPB_K_BUILD_MAIN)
     target_include_directories(${_exec_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(${_exec_target} PRIVATE tpbench ${_lib_target} m)
+    target_link_libraries(${_exec_target} PRIVATE tpbench m)
     if(OpenMP_C_FOUND)
         target_link_libraries(${_exec_target} PRIVATE OpenMP::OpenMP_C)
     endif()

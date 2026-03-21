@@ -10,18 +10,18 @@
 
 set(TPB_CPU_KERNEL_DEFS
     "stream|default,bandwidth||"
-    "triad|bandwidth||"
-    "scale|bandwidth||"
-    "axpy|bandwidth||"
-    "rtriad|bandwidth||"
-    "sum|bandwidth||"
-    "staxpy|bandwidth,stanza||"
-    "striad|bandwidth,stanza||"
-    "stream_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "scale_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "axpy_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "rtriad_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
-    "sum_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    # "triad|bandwidth||"
+    # "scale|bandwidth||"
+    # "axpy|bandwidth||"
+    # "rtriad|bandwidth||"
+    # "sum|bandwidth||"
+    # "staxpy|bandwidth,stanza||"
+    # "striad|bandwidth,stanza||"
+    # "stream_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    # "scale_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    # "axpy_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    # "rtriad_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    # "sum_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
 )
 
 set(TPB_ROCM_KERNEL_DEFS
