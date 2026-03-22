@@ -829,8 +829,8 @@ void tpb_rawdb_id_to_hex(const unsigned char id[20],
                          char hex[41]);
 
 /**
- * @brief Parse a 40-character hex string into a 20-byte ID.
- * @param hex 40 hex digits (optional leading whitespace; optional 0x prefix)
+ * @brief Parse exactly 40 hex digits into a 20-byte ID.
+ * @param hex 40 hex digits [0-9A-Fa-f], no prefix, no spaces
  * @param id  Output 20-byte buffer
  * @return 0 on success, TPBE_NULLPTR_ARG or TPBE_CLI_FAIL on error
  */

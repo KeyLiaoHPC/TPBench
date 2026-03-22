@@ -9,16 +9,22 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <stdint.h>
 #include <inttypes.h>
 
-#include "corelib/tpb-types.h"
-#include "corelib/tpb-io.h"
 #include "corelib/strftime.h"
 #include "corelib/raw_db/tpb-rawdb-types.h"
 #include "tpbcli-database.h"
 
 #define RECORD_LIST_MAX 20
+/** Scan all rawdb record domains (for --id prefix search). */
+#define DOMAIN_FILTER_ALL ((uint8_t)0xFF)
+
+typedef struct id_prefix_match {
+    char     full_hex[41];
+    uint8_t  domain;
+} id_prefix_match_t;
 
 typedef enum {
     DUMP_T_NONE = 0,
@@ -70,6 +76,21 @@ static int dump_tpbr_task(const char *workspace,
                           const unsigned char id[20]);
 static int dump_tpbe_domain(const char *workspace, uint8_t domain);
 static int dump_file_path(const char *workspace, const char *filepath);
+
+static int parse_id_hex_arg(const char *in, char *out, size_t outsz,
+                            size_t *out_len);
+static int scan_tpbr_prefix_matches(const char *workspace,
+                                    const char *prefix, size_t prefix_len,
+                                    uint8_t domain_filter,
+                                    id_prefix_match_t **matches_out,
+                                    int *nmatch_out);
+static void print_ambiguous_id_table(const char *prefix,
+                                     id_prefix_match_t *matches, int nmatch,
+                                     const char *workspace);
+static int dump_tpbr_by_domain(const char *workspace, uint8_t domain,
+                               const unsigned char id[20]);
+static int resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
+                                    const char *arg);
 
 static void
 print_list_header(void)
@@ -264,6 +285,309 @@ resolve_file_path(const char *workspace, const char *inpath,
     return TPBE_FILE_IO_FAIL;
 }
 
+/* Leading/trailing whitespace only; 4-40 hex digits, lowercased. No 0x. */
+static int
+parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
+{
+    const char *a;
+    const char *z;
+    size_t n, i;
+
+    if (!in || !out || !out_len || outsz < 42) {
+        return TPBE_NULLPTR_ARG;
+    }
+    a = in;
+    while (*a != '\0' && isspace((unsigned char)*a)) {
+        a++;
+    }
+    z = a + strlen(a);
+    while (z > a && isspace((unsigned char)z[-1])) {
+        z--;
+    }
+    n = (size_t)(z - a);
+    if (n < 4 || n > 40) {
+        return TPBE_CLI_FAIL;
+    }
+    memcpy(out, a, n);
+    out[n] = '\0';
+    for (i = 0; i < n; i++) {
+        if (!isxdigit((unsigned char)out[i])) {
+            return TPBE_CLI_FAIL;
+        }
+        out[i] = (char)tolower((unsigned char)out[i]);
+    }
+    *out_len = n;
+    return TPBE_SUCCESS;
+}
+
+static int
+cmp_prefix_match(const void *a, const void *b)
+{
+    const id_prefix_match_t *x = (const id_prefix_match_t *)a;
+    const id_prefix_match_t *y = (const id_prefix_match_t *)b;
+    int c = strcmp(x->full_hex, y->full_hex);
+    if (c != 0) {
+        return c;
+    }
+    return (int)x->domain - (int)y->domain;
+}
+
+static int
+scan_tpbr_prefix_matches(const char *workspace, const char *prefix,
+                         size_t prefix_len, uint8_t domain_filter,
+                         id_prefix_match_t **matches_out, int *nmatch_out)
+{
+    static const struct {
+        const char *reldir;
+        uint8_t     domain;
+    } dirs[3] = {
+        { TPB_RAWDB_TBATCH_DIR, TPB_RAWDB_DOM_TBATCH },
+        { TPB_RAWDB_KERNEL_DIR, TPB_RAWDB_DOM_KERNEL },
+        { TPB_RAWDB_TASK_DIR,   TPB_RAWDB_DOM_TASK },
+    };
+    char dirpath[TPB_RAWDB_PATH_MAX];
+    id_prefix_match_t *matches = NULL;
+    int n = 0, cap = 0;
+    size_t di;
+
+    if (!workspace || !prefix || !matches_out || !nmatch_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+    *matches_out = NULL;
+    *nmatch_out = 0;
+
+    for (di = 0; di < sizeof(dirs) / sizeof(dirs[0]); di++) {
+        DIR *dp;
+        struct dirent *ent;
+
+        if (domain_filter != DOMAIN_FILTER_ALL &&
+            domain_filter != dirs[di].domain) {
+            continue;
+        }
+        snprintf(dirpath, sizeof(dirpath), "%s/%s",
+                 workspace, dirs[di].reldir);
+        dp = opendir(dirpath);
+        if (!dp) {
+            continue;
+        }
+        while ((ent = readdir(dp)) != NULL) {
+            const char *name = ent->d_name;
+            size_t len = strlen(name);
+            char idpart[41];
+            size_t k;
+
+            if (len != 45 || strcmp(name + 40, ".tpbr") != 0) {
+                continue;
+            }
+            memcpy(idpart, name, 40);
+            idpart[40] = '\0';
+            for (k = 0; k < 40; k++) {
+                if (!isxdigit((unsigned char)idpart[k])) {
+                    break;
+                }
+                idpart[k] = (char)tolower((unsigned char)idpart[k]);
+            }
+            if (k != 40 || strncmp(idpart, prefix, prefix_len) != 0) {
+                continue;
+            }
+            if (n >= cap) {
+                int nc = cap ? cap * 2 : 16;
+                id_prefix_match_t *nm = (id_prefix_match_t *)realloc(
+                    matches, (size_t)nc * sizeof(*matches));
+                if (!nm) {
+                    closedir(dp);
+                    free(matches);
+                    return TPBE_MALLOC_FAIL;
+                }
+                matches = nm;
+                cap = nc;
+            }
+            snprintf(matches[n].full_hex, sizeof(matches[n].full_hex),
+                     "%s", idpart);
+            matches[n].domain = dirs[di].domain;
+            n++;
+        }
+        closedir(dp);
+    }
+
+    if (n > 1) {
+        qsort(matches, (size_t)n, sizeof(*matches), cmp_prefix_match);
+    }
+    *matches_out = matches;
+    *nmatch_out = n;
+    return TPBE_SUCCESS;
+}
+
+static void
+print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
+                         int nmatch, const char *workspace)
+{
+    int i;
+
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+               "The ID %s maps following records, use longer ID for "
+               "precise searching:\n",
+               prefix);
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+               "FullID, Domain, Start UTC, Duration\n");
+
+    for (i = 0; i < nmatch; i++) {
+        unsigned char id[20];
+        tpb_datetime_str_t ts;
+        const char *utc_col = "N/A";
+        char tsbuf[sizeof(ts.str)];
+        double dur_sec = 0.0;
+        int have_dur = 0;
+
+        if (tpb_rawdb_hex_to_id(matches[i].full_hex, id) != TPBE_SUCCESS) {
+            continue;
+        }
+
+        tsbuf[0] = '\0';
+        if (matches[i].domain == TPB_RAWDB_DOM_TBATCH) {
+            tbatch_attr_t attr;
+            memset(&attr, 0, sizeof(attr));
+            if (tpb_rawdb_record_read_tbatch(workspace, id, &attr,
+                                              NULL, NULL) == TPBE_SUCCESS) {
+                if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+                    snprintf(tsbuf, sizeof(tsbuf), "%s", ts.str);
+                    utc_col = tsbuf;
+                }
+                dur_sec = (double)attr.duration / 1e9;
+                have_dur = 1;
+                tpb_rawdb_free_headers(attr.headers, attr.nheader);
+            }
+        } else if (matches[i].domain == TPB_RAWDB_DOM_TASK) {
+            task_attr_t attr;
+            memset(&attr, 0, sizeof(attr));
+            if (tpb_rawdb_record_read_task(workspace, id, &attr,
+                                           NULL, NULL) == TPBE_SUCCESS) {
+                if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+                    snprintf(tsbuf, sizeof(tsbuf), "%s", ts.str);
+                    utc_col = tsbuf;
+                }
+                dur_sec = (double)attr.duration / 1e9;
+                have_dur = 1;
+                tpb_rawdb_free_headers(attr.headers, attr.nheader);
+            }
+        } else {
+            utc_col = "N/A";
+        }
+
+        {
+            const char *dname =
+                (matches[i].domain == TPB_RAWDB_DOM_TBATCH) ? "task_batch" :
+                (matches[i].domain == TPB_RAWDB_DOM_KERNEL) ? "kernel" : "task";
+
+            if (have_dur) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "%s, %s, %s, %.3f\n",
+                           matches[i].full_hex, dname, utc_col, dur_sec);
+            } else {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "%s, %s, %s, N/A\n",
+                           matches[i].full_hex, dname, utc_col);
+            }
+        }
+    }
+}
+
+static int
+dump_tpbr_by_domain(const char *workspace, uint8_t domain,
+                    const unsigned char id[20])
+{
+    if (domain == TPB_RAWDB_DOM_TBATCH) {
+        return dump_tpbr_tbatch(workspace, id);
+    }
+    if (domain == TPB_RAWDB_DOM_KERNEL) {
+        return dump_tpbr_kernel(workspace, id);
+    }
+    return dump_tpbr_task(workspace, id);
+}
+
+static int
+resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
+                         const char *arg)
+{
+    char norm[48];
+    size_t plen;
+    unsigned char id[20];
+    uint8_t dom_filter;
+    uint8_t dom;
+    int err;
+
+    if (parse_id_hex_arg(arg, norm, sizeof(norm), &plen) != TPBE_SUCCESS) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Invalid id (need 4-40 hex digits, no 0x): %s\n", arg);
+        return TPBE_CLI_FAIL;
+    }
+
+    switch (t) {
+    case DUMP_T_ID_GLOBAL:
+        dom_filter = DOMAIN_FILTER_ALL;
+        break;
+    case DUMP_T_TBATCH_ID:
+        dom_filter = TPB_RAWDB_DOM_TBATCH;
+        break;
+    case DUMP_T_KERNEL_ID:
+        dom_filter = TPB_RAWDB_DOM_KERNEL;
+        break;
+    case DUMP_T_TASK_ID:
+        dom_filter = TPB_RAWDB_DOM_TASK;
+        break;
+    default:
+        return TPBE_CLI_FAIL;
+    }
+
+    if (plen == 40) {
+        if (tpb_rawdb_hex_to_id(norm, id) != TPBE_SUCCESS) {
+            return TPBE_CLI_FAIL;
+        }
+        if (t == DUMP_T_ID_GLOBAL) {
+            err = tpb_rawdb_find_record(workspace, id, &dom);
+            if (err != TPBE_SUCCESS) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "No .tpbr found for id in workspace.\n");
+                return err;
+            }
+            return dump_tpbr_by_domain(workspace, dom, id);
+        }
+        return dump_tpbr_by_domain(workspace, dom_filter, id);
+    }
+
+    {
+        id_prefix_match_t *matches = NULL;
+        int nmatch = 0;
+
+        err = scan_tpbr_prefix_matches(workspace, norm, plen, dom_filter,
+                                       &matches, &nmatch);
+        if (err != TPBE_SUCCESS) {
+            free(matches);
+            return err;
+        }
+
+        if (nmatch == 0) {
+            free(matches);
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                       "No .tpbr matches id prefix %s in workspace.\n", norm);
+            return TPBE_FILE_IO_FAIL;
+        }
+        if (nmatch > 1) {
+            print_ambiguous_id_table(norm, matches, nmatch, workspace);
+            free(matches);
+            return TPBE_CLI_FAIL;
+        }
+
+        if (tpb_rawdb_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
+            free(matches);
+            return TPBE_CLI_FAIL;
+        }
+        dom = matches[0].domain;
+        free(matches);
+        return dump_tpbr_by_domain(workspace, dom, id);
+    }
+}
+
 /*
  * Scan argv[3..] in order; first recognized dump target wins.
  * Stores path/hex/entry into buffers; sets *consumed_to unused (for API symmetry).
@@ -289,7 +613,7 @@ parse_dump_target(int argc, char **argv, int *consumed_to,
     for (i = 3; i < argc; i++) {
         const char *a = argv[i];
 
-        if (strcmp(a, "-i") == 0 || strcmp(a, "--id") == 0) {
+        if (strcmp(a, "--id") == 0) {
             if (i + 1 >= argc) {
                 return DUMP_T_NONE;
             }
@@ -324,14 +648,14 @@ parse_dump_target(int argc, char **argv, int *consumed_to,
             snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
             return DUMP_T_SCORE_ID;
         }
-        if (strcmp(a, "-f") == 0 || strcmp(a, "--file") == 0) {
+        if (strcmp(a, "--file") == 0) {
             if (i + 1 >= argc) {
                 return DUMP_T_NONE;
             }
             snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
             return DUMP_T_FILE;
         }
-        if (strcmp(a, "-e") == 0 || strcmp(a, "--entry") == 0) {
+        if (strcmp(a, "--entry") == 0) {
             if (i + 1 >= argc || !entry_name) {
                 return DUMP_T_NONE;
             }
@@ -859,8 +1183,39 @@ dump_file_path(const char *workspace, const char *filepath)
             *dot = '\0';
         }
     }
-    if (tpb_rawdb_hex_to_id(base, id) != TPBE_SUCCESS) {
-        return TPBE_CLI_FAIL;
+    if (tpb_rawdb_hex_to_id(base, id) == TPBE_SUCCESS) {
+        /* full 40-char id */
+    } else {
+        char norm[48];
+        size_t plen;
+        id_prefix_match_t *matches = NULL;
+        int nmatch = 0;
+        int err;
+
+        if (parse_id_hex_arg(base, norm, sizeof(norm), &plen) != TPBE_SUCCESS ||
+            plen >= 40) {
+            return TPBE_CLI_FAIL;
+        }
+        err = scan_tpbr_prefix_matches(workspace, norm, plen, domain,
+                                       &matches, &nmatch);
+        if (err != TPBE_SUCCESS) {
+            free(matches);
+            return err;
+        }
+        if (nmatch == 0) {
+            free(matches);
+            return TPBE_CLI_FAIL;
+        }
+        if (nmatch > 1) {
+            print_ambiguous_id_table(norm, matches, nmatch, workspace);
+            free(matches);
+            return TPBE_CLI_FAIL;
+        }
+        if (tpb_rawdb_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
+            free(matches);
+            return TPBE_CLI_FAIL;
+        }
+        free(matches);
     }
 
     if (domain == TPB_RAWDB_DOM_TBATCH) {
@@ -879,19 +1234,17 @@ database_dump(int argc, char **argv, const char *workspace)
     int dummy;
     char buf[TPB_RAWDB_PATH_MAX];
     char entrybuf[256];
-    unsigned char id[20];
     uint8_t dom;
-    int err;
 
     t = parse_dump_target(argc, argv, &dummy, buf, sizeof(buf),
                           entrybuf, sizeof(entrybuf));
     if (t == DUMP_T_NONE) {
         tpb_printf(TPBM_PRTN_M_DIRECT,
                    "Usage: tpbcli database dump "
-                   "[-i|--id <hex>|--tbatch-id <hex>|--kernel-id <hex>|"
-                   "--task-id <hex>|--score-id <hex>|-f|--file <path>|"
-                   "-e|--entry <name>]\n"
-                   "First matching target option wins.\n");
+                   "[--id <hex>|--tbatch-id <hex>|--kernel-id <hex>|"
+                   "--task-id <hex>|--score-id <hex>|--file <path>|"
+                   "--entry <name>]\n"
+                   "Enter a ID, a file name in the workspace, or a full path to a tpbe or tpbr file.\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -920,34 +1273,7 @@ database_dump(int argc, char **argv, const char *workspace)
         return dump_file_path(workspace, buf);
     }
 
-    if (tpb_rawdb_hex_to_id(buf, id) != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid hex id: %s\n", buf);
-        return TPBE_CLI_FAIL;
-    }
-
-    if (t == DUMP_T_ID_GLOBAL) {
-        err = tpb_rawdb_find_record(workspace, id, &dom);
-        if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
-                       "No .tpbr found for id in workspace.\n");
-            return err;
-        }
-        if (dom == TPB_RAWDB_DOM_TBATCH) {
-            return dump_tpbr_tbatch(workspace, id);
-        }
-        if (dom == TPB_RAWDB_DOM_KERNEL) {
-            return dump_tpbr_kernel(workspace, id);
-        }
-        return dump_tpbr_task(workspace, id);
-    }
-
-    if (t == DUMP_T_TBATCH_ID) {
-        return dump_tpbr_tbatch(workspace, id);
-    }
-    if (t == DUMP_T_KERNEL_ID) {
-        return dump_tpbr_kernel(workspace, id);
-    }
-    return dump_tpbr_task(workspace, id);
+    return resolve_hex_arg_and_dump(workspace, t, buf);
 }
 
 int

@@ -135,32 +135,23 @@ int
 tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20])
 {
     size_t i;
-    const char *p;
 
     if (!hex || !id) {
         return TPBE_NULLPTR_ARG;
     }
 
-    p = hex;
-    while (*p == ' ' || *p == '\t') {
-        p++;
-    }
-    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
-        p += 2;
-    }
-
     for (i = 0; i < 40; i++) {
-        if (p[i] == '\0' || isspace((unsigned char)p[i])) {
+        if (!isxdigit((unsigned char)hex[i])) {
             return TPBE_CLI_FAIL;
         }
     }
-    if (p[40] != '\0') {
+    if (hex[40] != '\0') {
         return TPBE_CLI_FAIL;
     }
 
     for (i = 0; i < 20; i++) {
-        int hi = hex_nibble((unsigned char)p[i * 2]);
-        int lo = hex_nibble((unsigned char)p[i * 2 + 1]);
+        int hi = hex_nibble((unsigned char)hex[i * 2]);
+        int lo = hex_nibble((unsigned char)hex[i * 2 + 1]);
         if (hi < 0 || lo < 0) {
             return TPBE_CLI_FAIL;
         }
