@@ -68,7 +68,11 @@ TPBench/
 │
 ├── src/
 │   ├── tpbcli.c                # CLI entry point
-│   ├── tpbcli-*.c/h            # CLI subcommands (run/list/benchmark/help)
+│   ├── tpbcli-database.c       # `database` subcommand — dispatch (list|ls|dump)
+│   ├── tpbcli-database-ls.c    # `database list` / `ls`
+│   ├── tpbcli-database-dump.c  # `database dump`
+│   ├── tpbcli-database.h       # `tpbcli_database`, `tpbcli_database_ls`, `tpbcli_database_dump`
+│   ├── tpbcli-*.c/h            # Other CLI subcommands (run/list/benchmark/help)
 │   ├── tpb-bench-*.c/h         # Benchmark execution engine
 │   ├── tpb-timer.c/h           # Timer abstraction
 │   │
@@ -139,7 +143,7 @@ TPBench/
 
 | Component | Path | Purpose |
 |-----------|------|---------|
-| CLI Frontend | `src/tpbcli*.c` | Command-line interface for running benchmarks |
+| CLI Frontend | `src/tpbcli*.c` | Command-line interface for running, recording kernels and benchmarks |
 | Core Library | `src/corelib/` | Kernel loading, execution, and result collection |
 | Benchmark Kernels | `src/kernels/simple/` | CPU benchmark implementations (STREAM, TRIAD, etc.) |
 | GPU Kernels | `src/kernels/rocm/` | ROCm GPU benchmark implementations |

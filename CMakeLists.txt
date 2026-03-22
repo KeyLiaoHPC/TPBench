@@ -131,6 +131,8 @@ add_executable(tpbcli
     src/tpb-bench-yaml.c
     src/tpb-bench-score.c
     src/tpbcli-database.c
+    src/tpbcli-database-ls.c
+    src/tpbcli-database-dump.c
 )
 target_include_directories(tpbcli PRIVATE src)
 target_link_libraries(tpbcli PRIVATE tpbench ${TPB_BUILT_KERNEL_LIBS} m)
