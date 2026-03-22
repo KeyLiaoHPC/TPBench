@@ -3,6 +3,7 @@
  * Magic signature construction, validation, and scanning.
  */
 
+#include <stdio.h>
 #include <string.h>
 #include "../tpb-types.h"
 #include "tpb-rawdb-types.h"
@@ -104,5 +105,56 @@ tpb_rawdb_magic_scan(const void *buf, size_t len,
     }
 
     *nfound = found;
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_rawdb_detect_file(const char *filepath,
+                      uint8_t *ftype_out,
+                      uint8_t *domain_out)
+{
+    FILE *fp;
+    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
+    uint8_t hi, lo;
+
+    if (!filepath || !ftype_out || !domain_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    fp = fopen(filepath, "rb");
+    if (!fp) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp) != TPB_RAWDB_MAGIC_LEN) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    fclose(fp);
+
+    if (!match_magic_prefix(magic)) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (magic[6] != TPB_RAWDB_MAGIC_B6 ||
+        magic[7] != TPB_RAWDB_MAGIC_B7) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (magic[5] != TPB_RAWDB_POS_START) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    hi = (uint8_t)(magic[4] & 0xF0u);
+    lo = (uint8_t)(magic[4] & 0x0Fu);
+
+    if (hi != TPB_RAWDB_FTYPE_ENTRY && hi != TPB_RAWDB_FTYPE_RECORD) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (lo != TPB_RAWDB_DOM_TBATCH &&
+        lo != TPB_RAWDB_DOM_KERNEL &&
+        lo != TPB_RAWDB_DOM_TASK) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    *ftype_out = hi;
+    *domain_out = lo;
     return TPBE_SUCCESS;
 }

@@ -554,6 +554,17 @@ int tpb_rawdb_init_workspace(const char *workspace_path);
 
 /* ===== rawdb Magic API ===== */
 
+/** @brief Entry file (.tpbe) type nibble for magic byte 4 (high nibble) */
+#define TPB_RAWDB_FTYPE_ENTRY   ((uint8_t)0xE0)
+/** @brief Record file (.tpbr) type nibble for magic byte 4 (high nibble) */
+#define TPB_RAWDB_FTYPE_RECORD  ((uint8_t)0xD0)
+/** @brief Task batch domain (magic byte 4 low nibble) */
+#define TPB_RAWDB_DOM_TBATCH    ((uint8_t)0x00)
+/** @brief Kernel domain (magic byte 4 low nibble) */
+#define TPB_RAWDB_DOM_KERNEL    ((uint8_t)0x01)
+/** @brief Task domain (magic byte 4 low nibble) */
+#define TPB_RAWDB_DOM_TASK      ((uint8_t)0x02)
+
 /**
  * @brief Build an 8-byte magic signature.
  * @param ftype  File type (TPB_RAWDB_FTYPE_ENTRY or _RECORD)
@@ -588,6 +599,17 @@ int tpb_rawdb_validate_magic(const unsigned char magic[8],
 int tpb_rawdb_magic_scan(const void *buf, size_t len,
                          size_t *offsets, int *nfound,
                          int max_results);
+
+/**
+ * @brief Detect rawdb file type and domain from the first 8-byte magic.
+ * @param filepath Path to a .tpbe or .tpbr file
+ * @param ftype_out Receives TPB_RAWDB_FTYPE_ENTRY or TPB_RAWDB_FTYPE_RECORD
+ * @param domain_out Receives TPB_RAWDB_DOM_TBATCH, _KERNEL, or _TASK
+ * @return 0 on success, TPBE_FILE_IO_FAIL if unreadable or invalid magic
+ */
+int tpb_rawdb_detect_file(const char *filepath,
+                          uint8_t *ftype_out,
+                          uint8_t *domain_out);
 
 /* ===== rawdb Entry API (.tpbe) ===== */
 
@@ -805,6 +827,25 @@ int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
  */
 void tpb_rawdb_id_to_hex(const unsigned char id[20],
                          char hex[41]);
+
+/**
+ * @brief Parse a 40-character hex string into a 20-byte ID.
+ * @param hex 40 hex digits (optional leading whitespace; optional 0x prefix)
+ * @param id  Output 20-byte buffer
+ * @return 0 on success, TPBE_NULLPTR_ARG or TPBE_CLI_FAIL on error
+ */
+int tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20]);
+
+/**
+ * @brief Find which domain directory contains a .tpbr for the given ID.
+ * @param workspace Workspace root
+ * @param id 20-byte record ID
+ * @param domain_out Receives TPB_RAWDB_DOM_TBATCH, _KERNEL, or _TASK
+ * @return 0 on success, TPBE_FILE_IO_FAIL if no matching file
+ */
+int tpb_rawdb_find_record(const char *workspace,
+                          const unsigned char id[20],
+                          uint8_t *domain_out);
 
 /* ===== Kernel Query API ===== */
 

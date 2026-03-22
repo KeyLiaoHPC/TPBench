@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <limits.h>
+#include "../../include/tpb-public.h"
 
 /* Magic signature template: E1 54 50 42 <X> <Y> 31 E0 */
 #define TPB_RAWDB_MAGIC_LEN     8
@@ -18,12 +19,8 @@
 #define TPB_RAWDB_MAGIC_B6      0x31  /* '1' */
 #define TPB_RAWDB_MAGIC_B7      0xE0
 
-/* X byte (byte 4): high nibble = file type, low nibble = domain */
-#define TPB_RAWDB_FTYPE_ENTRY   0xE0
-#define TPB_RAWDB_FTYPE_RECORD  0xD0
-#define TPB_RAWDB_DOM_TBATCH    0x00
-#define TPB_RAWDB_DOM_KERNEL    0x01
-#define TPB_RAWDB_DOM_TASK      0x02
+/* X byte (byte 4): high nibble = file type, low nibble = domain
+ * Values TPB_RAWDB_FTYPE_* / TPB_RAWDB_DOM_* are in tpb-public.h */
 
 /* Y byte (byte 5): position mark */
 #define TPB_RAWDB_POS_START     0x53  /* 'S' */

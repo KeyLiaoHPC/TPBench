@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "../tpb-types.h"
 #include "tpb-rawdb-types.h"
 #include "tpb-sha1.h"
@@ -119,4 +120,51 @@ tpb_rawdb_id_to_hex(const unsigned char id[20], char hex[41])
         snprintf(hex + i * 2, 3, "%02x", id[i]);
     }
     hex[40] = '\0';
+}
+
+static int
+hex_nibble(int c)
+{
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+int
+tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20])
+{
+    size_t i;
+    const char *p;
+
+    if (!hex || !id) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    p = hex;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (p[0] == '0' && (p[1] == 'x' || p[1] == 'X')) {
+        p += 2;
+    }
+
+    for (i = 0; i < 40; i++) {
+        if (p[i] == '\0' || isspace((unsigned char)p[i])) {
+            return TPBE_CLI_FAIL;
+        }
+    }
+    if (p[40] != '\0') {
+        return TPBE_CLI_FAIL;
+    }
+
+    for (i = 0; i < 20; i++) {
+        int hi = hex_nibble((unsigned char)p[i * 2]);
+        int lo = hex_nibble((unsigned char)p[i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return TPBE_CLI_FAIL;
+        }
+        id[i] = (unsigned char)((hi << 4) | lo);
+    }
+    return TPBE_SUCCESS;
 }

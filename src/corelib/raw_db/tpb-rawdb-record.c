@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "../tpb-types.h"
 #include "tpb-rawdb-types.h"
 
@@ -88,6 +89,34 @@ build_record_path(const char *workspace, uint8_t domain,
     }
     snprintf(out, outlen, "%s/%s/%s.tpbr",
              workspace, dir, hex);
+}
+
+int
+tpb_rawdb_find_record(const char *workspace,
+                      const unsigned char id[20],
+                      uint8_t *domain_out)
+{
+    char path[TPB_RAWDB_PATH_MAX];
+    struct stat st;
+    uint8_t doms[3];
+    int d;
+
+    if (!workspace || !id || !domain_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    doms[0] = TPB_RAWDB_DOM_TBATCH;
+    doms[1] = TPB_RAWDB_DOM_KERNEL;
+    doms[2] = TPB_RAWDB_DOM_TASK;
+
+    for (d = 0; d < 3; d++) {
+        build_record_path(workspace, doms[d], id, path, sizeof(path));
+        if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
+            *domain_out = doms[d];
+            return TPBE_SUCCESS;
+        }
+    }
+    return TPBE_FILE_IO_FAIL;
 }
 
 /*
