@@ -2,6 +2,8 @@
 
 These instructions apply to all AI-assisted contributions to TPBench. Breaching these instructions can result in automatic banning.
 
+
+
 ## 1 AI Agent Guidelines
 
 ### 1.1 Basic version
@@ -22,7 +24,7 @@ Optional: list `TPB_*` CMake options and registered kernels (no compile):
 cmake --build build --target tpb_cmake_help
 ```
 
-### 1.1.2 Running tests
+#### 1.1.2 Running tests
 
 Step 1: Run the ctest suite. If any tests fail, check the issues and fix.
 
@@ -39,7 +41,7 @@ Step 2: Run a single-core kernel. If the kernel does not finish normally and pri
 $ ./build/bin/tpbcli run --kernel stream --kargs total_memsize=524288,ntest=100
 ```
 
-### 1.1.3 Project Structure
+#### 1.1.3 Project Structure
 
 The following file tree shows the source code organization. Items in `.gitignore` (build artifacts, binaries, data files) are excluded.
 
@@ -139,7 +141,7 @@ TPBench/
         └── test-cli-run-dimargs.c  # CLI dimension argument tests
 ```
 
-#### 1.1.3.1 Key Components
+##### 1.1.3.1 Key Components
 
 | Component | Path | Purpose |
 |-----------|------|---------|
@@ -151,7 +153,7 @@ TPBench/
 | Timer Backend | `src/timers/` | High-resolution timing implementations |
 | PMU Support | `src/libpfc/`, `src/pmu/` | Hardware performance counter access |
 
-#### 1.1.3.2 Build Output Structure
+##### 1.1.3.2 Build Output Structure
 
 After building with `cmake --build build`, the output structure is:
 
@@ -168,7 +170,7 @@ build/
     └── yaml/               # Installed configuration files
 ```
 
-### 1.1.4 CPU PLI kernel layout 
+#### 1.1.4 CPU PLI kernel layout 
 
 A kernel named `<kern>` requires at least one dedicated source code file `src/kernels/simple/tpbk_<kern>.c`:
 
@@ -177,7 +179,8 @@ A kernel named `<kern>` requires at least one dedicated source code file `src/ke
 
 Both corelib and the kernel call `tpbk_pli_register_<kern>()` (params and static outputs) to register parameters and target metrics information; dynamic outputs may still be added at run time in the runner.
 
-### 1.1.5 Development Guidelines
+
+### 1.2 Development Guidelines
 
 1. **New `TPB_*` build option**: Add an `option()` or `set(... CACHE STRING "help" )` in root [`CMakeLists.txt`](CMakeLists.txt) (or in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) for kernel-selection caches). **Also** append one `"VAR|same short description"` entry to `_tpb_cmake_help_doc_lines` in [`cmake/TPBenchCmakeHelp.cmake`](cmake/TPBenchCmakeHelp.cmake). That list is the fallback when CMake replaces the cache HELPSTRING (e.g. after `-DTPB_*=...` on the command line); without it, `tpb_cmake_help` would show a generic placeholder. Reconfigure and run `cmake --build build --target tpb_cmake_help` to verify.
 2. **New CPU kernel**: Add one row to `TPB_CPU_KERNEL_DEFS` in [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake) (`NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION`). Add `src/kernels/simple/tpbk_<kern>.c` implementing `tpbk_pli_register_<kern>`, the runner (e.g. `_tpbk_run_<kern>`), and `main` under `#ifdef TPB_K_BUILD_MAIN`. Build rules are generated in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) (no per-kernel `add_library` in root CMake). [`src/kernels/kernels.h`](src/kernels/kernels.h) is legacy; PLI does not require new `register_*` declarations there.
@@ -186,3 +189,4 @@ Both corelib and the kernel call `tpbk_pli_register_<kern>()` (params and static
 5. **Corelib Feature Extensions**: Extend [`src/corelib/`](src/corelib/) for new TPBench features
 6. **Tests**: Add unit tests in `tests/` following existing patterns. Ask users for the index.
 7. **Limited Kernel Modification**: When kernel codes have to be changed according to front-end or corelib modifications, unless explicit requests, only modify and test [`tpbk_stream.c`](src/kernels/simple/tpbk_stream.c), do not touch other kernels.
+8. **All code contributions MUST follow the style rules defined in [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md).** Before writing or modifying any C code, review, obey, and per-item check the whole style guide,
