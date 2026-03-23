@@ -19,6 +19,7 @@ tpb_add_subcase(A2 A2.2 missing_exec       test-tpb-run-pli corelib)
 tpb_add_subcase(A2 A2.3 basic_success      test-tpb-run-pli corelib)
 tpb_add_subcase(A2 A2.4 child_nonzero_exit test-tpb-run-pli corelib)
 tpb_add_subcase(A2 A2.5 child_signaled     test-tpb-run-pli corelib)
+tpb_add_subcase(A2 A2.6 kernel_id_env      test-tpb-run-pli corelib)
 
 # --- Strftime test executable (Pack A3) ---
 add_executable(test-strftime EXCLUDE_FROM_ALL

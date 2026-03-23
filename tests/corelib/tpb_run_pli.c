@@ -16,6 +16,8 @@
 static char path_success[512];
 static char path_fail[512];
 static char path_signal[512];
+static char path_capture_kid[512];
+static char path_kernel_id_out[512];
 
 static int g_setup_done = 0;
 
@@ -39,12 +41,20 @@ create_mock_scripts(void)
              "%s/mock_pli_fail.sh", MOCK_SCRIPT_DIR);
     snprintf(path_signal, sizeof(path_signal),
              "%s/mock_pli_signal.sh", MOCK_SCRIPT_DIR);
+    snprintf(path_capture_kid, sizeof(path_capture_kid),
+             "%s/mock_pli_capture_kid.sh", MOCK_SCRIPT_DIR);
+    snprintf(path_kernel_id_out, sizeof(path_kernel_id_out),
+             "%s/kernel_id.out", MOCK_SCRIPT_DIR);
 
     mkdir(MOCK_SCRIPT_DIR, 0755);
 
     if (write_script(path_success, "exit 0")) return -1;
     if (write_script(path_fail, "exit 42")) return -1;
     if (write_script(path_signal, "kill -9 $$")) return -1;
+    if (write_script(path_capture_kid,
+                     "printf \"%s\" \"$TPB_KERNEL_ID\" > /tmp/tpbench_test_pli/kernel_id.out\nexit 0")) {
+        return -1;
+    }
     return 0;
 }
 
@@ -54,6 +64,8 @@ cleanup_mock_scripts(void)
     unlink(path_success);
     unlink(path_fail);
     unlink(path_signal);
+    unlink(path_capture_kid);
+    unlink(path_kernel_id_out);
     rmdir(MOCK_SCRIPT_DIR);
 }
 
@@ -162,6 +174,49 @@ test_child_signaled(void)
     return (err != 0) ? 0 : 1;
 }
 
+/* A2.6: TPB_KERNEL_ID is injected into child process env */
+static int
+test_kernel_id_env(void)
+{
+    FILE *fp;
+    char got_hex[128];
+    char exp_hex[41];
+    unsigned char kernel_id[20];
+    size_t nread;
+    int err;
+    tpb_k_rthdl_t hdl;
+
+    if (ensure_setup()) return 1;
+    err = mock_build_handle("mock_pli_test", &hdl);
+    if (err) return 1;
+
+    for (int i = 0; i < 20; i++) {
+        kernel_id[i] = (unsigned char)(i + 1);
+    }
+    memcpy(hdl.kernel.info.kernel_id, kernel_id, 20);
+    tpb_rawdb_id_to_hex(kernel_id, exp_hex);
+
+    unlink(path_kernel_id_out);
+    mock_dl_set_exec_path(path_capture_kid);
+    mock_dl_set_complete(1);
+    err = tpb_run_pli(&hdl);
+    free(hdl.argpack.args);
+    tpb_free_kernel(&hdl.kernel);
+    if (err != 0) {
+        return 1;
+    }
+
+    fp = fopen(path_kernel_id_out, "r");
+    if (fp == NULL) {
+        return 1;
+    }
+    nread = fread(got_hex, 1, sizeof(got_hex) - 1, fp);
+    fclose(fp);
+    got_hex[nread] = '\0';
+
+    return (strcmp(got_hex, exp_hex) == 0) ? 0 : 1;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -174,6 +229,7 @@ main(int argc, char **argv)
         { "A2.3", "basic_success",      test_basic_success      },
         { "A2.4", "child_nonzero_exit", test_child_nonzero_exit },
         { "A2.5", "child_signaled",     test_child_signaled     },
+        { "A2.6", "kernel_id_env",      test_kernel_id_env      },
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int fail = run_pack("A2", cases, n, filter);

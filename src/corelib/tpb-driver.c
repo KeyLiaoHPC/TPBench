@@ -21,7 +21,6 @@
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"
-#include "tpb-types.h"
 #include "tpb-dynloader.h"
 #include "tpb-argp.h"
 #include "tpb-autorecord.h"
@@ -102,6 +101,7 @@ _tpb_deep_copy_kernel(const tpb_kernel_t *src)
     /* Copy scalar fields in info */
     snprintf(dst->info.name, TPBM_NAME_STR_MAX_LEN, "%s", src->info.name);
     snprintf(dst->info.note, TPBM_NOTE_STR_MAX_LEN, "%s", src->info.note);
+    memcpy(dst->info.kernel_id, src->info.kernel_id, 20);
     dst->info.kctrl = src->info.kctrl;
     dst->info.nparms = src->info.nparms;
     dst->info.nouts = src->info.nouts;
@@ -228,6 +228,27 @@ int
 tpb_k_get_timer(tpb_timer_t *timer_out)
 {
     return tpb_driver_get_timer(timer_out);
+}
+
+int
+tpb_driver_set_kernel_id(const char *kernel_name,
+                         const unsigned char kernel_id[20])
+{
+    tpb_kernel_t *kernel = NULL;
+    int err;
+
+    if (kernel_name == NULL || kernel_id == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+    if (err != 0) {
+        return err;
+    }
+
+    /* Persist resolved KernelID for later handle/env propagation. */
+    memcpy(kernel->info.kernel_id, kernel_id, 20);
+    return 0;
 }
 
 int
@@ -1415,6 +1436,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...> */
     {
         char value_buf[256];
+        char kernel_id_hex[41];
         size_t cmd_size = 8192;
         full_cmd = (char *)malloc(cmd_size);
         if (full_cmd == NULL) {
@@ -1424,6 +1446,9 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         size_t pos = 0;
 
         pos += snprintf(full_cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer.name);
+        tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+        pos += snprintf(full_cmd + pos, cmd_size - pos,
+                        "TPB_KERNEL_ID=%s ", kernel_id_hex);
 
         /* Inject auto-record env vars if a batch is active */
         const char *ar_bid = tpb_record_get_tbatch_id_hex();

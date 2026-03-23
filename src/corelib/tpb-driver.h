@@ -26,6 +26,15 @@ int tpb_driver_set_timer(tpb_timer_t timer);
 int tpb_driver_get_timer(tpb_timer_t *timer);
 
 /**
+ * @brief Set resolved KernelID for a registered kernel by name.
+ * @param kernel_name Kernel name.
+ * @param kernel_id 20-byte KernelID value.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_kernel_id(const char *kernel_name,
+                             const unsigned char kernel_id[20]);
+
+/**
  * @brief Get number of registered kernels.
  * @return Number of registered kernels.
  */

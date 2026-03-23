@@ -290,6 +290,24 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
         handle_index = (uint32_t)atoi(env_idx);
     }
 
+    /* Read KernelID from env (or zero) */
+    const char *env_kid = getenv("TPB_KERNEL_ID");
+    memset(kernel_id, 0, 20);
+    /*
+     * Kernel process receives TPB_KERNEL_ID from parent runner.
+     * Keep compatibility fallback to zero ID when env is invalid.
+     */
+    if (env_kid != NULL && strlen(env_kid) == 40) {
+        if (hex_to_id(env_kid, kernel_id) != 0) {
+            memset(kernel_id, 0, 20);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Auto-record: invalid TPB_KERNEL_ID, fallback to zero.\n");
+        }
+    } else if (env_kid != NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Auto-record: TPB_KERNEL_ID must be 40 hex chars.\n");
+    }
+
     /* Resolve workspace */
     err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
     if (err) return err;
@@ -301,7 +319,6 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     if (err) return err;
 
     get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
-    memset(kernel_id, 0, 20);
 
     err = tpb_rawdb_gen_task_id(utc_bits, btime_ns, hostname, username,
                                  tbatch_id, kernel_id, handle_index, task_id);
