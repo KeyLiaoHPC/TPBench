@@ -1206,7 +1206,7 @@ int tpb_rawdb_magic_scan(const void *buf, size_t len,
 
 ### Entry Operations (.tpbe)
 
-Entry files store 128-byte fixed-size record summaries for fast indexing.
+Entry files store fixed-size record summaries for fast indexing (`tbatch_entry_t` / `kernel_entry_t`: 264 bytes; `task_entry_t`: 240 bytes including ABI tail padding). The public macro `TPB_RAWDB_RESERVE_SIZE` (128) is the tail reserve size in each entry and the opaque reserve block size in each `.tpbr` meta section.
 
 #### `tpb_rawdb_entry_append_tbatch`
 
@@ -1219,7 +1219,7 @@ int tpb_rawdb_entry_append_tbatch(const char *workspace,
 
 **Parameters:**
 - `workspace`: Workspace root path
-- `entry`: Pointer to 128-byte `tbatch_entry_t` structure
+- `entry`: Pointer to `tbatch_entry_t` (264 bytes on disk)
 
 **Returns:**
 - `TPBE_SUCCESS` on success
@@ -1239,7 +1239,7 @@ int tpb_rawdb_entry_append_kernel(const char *workspace,
 
 **Parameters:**
 - `workspace`: Workspace root path
-- `entry`: Pointer to 128-byte `kernel_entry_t` structure
+- `entry`: Pointer to `kernel_entry_t` (264 bytes on disk)
 
 ---
 
@@ -1254,7 +1254,7 @@ int tpb_rawdb_entry_append_task(const char *workspace,
 
 **Parameters:**
 - `workspace`: Workspace root path
-- `entry`: Pointer to 128-byte `task_entry_t` structure
+- `entry`: Pointer to `task_entry_t` (240 bytes on disk)
 
 ---
 
@@ -1551,11 +1551,12 @@ typedef struct tpb_meta_header {
 
 #### Entry Structures
 
-**`tbatch_entry_t`** (128 bytes) - Slim tbatch summary:
+**`tbatch_entry_t`** (264 bytes) - Slim tbatch summary:
 
 ```c
 typedef struct tbatch_entry {
     unsigned char tbatch_id[20];    // TBatchID
+    unsigned char dup_from[20];     // Lineage: source TBatchID or zero
     tpb_dtbits_t start_utc_bits;    // Start datetime
     uint64_t duration;              // Duration in nanoseconds
     char hostname[64];              // Hostname
@@ -1563,29 +1564,31 @@ typedef struct tbatch_entry {
     uint32_t ntask;                 // Number of tasks
     uint32_t nscore;                // Number of scores (always 0 for now)
     uint32_t batch_type;            // 0=run, 1=benchmark
-    unsigned char reserve[12];      // Reserved
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; // Reserved (128)
 } tbatch_entry_t;
 ```
 
-**`kernel_entry_t`** (128 bytes) - Slim kernel summary:
+**`kernel_entry_t`** (264 bytes) - Slim kernel summary:
 
 ```c
 typedef struct kernel_entry {
     unsigned char kernel_id[20];    // KernelID
+    unsigned char dup_from[20];     // Lineage: source KernelID or zero
     char kernel_name[64];           // Kernel name
     unsigned char so_sha1[20];    // Shared library SHA1
     uint32_t kctrl;                 // Kernel control bits
     uint32_t nparm;                 // Number of parameters
     uint32_t nmetric;               // Number of metrics
-    unsigned char reserve[12];      // Reserved
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; // Reserved (128)
 } kernel_entry_t;
 ```
 
-**`task_entry_t`** (128 bytes) - Slim task summary:
+**`task_entry_t`** (240 bytes) - Slim task summary:
 
 ```c
 typedef struct task_entry {
     unsigned char task_record_id[20];   // TaskRecordID
+    unsigned char dup_from[20];         // Lineage: source TaskRecordID or zero
     unsigned char tbatch_id[20];        // TBatchID
     unsigned char kernel_id[20];        // KernelID
     tpb_dtbits_t utc_bits;              // Invocation datetime
@@ -1593,7 +1596,7 @@ typedef struct task_entry {
     uint32_t exit_code;                 // Exit code
     uint32_t handle_index;              // Handle index
     int32_t mpi_rank;                   // MPI rank (-1 if non-MPI)
-    unsigned char reserve[40];          // Reserved
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; // Reserved (128)
 } task_entry_t;
 ```
 
@@ -1607,6 +1610,7 @@ typedef struct task_entry {
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];    // Primary Link ID
     unsigned char dup_to[20];       // Duplicate tracking
+    unsigned char dup_from[20];     // Lineage / provenance
     tpb_dtbits_t utc_bits;          // Start datetime
     uint64_t btime;                 // Boot time (ns)
     uint64_t duration;              // Duration (ns)
@@ -1628,6 +1632,7 @@ typedef struct tbatch_attr {
 typedef struct kernel_attr {
     unsigned char kernel_id[20];    // KernelID
     unsigned char dup_to[20];       // Duplicate tracking
+    unsigned char dup_from[20];     // Lineage / provenance
     unsigned char src_sha1[20];     // Source SHA1
     unsigned char so_sha1[20];     // Shared library SHA1
     unsigned char bin_sha1[20];    // Executable SHA1
@@ -1649,6 +1654,7 @@ typedef struct kernel_attr {
 typedef struct task_attr {
     unsigned char task_record_id[20];   // TaskRecordID
     unsigned char dup_to[20];           // Duplicate tracking
+    unsigned char dup_from[20];         // Lineage / provenance
     unsigned char tbatch_id[20];        // Foreign key: TBatchID
     unsigned char kernel_id[20];        // Foreign key: KernelID
     tpb_dtbits_t utc_bits;              // Invocation datetime
@@ -1677,6 +1683,7 @@ typedef struct task_attr {
 | `TPBM_NAME_STR_MAX_LEN` | 256 | Maximum name string length |
 | `TPBM_NOTE_STR_MAX_LEN` | 2048 | Maximum note string length |
 | `TPBM_CLI_K_MAX` | 128 | Maximum number of kernels |
+| `TPB_RAWDB_RESERVE_SIZE` | 128 | `.tpbr` meta reserve and `.tpbe` entry tail (bytes) |
 
 ---
 

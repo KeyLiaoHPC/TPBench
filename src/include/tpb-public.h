@@ -403,6 +403,9 @@ int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
 /* ===== Record Data Types (rawdb) ===== */
 
+/** @brief Opaque reserve size in .tpbr meta and tail of .tpbe entry rows (bytes) */
+#define TPB_RAWDB_RESERVE_SIZE 128
+
 /** @brief 64-bit bit-packed datetime representation */
 typedef uint64_t tpb_dtbits_t;
 
@@ -438,6 +441,7 @@ typedef struct tpb_meta_header {
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];  /**< Primary Link ID (SHA-1) */
     unsigned char dup_to[20];     /**< Duplicate tracking */
+    unsigned char dup_from[20];   /**< Lineage: source record ID, or zero */
     tpb_dtbits_t utc_bits;        /**< Batch start datetime */
     uint64_t btime;               /**< Boot time at batch start (ns) */
     uint64_t duration;            /**< Total batch duration (ns) */
@@ -452,9 +456,10 @@ typedef struct tbatch_attr {
     tpb_meta_header_t *headers;   /**< Header array */
 } tbatch_attr_t;
 
-/** @brief TBatch entry (128-byte slim record in .tpbe) */
+/** @brief TBatch entry (slim record in .tpbe) */
 typedef struct tbatch_entry {
     unsigned char tbatch_id[20];  /**< TBatchID */
+    unsigned char dup_from[20];   /**< Lineage: source TBatchID, or zero */
     tpb_dtbits_t start_utc_bits;  /**< Batch start datetime */
     uint64_t duration;            /**< Duration in nanoseconds */
     char hostname[64];            /**< Hostname */
@@ -462,13 +467,14 @@ typedef struct tbatch_entry {
     uint32_t ntask;               /**< Number of tasks */
     uint32_t nscore;              /**< Number of scores */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
-    unsigned char reserve[12];    /**< Reserved */
-} tbatch_entry_t;                 /* 128 Bytes */
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+} tbatch_entry_t;
 
 /** @brief Kernel full attributes (.tpbr meta section) */
 typedef struct kernel_attr {
     unsigned char kernel_id[20];  /**< KernelID (SHA-1) */
     unsigned char dup_to[20];     /**< Duplicate tracking */
+    unsigned char dup_from[20];   /**< Lineage: source KernelID, or zero */
     unsigned char src_sha1[20];   /**< Source files SHA-1 */
     unsigned char so_sha1[20];    /**< Shared library SHA-1 */
     unsigned char bin_sha1[20];   /**< Executable SHA-1 */
@@ -483,21 +489,23 @@ typedef struct kernel_attr {
     tpb_meta_header_t *headers;   /**< Header array */
 } kernel_attr_t;
 
-/** @brief Kernel entry (128-byte slim record in .tpbe) */
+/** @brief Kernel entry (slim record in .tpbe) */
 typedef struct kernel_entry {
     unsigned char kernel_id[20];  /**< KernelID */
+    unsigned char dup_from[20];   /**< Lineage: source KernelID, or zero */
     char kernel_name[64];         /**< Kernel name */
     unsigned char so_sha1[20];    /**< Shared library SHA-1 */
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nparm;               /**< Number of parameters */
     uint32_t nmetric;             /**< Number of metrics */
-    unsigned char reserve[12];    /**< Reserved */
-} kernel_entry_t;                 /* 128 Bytes */
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+} kernel_entry_t;
 
 /** @brief Task full attributes (.tpbr meta section) */
 typedef struct task_attr {
     unsigned char task_record_id[20]; /**< TaskRecordID (SHA-1) */
     unsigned char dup_to[20];         /**< Duplicate tracking */
+    unsigned char dup_from[20];       /**< Lineage: source TaskRecordID, or zero */
     unsigned char tbatch_id[20];      /**< Foreign key: TBatchID */
     unsigned char kernel_id[20];      /**< Foreign key: KernelID */
     tpb_dtbits_t utc_bits;            /**< Invocation datetime */
@@ -513,9 +521,10 @@ typedef struct task_attr {
     tpb_meta_header_t *headers;       /**< Header array */
 } task_attr_t;
 
-/** @brief Task entry (128-byte slim record in .tpbe) */
+/** @brief Task entry (slim record in .tpbe) */
 typedef struct task_entry {
     unsigned char task_record_id[20]; /**< TaskRecordID */
+    unsigned char dup_from[20];       /**< Lineage: source TaskRecordID, or zero */
     unsigned char tbatch_id[20];      /**< TBatchID */
     unsigned char kernel_id[20];      /**< KernelID */
     tpb_dtbits_t utc_bits;            /**< Invocation datetime */
@@ -523,8 +532,8 @@ typedef struct task_entry {
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
     int32_t  mpi_rank;                /**< MPI rank */
-    unsigned char reserve[40];        /**< Reserved */
-} task_entry_t;                       /* 128 Bytes */
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+} task_entry_t;
 
 /* ===== rawdb Workspace API ===== */
 

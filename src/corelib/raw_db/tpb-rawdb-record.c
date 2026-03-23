@@ -271,8 +271,8 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     /* Calculate metasize: fixed attrs + reserve + headers */
-    /* Fixed: 20+20+8+8+8+64+64+4+4+4+4+4+4 = 216 bytes */
-    metasize = 216 + TPB_RAWDB_RESERVE_SIZE;
+    /* Fixed: 20+20+20+8+8+8+64+64+4+4+4+4+4+4 = 236 bytes */
+    metasize = 236 + TPB_RAWDB_RESERVE_SIZE;
     metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     /* meta_magic */
@@ -291,6 +291,7 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
     /* Attributes */
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (write_u64(fp, attr->utc_bits) != 0) goto fail;
     if (write_u64(fp, attr->btime) != 0) goto fail;
     if (write_u64(fp, attr->duration) != 0) goto fail;
@@ -372,6 +373,7 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (read_u64(fp, &attr->utc_bits) != 0) goto fail;
     if (read_u64(fp, &attr->btime) != 0) goto fail;
     if (read_u64(fp, &attr->duration) != 0) goto fail;
@@ -474,8 +476,8 @@ tpb_rawdb_record_write_kernel(const char *workspace,
     fp = fopen(fpath, "wb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    /* Fixed attrs: 5*20 + 256 + 64 + 2048 + 5*4 = 2488 */
-    metasize = 2488 + TPB_RAWDB_RESERVE_SIZE;
+    /* Fixed attrs: 6*20 + 256 + 64 + 2048 + 5*4 = 2508 */
+    metasize = 2508 + TPB_RAWDB_RESERVE_SIZE;
     metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
@@ -491,6 +493,7 @@ tpb_rawdb_record_write_kernel(const char *workspace,
 
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->src_sha1, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->so_sha1, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
@@ -569,6 +572,7 @@ tpb_rawdb_record_read_kernel(const char *workspace,
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fread(attr->src_sha1, 1, 20, fp) != 20) goto fail;
     if (fread(attr->so_sha1, 1, 20, fp) != 20) goto fail;
     if (fread(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
@@ -669,8 +673,8 @@ tpb_rawdb_record_write_task(const char *workspace,
     fp = fopen(fpath, "wb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    /* Fixed: 4*20 + 3*8 + 7*4 = 132 bytes */
-    metasize = 132 + TPB_RAWDB_RESERVE_SIZE;
+    /* Fixed: 5*20 + 3*8 + 7*4 = 152 bytes */
+    metasize = 152 + TPB_RAWDB_RESERVE_SIZE;
     metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
@@ -686,6 +690,7 @@ tpb_rawdb_record_write_task(const char *workspace,
 
     if (fwrite(attr->task_record_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (write_u64(fp, attr->utc_bits) != 0) goto fail;
@@ -763,6 +768,7 @@ tpb_rawdb_record_read_task(const char *workspace,
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->task_record_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (read_u64(fp, &attr->utc_bits) != 0) goto fail;

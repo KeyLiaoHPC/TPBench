@@ -231,6 +231,7 @@ A task batch (tbatch) is the execution context that invokes one or more kernels.
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
+    unsigned char dup_from[20];         /**< Lineage: source TBatchID if copied/forked, else zero */
     tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
     uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
     uint64_t duration;                  /**< Total batch duration in nanoseconds */
@@ -270,8 +271,10 @@ SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <us
 
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
+**2) `dup_to` and `dup_from`**
 
-
+- `dup_to`: non-zero means this record aliases another TBatchID (deduplication target).
+- `dup_from`: non-zero records the source TBatchID when this record was copied or derived for lineage; independent of `dup_to`.
 
 #### 2.2.2. Entry Structure (.tpbe)
 
@@ -280,16 +283,19 @@ File structure:
 +----------------------0-+  
 | meta_magic (8B)        |  <- 0xe1 'T' 'P' 'B' 0xe0 'S' 0x31 0xe0
 +----------------------8-+ 
-| entry[0:N] (128B)      |
-+-----------------8+128N-+
+| entry[0:N] (264B)      |
++-----------------8+264N-+
 | end_magic (8B)         |  <- 0xe1 'T' 'P' 'B' 0xe0 'E' 0x31 0xe0
-+----------------16+128N-+
++----------------16+264N-+
 ```
+
+**Migration:** Older 128-byte `.tpbe` / prior `.tpbr` fixed layouts are incompatible; remove or re-initialize `rawdb/` in the workspace after upgrading.
 
 Entry member:
 |name|size|
 |---|---|
 |tbatch_id | 20 |
+|dup_from | 20 |
 |start_utc_bits | 8 |
 |duration | 8 |
 |hostname | 64 |
@@ -297,8 +303,8 @@ Entry member:
 |ntask | 4 |
 |nscore | 4 |
 |batch_type | 4 |
-|reserve | 12 |
-|**Total**|128|
+|reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+|**Total**|264|
 
 
 
@@ -326,30 +332,32 @@ File structure:
 +-------------------44-+
 | dup_to               |  <- 20B
 +-------------------64-+
+| dup_from             |  <- 20B
++-------------------84-+
 | utc_bits             |  <- 8B
-+-------------------72-+
++-------------------92-+
 | btime                |  <- 8B
-+-------------------80-+
++------------------100-+
 | duration             |  <- 8B
-+-------------------88-+
++------------------108-+
 | hostname             |  <- 64B
-+------------------152-+
++------------------172-+
 | username             |  <- 64B
-+------------------216-+
-| front_pid            |  <- 4B
-+------------------220-+
-| nkernel              |  <- 4B
-+------------------224-+
-| ntask                |  <- 4B
-+------------------228-+
-| nscore               |  <- 4B
-+------------------232-+
-| batch_type           |  <- 4B
 +------------------236-+
-| nheader              |  <- 4B
+| front_pid            |  <- 4B
 +------------------240-+
-| 64-Byte reserve      |  <- Reserved for future. 
-+------------------304-+
+| nkernel              |  <- 4B
++------------------244-+
+| ntask                |  <- 4B
++------------------248-+
+| nscore               |  <- 4B
++------------------252-+
+| batch_type           |  <- 4B
++------------------256-+
+| nheader              |  <- 4B
++------------------260-+
+| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
++------------------388-+
 | fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -381,6 +389,7 @@ The Kernel domain stores metadata about a kernel being evaluated, including desc
 typedef struct kernel_attr {
     unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1), ASCII */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID, ASCII */
+    unsigned char dup_from[20];         /**< Lineage: source KernelID if copied/forked, else zero */
     unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files, ASCII */
     unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file, ASCII */
     unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, ASCII */
@@ -415,6 +424,7 @@ SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
 Notes:
 - `kctrl` uses `TPB_KTYPE_PLI` from `tpb-public.h`. `TPB_KTYPE_FLI` and `TPB_KTYPE_ALI` are deprecated aliases for `TPB_KTYPE_PLI`.
 - `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
+- `dup_from` is all-zero unless this record was derived from another kernel record (provenance).
 
 #### 2.3.2. Entry Structure (.tpbe)
 
@@ -423,10 +433,10 @@ File structure:
 +----------------------0-+
 | entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe1 'S' 0x31 0xe0
 +----------------------8-+
-| entry[0:N] (128B)      |
-+-----------------8+128N-+
+| entry[0:N] (264B)      |
++-----------------8+264N-+
 | entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe1 'E' 0x31 0xe0
-+----------------16+128N-+
++----------------16+264N-+
 ```
 
 Entry member (slim subset of `kernel_attr_t`):
@@ -434,13 +444,14 @@ Entry member (slim subset of `kernel_attr_t`):
 | name | size |
 |---|---|
 | kernel_id | 20 |
+| dup_from | 20 |
 | kernel_name | 64 |
 | so_sha1 | 20 |
 | kctrl | 4 |
 | nparm | 4 |
 | nmetric | 4 |
-| reserve | 12 |
-| **Total** | **128** |
+| reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+| **Total** | **264** |
 
 Magic signature:
 
@@ -466,28 +477,30 @@ File structure:
 +-------------------44-+
 | dup_to               |  <- 20B
 +-------------------64-+
-| src_sha1             |  <- 20B
+| dup_from             |  <- 20B
 +-------------------84-+
-| so_sha1              |  <- 20B
+| src_sha1             |  <- 20B
 +------------------104-+
-| bin_sha1             |  <- 20B
+| so_sha1              |  <- 20B
 +------------------124-+
+| bin_sha1             |  <- 20B
++------------------144-+
 | kernel_name          |  <- 256B
-+------------------380-+
++------------------400-+
 | version              |  <- 64B
-+------------------444-+
++------------------464-+
 | description          |  <- 2048B
-+-----------------2492-+
++-----------------2512-+
 | nparm                |  <- 4B
-+-----------------2496-+
++-----------------2516-+
 | nmetric              |  <- 4B
-+-----------------2500-+
++-----------------2520-+
 | kctrl                |  <- 4B
-+-----------------2504-+
++-----------------2524-+
 | nheader              |  <- 4B
-+-----------------2508-+
-| 64-Byte reserve      |  <- Reserved for future.
-+-----------------2572-+
++-----------------2528-+
+| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
++-----------------2656-+
 | fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + user headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -523,6 +536,7 @@ The TaskRecord domain stores the input arguments and output metrics from a singl
 typedef struct task_attr {
     unsigned char task_record_id[20];   /**< TaskRecordID - Primary Link ID (20-byte SHA-1) */
     unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TaskRecordID */
+    unsigned char dup_from[20];         /**< Lineage: source TaskRecordID if copied/forked, else zero */
     unsigned char tbatch_id[20];        /**< Foreign key: links to task batch that produced this record */
     unsigned char kernel_id[20];        /**< Foreign key: links to kernel definition record */
 
@@ -558,6 +572,7 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 Notes:
 - `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
 - `dup_to` points to the canonical task record when deduplication is enabled.
+- `dup_from` is all-zero unless this record was derived from another task record (provenance).
 
 #### 2.4.2. Entry Structure (.tpbe)
 
@@ -566,10 +581,10 @@ File structure:
 +----------------------0-+
 | entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
 +----------------------8-+
-| entry[0:N] (128B)      |
-+-----------------8+128N-+
+| entry[0:N] (240B)      |
++-----------------8+240N-+
 | entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+----------------16+128N-+
++----------------16+240N-+
 ```
 
 Entry member (slim subset of `task_attr_t`):
@@ -577,6 +592,7 @@ Entry member (slim subset of `task_attr_t`):
 | name | size |
 |---|---|
 | task_record_id | 20 |
+| dup_from | 20 |
 | tbatch_id | 20 |
 | kernel_id | 20 |
 | utc_bits | 8 |
@@ -584,8 +600,9 @@ Entry member (slim subset of `task_attr_t`):
 | exit_code | 4 |
 | handle_index | 4 |
 | mpi_rank | 4 |
-| reserve | 40 |
-| **Total** | **128** |
+| reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+| *(struct tail padding)* | *4* |
+| **Total** | **240** |
 
 Magic signature:
 
@@ -611,30 +628,32 @@ File structure:
 +-------------------44-+
 | dup_to               |  <- 20B
 +-------------------64-+
-| tbatch_id            |  <- 20B
+| dup_from             |  <- 20B
 +-------------------84-+
-| kernel_id            |  <- 20B
+| tbatch_id            |  <- 20B
 +------------------104-+
+| kernel_id            |  <- 20B
++------------------124-+
 | utc_bits             |  <- 8B
-+------------------112-+
-| btime                |  <- 8B
-+------------------120-+
-| duration             |  <- 8B
-+------------------128-+
-| exit_code            |  <- 4B
 +------------------132-+
-| handle_index         |  <- 4B
-+------------------136-+
-| mpi_rank             |  <- 4B
+| btime                |  <- 8B
 +------------------140-+
-| ninput               |  <- 4B
-+------------------144-+
-| noutput              |  <- 4B
+| duration             |  <- 8B
 +------------------148-+
-| nheader              |  <- 4B
+| exit_code            |  <- 4B
 +------------------152-+
-| 64-Byte reserve      |  <- Reserved for future.
-+------------------216-+
+| handle_index         |  <- 4B
++------------------156-+
+| mpi_rank             |  <- 4B
++------------------160-+
+| ninput               |  <- 4B
++------------------164-+
+| noutput              |  <- 4B
++------------------168-+
+| nheader              |  <- 4B
++------------------172-+
+| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
++------------------300-+
 | headers[i]           |  <- (ninput + noutput) x tpb_meta_header_t + user headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -895,7 +914,7 @@ dimnames[0..6]   (448B) -- 7 x 64-byte strings, parallel to dimsizes
 
 ### 3.5. Memory Safety
 
-- Entry structs (128 bytes) are stack-allocated or caller-provided.
+- Entry structs (`tbatch_entry_t` / `kernel_entry_t` 264 bytes, `task_entry_t` 240 bytes including tail padding) are stack-allocated or caller-provided.
 - `tpb_meta_header_t` arrays are heap-allocated during record read; freed via `tpb_rawdb_free_headers()`.
 - All pointer arguments are NULL-checked; functions return `TPBE_NULLPTR_ARG` on failure.
 - File I/O uses explicit size checks; no buffer overruns.

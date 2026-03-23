@@ -302,6 +302,7 @@ test_entry_tbatch(void)
     tbatch_entry_t e;
     memset(&e, 0, sizeof(e));
     memset(e.tbatch_id, 0xAA, 20);
+    memset(e.dup_from, 0xCC, 20);
     e.start_utc_bits = 12345;
     e.duration = 1000000000ULL;
     snprintf(e.hostname, 64, "testhost");
@@ -324,6 +325,7 @@ test_entry_tbatch(void)
     }
 
     if (memcmp(entries[0].tbatch_id, e.tbatch_id, 20) != 0 ||
+        memcmp(entries[0].dup_from, e.dup_from, 20) != 0 ||
         entries[0].start_utc_bits != e.start_utc_bits ||
         entries[0].duration != e.duration ||
         entries[0].nkernel != 2 || entries[0].ntask != 3 ||
@@ -347,6 +349,7 @@ test_entry_kernel(void)
     kernel_entry_t e;
     memset(&e, 0, sizeof(e));
     memset(e.kernel_id, 0xBB, 20);
+    memset(e.dup_from, 0xDD, 20);
     snprintf(e.kernel_name, 64, "triad");
     memset(e.so_sha1, 0xCC, 20);
     e.kctrl = TPB_KTYPE_PLI;
@@ -367,6 +370,7 @@ test_entry_kernel(void)
     }
 
     if (memcmp(entries[0].kernel_id, e.kernel_id, 20) != 0 ||
+        memcmp(entries[0].dup_from, e.dup_from, 20) != 0 ||
         strcmp(entries[0].kernel_name, "triad") != 0 ||
         entries[0].nparm != 3 || entries[0].nmetric != 1) {
         free(entries);
@@ -388,6 +392,7 @@ test_entry_task(void)
     task_entry_t e;
     memset(&e, 0, sizeof(e));
     memset(e.task_record_id, 0xDD, 20);
+    memset(e.dup_from, 0xEE, 20);
     memset(e.tbatch_id, 0xAA, 20);
     memset(e.kernel_id, 0xBB, 20);
     e.utc_bits = 99999;
@@ -411,6 +416,7 @@ test_entry_task(void)
 
     if (memcmp(entries[0].task_record_id,
                e.task_record_id, 20) != 0 ||
+        memcmp(entries[0].dup_from, e.dup_from, 20) != 0 ||
         entries[0].duration != e.duration ||
         entries[0].mpi_rank != -1) {
         free(entries);
@@ -508,6 +514,8 @@ test_record_tbatch(void)
     tbatch_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memset(attr.tbatch_id, 0x11, 20);
+    memset(attr.dup_to, 0x22, 20);
+    memset(attr.dup_from, 0x33, 20);
     attr.utc_bits = 54321;
     attr.btime = 99999;
     attr.duration = 2000000000ULL;
@@ -541,6 +549,8 @@ test_record_tbatch(void)
 
     int fail = 0;
     if (memcmp(rattr.tbatch_id, attr.tbatch_id, 20) != 0) fail = 1;
+    if (memcmp(rattr.dup_to, attr.dup_to, 20) != 0) fail = 1;
+    if (memcmp(rattr.dup_from, attr.dup_from, 20) != 0) fail = 1;
     if (rattr.utc_bits != attr.utc_bits) fail = 1;
     if (rattr.duration != attr.duration) fail = 1;
     if (rattr.nkernel != 1 || rattr.ntask != 2) fail = 1;
@@ -569,6 +579,8 @@ test_record_kernel(void)
     kernel_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memset(attr.kernel_id, 0x22, 20);
+    memset(attr.dup_to, 0xAA, 20);
+    memset(attr.dup_from, 0xBB, 20);
     memset(attr.so_sha1, 0x33, 20);
     memset(attr.bin_sha1, 0x44, 20);
     snprintf(attr.kernel_name, 256, "triad");
@@ -598,6 +610,8 @@ test_record_kernel(void)
 
     int fail = 0;
     if (strcmp(rattr.kernel_name, "triad") != 0) fail = 1;
+    if (memcmp(rattr.dup_to, attr.dup_to, 20) != 0) fail = 1;
+    if (memcmp(rattr.dup_from, attr.dup_from, 20) != 0) fail = 1;
     if (rattr.nparm != 2 || rattr.nmetric != 1) fail = 1;
     if (rsize != 8) fail = 1;
     if (rdata && *(uint64_t *)rdata != 100) fail = 1;
@@ -617,6 +631,8 @@ test_record_task(void)
     task_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memset(attr.task_record_id, 0x55, 20);
+    memset(attr.dup_to, 0x66, 20);
+    memset(attr.dup_from, 0x77, 20);
     memset(attr.tbatch_id, 0x11, 20);
     memset(attr.kernel_id, 0x22, 20);
     attr.utc_bits = 77777;
@@ -647,6 +663,8 @@ test_record_task(void)
     if (err) { cleanup_test_dir(); return 1; }
 
     int fail = 0;
+    if (memcmp(rattr.dup_to, attr.dup_to, 20) != 0) fail = 1;
+    if (memcmp(rattr.dup_from, attr.dup_from, 20) != 0) fail = 1;
     if (rattr.mpi_rank != -1) fail = 1;
     if (rattr.duration != 500000000ULL) fail = 1;
     if (rattr.ninput != 1 || rattr.noutput != 1) fail = 1;

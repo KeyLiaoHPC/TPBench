@@ -990,6 +990,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
     dump_print_kv_hex20("dup_to", attr.dup_to);
+    dump_print_kv_hex20("dup_from", attr.dup_from);
     if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
         dump_print_kv_str("start_utc", ts.str);
     } else {
@@ -1032,6 +1033,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     dump_print_kv_hex20("dup_to", attr.dup_to);
+    dump_print_kv_hex20("dup_from", attr.dup_from);
     dump_print_kv_hex20("src_sha1", attr.src_sha1);
     dump_print_kv_hex20("so_sha1", attr.so_sha1);
     dump_print_kv_hex20("bin_sha1", attr.bin_sha1);
@@ -1071,6 +1073,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("task_record_id", attr.task_record_id);
     dump_print_kv_hex20("dup_to", attr.dup_to);
+    dump_print_kv_hex20("dup_from", attr.dup_from);
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
@@ -1125,6 +1128,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             tpb_datetime_str_t ts;
             snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
             dump_print_kv_hex20(p, e[i].tbatch_id);
+            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
+            dump_print_kv_hex20(p, e[i].dup_from);
             snprintf(p, sizeof(p), "entry[%d].start_utc", i);
             if (tpb_ts_bits_to_isoutc(e[i].start_utc_bits, &ts) == 0) {
                 dump_print_kv_str(p, ts.str);
@@ -1160,6 +1165,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             char p[80];
             snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
             dump_print_kv_hex20(p, e[i].kernel_id);
+            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
+            dump_print_kv_hex20(p, e[i].dup_from);
             snprintf(p, sizeof(p), "entry[%d].kernel_name", i);
             dump_print_kv_str(p, e[i].kernel_name);
             snprintf(p, sizeof(p), "entry[%d].so_sha1", i);
@@ -1187,6 +1194,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             tpb_datetime_str_t ts;
             snprintf(p, sizeof(p), "entry[%d].task_record_id", i);
             dump_print_kv_hex20(p, e[i].task_record_id);
+            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
+            dump_print_kv_hex20(p, e[i].dup_from);
             snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
             dump_print_kv_hex20(p, e[i].tbatch_id);
             snprintf(p, sizeof(p), "entry[%d].kernel_id", i);

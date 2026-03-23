@@ -27,8 +27,8 @@
 #define TPB_RAWDB_POS_SPLIT     0x44  /* 'D' */
 #define TPB_RAWDB_POS_END       0x45  /* 'E' */
 
-/* Entry size in bytes (all domains) */
-#define TPB_RAWDB_ENTRY_SIZE    128
+/* Max .tpbe row size in bytes (all domains; task includes tail alignment) */
+#define TPB_RAWDB_ENTRY_SIZE    264
 
 /* TBatch type values */
 #define TPB_BATCH_TYPE_RUN       0
@@ -42,8 +42,7 @@
 /* block_size(4) + ndim(4) + data_size(8) + type_bits(4) + _reserve(4) + uattr_bits(8) + name(256) + note(2048) + dimsizes[7](56) + dimnames[7][64](448) */
 #define TPB_RAWDB_HDR_FIXED_SIZE 2840
 
-/* Reserved block size in .tpbr meta section */
-#define TPB_RAWDB_RESERVE_SIZE   64
+/* TPB_RAWDB_RESERVE_SIZE is in tpb-public.h (shared with entry tail reserve) */
 
 /* Maximum workspace path length */
 #define TPB_RAWDB_PATH_MAX       PATH_MAX

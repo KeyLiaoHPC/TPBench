@@ -10,6 +10,13 @@
 #include "../tpb-types.h"
 #include "tpb-rawdb-types.h"
 
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
+_Static_assert(sizeof(tbatch_entry_t) == 264, "tbatch_entry_t on-disk size");
+_Static_assert(sizeof(kernel_entry_t) == 264, "kernel_entry_t on-disk size");
+_Static_assert(sizeof(task_entry_t) == 240, "task_entry_t on-disk size");
+_Static_assert(TPB_RAWDB_RESERVE_SIZE == 128, "TPB_RAWDB_RESERVE_SIZE");
+#endif
+
 /* Local Function Prototypes */
 static void build_entry_path(const char *workspace, uint8_t domain,
                              char *out, size_t outlen);
@@ -50,7 +57,7 @@ build_entry_path(const char *workspace, uint8_t domain,
 }
 
 /*
- * Append a 128-byte entry to a .tpbe file.
+ * Append one domain entry row to a .tpbe file.
  * Creates the file with start/end magic if it does not exist.
  * Otherwise inserts before the trailing end_magic.
  */

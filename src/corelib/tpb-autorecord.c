@@ -180,7 +180,7 @@ tpb_record_end_batch(int ntask)
     tbatch_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memcpy(attr.tbatch_id, s_tbatch_id, 20);
-    /* dup_to stays zero */
+    /* dup_to and dup_from stay zero */
     attr.utc_bits = s_batch_utc_bits;
     attr.btime = s_batch_btime_ns;
     attr.duration = duration;
