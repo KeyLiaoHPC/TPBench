@@ -21,9 +21,7 @@
 #include "corelib/tpb-driver.h"
 #include "corelib/tpb-impl.h"
 #include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 #include "corelib/tpb-autorecord.h"
-#include "kernels/kernels.h"
 
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16

@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "../tpb-types.h"
 #include "tpb-rawdb-types.h"
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L

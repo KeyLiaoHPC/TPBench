@@ -20,7 +20,6 @@
 #include "tpb-bench-yaml.h"
 #include "tpb-bench-score.h"
 #include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 #include "corelib/tpb-driver.h"
 #include "corelib/tpb-dynloader.h"
 #include "corelib/tpb-argp.h"

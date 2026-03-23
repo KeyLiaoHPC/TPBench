@@ -5,7 +5,6 @@
 
 #include "tpbcli-help.h"
 #include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 
 /* Local Function Prototypes */
 

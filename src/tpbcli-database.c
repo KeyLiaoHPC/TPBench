@@ -6,8 +6,6 @@
 #include <string.h>
 
 #include "corelib/raw_db/tpb-rawdb-types.h"
-#include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 #include "tpbcli-database.h"
 
 /*
