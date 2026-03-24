@@ -1,6 +1,18 @@
 cmake_minimum_required(VERSION 3.16) # Require at least CMake 3.16
 project(TPBench C CXX) # Project name and languages (CXX needed for ROCm)
 
+# Optional workspace root: seeds default CMAKE_INSTALL_PREFIX when prefix is CMake default.
+# Precedence at install time: cmake --install --prefix > configured CMAKE_INSTALL_PREFIX.
+set(TPB_WORKSPACE "$ENV{TPB_WORKSPACE}" CACHE PATH
+    "Workspace root; default install prefix when CMAKE_INSTALL_PREFIX is CMake default (else /opt/tpbench)")
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    if(TPB_WORKSPACE AND NOT TPB_WORKSPACE STREQUAL "")
+        set(CMAKE_INSTALL_PREFIX "${TPB_WORKSPACE}" CACHE PATH "Install path prefix" FORCE)
+    else()
+        set(CMAKE_INSTALL_PREFIX "/opt/tpbench" CACHE PATH "Install path prefix" FORCE)
+    endif()
+endif()
+
 # Use C11 and require it
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -166,6 +178,26 @@ if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+# Workspace layout under install root (DESTDIR + CMAKE_INSTALL_PREFIX at install time).
+# Creates dirs only; does not touch rawdb files. etc/config.json only if missing.
+install(CODE "
+  if(NOT \"\$ENV{DESTDIR}\" STREQUAL \"\")
+    set(_tpb_install_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+  else()
+    set(_tpb_install_root \"\${CMAKE_INSTALL_PREFIX}\")
+  endif()
+  file(MAKE_DIRECTORY
+    \"\${_tpb_install_root}/etc\"
+    \"\${_tpb_install_root}/rawdb/task_batch\"
+    \"\${_tpb_install_root}/rawdb/kernel\"
+    \"\${_tpb_install_root}/rawdb/task\"
+    \"\${_tpb_install_root}/rawdb/log\")
+  if(NOT EXISTS \"\${_tpb_install_root}/etc/config.json\")
+    file(WRITE \"\${_tpb_install_root}/etc/config.json\"
+      \"{\\n    \\\"name\\\": \\\"default\\\"\\n}\\n\")
+  endif()
+")
 
 # Install core library and CLI
 install(TARGETS tpbench

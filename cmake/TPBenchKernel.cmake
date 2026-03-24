@@ -15,6 +15,13 @@
 #   tpbk_<name>      - shared library (.so)
 #   tpbk_<name>.tpbx - PLI executable
 
+if(NOT DEFINED CMAKE_INSTALL_LIBDIR)
+    set(CMAKE_INSTALL_LIBDIR lib)
+endif()
+if(NOT DEFINED CMAKE_INSTALL_BINDIR)
+    set(CMAKE_INSTALL_BINDIR bin)
+endif()
+
 function(tpbench_add_kernel)
     cmake_parse_arguments(_K "" "NAME;MAIN_SOURCE" "SOURCES;LINK_LIBS" ${ARGN})
 
@@ -47,8 +54,8 @@ function(tpbench_add_kernel)
 
     # Install rules
     install(TARGETS ${_lib_target}
-            LIBRARY DESTINATION lib
-            ARCHIVE DESTINATION lib)
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
     install(TARGETS ${_exec_target}
-            RUNTIME DESTINATION bin)
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endfunction()
