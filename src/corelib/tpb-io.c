@@ -20,7 +20,8 @@
 #include "tpb-driver.h"
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
-#include "tpb-dynloader.h"
+#include "tpb_corelib_state.h"
+#include "raw_db/tpb-rawdb-types.h"
 
 /* Local Function Prototypes */
 
@@ -188,18 +189,17 @@ tpb_log_init(void)
     char timestamp[32];
     time_t now;
     struct tm *tm_now;
+    const char *ws;
 
-    /* Get TPB_DIR */
-    const char *tpb_dir = tpb_dl_get_tpb_dir();
-    if (tpb_dir == NULL || strlen(tpb_dir) == 0) {
-        fprintf(stderr, "Warning: Could not determine TPB_DIR for logging\n");
+    ws = _tpb_workspace_path_get();
+    if (ws == NULL || ws[0] == '\0') {
+        fprintf(stderr, "Warning: TPBench workspace not set for logging\n");
         return TPBE_FILE_IO_FAIL;
     }
 
-    /* Create log directory */
-    snprintf(logdir, sizeof(logdir), "%s/log", tpb_dir);
-    if (tpb_mkdir(logdir) != 0) {
-        fprintf(stderr, "Warning: Could not create log directory %s\n", logdir);
+    if (snprintf(logdir, sizeof(logdir), "%s/%s", ws, TPB_RAWDB_LOG_REL)
+        >= (int)sizeof(logdir)) {
+        fprintf(stderr, "Warning: Log directory path too long\n");
         return TPBE_FILE_IO_FAIL;
     }
 
@@ -217,7 +217,7 @@ tpb_log_init(void)
 
     /* Construct log filepath */
     snprintf(log_filepath, sizeof(log_filepath),
-             "%s/tpbrunlog_%s_%s.md", logdir, timestamp, hostname);
+             "%s/tpbrunlog_%s_%s.log", logdir, timestamp, hostname);
 
     /* Open log file */
     log_file = fopen(log_filepath, "w");
@@ -226,15 +226,16 @@ tpb_log_init(void)
         return TPBE_FILE_IO_FAIL;
     }
 
-    /* Write markdown header */
-    fprintf(log_file, "# TPBench Run Log\n");
-    fprintf(log_file, "**Session Started:** %04d-%02d-%02d %02d:%02d:%02d\n",
+    fprintf(log_file, "TPBench Run Log\n");
+    fprintf(log_file, "Session Started: %04d-%02d-%02d %02d:%02d:%02d\n",
             tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
             tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
-    fprintf(log_file, "**Hostname:** %s\n", hostname);
-    fprintf(log_file, "**TPB Version:** %g\n", TPB_VERSION);
-    fprintf(log_file, "**TPB_DIR:** %s\n", tpb_dir);
-    fprintf(log_file, "\n---\n\n");
+    fprintf(log_file, "Hostname: %s\n", hostname);
+    fprintf(log_file, "TPB Version: %g\n", TPB_VERSION);
+    fprintf(log_file, "TPBench workspace: %s\n", ws);
+    fprintf(log_file,
+            "Note: Raw database and this log file live under this workspace.\n");
+    fprintf(log_file, "\n");
     fflush(log_file);
 
     return TPBE_SUCCESS;
@@ -458,7 +459,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     int max_col = cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Input info  \n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Input info\n");
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
@@ -515,7 +516,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     int sigbit_trim = cliout_fmt.sigbit_trim;
 
     /* Test results section */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Output  \n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Output\n");
 
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));
@@ -603,7 +604,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         TPB_UNIT_T base_unit = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
 
         /* Print metrics name */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "### Metrics: %s\n", out->name);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Metrics: %s\n", out->name);
 
         /* Determine display unit */
         TPB_UNIT_T display_unit = base_unit;

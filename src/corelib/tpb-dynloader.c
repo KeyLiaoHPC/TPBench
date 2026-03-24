@@ -461,9 +461,6 @@ tpb_dl_scan(void)
 
             ws_err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
             if (ws_err == TPBE_SUCCESS) {
-                ws_err = tpb_rawdb_init_workspace(workspace);
-            }
-            if (ws_err == TPBE_SUCCESS) {
                 ws_err = resolve_kernel_id_for_workspace(workspace, kernel_name,
                                                          so_sha1, bin_sha1,
                                                          kernel_id,

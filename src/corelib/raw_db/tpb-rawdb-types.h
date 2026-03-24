@@ -53,6 +53,7 @@
 #define TPB_RAWDB_TBATCH_DIR     "rawdb/task_batch"
 #define TPB_RAWDB_KERNEL_DIR     "rawdb/kernel"
 #define TPB_RAWDB_TASK_DIR       "rawdb/task"
+#define TPB_RAWDB_LOG_REL        "rawdb/log"
 #define TPB_RAWDB_TBATCH_ENTRY   "task_batch.tpbe"
 #define TPB_RAWDB_KERNEL_ENTRY   "kernel.tpbe"
 #define TPB_RAWDB_TASK_ENTRY     "task.tpbe"

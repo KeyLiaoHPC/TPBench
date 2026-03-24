@@ -98,13 +98,6 @@ tpb_record_begin_batch(uint32_t batch_type)
         return err;
     }
 
-    err = tpb_rawdb_init_workspace(s_workspace);
-    if (err) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "Auto-record: failed to init workspace (%d)\n", err);
-        return err;
-    }
-
     err = get_current_timestamps(&s_batch_utc_bits, &s_batch_btime_ns);
     if (err) return err;
 
@@ -310,9 +303,6 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
 
     /* Resolve workspace */
     err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
-    if (err) return err;
-
-    err = tpb_rawdb_init_workspace(workspace);
     if (err) return err;
 
     err = get_current_timestamps(&utc_bits, &btime_ns);

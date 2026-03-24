@@ -3,6 +3,7 @@
  * Test pack A2: Unit tests for tpb_run_pli (PLI kernel runner).
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +21,21 @@ static char path_capture_kid[512];
 static char path_kernel_id_out[512];
 
 static int g_setup_done = 0;
+static char g_pli_workspace[512];
+
+static int
+setup_pli_workspace(void)
+{
+    snprintf(g_pli_workspace, sizeof(g_pli_workspace),
+             "/tmp/tpbench_pli_ws_%d", (int)getpid());
+    if (mkdir(g_pli_workspace, 0755) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    if (setenv("TPB_WORKSPACE", g_pli_workspace, 1) != 0) {
+        return -1;
+    }
+    return 0;
+}
 
 static int
 write_script(const char *path, const char *body)
@@ -61,19 +77,34 @@ create_mock_scripts(void)
 static void
 cleanup_mock_scripts(void)
 {
+    char cmd[640];
+
     unlink(path_success);
     unlink(path_fail);
     unlink(path_signal);
     unlink(path_capture_kid);
     unlink(path_kernel_id_out);
     rmdir(MOCK_SCRIPT_DIR);
+    if (g_pli_workspace[0] != '\0') {
+        snprintf(cmd, sizeof(cmd), "rm -rf %s", g_pli_workspace);
+        (void)system(cmd);
+        g_pli_workspace[0] = '\0';
+    }
 }
 
 static int
 ensure_setup(void)
 {
     if (!g_setup_done) {
-        int err = mock_setup_driver();
+        int err;
+
+        g_pli_workspace[0] = '\0';
+        if (setup_pli_workspace() != 0) {
+            fprintf(stderr, "FATAL: setup_pli_workspace failed\n");
+            return -1;
+        }
+
+        err = mock_setup_driver();
         if (err) {
             fprintf(stderr, "FATAL: mock_setup_driver failed with %d\n", err);
             return err;

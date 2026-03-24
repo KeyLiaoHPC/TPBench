@@ -407,6 +407,12 @@ main(int argc, char **argv)
 {
     int err;
 
+    err = tpb_k_corelib_init(NULL);
+    if (err != 0) {
+        fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        return err;
+    }
+
     const char *timer_name = NULL;
     if (argc >= 2) {
         timer_name = argv[1];
@@ -439,7 +445,7 @@ main(int argc, char **argv)
 
     tpb_cliout_args(&handle);
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
     err = _tpbk_run_stream();
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel stream failed: %d\n", err);

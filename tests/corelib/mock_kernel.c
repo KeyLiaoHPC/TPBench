@@ -4,6 +4,7 @@
 #include "mock_kernel.h"
 #include "mock_timer.h"
 #include "corelib/tpb-driver.h"
+#include "include/tpb-public.h"
 
 /* ---- Driver setup ---- */
 
@@ -11,6 +12,11 @@ int
 mock_setup_driver(void)
 {
     int err;
+
+    err = tpb_corelib_init(NULL);
+    if (err != 0) {
+        return err;
+    }
 
     tpb_driver_set_timer(mock_get_timer());
 

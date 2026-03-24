@@ -1586,7 +1586,7 @@ tpb_driver_run_all(void)
     for (int i = 1; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
         /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i, nhdl - 1);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Test %d/%d  \n", i, nhdl - 1);
 
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
                    handle->kernel.info.name);

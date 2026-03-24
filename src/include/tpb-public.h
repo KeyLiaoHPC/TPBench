@@ -123,6 +123,28 @@ enum _tpb_errno {
 };
 typedef enum _tpb_errno tpb_errno_t;
 
+/** @brief Process context that last completed tpb_corelib_init / tpb_k_corelib_init. */
+typedef enum {
+    TPB_CORELIB_CTX_CALLER_TPBCLI = 1,
+    TPB_CORELIB_CTX_CALLER_KERNEL = 2
+} tpb_corelib_caller_t;
+
+/**
+ * @brief Initialize TPBench corelib for this process: resolve workspace, create rawdb
+ *        layout under that root, open the run log, and record caller as tpbcli.
+ *        Call before any other corelib API that depends on workspace or logging.
+ * @param tpb_workspace_path Optional workspace root override, or NULL to use $TPB_WORKSPACE then $HOME/.tpbench.
+ * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if already initialized, or another TPBE_* code.
+ */
+int tpb_corelib_init(const char *tpb_workspace_path);
+
+/**
+ * @brief Same as tpb_corelib_init but sets caller context to KERNEL after success (PLI .tpbx entry).
+ * @param tpb_workspace_path Same as tpb_corelib_init.
+ * @return Same as tpb_corelib_init.
+ */
+int tpb_k_corelib_init(const char *tpb_workspace_path);
+
 /** @brief Timer structure */
 typedef struct tpb_timer {
     char name[TPBM_NAME_STR_MAX_LEN];
@@ -538,23 +560,21 @@ typedef struct task_entry {
 /* ===== rawdb Workspace API ===== */
 
 /**
- * @brief Resolve current workspace path.
+ * @brief Copy the workspace path set by tpb_corelib_init into out_path.
  *
- * Resolution order:
- * 1) $TPB_WORKSPACE env var
- * 2) $HOME/.tpbench/ if etc/config.json exists
- * 3) Create default at $HOME/.tpbench/
+ * Requires a prior successful tpb_corelib_init (or tpb_k_corelib_init) in this process.
+ * Optionally verifies the path exists as a directory.
  *
  * @param out_path Buffer to receive resolved path
  * @param pathlen  Buffer size
- * @return 0 on success, error code otherwise
+ * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if corelib not initialized, or TPBE_FILE_IO_FAIL
  */
 int tpb_rawdb_resolve_workspace(char *out_path, size_t pathlen);
 
 /**
  * @brief Initialize workspace directory structure.
  *
- * Creates etc/config.json and rawdb/{task_batch,kernel,task}
+ * Creates etc/config.json and rawdb/{task_batch,kernel,task,log}
  * directories if they do not exist.
  *
  * @param workspace_path Root workspace directory

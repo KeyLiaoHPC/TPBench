@@ -19,7 +19,8 @@
 
 #define TPBM_HELP_DOC_TOTAL \
     "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
-    "Usage: tpbcli <action> <option>\n" \
+    "Usage: tpbcli [--workspace PATH] <action> <option>\n" \
+    "Global (before action): --workspace PATH — TPBench data root; omit to use $TPB_WORKSPACE or $HOME/.tpbench.\n" \
     "Action: run/r, benchmark/b, database/d, list/l, help/h\n" \
     "Options and explanation for each action:\n" \
     "    r, run: Run one or more benchmark kernels.\n" \
@@ -99,12 +100,12 @@ int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
 
 /**
- * @brief Initialize the logging system.
+ * @brief Open a timestamped run log under the current TPBench workspace.
  *
- * Creates ${TPB_DIR}/log directory and opens a timestamped log file.
- * Log filename format: tpbrunlog_YYYYMMDDThhmmss_<hostname>.md
+ * Expects tpb_corelib_init to have set the workspace and tpb_rawdb_init_workspace
+ * to have created rawdb/log. Log path: <workspace>/rawdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log
  *
- * @return 0 on success, error code on failure (non-fatal).
+ * @return TPBE_SUCCESS on success, error code on failure (non-fatal to some callers).
  */
 int tpb_log_init(void);
 
