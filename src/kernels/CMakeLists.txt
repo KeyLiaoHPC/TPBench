@@ -127,6 +127,9 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
         target_compile_definitions(${_exec_target} PRIVATE TPB_K_DEBUG=1)
     endif()
 
+    tpb_set_install_rpath_tpbench_shlib(${_lib_target})
+    tpb_set_install_rpath_tpbench_exe(${_exec_target})
+
     # Install rules
     install(TARGETS ${_lib_target}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

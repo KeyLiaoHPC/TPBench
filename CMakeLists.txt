@@ -122,6 +122,8 @@ endif()
 # Core library (libtpbench.so) defined in sub-CMakeLists
 add_subdirectory(src/corelib)
 
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRpath.cmake)
+
 # Kernels (.so + .tpbx) with name/tag-based selection
 add_subdirectory(src/kernels)
 
@@ -148,6 +150,7 @@ add_executable(tpbcli
 )
 target_include_directories(tpbcli PRIVATE src)
 target_link_libraries(tpbcli PRIVATE tpbench ${TPB_BUILT_KERNEL_LIBS} m)
+tpb_set_install_rpath_tpbench_exe(tpbcli)
 
 # ============================================================================
 # ROCm/HIP GPU Support

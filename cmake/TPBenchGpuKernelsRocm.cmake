@@ -46,6 +46,9 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
         message(STATUS "TPB_K_DEBUG enabled for ${_exec_target}")
     endif()
 
+    tpb_set_install_rpath_tpbench_shlib(${_lib_target})
+    tpb_set_install_rpath_tpbench_exe(${_exec_target})
+
     install(TARGETS ${_lib_target}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
