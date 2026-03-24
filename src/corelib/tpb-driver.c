@@ -1415,9 +1415,17 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
     char *full_cmd;
+    char workspace[PATH_MAX];
+    char kernel_id_hex[41];
+    kernel_attr_t kernel_attr;
+    void *kernel_data = NULL;
+    uint64_t kernel_datasize = 0;
     pid_t pid;
     int status;
+    int err;
+    const char *ar_bid;
     const char *log_path;
+    unsigned char zero_id[20] = {0};
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1431,10 +1439,45 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         return TPBE_KERNEL_INCOMPLETE;
     }
 
+    ar_bid = tpb_record_get_tbatch_id_hex();
+    if (ar_bid != NULL) {
+        if (memcmp(hdl->kernel.info.kernel_id, zero_id, 20) == 0) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Kernel %s has zero KernelID, stop before fork.\n",
+                       hdl->kernel.info.name);
+            return TPBE_KERNEL_NE_FAIL;
+        }
+
+        err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+        if (err != TPBE_SUCCESS) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Failed to resolve workspace for kernel %s (%d)\n",
+                       hdl->kernel.info.name, err);
+            return err;
+        }
+
+        memset(&kernel_attr, 0, sizeof(kernel_attr));
+        err = tpb_rawdb_record_read_kernel(workspace, hdl->kernel.info.kernel_id,
+                                           &kernel_attr, &kernel_data,
+                                           &kernel_datasize);
+        if (kernel_attr.headers != NULL) {
+            tpb_rawdb_free_headers(kernel_attr.headers, kernel_attr.nheader);
+        }
+        if (kernel_data != NULL) {
+            free(kernel_data);
+        }
+        if (err != TPBE_SUCCESS) {
+            tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Kernel %s has unrecorded KernelID=%s, stop before fork.\n",
+                       hdl->kernel.info.name, kernel_id_hex);
+            return err;
+        }
+    }
+
     /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...> */
     {
         char value_buf[256];
-        char kernel_id_hex[41];
         size_t cmd_size = 8192;
         full_cmd = (char *)malloc(cmd_size);
         if (full_cmd == NULL) {
@@ -1449,7 +1492,6 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
                         "TPB_KERNEL_ID=%s ", kernel_id_hex);
 
         /* Inject auto-record env vars if a batch is active */
-        const char *ar_bid = tpb_record_get_tbatch_id_hex();
         const char *ar_ws = tpb_record_get_workspace();
         if (ar_bid != NULL) {
             pos += snprintf(full_cmd + pos, cmd_size - pos,

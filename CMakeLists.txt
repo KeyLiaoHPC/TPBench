@@ -24,7 +24,7 @@ add_compile_options(-O2)
 option(TPB_USE_AVX512 "Enable AVX-512 SIMD instructions" OFF)
 option(TPB_USE_AVX2 "Enable AVX2 SIMD instructions" OFF)
 option(TPB_USE_KP_SVE "Enable ARM SVE SIMD instructions" OFF)
-option(TPB_USE_OPENMP "Enable OpenMP parallelization" ON)
+option(TPB_USE_OPENMP "Enable OpenMP parallelization" OFF)
 
 # Debug options
 option(TPB_SHOW_DEBUG "Enable kernel debug logging (TPB_K_DEBUG)" OFF)

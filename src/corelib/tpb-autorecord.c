@@ -153,6 +153,7 @@ tpb_record_end_batch(int ntask)
     err = tpb_rawdb_entry_list_task(s_workspace, &task_entries, &task_count);
 
     int matched = 0;
+    int nkernel = 0;
     unsigned char *task_id_list = NULL;
 
     if (err == 0 && task_count > 0 && task_entries != NULL) {
@@ -160,8 +161,22 @@ tpb_record_end_batch(int ntask)
         if (task_id_list) {
             for (int i = 0; i < task_count; i++) {
                 if (memcmp(task_entries[i].tbatch_id, s_tbatch_id, 20) == 0) {
+                    int seen = 0;
+
                     memcpy(task_id_list + matched * 20,
                            task_entries[i].task_record_id, 20);
+                    for (int j = 0; j < i; j++) {
+                        if (memcmp(task_entries[j].tbatch_id, s_tbatch_id,
+                                   20) == 0 &&
+                            memcmp(task_entries[j].kernel_id,
+                                   task_entries[i].kernel_id, 20) == 0) {
+                            seen = 1;
+                            break;
+                        }
+                    }
+                    if (!seen) {
+                        nkernel++;
+                    }
                     matched++;
                 }
             }
@@ -180,7 +195,7 @@ tpb_record_end_batch(int ntask)
     snprintf(attr.hostname, sizeof(attr.hostname), "%s", s_batch_hostname);
     snprintf(attr.username, sizeof(attr.username), "%s", s_batch_username);
     attr.front_pid = s_batch_pid;
-    attr.nkernel = 0;
+    attr.nkernel = (uint32_t)nkernel;
     attr.ntask = (uint32_t)matched;
     attr.nscore = 0;
     attr.batch_type = s_batch_type;
@@ -234,7 +249,7 @@ tpb_record_end_batch(int ntask)
     entry.start_utc_bits = s_batch_utc_bits;
     entry.duration = duration;
     snprintf(entry.hostname, sizeof(entry.hostname), "%s", s_batch_hostname);
-    entry.nkernel = 0;
+    entry.nkernel = (uint32_t)nkernel;
     entry.ntask = (uint32_t)matched;
     entry.nscore = 0;
     entry.batch_type = s_batch_type;
