@@ -17,6 +17,14 @@
 #define DHLINE "==="
 #define HLINE  "---"
 
+/**
+ * @brief Environment variable: absolute path of the active run log for PLI children.
+ *
+ * Set by the driver before fork/exec; read by tpb_log_init() to open the log in append
+ * mode without writing a second session header. Cleared at the start of tpb_corelib_init().
+ */
+#define TPB_LOG_FILE_ENV "TPB_LOG_FILE"
+
 #define TPBM_HELP_DOC_TOTAL \
     "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
     "Usage: tpbcli [--workspace PATH] <action> <option>\n" \
@@ -100,10 +108,14 @@ int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
 
 /**
- * @brief Open a timestamped run log under the current TPBench workspace.
+ * @brief Open or reopen the run log for this process.
  *
- * Expects tpb_corelib_init to have set the workspace and tpb_rawdb_init_workspace
- * to have created rawdb/log. Log path: <workspace>/rawdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log
+ * If the log FILE* is already open, returns TPBE_SUCCESS. Else if environment variable
+ * TPB_LOG_FILE (TPB_LOG_FILE_ENV) is set and non-empty, opens that path in append mode
+ * without writing the session banner (shared log between tpbcli parent and PLI child).
+ * Otherwise requires workspace from tpb_corelib_init, creates
+ * <workspace>/rawdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log with mode "w", and writes
+ * the session header.
  *
  * @return TPBE_SUCCESS on success, error code on failure (non-fatal to some callers).
  */
@@ -113,15 +125,6 @@ int tpb_log_init(void);
  * @brief Cleanup and close the log file.
  */
 void tpb_log_cleanup(void);
-
-/**
- * @brief Write output directly to the log file.
- *
- * This is used by PLI kernels to write captured stdout/stderr to the log.
- *
- * @param output String to write to log file.
- */
-void tpb_log_write_output(const char *output);
 
 /**
  * @brief Get the current log file path.

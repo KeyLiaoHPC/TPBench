@@ -190,6 +190,27 @@ tpb_log_init(void)
     time_t now;
     struct tm *tm_now;
     const char *ws;
+    const char *env_path;
+
+    if (log_file != NULL) {
+        return TPBE_SUCCESS;
+    }
+
+    env_path = getenv(TPB_LOG_FILE_ENV);
+    if (env_path != NULL && env_path[0] != '\0') {
+        if (strlen(env_path) >= sizeof(log_filepath)) {
+            printf("Warning: %s path too long\n", TPB_LOG_FILE_ENV);
+            return TPBE_FILE_IO_FAIL;
+        }
+        snprintf(log_filepath, sizeof(log_filepath), "%s", env_path);
+        log_file = fopen(log_filepath, "a");
+        if (log_file == NULL) {
+            printf("Warning: Could not open log file %s\n", log_filepath);
+            return TPBE_FILE_IO_FAIL;
+        }
+        fflush(log_file);
+        return TPBE_SUCCESS;
+    }
 
     ws = _tpb_workspace_path_get();
     if (ws == NULL || ws[0] == '\0') {
@@ -257,12 +278,6 @@ tpb_log_write(const char *msg)
         fputs(msg, log_file);
         fflush(log_file);
     }
-}
-
-void
-tpb_log_write_output(const char *output)
-{
-    tpb_log_write(output);
 }
 
 const char *

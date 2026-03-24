@@ -1417,9 +1417,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     char *full_cmd;
     pid_t pid;
     int status;
-    int pipefd[2];
-    char buffer[4096];
-    ssize_t nbytes;
+    const char *log_path;
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1499,52 +1497,35 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     /* Print full command for debugging/analysis */
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Exec: %s\n", full_cmd);
 
-    /* Create pipe for capturing child output */
-    if (pipe(pipefd) == -1) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "pipe() failed\n");
-        free(full_cmd);
-        return TPBE_FILE_IO_FAIL;
+    /*
+     * Close parent's log stream and publish path so the PLI child opens the same file
+     * in append mode; reopen in the parent after fork.
+     */
+    tpb_log_cleanup();
+    log_path = tpb_log_get_filepath();
+    if (log_path != NULL) {
+        setenv(TPB_LOG_FILE_ENV, log_path, 1);
     }
 
-    /* Fork and exec */
     pid = fork();
     if (pid < 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
-        close(pipefd[0]);
-        close(pipefd[1]);
+        (void)tpb_log_init();
         free(full_cmd);
         return TPBE_FILE_IO_FAIL;
     }
 
     if (pid == 0) {
-        /* Child process: redirect stdout and stderr to pipe, then exec via shell */
-        close(pipefd[0]);  /* Close read end */
-        dup2(pipefd[1], STDOUT_FILENO);
-        dup2(pipefd[1], STDERR_FILENO);
-        close(pipefd[1]);
-
         /* Execute via shell to handle env vars and mpiargs correctly */
         execl("/bin/sh", "sh", "-c", full_cmd, (char *)NULL);
         fprintf(stderr, "execl failed for /bin/sh\n");
         _exit(127);
     }
 
-    /* Parent process: close write end and read from pipe */
-    close(pipefd[1]);
-
-    /* Read and forward child output to both console and log */
-    while ((nbytes = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[nbytes] = '\0';
-        /* Write to console */
-        fputs(buffer, stdout);
-        fflush(stdout);
-        /* Write to log file */
-        tpb_log_write_output(buffer);
+    if (tpb_log_init() != TPBE_SUCCESS) {
+        fprintf(stderr, "Warning: could not reopen run log after fork\n");
     }
 
-    close(pipefd[0]);
-
-    /* Wait for child to complete */
     waitpid(pid, &status, 0);
 
     /* Clean up */

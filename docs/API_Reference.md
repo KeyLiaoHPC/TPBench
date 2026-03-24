@@ -213,6 +213,10 @@ void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 **Output Format:** `YYYY-mm-dd HH:MM:SS [TAG] message`
 
+**Run log file:** When the workspace is initialized (`tpb_corelib_init` / `tpb_k_corelib_init`), corelib opens a timestamped log under `<workspace>/rawdb/log/tpbrunlog_*_<host>.log` via `tpb_log_init()` (declared in `tpb-io.h`, internal to the `tpbench` library). `tpb_printf` mirrors each line to that file when logging is active.
+
+**`TPB_LOG_FILE`:** Before fork/exec of a PLI kernel, the driver calls `tpb_log_cleanup()`, sets this environment variable to the current log path (`TPB_LOG_FILE_ENV` / `"TPB_LOG_FILE"`), and forks. The parent immediately calls `tpb_log_init()` again so it appends to the same file; the child process inherits `TPB_LOG_FILE` and `tpb_log_init()` inside `tpb_k_corelib_init` opens that path in append mode without writing a second session header. This yields one log file for both `tpbcli` and the `.tpbx` kernel. At the start of `tpb_corelib_init()`, `TPB_LOG_FILE` is cleared (`unsetenv`) so a normal CLI session always starts a new timestamped log instead of appending to a stale path.
+
 ---
 
 ### `tpb_list`
@@ -557,10 +561,11 @@ tpb_free_kernel(&hdl->kernel);  // Frees nested data only
 
 ### `tpb_run_pli`
 
-Run a PLI kernel via fork/exec.  Builds the execution command with
-environment variables, MPI arguments, and kernel parameters, then launches the
-`.tpbx` executable via shell.  Captures and forwards stdout/stderr to both
-console and log file.
+Run a PLI kernel via fork/exec. Builds the execution command with environment
+variables, MPI arguments, and kernel parameters, then launches the `.tpbx`
+executable via shell. The child inherits the parent’s stdout and stderr; the
+shared run log is written through `tpb_printf` in both processes using
+`TPB_LOG_FILE` as described under `tpb_printf` (run log file).
 
 Declared in `tpb-public.h`.
 

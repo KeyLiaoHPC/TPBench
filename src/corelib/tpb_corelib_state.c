@@ -15,6 +15,7 @@
 
 /* Local Function Prototypes */
 static int resolve_workspace_root(const char *override, char *out, size_t outlen);
+static int init_corelib(const char *tpb_workspace_path, int caller_after);
 
 static int _s_corelib_initialized;
 static int _s_caller;
@@ -94,14 +95,22 @@ resolve_workspace_root(const char *override, char *out, size_t outlen)
     return TPBE_SUCCESS;
 }
 
-int
-tpb_corelib_init(const char *tpb_workspace_path)
+/*
+ * Shared corelib startup: resolve workspace, rawdb layout, run log, caller tag.
+ * For tpbcli only, clears TPB_LOG_FILE so a new timestamped log is always created.
+ */
+static int
+init_corelib(const char *tpb_workspace_path, int caller_after)
 {
     char resolved[PATH_MAX];
     int err;
 
     if (_s_corelib_initialized) {
         return TPBE_ILLEGAL_CALL;
+    }
+
+    if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
+        unsetenv(TPB_LOG_FILE_ENV);
     }
 
     err = resolve_workspace_root(tpb_workspace_path, resolved, sizeof(resolved));
@@ -126,20 +135,19 @@ tpb_corelib_init(const char *tpb_workspace_path)
         return err;
     }
 
-    _tpb_caller_set(TPB_CORELIB_CTX_CALLER_TPBCLI);
+    _tpb_caller_set(caller_after);
     _s_corelib_initialized = 1;
     return TPBE_SUCCESS;
 }
 
 int
+tpb_corelib_init(const char *tpb_workspace_path)
+{
+    return init_corelib(tpb_workspace_path, TPB_CORELIB_CTX_CALLER_TPBCLI);
+}
+
+int
 tpb_k_corelib_init(const char *tpb_workspace_path)
 {
-    int err;
-
-    err = tpb_corelib_init(tpb_workspace_path);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
-    _tpb_caller_set(TPB_CORELIB_CTX_CALLER_KERNEL);
-    return TPBE_SUCCESS;
+    return init_corelib(tpb_workspace_path, TPB_CORELIB_CTX_CALLER_KERNEL);
 }
