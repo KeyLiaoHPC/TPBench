@@ -25,10 +25,8 @@ static int write_magic_and_data(FILE *fp, uint8_t domain,
                                 uint64_t datasize);
 static int write_u64(FILE *fp, uint64_t v);
 static int write_u32(FILE *fp, uint32_t v);
-static int write_i32(FILE *fp, int32_t v);
 static int read_u64(FILE *fp, uint64_t *v);
 static int read_u32(FILE *fp, uint32_t *v);
-static int read_i32(FILE *fp, int32_t *v);
 
 static int
 write_u64(FILE *fp, uint64_t v)
@@ -43,12 +41,6 @@ write_u32(FILE *fp, uint32_t v)
 }
 
 static int
-write_i32(FILE *fp, int32_t v)
-{
-    return (fwrite(&v, sizeof(v), 1, fp) == 1) ? 0 : -1;
-}
-
-static int
 read_u64(FILE *fp, uint64_t *v)
 {
     return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
@@ -56,12 +48,6 @@ read_u64(FILE *fp, uint64_t *v)
 
 static int
 read_u32(FILE *fp, uint32_t *v)
-{
-    return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
-}
-
-static int
-read_i32(FILE *fp, int32_t *v)
 {
     return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
 }
@@ -673,8 +659,8 @@ tpb_rawdb_record_write_task(const char *workspace,
     fp = fopen(fpath, "wb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    /* Fixed: 5*20 + 3*8 + 7*4 = 152 bytes */
-    metasize = 152 + TPB_RAWDB_RESERVE_SIZE;
+    /* Fixed: 5*20 + 3*8 + 8*4 = 156 bytes */
+    metasize = 156 + TPB_RAWDB_RESERVE_SIZE;
     metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
 
     tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
@@ -698,7 +684,8 @@ tpb_rawdb_record_write_task(const char *workspace,
     if (write_u64(fp, attr->duration) != 0) goto fail;
     if (write_u32(fp, attr->exit_code) != 0) goto fail;
     if (write_u32(fp, attr->handle_index) != 0) goto fail;
-    if (write_i32(fp, attr->mpi_rank) != 0) goto fail;
+    if (write_u32(fp, attr->pid) != 0) goto fail;
+    if (write_u32(fp, attr->tid) != 0) goto fail;
     if (write_u32(fp, attr->ninput) != 0) goto fail;
     if (write_u32(fp, attr->noutput) != 0) goto fail;
     if (write_u32(fp, attr->nheader) != 0) goto fail;
@@ -776,7 +763,8 @@ tpb_rawdb_record_read_task(const char *workspace,
     if (read_u64(fp, &attr->duration) != 0) goto fail;
     if (read_u32(fp, &attr->exit_code) != 0) goto fail;
     if (read_u32(fp, &attr->handle_index) != 0) goto fail;
-    if (read_i32(fp, &attr->mpi_rank) != 0) goto fail;
+    if (read_u32(fp, &attr->pid) != 0) goto fail;
+    if (read_u32(fp, &attr->tid) != 0) goto fail;
     if (read_u32(fp, &attr->ninput) != 0) goto fail;
     if (read_u32(fp, &attr->noutput) != 0) goto fail;
     if (read_u32(fp, &attr->nheader) != 0) goto fail;

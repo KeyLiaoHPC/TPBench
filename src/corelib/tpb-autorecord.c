@@ -12,6 +12,7 @@
 #include <time.h>
 #ifdef __linux__
 #include <linux/limits.h>
+#include <sys/syscall.h>
 #else
 #include <limits.h>
 #endif
@@ -70,6 +71,16 @@ get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns)
 
     *btime_ns = bt.sec * 1000000000ULL + bt.nsec;
     return 0;
+}
+
+static uint32_t
+get_current_tid(void)
+{
+#ifdef __linux__
+    return (uint32_t)syscall(SYS_gettid);
+#else
+    return (uint32_t)getpid();
+#endif
 }
 
 static int
@@ -282,6 +293,8 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     uint64_t btime_ns;
     char hostname[64], username[64];
     uint32_t handle_index = 0;
+    uint32_t pid;
+    uint32_t tid;
 
     if (!hdl) return TPBE_NULLPTR_ARG;
 
@@ -324,9 +337,12 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     if (err) return err;
 
     get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
+    pid = (uint32_t)getpid();
+    tid = get_current_tid();
 
     err = tpb_rawdb_gen_task_id(utc_bits, btime_ns, hostname, username,
-                                 tbatch_id, kernel_id, handle_index, task_id);
+                                tbatch_id, kernel_id, handle_index,
+                                pid, tid, task_id);
     if (err) return err;
 
     /* Build task_attr_t */
@@ -344,7 +360,8 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     attr.duration = 0;
     attr.exit_code = (uint32_t)exit_code;
     attr.handle_index = handle_index;
-    attr.mpi_rank = -1;
+    attr.pid = pid;
+    attr.tid = tid;
     attr.ninput = ninput;
     attr.noutput = noutput;
     attr.nheader = nheader;
@@ -448,7 +465,6 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     entry.duration = 0;
     entry.exit_code = (uint32_t)exit_code;
     entry.handle_index = handle_index;
-    entry.mpi_rank = -1;
 
     err = tpb_rawdb_entry_append_task(workspace, &entry);
     if (err) {

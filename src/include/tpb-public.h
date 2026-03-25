@@ -535,7 +535,8 @@ typedef struct task_attr {
     uint64_t duration;                /**< Execution duration (ns) */
     uint32_t exit_code;               /**< Kernel exit code */
     uint32_t handle_index;            /**< Handle index (0-based) */
-    int32_t  mpi_rank;                /**< MPI rank (-1 if non-MPI) */
+    uint32_t pid;                     /**< Writer process ID */
+    uint32_t tid;                     /**< Writer thread ID */
     uint32_t ninput;                  /**< Input argument headers */
     uint32_t noutput;                 /**< Output metric headers */
     uint32_t nheader;                 /**< Total headers */
@@ -553,7 +554,6 @@ typedef struct task_entry {
     uint64_t duration;                /**< Duration (ns) */
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
-    int32_t  mpi_rank;                /**< MPI rank */
     unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
 } task_entry_t;
 
@@ -838,6 +838,8 @@ int tpb_rawdb_gen_kernel_id(const char *kernel_name,
  * @param tbatch_id  20-byte TBatchID
  * @param kernel_id  20-byte KernelID
  * @param order      Order in batch (0-based)
+ * @param pid        Writer process ID
+ * @param tid        Writer thread ID
  * @param id_out     20-byte output buffer
  * @return 0 on success, error code otherwise
  */
@@ -848,6 +850,8 @@ int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
                           const unsigned char tbatch_id[20],
                           const unsigned char kernel_id[20],
                           uint32_t order,
+                          uint32_t pid,
+                          uint32_t tid,
                           unsigned char id_out[20]);
 
 /**

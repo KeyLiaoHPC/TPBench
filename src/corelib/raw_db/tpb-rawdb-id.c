@@ -77,6 +77,8 @@ tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
                       const unsigned char tbatch_id[20],
                       const unsigned char kernel_id[20],
                       uint32_t order,
+                      uint32_t pid,
+                      uint32_t tid,
                       unsigned char id_out[20])
 {
     tpb_sha1_ctx_t ctx;
@@ -106,6 +108,14 @@ tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
 
     len = snprintf(numbuf, sizeof(numbuf), "%u",
                    (unsigned)order);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%u",
+                   (unsigned)pid);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%u",
+                   (unsigned)tid);
     tpb_sha1_update(&ctx, numbuf, (size_t)len);
 
     tpb_sha1_final(&ctx, id_out);

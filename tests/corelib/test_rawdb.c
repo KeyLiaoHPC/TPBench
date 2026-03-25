@@ -256,18 +256,24 @@ test_id_kernel(void)
 static int
 test_id_task(void)
 {
-    unsigned char id1[20], id2[20];
+    unsigned char id1[20], id2[20], id3[20], id4[20];
     unsigned char tb[20], kn[20];
 
     memset(tb, 0x11, 20);
     memset(kn, 0x22, 20);
 
     tpb_rawdb_gen_task_id(111, 222, "host", "user",
-                          tb, kn, 0, id1);
+                          tb, kn, 0, 333, 444, id1);
     tpb_rawdb_gen_task_id(111, 222, "host", "user",
-                          tb, kn, 0, id2);
+                          tb, kn, 0, 333, 444, id2);
+    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+                          tb, kn, 0, 334, 444, id3);
+    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+                          tb, kn, 0, 333, 445, id4);
 
     if (memcmp(id1, id2, 20) != 0) return 1;
+    if (memcmp(id1, id3, 20) == 0) return 1;
+    if (memcmp(id1, id4, 20) == 0) return 1;
     return 0;
 }
 
@@ -399,7 +405,6 @@ test_entry_task(void)
     e.duration = 500000000ULL;
     e.exit_code = 0;
     e.handle_index = 1;
-    e.mpi_rank = -1;
 
     int err = tpb_rawdb_entry_append_task(g_test_dir, &e);
     if (err) { cleanup_test_dir(); return 1; }
@@ -417,8 +422,7 @@ test_entry_task(void)
     if (memcmp(entries[0].task_record_id,
                e.task_record_id, 20) != 0 ||
         memcmp(entries[0].dup_from, e.dup_from, 20) != 0 ||
-        entries[0].duration != e.duration ||
-        entries[0].mpi_rank != -1) {
+        entries[0].duration != e.duration) {
         free(entries);
         cleanup_test_dir();
         return 1;
@@ -640,7 +644,8 @@ test_record_task(void)
     attr.duration = 500000000ULL;
     attr.exit_code = 0;
     attr.handle_index = 0;
-    attr.mpi_rank = -1;
+    attr.pid = 4321;
+    attr.tid = 8765;
     attr.ninput = 1;
     attr.noutput = 1;
     attr.nheader = 1;
@@ -665,7 +670,8 @@ test_record_task(void)
     int fail = 0;
     if (memcmp(rattr.dup_to, attr.dup_to, 20) != 0) fail = 1;
     if (memcmp(rattr.dup_from, attr.dup_from, 20) != 0) fail = 1;
-    if (rattr.mpi_rank != -1) fail = 1;
+    if (rattr.pid != attr.pid) fail = 1;
+    if (rattr.tid != attr.tid) fail = 1;
     if (rattr.duration != 500000000ULL) fail = 1;
     if (rattr.ninput != 1 || rattr.noutput != 1) fail = 1;
     if (rsize != 8) fail = 1;

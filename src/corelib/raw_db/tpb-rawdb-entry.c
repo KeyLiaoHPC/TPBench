@@ -12,7 +12,7 @@
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(tbatch_entry_t) == 264, "tbatch_entry_t on-disk size");
 _Static_assert(sizeof(kernel_entry_t) == 264, "kernel_entry_t on-disk size");
-_Static_assert(sizeof(task_entry_t) == 240, "task_entry_t on-disk size");
+_Static_assert(sizeof(task_entry_t) == 232, "task_entry_t on-disk size");
 _Static_assert(TPB_RAWDB_RESERVE_SIZE == 128, "TPB_RAWDB_RESERVE_SIZE");
 #endif
 

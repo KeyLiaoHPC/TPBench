@@ -1211,7 +1211,7 @@ int tpb_rawdb_magic_scan(const void *buf, size_t len,
 
 ### Entry Operations (.tpbe)
 
-Entry files store fixed-size record summaries for fast indexing (`tbatch_entry_t` / `kernel_entry_t`: 264 bytes; `task_entry_t`: 240 bytes including ABI tail padding). The public macro `TPB_RAWDB_RESERVE_SIZE` (128) is the tail reserve size in each entry and the opaque reserve block size in each `.tpbr` meta section.
+Entry files store fixed-size record summaries for fast indexing (`tbatch_entry_t` / `kernel_entry_t`: 264 bytes; `task_entry_t`: 232 bytes). The public macro `TPB_RAWDB_RESERVE_SIZE` (128) is the tail reserve size in each entry and the opaque reserve block size in each `.tpbr` meta section.
 
 #### `tpb_rawdb_entry_append_tbatch`
 
@@ -1259,7 +1259,7 @@ int tpb_rawdb_entry_append_task(const char *workspace,
 
 **Parameters:**
 - `workspace`: Workspace root path
-- `entry`: Pointer to `task_entry_t` (240 bytes on disk)
+- `entry`: Pointer to `task_entry_t` (232 bytes on disk)
 
 ---
 
@@ -1485,10 +1485,12 @@ int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
                           const unsigned char tbatch_id[20],
                           const unsigned char kernel_id[20],
                           uint32_t order,
+                          uint32_t pid,
+                          uint32_t tid,
                           unsigned char id_out[20]);
 ```
 
-**Formula:** `SHA1("task" + utc_bits + btime + hostname + username + tbatch_id + kernel_id + order)`
+**Formula:** `SHA1("task" + utc_bits + btime + hostname + username + tbatch_id + kernel_id + order + pid + tid)`
 
 ---
 
@@ -1588,7 +1590,7 @@ typedef struct kernel_entry {
 } kernel_entry_t;
 ```
 
-**`task_entry_t`** (240 bytes) - Slim task summary:
+**`task_entry_t`** (232 bytes) - Slim task summary:
 
 ```c
 typedef struct task_entry {
@@ -1600,7 +1602,6 @@ typedef struct task_entry {
     uint64_t duration;                  // Duration (ns)
     uint32_t exit_code;                 // Exit code
     uint32_t handle_index;              // Handle index
-    int32_t mpi_rank;                   // MPI rank (-1 if non-MPI)
     unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; // Reserved (128)
 } task_entry_t;
 ```
@@ -1667,7 +1668,8 @@ typedef struct task_attr {
     uint64_t duration;                  // Duration (ns)
     uint32_t exit_code;                 // Exit code
     uint32_t handle_index;              // Handle index
-    int32_t mpi_rank;                   // MPI rank (-1 if non-MPI)
+    uint32_t pid;                       // Writer process ID
+    uint32_t tid;                       // Writer thread ID
     uint32_t ninput;                    // Input headers count
     uint32_t noutput;                   // Output headers count
     uint32_t nheader;                   // Total headers

@@ -129,13 +129,6 @@ static int resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
 static void dump_print_kv_u64(const char *key, uint64_t v);
 
 /*
- * When: Same as dump_print_kv_u64 for signed 32-bit fields.
- * Input: key; v.
- * Output: One CSV line to stdout.
- */
-static void dump_print_kv_i32(const char *key, int32_t v);
-
-/*
  * When: Same as dump_print_kv_u64 for unsigned 32-bit fields.
  * Input: key; v.
  * Output: One CSV line to stdout.
@@ -239,12 +232,6 @@ static void
 dump_print_kv_u64(const char *key, uint64_t v)
 {
     tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %" PRIu64 "\n", key, v);
-}
-
-static void
-dump_print_kv_i32(const char *key, int32_t v)
-{
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %" PRId32 "\n", key, v);
 }
 
 static void
@@ -1085,7 +1072,8 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     dump_print_kv_u64("duration", attr.duration);
     dump_print_kv_u32("exit_code", attr.exit_code);
     dump_print_kv_u32("handle_index", attr.handle_index);
-    dump_print_kv_i32("mpi_rank", attr.mpi_rank);
+    dump_print_kv_u32("pid", attr.pid);
+    dump_print_kv_u32("tid", attr.tid);
     dump_print_kv_u32("ninput", attr.ninput);
     dump_print_kv_u32("noutput", attr.noutput);
     dump_print_kv_u32("nheader", attr.nheader);
@@ -1213,8 +1201,6 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             dump_print_kv_u32(p, e[i].exit_code);
             snprintf(p, sizeof(p), "entry[%d].handle_index", i);
             dump_print_kv_u32(p, e[i].handle_index);
-            snprintf(p, sizeof(p), "entry[%d].mpi_rank", i);
-            dump_print_kv_i32(p, e[i].mpi_rank);
         }
         free(e);
     }

@@ -203,7 +203,7 @@ uint16_t year = 1970 + year_bias;
 |-------------|-----------|-------------|
 | **任务批次记录 (TBatch Record)** | `SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>)` | 每次 tbatch 调用一条记录 |
 | **Kernel 记录 (Kernel Record)** | `SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)` | 构建时检查或生成一次 |
-| **任务记录 (Task Record)** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)` | 每次 kernel 调用一条记录 |
+| **任务记录 (Task Record)** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)` | 每次 kernel 调用一条记录 |
 | **评分记录 (Score Record)** | `SHA1("score" + <utc_bits> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | 每个计算的评分或子评分一条记录 |
 
 **Magic 签名**
@@ -538,7 +538,8 @@ typedef struct task_attr {
 
     uint32_t exit_code;                 /**< kernel 退出代码（0=成功） */
     uint32_t handle_index;              /**< 批次内的 handle 索引（从 0 开始） */
-    int32_t  mpi_rank;                  /**< MPI 等级（非 MPI 为 -1，MPI 启用为 0-N） */
+    uint32_t pid;                       /**< 写入进程 ID */
+    uint32_t tid;                       /**< 写入线程 ID */
     uint32_t ninput;                    /**< 输入参数头部数量 */
     uint32_t noutput;                   /**< 输出指标头部数量 */
     uint32_t nheader;                   /**< 头部数量（= ninput + noutput） */
@@ -558,7 +559,7 @@ typedef struct task_attr {
 
 TaskRecordID:
 ```
-SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)
+SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)
 ```
 
 注意：
@@ -573,10 +574,10 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 +----------------------0-+
 | entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
 +----------------------8-+
-| entry[0:N] (240B)      |
-+-----------------8+240N-+
+| entry[0:N] (232B)      |
++-----------------8+232N-+
 | entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+----------------16+240N-+
++----------------16+232N-+
 ```
 
 条目成员（`task_attr_t` 的简化子集）：
@@ -591,10 +592,8 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 | duration | 8 |
 | exit_code | 4 |
 | handle_index | 4 |
-| mpi_rank | 4 |
 | reserve | 128（`TPB_RAWDB_RESERVE_SIZE`） |
-| *（结构体尾部对齐填充）* | *4* |
-| **总计** | **240** |
+| **总计** | **232** |
 
 Magic 签名：
 
@@ -636,16 +635,20 @@ Magic 签名：
 +------------------152-+
 | handle_index         |  <- 4B
 +------------------156-+
-| mpi_rank             |  <- 4B
+| pid                  |  <- 4B
 +------------------160-+
-| ninput               |  <- 4B
+| tid                  |  <- 4B
 +------------------164-+
-| noutput              |  <- 4B
+| ninput               |  <- 4B
 +------------------168-+
-| nheader              |  <- 4B
+| noutput              |  <- 4B
 +------------------172-+
+| nheader              |  <- 4B
++------------------176-+
+| reserve              |  <- 4B
++------------------180-+
 | 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`，不透明保留
-+------------------300-+
++------------------308-+
 | headers[i]           |  <- (ninput + noutput) x tpb_meta_header_t + 用户头部
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -881,7 +884,7 @@ Magic:
 ID 生成：
 - `tpb_rawdb_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
 - `tpb_rawdb_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
-- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, id_out)` -- TaskRecordID
+- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
 - `tpb_rawdb_id_to_hex(id, hex)` -- 将 20 字节 ID 转换为 40 字符十六进制字符串
 
 ### 3.4. 头部序列化

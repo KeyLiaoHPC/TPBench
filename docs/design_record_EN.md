@@ -204,7 +204,7 @@ Each ID is a 20-byte SHA1 has string stored in a 20-byte unsigned char variable.
 |-------------|-----------|-------------|
 | **TBatch Record** | `SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>)` | One record per tbatch invocation |
 | **Kernel Record** | `SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)` | Check or generate once a kernel is built. |
-| **Task Record** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)` | One record per kernel invocation |
+| **Task Record** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)` | One record per kernel invocation |
 | **Score Record** | `SHA1("score" + <utc_bits> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
 **Magic Signature**
@@ -546,7 +546,8 @@ typedef struct task_attr {
 
     uint32_t exit_code;                 /**< Kernel exit code (0=success) */
     uint32_t handle_index;              /**< Handle index within batch (0-based) */
-    int32_t  mpi_rank;                  /**< MPI rank (-1 if non-MPI, 0-N if MPI enabled) */
+    uint32_t pid;                       /**< Writer process ID */
+    uint32_t tid;                       /**< Writer thread ID */
     uint32_t ninput;                    /**< # of input argument headers */
     uint32_t noutput;                   /**< # of output metric headers */
     uint32_t nheader;                   /**< # of headers (= ninput + noutput) */
@@ -566,7 +567,7 @@ Fixed header members:
 
 TaskRecordID:
 ```
-SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch>)
+SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)
 ```
 
 Notes:
@@ -581,10 +582,10 @@ File structure:
 +----------------------0-+
 | entry_begin_magic (8B) |  <- 0xe1 'T' 'P' 'B' 0xe2 'S' 0x31 0xe0
 +----------------------8-+
-| entry[0:N] (240B)      |
-+-----------------8+240N-+
+| entry[0:N] (232B)      |
++-----------------8+232N-+
 | entry_end_magic (8B)   |  <- 0xe1 'T' 'P' 'B' 0xe2 'E' 0x31 0xe0
-+----------------16+240N-+
++----------------16+232N-+
 ```
 
 Entry member (slim subset of `task_attr_t`):
@@ -599,10 +600,8 @@ Entry member (slim subset of `task_attr_t`):
 | duration | 8 |
 | exit_code | 4 |
 | handle_index | 4 |
-| mpi_rank | 4 |
 | reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
-| *(struct tail padding)* | *4* |
-| **Total** | **240** |
+| **Total** | **232** |
 
 Magic signature:
 
@@ -644,16 +643,20 @@ File structure:
 +------------------152-+
 | handle_index         |  <- 4B
 +------------------156-+
-| mpi_rank             |  <- 4B
+| pid                  |  <- 4B
 +------------------160-+
-| ninput               |  <- 4B
+| tid                  |  <- 4B
 +------------------164-+
-| noutput              |  <- 4B
+| ninput               |  <- 4B
 +------------------168-+
-| nheader              |  <- 4B
+| noutput              |  <- 4B
 +------------------172-+
+| nheader              |  <- 4B
++------------------176-+
+| reserve              |  <- 4B
++------------------180-+
 | 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
-+------------------300-+
++------------------308-+
 | headers[i]           |  <- (ninput + noutput) x tpb_meta_header_t + user headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -663,6 +666,16 @@ File structure:
 | end_magic            |  <- 8B
 +----metasize+datasize-+
 ```
+
+Byte layout summary:
+- Fixed task attribute bytes: `152 -> 156` after adding `pid` and `tid` and
+  removing `mpi_rank`
+- Fixed meta bytes before headers: `24 + 156 + 128 = 308`
+- Previous implementation header start: `304`
+- New implementation header start: `308`
+- The old document omitted the scalar `reserve` field, so its diagram moves
+  from `300` to `308`
+- Older task `.tpbr` files are not layout-compatible with this definition
 
 Header member:
 - header[0..ninput-1]: Input argument data headers
@@ -892,7 +905,7 @@ Record (.tpbr):
 ID Generation:
 - `tpb_rawdb_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
 - `tpb_rawdb_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
-- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, id_out)` -- TaskRecordID
+- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
 - `tpb_rawdb_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string
 
 ### 3.4. Header Serialization
@@ -914,7 +927,8 @@ dimnames[0..6]   (448B) -- 7 x 64-byte strings, parallel to dimsizes
 
 ### 3.5. Memory Safety
 
-- Entry structs (`tbatch_entry_t` / `kernel_entry_t` 264 bytes, `task_entry_t` 240 bytes including tail padding) are stack-allocated or caller-provided.
+- Entry structs (`tbatch_entry_t` / `kernel_entry_t` 264 bytes, `task_entry_t`
+  232 bytes) are stack-allocated or caller-provided.
 - `tpb_meta_header_t` arrays are heap-allocated during record read; freed via `tpb_rawdb_free_headers()`.
 - All pointer arguments are NULL-checked; functions return `TPBE_NULLPTR_ARG` on failure.
 - File I/O uses explicit size checks; no buffer overruns.
