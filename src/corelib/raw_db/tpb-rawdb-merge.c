@@ -253,7 +253,8 @@ build_merge_headers(task_attr_t *tasks,
         }
     }
 
-    /* Build merged data blob */
+    /* Build merged data blob — data must be interleaved
+       to match the interleaved header order. */
     special_sz = (uint64_t)n * 20
                + (uint64_t)n * 4;
     if (is_process_merge) {
@@ -262,8 +263,19 @@ build_merge_headers(task_attr_t *tasks,
     }
 
     total_sz = special_sz;
-    for (i = 0; i < n; i++)
-        total_sz += 4 + src_datasize[i];
+    for (ui = 0; ui < n_unames; ui++) {
+        for (ti = 0; ti < n; ti++) {
+            for (hj = 0;
+                 hj < (int)tasks[ti].nheader; hj++) {
+                if (strcmp(tasks[ti].headers[hj].name,
+                           unames[ui]) == 0) {
+                    total_sz +=
+                        tasks[ti].headers[hj].data_size;
+                    break;
+                }
+            }
+        }
+    }
 
     mdata = (unsigned char *)calloc(1, (size_t)total_sz);
     if (!mdata) {
@@ -303,15 +315,33 @@ build_merge_headers(task_attr_t *tasks,
         }
     }
 
-    /* Size-prefixed source data blocks */
-    for (i = 0; i < n; i++) {
-        uint32_t sz32 = (uint32_t)src_datasize[i];
-        memcpy(ptr, &sz32, 4);
-        ptr += 4;
-        if (src_datasize[i] > 0 && src_data[i]) {
-            memcpy(ptr, src_data[i],
-                   (size_t)src_datasize[i]);
-            ptr += (size_t)src_datasize[i];
+    /* Interleaved source data: for each unique header
+       name and each source, copy the matching header's
+       data slice from the source blob. */
+    for (ui = 0; ui < n_unames; ui++) {
+        for (ti = 0; ti < n; ti++) {
+            for (hj = 0;
+                 hj < (int)tasks[ti].nheader; hj++) {
+                if (strcmp(tasks[ti].headers[hj].name,
+                           unames[ui]) == 0) {
+                    uint64_t off = 0;
+                    int k;
+                    for (k = 0; k < hj; k++)
+                        off +=
+                            tasks[ti].headers[k].data_size;
+                    if (tasks[ti].headers[hj].data_size > 0
+                        && src_data[ti]) {
+                        memcpy(ptr,
+                            (const uint8_t *)src_data[ti]
+                                + off,
+                            (size_t)tasks[ti]
+                                .headers[hj].data_size);
+                    }
+                    ptr +=
+                        tasks[ti].headers[hj].data_size;
+                    break;
+                }
+            }
         }
     }
 

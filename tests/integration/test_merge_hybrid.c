@@ -496,6 +496,42 @@ test_merge_hybrid(void)
             CHECK("duration > 0",
                   final_attr.duration > 0);
 
+            /* 8f2: verify triad_time data values are
+               valid (not garbage from misaligned blob) */
+            if (final_data && final_datasize > 0) {
+                const uint8_t *dptr =
+                    (const uint8_t *)final_data;
+                uint64_t doff = 0;
+                int tt_found = 0;
+                for (uint32_t hi = 0;
+                     hi < final_attr.nheader; hi++) {
+                    const tpb_meta_header_t *fh =
+                        &final_attr.headers[hi];
+                    if (strcmp(fh->name,
+                              "triad_time") == 0
+                        && fh->data_size == sizeof(double)
+                        && doff + sizeof(double)
+                           <= final_datasize) {
+                        double val;
+                        memcpy(&val, dptr + doff,
+                               sizeof(double));
+                        char msg[64];
+                        snprintf(msg, sizeof(msg),
+                            "triad_time[%d] > 0",
+                            tt_found);
+                        CHECK(msg, val > 0.0);
+                        snprintf(msg, sizeof(msg),
+                            "triad_time[%d] < 1e15",
+                            tt_found);
+                        CHECK(msg, val < 1.0e15);
+                        tt_found++;
+                    }
+                    doff += fh->data_size;
+                }
+                CHECK("triad_time count >= 2",
+                      tt_found >= 2);
+            }
+
             tpb_rawdb_free_headers(final_attr.headers,
                                    final_attr.nheader);
             free(final_data);
