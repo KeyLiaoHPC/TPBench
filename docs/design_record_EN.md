@@ -600,7 +600,8 @@ Entry member (slim subset of `task_attr_t`):
 | duration | 8 |
 | exit_code | 4 |
 | handle_index | 4 |
-| reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+| dup_to | 20 |
+| reserve | 108 |
 | **Total** | **232** |
 
 Magic signature:
@@ -966,3 +967,129 @@ Column details:
 | NKernel | `nkernel` | integer |
 | NScore | `nscore` | integer (always 0 for now) |
 | Duration (s) | `duration` nanoseconds | seconds with 3 decimal digits |
+
+## 5. Parallel Recording
+
+### 5.1. Overview
+
+When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently. After all units finish, the caller merges the per-unit task records into a single **merged task record** that represents the combined execution.
+
+Two merge levels exist:
+1) **Thread merge** -- merges task records from threads within one process.
+2) **Process merge** -- merges task records (or already thread-merged records) from multiple processes, potentially across nodes.
+
+A hybrid kernel (multi-process x multi-thread) performs thread merge first inside each process, then process merge across the intermediate results.
+
+### 5.2. Merge Procedure
+
+#### 5.2.1. Input Validation
+
+All source task records must share the same `tbatch_id` and `kernel_id`. If either differs, the merge aborts with a warning (`TPBE_MERGE_MISMATCH`) without terminating the process.
+
+#### 5.2.2. Ordering
+
+Source tasks are sorted by `tid` ascending. When thread ranks are unavailable or identical, `tid` (OS thread ID) is used as the tiebreaker.
+
+#### 5.2.3. Duration Calculation
+
+Uses `btime` (boot-time nanoseconds, `CLOCK_BOOTTIME`) for precision:
+
+```
+merged.btime    = min(source[i].btime)
+merged.duration = max(source[i].btime + source[i].duration) - merged.btime
+merged.utc_bits = utc_bits of whichever source has min(btime)
+```
+
+Assumption: all participating threads/processes share the same boot-time reference (same node for threads; same node or NTP-synced for processes).
+
+#### 5.2.4. dup_from / dup_to Semantics
+
+Merged record:
+- `dup_from` = `0xFF` repeated 20 bytes (multi-source sentinel)
+- `dup_to` = all zero
+
+Source records (updated after merge):
+- `dup_to` = merged task record ID (updated in both `.tpbr` and `.tpbe`)
+- `dup_from` = unchanged (all zero)
+
+#### 5.2.5. Merge Metadata Headers
+
+The merged task record prepends special headers before the interleaved source headers:
+
+| Header | Type | Thread merge | Process merge |
+|---|---|:---:|:---:|
+| SourceTaskIDs | `unsigned char[20]` x N | yes | yes |
+| ThreadIDs | `uint32_t` x T | yes | yes |
+| ProcessIDs | `uint32_t` x P | -- | yes |
+| Hosts | `char[64]` x P | -- | yes |
+
+#### 5.2.6. Source Header Interleaving
+
+For each unique header name across all source tasks, one header entry is created per source task in tid-ascending order. If a source task lacks a header present in other tasks, an empty placeholder (`ndim=0`, `data_size=0`) is inserted at that position.
+
+Example with 3 source tasks:
+
+```
+thread0: headers = [perf]
+thread1: headers = [perf, time]
+thread2: headers = [perf, time]
+
+merged:  [SourceTaskIDs, ThreadIDs,
+          perf(t0), perf(t1), perf(t2),
+          time(t0=empty), time(t1), time(t2)]
+```
+
+#### 5.2.7. Data Layout
+
+Source data blocks are concatenated with 4-byte size prefixes:
+
+```
+[uint32_t src0_datasize][src0_data]
+[uint32_t src1_datasize][src1_data]
+...
+```
+
+#### 5.2.8. Merged Task ID
+
+Generated via `tpb_rawdb_gen_task_id()` with:
+- `utc_bits`, `btime` from the earliest source
+- `order` = `UINT32_MAX` (sentinel distinguishing merged records)
+- `pid`, `tid` from the calling (merging) thread
+
+### 5.3. Public API
+
+```c
+int tpb_k_merge_record_thread(const unsigned char task_ids[][20],
+                              int n_tasks,
+                              unsigned char merged_id_out[20]);
+
+int tpb_k_merge_record_process(const unsigned char task_ids[][20],
+                               int n_tasks,
+                               unsigned char merged_id_out[20]);
+```
+
+Both resolve the workspace internally, then call the core merge function `tpb_rawdb_merge_par()` with `is_process_merge` = 0 or 1.
+
+### 5.4. Hybrid Merge Sequence
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Process 0                  Process 1               │
+│  ┌──────┐ ┌──────┐         ┌──────┐ ┌──────┐       │
+│  │ Th 0 │ │ Th 1 │         │ Th 0 │ │ Th 1 │       │
+│  │ task │ │ task │         │ task │ │ task │       │
+│  └──┬───┘ └──┬───┘         └──┬───┘ └──┬───┘       │
+│     └───┬────┘                └───┬────┘            │
+│    thread_merge              thread_merge           │
+│     merged_0                  merged_1              │
+│         └────────┬────────────┘                     │
+│            process_merge                            │
+│             final_merged                            │
+└─────────────────────────────────────────────────────┘
+```
+
+The final merged record contains:
+- ThreadIDs: `[t0_p0, t1_p0, t0_p1, t1_p1]` (flattened, P x T)
+- ProcessIDs: `[pid0, pid1]`
+- Hosts: `[host0, host1]`
+- SourceTaskIDs: `[merged_0, merged_1]`

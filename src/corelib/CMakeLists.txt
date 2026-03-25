@@ -14,6 +14,7 @@ set(TPB_CORELIB_SOURCES
     raw_db/tpb-rawdb-entry.c
     raw_db/tpb-rawdb-record.c
     raw_db/tpb-rawdb-id.c
+    raw_db/tpb-rawdb-merge.c
     raw_db/tpb-sha1.c
 )
 

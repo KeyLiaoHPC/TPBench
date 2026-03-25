@@ -119,7 +119,9 @@ enum _tpb_errno {
     TPBE_KERNEL_NE_FAIL,
     TPBE_KARG_NE_FAIL,
     TPBE_KERNEL_INCOMPLETE,
-    TPBE_DLOPEN_FAIL
+    TPBE_DLOPEN_FAIL,
+    TPBE_MERGE_MISMATCH,
+    TPBE_MERGE_FAIL
 };
 typedef enum _tpb_errno tpb_errno_t;
 
@@ -554,7 +556,8 @@ typedef struct task_entry {
     uint64_t duration;                /**< Duration (ns) */
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+    unsigned char dup_to[20];         /**< Merge target: merged TaskRecordID, or zero */
+    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE - 20]; /**< Reserved */
 } task_entry_t;
 
 /* ===== rawdb Workspace API ===== */
@@ -880,6 +883,43 @@ int tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20]);
 int tpb_rawdb_find_record(const char *workspace,
                           const unsigned char id[20],
                           uint8_t *domain_out);
+
+/* ===== Task Record Merge API ===== */
+
+/**
+ * @brief Merge multiple task records from threads within one process.
+ *
+ * Combines per-thread task records into a single merged record.
+ * Source records must share the same tbatch_id and kernel_id.
+ * Adds SourceTaskIDs and ThreadIDs headers to the merged record.
+ *
+ * @param task_ids     Array of 20-byte source task IDs
+ * @param n_tasks      Number of source tasks (must be >= 2)
+ * @param merged_id_out Output: 20-byte merged task ID
+ * @return TPBE_SUCCESS on success,
+ *         TPBE_MERGE_MISMATCH or TPBE_MERGE_FAIL on error
+ */
+int tpb_k_merge_record_thread(const unsigned char task_ids[][20],
+                              int n_tasks,
+                              unsigned char merged_id_out[20]);
+
+/**
+ * @brief Merge multiple task records from processes (possibly multi-node).
+ *
+ * Combines per-process task records into a single merged record.
+ * Source records must share the same tbatch_id and kernel_id.
+ * Adds SourceTaskIDs, ThreadIDs, ProcessIDs, and Hosts headers
+ * to the merged record.
+ *
+ * @param task_ids     Array of 20-byte source task IDs
+ * @param n_tasks      Number of source tasks (must be >= 2)
+ * @param merged_id_out Output: 20-byte merged task ID
+ * @return TPBE_SUCCESS on success,
+ *         TPBE_MERGE_MISMATCH or TPBE_MERGE_FAIL on error
+ */
+int tpb_k_merge_record_process(const unsigned char task_ids[][20],
+                               int n_tasks,
+                               unsigned char merged_id_out[20]);
 
 /* ===== Kernel Query API ===== */
 

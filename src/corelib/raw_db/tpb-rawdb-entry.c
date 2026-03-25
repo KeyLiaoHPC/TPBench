@@ -1,6 +1,9 @@
 /*
  * tpb-rawdb-entry.c
  * Entry file (.tpbe) append, read, and list operations for all domains.
+ *
+ * .tpbe files are small index files; only rank 0 (main thread /
+ * parent process) writes to them.  No locking is needed.
  */
 
 #include <stdio.h>
@@ -29,9 +32,6 @@ static int entry_list_generic(const char *workspace,
                               int *count_out,
                               size_t entry_size);
 
-/*
- * Build the full path to a domain's .tpbe file.
- */
 static void
 build_entry_path(const char *workspace, uint8_t domain,
                  char *out, size_t outlen)
@@ -56,9 +56,10 @@ build_entry_path(const char *workspace, uint8_t domain,
 }
 
 /*
- * Append one domain entry row to a .tpbe file.
- * Creates the file with start/end magic if it does not exist.
- * Otherwise inserts before the trailing end_magic.
+ * Append one fixed-size entry row to a .tpbe file.
+ * Single-writer only (rank 0).
+ *
+ * File layout: [start_magic][entry_0]...[entry_N-1][end_magic]
  */
 static int
 entry_append_generic(const char *workspace, uint8_t domain,
@@ -79,72 +80,59 @@ entry_append_generic(const char *workspace, uint8_t domain,
                           TPB_RAWDB_POS_END, end_magic);
 
     if (stat(fpath, &st) != 0) {
-        /* File does not exist: create with start + entry + end */
         fp = fopen(fpath, "wb");
         if (!fp) return TPBE_FILE_IO_FAIL;
 
         if (fwrite(start_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-            != TPB_RAWDB_MAGIC_LEN) {
-            fclose(fp);
-            return TPBE_FILE_IO_FAIL;
-        }
-        if (fwrite(entry_data, 1, entry_size, fp)
-            != entry_size) {
-            fclose(fp);
-            return TPBE_FILE_IO_FAIL;
-        }
+            != TPB_RAWDB_MAGIC_LEN)
+            goto fail;
+        if (fwrite(entry_data, 1, entry_size, fp) != entry_size)
+            goto fail;
         if (fwrite(end_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-            != TPB_RAWDB_MAGIC_LEN) {
-            fclose(fp);
-            return TPBE_FILE_IO_FAIL;
-        }
+            != TPB_RAWDB_MAGIC_LEN)
+            goto fail;
+
         fclose(fp);
         return TPBE_SUCCESS;
-    }
-
-    /* File exists: open r+b, seek before end_magic, write entry + end */
-    fsize = (long)st.st_size;
-    if (fsize < (long)(2 * TPB_RAWDB_MAGIC_LEN)) {
-        return TPBE_FILE_IO_FAIL;
     }
 
     fp = fopen(fpath, "r+b");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    /* Verify end_magic at expected position */
-    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
-    }
-    unsigned char check[TPB_RAWDB_MAGIC_LEN];
-    if (fread(check, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
-    }
-    if (!tpb_rawdb_validate_magic(check, TPB_RAWDB_FTYPE_ENTRY,
-                                  domain, TPB_RAWDB_POS_END)) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+    fsize = (long)st.st_size;
+    if (fsize < (long)(2 * TPB_RAWDB_MAGIC_LEN))
+        goto fail;
+
+    /* Verify trailing end_magic */
+    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0)
+        goto fail;
+    {
+        unsigned char check[TPB_RAWDB_MAGIC_LEN];
+        if (fread(check, 1, TPB_RAWDB_MAGIC_LEN, fp)
+            != TPB_RAWDB_MAGIC_LEN)
+            goto fail;
+        if (!tpb_rawdb_validate_magic(check,
+                                      TPB_RAWDB_FTYPE_ENTRY,
+                                      domain,
+                                      TPB_RAWDB_POS_END))
+            goto fail;
     }
 
-    /* Seek to position of old end_magic, overwrite with entry */
-    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
-    }
-    if (fwrite(entry_data, 1, entry_size, fp) != entry_size) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
-    }
+    /* Overwrite old end_magic with entry + new end_magic */
+    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0)
+        goto fail;
+    if (fwrite(entry_data, 1, entry_size, fp) != entry_size)
+        goto fail;
     if (fwrite(end_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
-        fclose(fp);
-        return TPBE_FILE_IO_FAIL;
-    }
+        != TPB_RAWDB_MAGIC_LEN)
+        goto fail;
 
     fclose(fp);
     return TPBE_SUCCESS;
+
+fail:
+    fclose(fp);
+    return TPBE_FILE_IO_FAIL;
 }
 
 /*

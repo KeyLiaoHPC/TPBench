@@ -1184,6 +1184,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             dump_print_kv_hex20(p, e[i].task_record_id);
             snprintf(p, sizeof(p), "entry[%d].dup_from", i);
             dump_print_kv_hex20(p, e[i].dup_from);
+            snprintf(p, sizeof(p), "entry[%d].dup_to", i);
+            dump_print_kv_hex20(p, e[i].dup_to);
             snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
             dump_print_kv_hex20(p, e[i].tbatch_id);
             snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
