@@ -11,13 +11,16 @@ set(_tpb_cmake_help_doc_lines
     "TPB_DIR|TPBench installation directory for kernel discovery"
     "TPB_KERNELS|Kernel selection: comma-separated names, 'all', or 'default'"
     "TPB_KERNEL_TAGS|Comma-separated tags to select kernels (union with TPB_KERNELS)"
+    "TPB_KERNEL_CFLAGS|C compile options for CPU kernels (empty = -O2 only; if set, replaces kernel C flags)"
+    "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
+    "TPB_KERNEL_FFLAGS|Fortran kernel compile options (reserved; empty = -O2 when Fortran kernels exist)"
+    "TPB_MPI_PATH|MPI install root when an MPI kernel is selected (empty = auto-detect)"
+    "TPB_ROCM_PATH|ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)"
+    "TPB_ENABLE_OPENMP|Add OpenMP to built kernel targets (does not select which kernels build)"
     "TPB_SHOW_DEBUG|Enable kernel debug logging (TPB_K_DEBUG)"
     "TPB_USE_AVX512|Enable AVX-512 SIMD instructions"
     "TPB_USE_AVX2|Enable AVX2 SIMD instructions"
     "TPB_USE_KP_SVE|Enable ARM SVE SIMD instructions"
-    "TPB_USE_OPENMP|Enable OpenMP parallelization"
-    "TPB_USE_MPI|MPI support: OFF to disable, ON for system default, or specify MPI installation path"
-    "TPB_USE_ROCM|Enable ROCm/HIP GPU support"
 )
 
 set(_out "${CMAKE_BINARY_DIR}/tpb_cmake_help.txt")
@@ -61,7 +64,7 @@ foreach(_v ${_tpb_opts})
         if(NOT "${_fb}" STREQUAL "")
             set(_help "${_fb}")
         elseif(_v MATCHES "^TPB_KERNEL_.*_TAGS$")
-            set(_help "Override default tags for that kernel (see src/kernels/CMakeLists.txt)")
+            set(_help "Override default tags for that kernel (see root CMakeLists.txt / src/kernels)")
         else()
             set(_help "(no description; search CMakeLists.txt for ${_v})")
         endif()
@@ -86,7 +89,7 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
     if("${_kcond}" STREQUAL "")
         set(_pre "Always")
     elseif(_kcond STREQUAL "MPI_C_FOUND")
-        set(_pre "TPB_USE_MPI and MPI found")
+        set(_pre "MPI when MPI kernel selected (TPB_MPI_PATH or auto)")
     else()
         set(_pre "${_kcond}")
     endif()

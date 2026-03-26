@@ -12,7 +12,7 @@ Refer to documentations in `docs/` for:
 - Programming interfaces ([docs/API_Reference.md](docs/API_Reference.md)).
 - Case studies and examples ([docs/EXAMPLES.md](docs/EXAMPLES.md)).
 
-## 1. Get Started: Run a STREAM Benchmark
+## 1. Get Started: Running a STREAM Benchmark
 
 ### 1.1. Compiling TPBench
 
@@ -66,7 +66,7 @@ $ tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'total_memsize=[32768,
 
 This command expands to three runs and records three tasks in one batch.
 
-### 1.3. Checking Results
+### 1.3. Checking results
 
 Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rawdb`. So you don't have to keep terminal outputs. Here the "node01" is the hostname of your system, you need to adjust to align with your own system:
 
@@ -104,6 +104,23 @@ Result quantiles: Q0.05=9.9532E4, Q0.25=1.1730E5, Q0.50=1.1825E5, Q0.75=1.1879E5
 ```
 
 Use `tpbcli database` to check detailed record:
+
+### 1.4. Building and running the parallel STREAM benchmark
+
+By default, TPBench only builds a STREAM benchmark. You can compile any kernels into your TPBench installation by setting `--target tpb_build_kernels`, set `-DTPB_KERNELS` or `-DTPB_KERNEL_TAGS` to select test kernels and set `-DTPB_KERNEL_CFLAGS`/`-DTPB_KERNEL_CXXFLAGS`/`TPB_KERNEL_FFLAGS` to configure compiler options. After building, use custom build target `--tpb_install_kernel` to install the new kernels to your `$TPB_WORKSPACE`.
+
+This example shows how to add a STREAM-MPI kernel and run it with 2 MPI processes and 2 OpenMP threads per MPI rank. Please set the `-DTPB_MPI_PATH` to your actual MPI library path. 
+``` bash
+# If TPBench has not been built, in TPBench root directory
+cmake -B build -DTPB_KERNELS=stream_mpi -DTPB_ENABLE_OPENMP=ON -DTPB_MPI_PATH=/path/to/mpi/library
+# Or, if you want to add one more kernel when after installing TPBench
+cmake --build build --target tpb_build_kernel  \
+-DTPB_KERNELS=stream_mpi -DTPB_ENABLE_OPENMP=ON -DTPB_MPI_PATH=/path/to/mpi/library
+# Install and run the kernel. Here you can use 'r' for 'run'.
+cmake --build build --target tpb_install_kernel
+tpbcli r --kernel stream --kargs ntest=10,stream_array_size=67108864 --kenvs 'OMP_NUM_THREADS=2' --kmpiargs '-np 2'
+```
+
 
 ## License
 

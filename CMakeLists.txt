@@ -17,14 +17,13 @@ endif()
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Set default optimization to -O2
-add_compile_options(-O2)
+# Default -O2 is applied per non-kernel target (kernels use TPB_KERNEL_*FLAGS or -O2).
 
 # SIMD and parallelization options
 option(TPB_USE_AVX512 "Enable AVX-512 SIMD instructions" OFF)
 option(TPB_USE_AVX2 "Enable AVX2 SIMD instructions" OFF)
 option(TPB_USE_KP_SVE "Enable ARM SVE SIMD instructions" OFF)
-option(TPB_USE_OPENMP "Enable OpenMP parallelization" OFF)
+option(TPB_ENABLE_OPENMP "Add OpenMP compile/link to built kernel targets" OFF)
 
 # Debug options
 option(TPB_SHOW_DEBUG "Enable kernel debug logging (TPB_K_DEBUG)" OFF)
@@ -42,50 +41,21 @@ if(TPB_USE_KP_SVE)
     add_compile_definitions(TPB_USE_KP_SVE)
     message(STATUS "TPB_USE_KP_SVE enabled")
 endif()
-if(TPB_USE_OPENMP)
+
+set(OpenMP_C_FOUND FALSE)
+set(OpenMP_CXX_FOUND FALSE)
+if(TPB_ENABLE_OPENMP)
     find_package(OpenMP)
-    if(OpenMP_C_FOUND)
-        add_compile_definitions(TPB_USE_OPENMP)
-        message(STATUS "TPB_USE_OPENMP enabled")
+    if(OpenMP_C_FOUND OR OpenMP_CXX_FOUND)
+        message(STATUS "TPB_ENABLE_OPENMP: OpenMP available for kernel targets")
     else()
-        message(WARNING "OpenMP not found, TPB_USE_OPENMP disabled")
+        message(WARNING "OpenMP not found; TPB_ENABLE_OPENMP has no effect")
     endif()
 endif()
 
-# MPI support (optional, for MPI kernels only - not linked to libtpbench.so)
-# Usage:
-#   -DTPB_USE_MPI=OFF or -DTPB_USE_MPI=FALSE or -DTPB_USE_MPI=0 or leave unset → MPI disabled
-#   -DTPB_USE_MPI=ON → Search MPI in system default locations
-#   -DTPB_USE_MPI=/path/to/mpi → Search MPI in the specified directory
-set(TPB_USE_MPI "" CACHE STRING "MPI support: OFF to disable, ON for system default, or specify MPI installation path")
-
-# Normalize TPB_USE_MPI to uppercase for case-insensitive comparison
-string(TOUPPER "${TPB_USE_MPI}" TPB_USE_MPI_UPPER)
-
-# Check if MPI should be enabled (ON or a path)
-if(TPB_USE_MPI_UPPER STREQUAL "ON")
-    # Case 2: TPB_USE_MPI=ON - search in system default locations
-    find_package(MPI REQUIRED)
-    if(MPI_C_FOUND)
-        add_compile_definitions(TPB_USE_MPI)
-        message(STATUS "MPI enabled (system default)")
-    else()
-        message(FATAL_ERROR "MPI not found in system default locations")
-    endif()
-elseif(TPB_USE_MPI_UPPER STREQUAL "OFF" OR TPB_USE_MPI_UPPER STREQUAL "FALSE" OR TPB_USE_MPI_UPPER STREQUAL "0" OR TPB_USE_MPI STREQUAL "")
-    # Case 1: MPI disabled (empty, 0, OFF, FALSE)
-    message(STATUS "MPI disabled")
-else()
-    # Case 3: TPB_USE_MPI=/path/to/mpi - search in specified directory
-    set(MPI_ROOT ${TPB_USE_MPI})
-    find_package(MPI REQUIRED)
-    if(MPI_C_FOUND)
-        add_compile_definitions(TPB_USE_MPI)
-        message(STATUS "MPI enabled from: ${TPB_USE_MPI}")
-    else()
-        message(FATAL_ERROR "MPI not found at ${TPB_USE_MPI}")
-    endif()
-endif()
+# MPI: resolved only when an MPI-conditioned CPU kernel is selected (see scan below).
+set(TPB_MPI_PATH "" CACHE PATH "MPI install root when an MPI kernel is selected (empty = auto-detect)")
+set(TPB_ROCM_PATH "" CACHE PATH "ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)")
 
 # Set output directories for build artifacts
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -108,6 +78,79 @@ endif()
 message(STATUS "TPB_DIR resolved to: ${TPB_DIR_RESOLVED}")
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelSelect.cmake)
+
+set(TPB_KERNELS "default" CACHE STRING "Kernel selection: comma-separated names, 'all', or 'default'")
+set(TPB_KERNEL_TAGS "" CACHE STRING "Comma-separated tags to select kernels (union with TPB_KERNELS)")
+
+string(REPLACE "," ";" _tpb_sel_names "${TPB_KERNELS}")
+string(REPLACE "," ";" _tpb_sel_tags "${TPB_KERNEL_TAGS}")
+
+set(TPB_NEED_MPI FALSE)
+foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
+    string(REPLACE "|" ";" _parts "${_def}")
+    list(GET _parts 0 _scan_kname)
+    list(GET _parts 1 _scan_ktags_str)
+    list(GET _parts 3 _scan_kcond)
+    tpb_kernel_should_build("${_scan_kname}" "${_scan_ktags_str}" "${_tpb_sel_names}" "${_tpb_sel_tags}" _scan_match)
+    if(_scan_match AND _scan_kcond STREQUAL "MPI_C_FOUND")
+        set(TPB_NEED_MPI TRUE)
+    endif()
+endforeach()
+
+set(TPB_NEED_HIP FALSE)
+foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
+    string(REPLACE "|" ";" _parts "${_def}")
+    list(GET _parts 0 _scan_rk_name)
+    list(GET _parts 1 _scan_rk_tags_str)
+    string(REPLACE "," ";" _scan_rk_taglist "${_scan_rk_tags_str}")
+    tpb_kernel_should_build("${_scan_rk_name}" "${_scan_rk_tags_str}" "${_tpb_sel_names}" "${_tpb_sel_tags}" _scan_rk_match)
+    if(_scan_rk_match AND "rocm" IN_LIST _scan_rk_taglist)
+        set(TPB_NEED_HIP TRUE)
+    endif()
+endforeach()
+
+if(TPB_NEED_MPI)
+    if(TPB_MPI_PATH AND IS_DIRECTORY "${TPB_MPI_PATH}")
+        set(MPI_ROOT "${TPB_MPI_PATH}")
+    endif()
+    find_package(MPI REQUIRED)
+    message(STATUS "MPI enabled for selected MPI kernel(s)")
+endif()
+
+set(TPB_ROCM_KERNEL_LIBS "")
+set(TPB_ROCM_KERNEL_EXES "")
+
+if(TPB_NEED_HIP)
+    cmake_minimum_required(VERSION 3.21)
+    set(_tpb_rocm_root "")
+    if(TPB_ROCM_PATH AND IS_DIRECTORY "${TPB_ROCM_PATH}")
+        set(_tpb_rocm_root "${TPB_ROCM_PATH}")
+    elseif(DEFINED ENV{ROCM_PATH} AND IS_DIRECTORY "$ENV{ROCM_PATH}")
+        set(_tpb_rocm_root "$ENV{ROCM_PATH}")
+    elseif(EXISTS /opt/rocm AND IS_DIRECTORY /opt/rocm)
+        set(_tpb_rocm_root /opt/rocm)
+    else()
+        find_program(_tpb_hipcc NAMES hipcc
+            PATHS
+            /opt/rocm/bin
+            /usr/local/rocm/bin
+            ENV PATH)
+        if(_tpb_hipcc)
+            get_filename_component(_tpb_hip_bin "${_tpb_hipcc}" DIRECTORY)
+            get_filename_component(_tpb_rocm_root "${_tpb_hip_bin}" DIRECTORY)
+        endif()
+    endif()
+    if(NOT _tpb_rocm_root OR NOT IS_DIRECTORY "${_tpb_rocm_root}")
+        message(FATAL_ERROR "Selected GPU kernel requires ROCm/HIP but no toolchain found. Set TPB_ROCM_PATH or install ROCm.")
+    endif()
+    list(PREPEND CMAKE_PREFIX_PATH "${_tpb_rocm_root}")
+    set(CMAKE_HIP_COMPILER_ROCM_ROOT "${_tpb_rocm_root}")
+    enable_language(HIP)
+    find_package(hip REQUIRED)
+    message(STATUS "ROCm/HIP enabled for selected GPU kernel(s) (root: ${_tpb_rocm_root})")
+    message(STATUS "  HIP version: ${hip_VERSION}")
+endif()
 
 # Timer-related sources (absolute paths for use in sub-CMakeLists)
 set(TPB_TIMER_SOURCES
@@ -126,6 +169,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRpath.cmake)
 
 # Kernels (.so + .tpbx) with name/tag-based selection
 add_subdirectory(src/kernels)
+
+if(TPB_NEED_HIP)
+    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchGpuKernelsRocm.cmake)
+endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchCmakeHelp.cmake)
 
@@ -149,31 +196,20 @@ add_executable(tpbcli
     src/tpbcli-database-dump.c
 )
 target_include_directories(tpbcli PRIVATE src)
+target_compile_options(tpbcli PRIVATE -O2)
 target_link_libraries(tpbcli PRIVATE tpbench ${TPB_BUILT_KERNEL_LIBS} m)
 tpb_set_install_rpath_tpbench_exe(tpbcli)
 
-# ============================================================================
-# ROCm/HIP GPU Support
-# ============================================================================
-option(TPB_USE_ROCM "Enable ROCm/HIP GPU support" OFF)
+add_custom_target(tpb_build_kernel
+    DEPENDS tpbench ${TPB_BUILT_KERNEL_LIBS} ${TPB_BUILT_KERNEL_EXES}
+            ${TPB_ROCM_KERNEL_LIBS} ${TPB_ROCM_KERNEL_EXES}
+    COMMENT "Build libtpbench.so and selected kernel .so / .tpbx only")
 
-if(TPB_USE_ROCM)
-    # Enable HIP language support (requires CMake 3.21+)
-    cmake_minimum_required(VERSION 3.21)
-    enable_language(HIP)
-
-    # Find HIP package
-    find_package(hip REQUIRED)
-    if(hip_FOUND)
-        add_compile_definitions(TPB_USE_ROCM)
-        message(STATUS "ROCm/HIP enabled")
-        message(STATUS "  HIP version: ${hip_VERSION}")
-    else()
-        message(FATAL_ERROR "HIP not found but TPB_USE_ROCM is ON")
-    endif()
-
-    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchGpuKernelsRocm.cmake)
-endif()
+add_custom_target(tpb_install_kernel
+    DEPENDS tpb_build_kernel
+    COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
+            --component tpbench_kernels --prefix "${CMAKE_INSTALL_PREFIX}"
+    COMMENT "Install kernel shared libraries and .tpbx (COMPONENT tpbench_kernels)")
 
 # Tests
 option(BUILD_TESTING "Build test targets" ON)

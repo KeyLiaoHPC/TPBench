@@ -25,5 +25,5 @@ set(TPB_CPU_KERNEL_DEFS
 )
 
 set(TPB_ROCM_KERNEL_DEFS
-    "roofline_rocm|gpu,roofline|TPB_USE_ROCM and HIP|rocm|src/kernels/rocm/tpbk_roofline_rocm.hip|src/kernels/rocm/tpbk_roofline_rocm_main.cpp"
+    "roofline_rocm|gpu,roofline,rocm|HIP toolchain when selected|rocm|src/kernels/rocm/tpbk_roofline_rocm.hip|src/kernels/rocm/tpbk_roofline_rocm_main.cpp"
 )
