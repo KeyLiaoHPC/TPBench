@@ -32,24 +32,32 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
+#include "tpb-public.h"
 #include "tpbench.h"
 
-#define MALLOC(_A, _NARR)  (_A) = (double *)aligned_alloc(64, sizeof(double) * _NARR);   \
-                            if((_A) == NULL) {                                  \
-                                return  TPBE_MALLOC_FAIL;                            \
-                            }
+#define HLINE "-------------------------------------------------------------\n"
+#ifndef STREAM_TYPE
+#define STREAM_TYPE double
+#endif
+
+/*
+ * MALLOC macro: may fail expansion if not wrapped in braces and used in single-statement contexts.
+ * If used in if() or other macros, surrounding block is REQUIRED to avoid parse errors or unexpected behavior.
+ */
+#define MALLOC(_A, _array_size)   (_A) = ((STREAM_TYPE *)aligned_alloc(64, sizeof(STREAM_TYPE) * (_array_size))); \
+                            if ((_A) == NULL) { return TPBE_MALLOC_FAIL; }
 
 static double epsilon = 1.e-8;
 
 // Forward declarations
 int _tpbk_run_stream(void);
 int tpbk_pli_register_stream(void);
-static int d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
+static int d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
                    int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
                    int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
                    uint32_t *array_size_out, double *copy_bw, double *scale_bw,
                    double *add_bw, double *triad_bw);
-static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
+static int check_d_stream(int array_size, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval);
 
 int
 tpbk_pli_register_stream(void)
@@ -64,11 +72,7 @@ tpbk_pli_register_stream(void)
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
-                         0.0009765625, DBL_MAX);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
+    err = tpb_k_add_parm("stream_array_size", "Number of elements per array", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
@@ -78,38 +82,49 @@ tpbk_pli_register_stream(void)
     if (err != 0) return err;
 
     /* Kernel outputs */
-    err = tpb_k_add_output("copy_time", "Measured runtime of copy operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("scale_time", "Measured runtime of scale operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("add_time", "Measured runtime of add operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("triad_time", "Measured runtime of triad operation.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of three stream arrays.",
+    err = tpb_k_add_output("Allocated memory size", "Actual memory footprint of three stream arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("array_size", "Actual number of elements per array.",
+    err = tpb_k_add_output("STREAM array size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Time::Copy", "Measured runtime of copy operation.", 
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Time::Scale", "Measured runtime of scale operation.", 
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Time::Add", "Measured runtime of add operation.", 
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Time::Triad", "Measured runtime of triad operation.", 
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Copy", "Measured copy bandwidth in decimal based MB/s.", 
+                     TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Scale", "Measured scale bandwidth in decimal based MB/s.", 
+                     TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Add", "Measured add bandwidth in decimal based MB/s.", 
+                     TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Triad", "Measured triad bandwidth in decimal based MB/s.", 
+                     TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 
     return tpb_k_finalize_pli();
 }
 
 int
-_tpbk_run_stream(void)
+run_stream(void)
 {
     int tpberr;
     /* Input */
     int ntest;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
-    double total_memsize;
-    uint32_t array_size;
+    uint64_t array_size;
     int64_t twarm_ms;
     /* Output */
     void *copy_time = NULL;
@@ -129,71 +144,44 @@ _tpbk_run_stream(void)
     /* Get arguments by names */
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
+    tpberr = tpb_k_get_arg("stream_array_size", TPB_UINT64_T, (void *)&array_size);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
     if (tpberr) return tpberr;
 
     /* Malloc callbacks for kernel\'s outputs - 4 separate timing arrays */
-    tpberr = tpb_k_alloc_output("copy_time", ntest, &copy_time);
+    tpberr = tpb_k_alloc_output("Time::Copy", ntest, &copy_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("scale_time", ntest, &scale_time);
+    tpberr = tpb_k_alloc_output("Time::Scale", ntest, &scale_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("add_time", ntest, &add_time);
+    tpberr = tpb_k_alloc_output("Time::Add", ntest, &add_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("triad_time", ntest, &triad_time);
+    tpberr = tpb_k_alloc_output("Time::Triad", ntest, &triad_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
+    tpberr = tpb_k_alloc_output("Allocated memory size", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("STREAM array size", 1, &array_size_out);
     if (tpberr) return tpberr;
 
     /* Measured data throughput rate is a derived metrics, adding at run-time */
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpb_k_add_output("copy_bw_walltime", "Measured copy bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("copy_bw_walltime", ntest, &copy_bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Copy", ntest, &copy_bw);
         if (tpberr) return tpberr;
-        tpb_k_add_output("scale_bw_walltime", "Measured scale bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("scale_bw_walltime", ntest, &scale_bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Scale", ntest, &scale_bw);
         if (tpberr) return tpberr;
-        tpb_k_add_output("add_bw_walltime", "Measured add bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("add_bw_walltime", ntest, &add_bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Add", ntest, &add_bw);
         if (tpberr) return tpberr;
-        tpb_k_add_output("triad_bw_walltime", "Measured triad bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("triad_bw_walltime", ntest, &triad_bw);
-        if (tpberr) return tpberr;
-    } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpb_k_add_output("copy_bw_phystime", "Measured copy bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("copy_bw_phystime", ntest, &copy_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("scale_bw_phystime", "Measured scale bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("scale_bw_phystime", ntest, &scale_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("add_bw_phystime", "Measured add bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("add_bw_phystime", ntest, &add_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("triad_bw_phystime", "Measured triad bandwidth in binay based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("triad_bw_phystime", ntest, &triad_bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Triad", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel stream: unknown timer unit name %llx", tpb_uname);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\n kernel stream: The STREAM benchmark only support wallclock timer. ", timer.name);
         return TPBE_KERN_ARG_FAIL;
     }
 
     /* Call the actual kernel implementation */
-    tpberr = d_stream(&timer, ntest, total_memsize, array_size, twarm_ms,
+    tpberr = d_stream(&timer, ntest, array_size, twarm_ms,
                       copy_time, scale_time, add_time, triad_time,
                       real_total_memsize, array_size_out, copy_bw, scale_bw,
                       add_bw, triad_bw);
@@ -202,31 +190,50 @@ _tpbk_run_stream(void)
 }
 
 static int
-d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
+d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
           int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
           int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
           uint32_t *array_size_out, double *copy_bw, double *scale_bw,
           double *add_bw, double *triad_bw) {
-    int narr, err;
-    double *a, *b, *c;
+    int err;
+    int BytesPerWord;
+    STREAM_TYPE *a, *b, *c;
     double s = 0.42;
     uint64_t t0, t1;
 
+    printf(HLINE);
+    tpb_printf(TPBM_PRTN_M_DIRECT, "STREAM version $Revision: 5.10 $\n");
+    printf(HLINE);
+    BytesPerWord = sizeof(STREAM_TYPE);
+    printf(TPBM_PRTN_M_DIRECT, "This system uses %d bytes per array element.\n", BytesPerWord);
+
     err = 0;
     /* Use array_size if specified (non-zero), otherwise use total_memsize */
-    if (array_size > 0) {
-        narr = array_size;
-    } else {
-        narr = (int)(kib * 1024 / sizeof(double) / 3);
+    if (array_size <= 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Illegal arguments stream_array_size must > 0, currently %u", array_size);
+        return TPBE_KERN_ARG_FAIL;
     }
-    *real_total_memsize = narr * sizeof(double) * 3;
-    *array_size_out = narr;
 
-    MALLOC(a, narr);
-    MALLOC(b, narr);
-    MALLOC(c, narr);
+    *real_total_memsize = 3 * BytesPerWord * array_size;
+    tpb_printf(TPBM_PRTN_M_DIRECT,"Array size = %llu (elements), Offset = %d (elements)\n" , 
+                (unsigned long long) array_size, 0);
+    tpb_printf(TPBM_PRTN_M_DIRECT,"Memory per array = %.1f MiB (= %.1f GiB).\n", 
+	BytesPerWord * ( (double) array_size / 1024.0/1024.0),
+	BytesPerWord * ( (double) array_size / 1024.0/1024.0/1024.0));
+    tpb_printf(TPBM_PRTN_M_DIRECT,"Total memory required = %.1f MiB (= %.1f GiB).\n",
+	(3.0 * BytesPerWord) * ( (double) array_size / 1024.0/1024.),
+	(3.0 * BytesPerWord) * ( (double) array_size / 1024.0/1024./1024.));
+    tpb_printf(TPBM_PRTN_M_DIRECT,"Each kernel will be executed %d times.\n", ntest);
+    tpb_printf(TPBM_PRTN_M_DIRECT," The *best* time for each kernel (excluding the first iteration)\n"); 
+    tpb_printf(TPBM_PRTN_M_DIRECT," will be used to compute the reported bandwidth.\n");
 
-    for(int i = 0; i < narr; i ++) {
+    *array_size_out = array_size;
+
+    MALLOC(a, array_size);
+    MALLOC(b, array_size);
+    MALLOC(c, array_size);
+
+    for(int i = 0; i < array_size; i ++) {
         a[i] = 1.0;
         b[i] = 2.0;
         c[i] = 3.0;
@@ -240,8 +247,8 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
     wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
     while(wns0 < wns1) {
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for(int j = 0; j < narr; j ++){
+        #pragma omp parallel for shared(a, b, c, s, array_size)
+        for(int j = 0; j < array_size; j ++){
             a[j] = b[j] + s * c[j];
         }
         clock_gettime(CLOCK_MONOTONIC, &wts);
@@ -249,7 +256,7 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     }
 
     /* Reset arrays to initial values after warm-up for verification */
-    for(int i = 0; i < narr; i ++) {
+    for(int i = 0; i < array_size; i ++) {
         a[i] = 1.0;
         b[i] = 2.0;
         c[i] = 3.0;
@@ -261,65 +268,100 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     for(int i = 0; i < ntest; i ++){
         // Copy: c[j] = a[j]
         timer->tick(copy_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for(int j = 0; j < narr; j ++){
+        #pragma omp parallel for shared(a, b, c, s, array_size)
+        for(int j = 0; j < array_size; j ++){
             c[j] = a[j];
         }
         timer->tock(copy_time + i);
         
         // Scale: b[j] = s * c[j]
         timer->tick(scale_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for(int j = 0; j < narr; j ++){
+        #pragma omp parallel for shared(a, b, c, s, array_size)
+        for(int j = 0; j < array_size; j ++){
             b[j] = s * c[j];
         }
         timer->tock(scale_time + i);
         
         // Add: c[j] = a[j] + b[j]
         timer->tick(add_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for(int j = 0; j < narr; j ++){
+        #pragma omp parallel for shared(a, b, c, s, array_size)
+        for(int j = 0; j < array_size; j ++){
             c[j] = a[j] + b[j];
         }
         timer->tock(add_time + i);
         
         // Triad: a[j] = b[j] + s * c[j]
         timer->tick(triad_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for(int j = 0; j < narr; j ++){
+        #pragma omp parallel for shared(a, b, c, s, array_size)
+        for(int j = 0; j < array_size; j ++){
             a[j] = b[j] + s * c[j];
         }
         timer->tock(triad_time + i);
     }
     
     // Calculate bandwidth for each operation
-    // Copy: 2 arrays (read a, write c) = 2 * narr * sizeof(double)
+    // Copy: 2 arrays (read a, write c) = 2 * array_size * sizeof(double)
     for (int i = 0; i < ntest; i ++) {
-        uint64_t copy_bytes = 2 * narr * sizeof(double);
+        uint64_t copy_bytes = 2 * array_size * sizeof(double);
         copy_bw[i] = ((double)copy_bytes * 1e-6)  / ((double)(copy_time[i]) * 1e-9);
     }
     
-    // Scale: 2 arrays (read c, write b) = 2 * narr * sizeof(double)
+    // Scale: 2 arrays (read c, write b) = 2 * array_size * sizeof(double)
     for (int i = 0; i < ntest; i ++) {
-        uint64_t scale_bytes = 2 * narr * sizeof(double);
+        uint64_t scale_bytes = 2 * array_size * sizeof(double);
         scale_bw[i] = ((double)scale_bytes * 1e-6)  / ((double)(scale_time[i]) * 1e-9);
     }
     
-    // Add: 3 arrays (read a, b, write c) = 3 * narr * sizeof(double)
+    // Add: 3 arrays (read a, b, write c) = 3 * array_size * sizeof(double)
     for (int i = 0; i < ntest; i ++) {
-        uint64_t add_bytes = 3 * narr * sizeof(double);
+        uint64_t add_bytes = 3 * array_size * sizeof(double);
         add_bw[i] = ((double)add_bytes * 1e-6)  / ((double)(add_time[i]) * 1e-9);
     }
     
-    // Triad: 3 arrays (read b, c, write a) = 3 * narr * sizeof(double)
+    // Triad: 3 arrays (read b, c, write a) = 3 * array_size * sizeof(double)
     for (int i = 0; i < ntest; i ++) {
-        uint64_t triad_bytes = 3 * narr * sizeof(double);
+        uint64_t triad_bytes = 3 * array_size * sizeof(double);
         triad_bw[i] = ((double)triad_bytes * 1e-6)  / ((double)(triad_time[i]) * 1e-9);
     }
+
+    /*--- SUMMARY ---*/
+    double avgtime[4] = {0}, maxtime[4] = {0}, mintime[4] = {FLT_MAX,FLT_MAX,FLT_MAX,FLT_MAX};
+    char *label[4] = {"Copy:      ", "Scale:     ","Add:       ", "Triad:     "};
+    double bytes[4] = { 
+        2 * sizeof(STREAM_TYPE) * array_size,
+        2 * sizeof(STREAM_TYPE) * array_size,
+        3 * sizeof(STREAM_TYPE) * array_size,
+        3 * sizeof(STREAM_TYPE) * array_size
+    };
+
+    for (int k=1; k < ntest; k ++) {
+        avgtime[0] += (double)copy_time[k];
+	    mintime[0] = mintime[0] < copy_time[k] ? mintime[0] : copy_time[k];
+	    maxtime[0] = maxtime[0] > copy_time[k] ? maxtime[0] : copy_time[k];
+        avgtime[1] += (double)scale_time[k];
+	    mintime[1] = mintime[1] < scale_time[k] ? mintime[1] : scale_time[k];
+	    maxtime[1] = maxtime[1] > scale_time[k] ? maxtime[1] : scale_time[k];
+        avgtime[2] += (double)add_time[k];
+        mintime[2] = mintime[2] < add_time[k] ? mintime[2] : add_time[k];
+	    maxtime[2] = maxtime[2] > add_time[k] ? maxtime[2] : add_time[k];
+        avgtime[3] += (double)triad_time[k];
+        mintime[3] = mintime[3] < triad_time[k] ? mintime[3] : triad_time[k];
+	    maxtime[3] = maxtime[3] > triad_time[k] ? maxtime[3] : triad_time[k];
+	}
+    
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
+    for (int j = 0; j < 4; j ++) {
+		avgtime[j] = avgtime[j] / (double)(ntest-1) / 1e9;
+        mintime[j] /= 1e9;
+        maxtime[j] /= 1e9;
+
+		printf("%s%12.1f  %11.6f  %11.6f  %11.6f\n", label[j], 1.0E-06 * bytes[j]/mintime[j], avgtime[j], mintime[j], maxtime[j]);
+    }
+    printf(HLINE);
     
     /* Verify results. */
     double errval;
-    err = check_d_stream(narr, ntest, a, b, c, s, epsilon, &errval);
+    err = check_d_stream(array_size, ntest, a, b, c, s, epsilon, &errval);
     tpb_printf(TPBM_PRTN_M_DIRECT, "stream error: %.17f\n", errval);
     // kernel end
     
@@ -330,7 +372,7 @@ d_stream(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
 }
 
 static int 
-check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval)
+check_d_stream(int array_size, int ntest, double *a, double *b, double *c, double s, double epsilon, double *errval)
 {
     int err;
     double a0 = 1.0;
@@ -350,13 +392,13 @@ check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, d
         a0 = b0 + s * c0;
     }
     
-    a0 = a0 * (double)(narr);
-    b0 = b0 * (double)(narr);
-    c0 = c0 * (double)(narr);
+    a0 = a0 * (double)(array_size);
+    b0 = b0 * (double)(array_size);
+    c0 = c0 * (double)(array_size);
     asum = 0.0;
     bsum = 0.0;
     csum = 0.0;
-    for (int i = 0; i < narr; i ++) {
+    for (int i = 0; i < array_size; i ++) {
         asum += a[i];
         bsum += b[i];
         csum += c[i];
@@ -387,13 +429,6 @@ check_d_stream(int narr, int ntest, double *a, double *b, double *c, double s, d
 		printf ("Solution Validates\n");
         err = 0;
 	}
-
-    // *errval = 0;
-    // for (int i = 0; i < narr; i ++) {
-    //     *errval += (a[i] - a0) > 0 ? (a[i] - a0): (a0 - a[i]);
-    // }
-
-    // if (*errval > epsilon) return TPBE_KERN_VERIFY_FAIL;
 
     return err;
 }
@@ -446,7 +481,7 @@ main(int argc, char **argv)
     tpb_cliout_args(&handle);
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
-    err = _tpbk_run_stream();
+    err = run_stream();
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel stream failed: %d\n", err);
         return err;
