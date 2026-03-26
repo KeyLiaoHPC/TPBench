@@ -1,8 +1,8 @@
-# TPBench - Traverse between Profiling and Benchmarking
+# TPBench - Traverse Profiling as Benchmark
 
 TPBench is a micro benchmarking tool. It acts as a framework for developing, running, and managing micro kernels for benchmarking your systems for multiple targets. TPBench integrates facilities for measuring and storing compiling options, environment variables, dependencies information, input arguments, output metrics, process variables, etc. With TPBench, you can create benchmark workloads, group different workloads in to a customizable benchmark suite with your own score rules, trace and analyze any data you want.
 
-With TPBench, it's easy to traverse between profiling and benchmarking, and to record and track performance:
+TPBench provides native-C frontends:
 - `tpbcli run`: Evaluate the performance and health with common micro computing kernels (e.g. arithmetic instructions, the STREAM benchmark, stencils, AI operators, etc).
 - `tpbcli benchmark`: Run predefined benchmark suites, calculate score and compare the performance from multiple dimensions you care.
 - `tpbcli database`: Record and track the performance.
