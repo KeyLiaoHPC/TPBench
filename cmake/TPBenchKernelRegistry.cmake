@@ -17,7 +17,7 @@ set(TPB_CPU_KERNEL_DEFS
     # "sum|bandwidth||"
     # "staxpy|bandwidth,stanza||"
     # "striad|bandwidth,stanza||"
-    # "stream_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
+    "stream_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
     # "scale_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
     # "axpy_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"
     # "rtriad_mpi|bandwidth,mpi|MPI::MPI_C|MPI_C_FOUND"

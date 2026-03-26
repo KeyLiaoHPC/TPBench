@@ -3,9 +3,9 @@
  * Test pack C1: Integration test for auto-record across 3 invocation modes.
  *
  * Runs:
- *   1) tpbcli r --kernel stream --kargs total_memsize=32
- *   2) tpbcli run --kernel stream --kargs ntest=100 --kargs-dim total_memsize=[242144,524288,1048576]
- *   3) tpbk_stream.tpbx clock_gettime 10 32 0 1  (direct invoke)
+ *   1) tpbcli r --kernel stream --kargs stream_array_size=32
+ *   2) tpbcli run --kernel stream --kargs ntest=100 --kargs-dim stream_array_size=[242144,524288,1048576]
+ *   3) tpbk_stream.tpbx clock_gettime 10 32 0  (direct invoke)
  *
  * Verifies:
  *   - 2 tbatch entries (batch 1: ntask=1, batch 2: ntask=3)
@@ -96,24 +96,24 @@ test_tri_record(void)
         return 1;
     }
 
-    /* --- Run 1: tpbcli r --kernel stream --kargs total_memsize=32 --- */
+    /* --- Run 1: tpbcli r --kernel stream --kargs stream_array_size=32 --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbcli r --kernel stream --kargs total_memsize=32",
+             "TPB_WORKSPACE=%s %s/tpbcli r --kernel stream --kargs stream_array_size=32",
              g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run1 exit", err == 0);
 
-    /* --- Run 2: tpbcli run --kernel stream --kargs ntest=100 --kargs-dim total_memsize=[242144,524288,1048576] --- */
+    /* --- Run 2: tpbcli run --kernel stream --kargs ntest=100 --kargs-dim stream_array_size=[242144,524288,1048576] --- */
     snprintf(cmd, sizeof(cmd),
              "TPB_WORKSPACE=%s %s/tpbcli run --kernel stream --kargs ntest=100 "
-             "--kargs-dim total_memsize=[242144,524288,1048576]",
+             "--kargs-dim stream_array_size=[242144,524288,1048576]",
              g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run2 exit", err == 0);
 
     /* --- Run 3: Direct kernel invocation (no TPB_TBATCH_ID) --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbk_stream.tpbx clock_gettime 10 32 0 1",
+             "TPB_WORKSPACE=%s %s/tpbk_stream.tpbx clock_gettime 10 32 0",
              g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run3 exit", err == 0);

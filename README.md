@@ -19,21 +19,21 @@ Refer to documentations in `docs/` for:
 Build from the TPBench source tree, then install to `~/tpbench`:
 
 ```bash
-$ git clone https://github.com/KeyLiaoHPC/TPBench.git
-$ export TPB_WORKSPACE=~/tpbench
-$ cd TPBench
-$ cmake -B build
-$ cmake --build build --config Release
-$ cmake --install build 
-$ ls ~/tpbench
+git clone https://github.com/KeyLiaoHPC/TPBench.git
+export TPB_WORKSPACE=~/tpbench
+cd TPBench
+cmake -B build
+cmake --build build --config Release
+cmake --install build 
+ls ~/tpbench
 bin  etc  include  lib  rawdb
 ```
 
 For running `tpbcli` linking `libtpbench.so`, set the library search path. You can also set $PATH for convenient:
 
 ```bash
-$ export PATH=${HOME}/tpbench/bin:${PATH}
-$ export LD_LIBRARY_PATH=$HOME/tpbench/lib:${LD_LIBRARY_PATH}
+export PATH=${HOME}/tpbench/bin:${PATH}
+export LD_LIBRARY_PATH=$HOME/tpbench/lib:${LD_LIBRARY_PATH}
 ```
 
 ### 1.2. Running the STREAM benchmark
@@ -41,7 +41,7 @@ $ export LD_LIBRARY_PATH=$HOME/tpbench/lib:${LD_LIBRARY_PATH}
 Run one STREAM test with `ntest=20` and `total_memsize=3145728`:
 
 ```bash
-$ tpbcli run --kernel stream --kargs total_memsize=3145728,ntest=20
+tpbcli run --kernel stream --kargs total_memsize=3145728,ntest=20
 ...
 Result quantiles: Q0.05=1.1308E5, Q0.25=1.1769E5, Q0.50=1.3686E5, Q0.75=1.3734E5, Q0.95=1.3777E5
 Metrics: triad_bw_walltime
@@ -61,7 +61,7 @@ You should see `TPBench workspace: .../tpbench`, kernel parameters, timing and b
 To sweep three memory sizes 32 MiB, 512 MiB, and 3 GiB, set `--kargs-dim`:
 
 ```bash
-$ tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'total_memsize=[32768,524288,3145728]'
+tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'total_memsize=[32768,524288,3145728]'
 ```
 
 This command expands to three runs and records three tasks in one batch.
@@ -72,7 +72,7 @@ Log files and records of arguments, task results are automatically saved in `${T
 
 ```bash
 # Here the "node01" is the hostname of your system, you need to adjust to align with your own system.
-$ tree ~/tpbench/rawdb
+tree ~/tpbench/rawdb
 /home/hpckey/tpbench/rawdb/
 ├── kernel
 │   ├── ad57c7c94b52b18c042ed7036b9818391968c8b5.tpbr
@@ -90,7 +90,7 @@ $ tree ~/tpbench/rawdb
     ├── 28d62c15ee2941aceb75b66f26d3d03641233520.tpbr
     ├── ca394f1f07e576ff0a281cf3af3029eb38b8cba3.tpbr
     └── task_batch.tpbe
-$ tail ~/tpbench/rawdb/log/tpbrunlog_20260324T151817_node01.log
+tail ~/tpbench/rawdb/log/tpbrunlog_20260324T151817_node01.log
 Result quantiles: Q0.05=1.1609E5, Q0.25=1.1766E5, Q0.50=1.1816E5, Q0.75=1.1871E5, Q0.95=1.3181E5
 Metrics: triad_bw_walltime
 Units: MB/s
@@ -103,7 +103,13 @@ Result quantiles: Q0.05=9.9532E4, Q0.25=1.1730E5, Q0.50=1.1825E5, Q0.75=1.1879E5
 2026-03-24 15:18:22 [NOTE] Auto-record: batch ended, 3 tasks recorded.
 ```
 
-Use `tpbcli database` to check detailed record:
+Use `tpbcli database` to check detailed record, you can find the TasiID above is `4c48e958bcb93c21609bbb5e4d509943212d197f` :
+```bash
+# Dumping raw data of tpbr
+tpbcli d dump --id 4c48
+# You can also check all recorded task's ID by dumping the entry file (.tpbe)
+tpbcli d dump --entry task
+```
 
 ### 1.4. Building and running the parallel STREAM benchmark
 

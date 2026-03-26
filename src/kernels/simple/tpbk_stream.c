@@ -25,6 +25,7 @@
  */
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -76,7 +77,7 @@ tpbk_pli_register_stream(void)
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
+    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 500", "500",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)10000);
     if (err != 0) return err;
@@ -121,6 +122,7 @@ run_stream(void)
 {
     int tpberr;
     /* Input */
+    int64_t ntest64;
     int ntest;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
@@ -142,12 +144,24 @@ run_stream(void)
     if (tpberr) return tpberr;
 
     /* Get arguments by names */
-    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
+    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest64);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("stream_array_size", TPB_UINT64_T, (void *)&array_size);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
     if (tpberr) return tpberr;
+
+    if (ntest64 < 2) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "stream: ntest must be >= 2, got %" PRId64 "\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    if (ntest64 > (int64_t)INT_MAX) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "stream: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    ntest = (int)ntest64;
 
     /* Malloc callbacks for kernel\'s outputs - 4 separate timing arrays */
     tpberr = tpb_k_alloc_output("Time::Copy", ntest, &copy_time);
@@ -176,7 +190,7 @@ run_stream(void)
         tpberr = tpb_k_alloc_output("Bandwidth::Triad", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\n kernel stream: The STREAM benchmark only support wallclock timer. ", timer.name);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\nThe STREAM benchmark only support wallclock timer. ", timer.name);
         return TPBE_KERN_ARG_FAIL;
     }
 

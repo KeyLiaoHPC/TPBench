@@ -1,645 +1,1209 @@
 /*
- * =================================================================================
- * TPBench - A high-precision throughputs benchmarking tool for scientific computing
- * 
- * Copyright (C) 2024 Key Liao (Liao Qiucheng)
- * 
- * This program is free software: you can redistribute it and/or modify it under the
- * terms of the GNU General Public License as published by the Free Software 
- * Foundation, either version 3 of the License, or (at your option) any later 
- * version.
- * 
- * This program is distributed in the hope that it will be useful, but WITHOUT ANY 
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A 
- * PARTICULAR PURPOSE. See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License along with 
- * this program. If not, see https://www.gnu.org/licenses/.
- * 
- * =================================================================================
  * tpbk_stream_mpi.c
- * Description: MPI-enabled STREAM benchmark with TPBench timing
- * Author: Key Liao
- * Email: keyliaohpc@gmail.com
- * =================================================================================
+ * STREAM benchmark (MPI + OpenMP) as a TPBench PLI kernel.
  */
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 #include <float.h>
+#include <math.h>
 #include <mpi.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
+#include "tpb-public.h"
 #include "tpbench.h"
 
+#ifndef STREAM_TYPE
+#define STREAM_TYPE double
+#endif
+
+#define HLINE "-------------------------------------------------------------\n"
+#define SCALAR 0.42
 #define ARRAY_ALIGNMENT 64
 
-static double epsilon = 1.e-8;
+#define MALLOC_ALIGN_GOTO(_A, _nel, _label) \
+    do { \
+        int _ma_rc = posix_memalign((void **)&(_A), ARRAY_ALIGNMENT, \
+            sizeof(STREAM_TYPE) * (size_t)(_nel)); \
+        if (_ma_rc != 0 || (_A) == NULL) { \
+            err = TPBE_MALLOC_FAIL; \
+            goto _label; \
+        } \
+    } while (0)
 
-/* Forward declarations */
-int _tpbk_register_stream_mpi(void);
-int _tpbk_run_stream_mpi(void);
+/* Local Function Prototypes */
+static int recover_task_id_after_write(unsigned char id_out[20]);
 int tpbk_pli_register_stream_mpi(void);
-static int d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
-                        int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
-                        int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
-                        uint32_t *array_size_out, double *copy_bw, double *scale_bw,
-                        double *add_bw, double *triad_bw);
-static int check_d_stream(int narr, int ntest, double *a, double *b, double *c, 
-                          double s, double epsilon, double *errval);
+static int run_stream_mpi(void);
 
-/* PLI registration: register only name, note, and parameters (no outputs, no runner) */
+static int d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
+    uint64_t agg_elems, int64_t twarm_ms, int64_t *copy_time,
+    int64_t *scale_time, int64_t *add_time, int64_t *triad_time,
+    uint64_t *real_total_memsize, uint32_t *array_size_out,
+    double *copy_bw, double *scale_bw, double *add_bw, double *triad_bw,
+    double **summary16);
+
+/* -------- STREAM MPI reference-style globals (for ported helpers) -------- */
+#ifndef MIN
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+#endif
+#ifndef MAX
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+#endif
+
+static STREAM_TYPE *a;
+static STREAM_TYPE *b;
+static STREAM_TYPE *c;
+static size_t array_elements;
+
+#define M 20
+
+static int checktick(void);
+static void computeSTREAMerrors(STREAM_TYPE *aAvgErr, STREAM_TYPE *bAvgErr,
+    STREAM_TYPE *cAvgErr, int ntimes);
+static void checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks,
+    int ntimes);
+
+#ifndef abs
+#define abs(x) ((x) >= 0 ? (x) : -(x))
+#endif
+
+static const char *const s_summary_names[16] = {
+    "Summary::Copy Best Rate MB/s",
+    "Summary::Copy Avg time",
+    "Summary::Copy Min time",
+    "Summary::Copy Max time",
+    "Summary::Scale Best Rate MB/s",
+    "Summary::Scale Avg time",
+    "Summary::Scale Min time",
+    "Summary::Scale Max time",
+    "Summary::Add Best Rate MB/s",
+    "Summary::Add Avg time",
+    "Summary::Add Min time",
+    "Summary::Add Max time",
+    "Summary::Triad Best Rate MB/s",
+    "Summary::Triad Avg time",
+    "Summary::Triad Min time",
+    "Summary::Triad Max time",
+};
+
 int
 tpbk_pli_register_stream_mpi(void)
 {
     int err;
+    int i;
 
-    /* Register to TPBench as PLI kernel */
-    err = tpb_k_register("stream_mpi", "The STREAM benchmark with MPI+OpenMP enabled.", TPB_KTYPE_PLI);
-    if (err != 0) return err;
+    err = tpb_k_register("stream_mpi",
+        "STREAM benchmark with MPI and OpenMP.", TPB_KTYPE_PLI);
+    if (err != 0) {
+        return err;
+    }
 
-    /* Kernel input parameters - same as stream kernel */
     err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)100000);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB (32 for default). "
-                         "The overall designated memory used by the compute kernel. "
-                         "total_array_size = round_down(total_memsize / 3 / sizeof(double)), "
-                         "then distributed across ranks with the last rank getting any remainder.", 
-                         "32",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
-                         0.0009765625, DBL_MAX);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
-                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)4294967295);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)10000);
-    if (err != 0) return err;
+        TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+        (int64_t)2, (int64_t)100000);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_parm("stream_array_size",
+        "Total aggregate elements per array across all MPI ranks", "0",
+        TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE,
+        (int64_t)1, (int64_t)9223372036854775807LL);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_parm("twarm",
+        "Warm-up time in milliseconds, 0<=twarm<=10000, default 500", "500",
+        TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+        (int64_t)0, (int64_t)10000);
+    if (err != 0) {
+        return err;
+    }
 
-    /* NO outputs registered here - kernel registers them in its own process */
-    /* NO runner function - PLI uses exec */
+    err = tpb_k_add_output("Allocated memory size",
+        "Local memory footprint of three stream arrays (bytes).",
+        TPB_UINT64_T,
+        TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("STREAM array size",
+        "Local number of elements per array on this rank.",
+        TPB_UINT32_T,
+        TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N
+            | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Time::Copy", "Measured runtime of copy operation.",
+        TPB_DTYPE_TIMER_T,
+        TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Time::Scale", "Measured runtime of scale operation.",
+        TPB_DTYPE_TIMER_T,
+        TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Time::Add", "Measured runtime of add operation.",
+        TPB_DTYPE_TIMER_T,
+        TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Time::Triad", "Measured runtime of triad operation.",
+        TPB_DTYPE_TIMER_T,
+        TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Bandwidth::Copy",
+        "Local copy bandwidth in decimal based MB/s.",
+        TPB_DOUBLE_T,
+        TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Bandwidth::Scale",
+        "Local scale bandwidth in decimal based MB/s.",
+        TPB_DOUBLE_T,
+        TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Bandwidth::Add",
+        "Local add bandwidth in decimal based MB/s.",
+        TPB_DOUBLE_T,
+        TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    err = tpb_k_add_output("Bandwidth::Triad",
+        "Local triad bandwidth in decimal based MB/s.",
+        TPB_DOUBLE_T,
+        TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
+            | TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+
+    for (i = 0; i < 16; i++) {
+        TPB_UNIT_T u = (i % 4 == 0) ? TPB_UNIT_MBPS : TPB_UNIT_SEC;
+        err = tpb_k_add_output(s_summary_names[i],
+            "Rank 0 global STREAM summary; other ranks store zero.",
+            TPB_DOUBLE_T,
+            u | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
+        if (err != 0) {
+            return err;
+        }
+    }
 
     return tpb_k_finalize_pli();
 }
 
-int
-_tpbk_register_stream_mpi(void)
-{
-    int err;
-    
-    /* Register to TPBench */
-    err = tpb_k_register("stream_mpi", "The STREAM benchmark with MPI+OpenMP enabled.", TPB_KTYPE_FLI);
-    if (err != 0) return err;
-
-    /* Kernel input parameters */
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)100000);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB (overall designated memory)", "32",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
-                         0.0009765625, DBL_MAX);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
-                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)4294967295);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=10000, default 1", "1",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)10000);
-    if (err != 0) return err;
-
-    /* Kernel outputs - 4 separate timing sections */
-    err = tpb_k_add_output("copy_time", "Measured runtime of copy operation (min across ranks).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("scale_time", "Measured runtime of scale operation (min across ranks).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("add_time", "Measured runtime of add operation (min across ranks).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("triad_time", "Measured runtime of triad operation (min across ranks).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of three stream arrays per rank.",
-                           TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
-    if (err != 0) return err;
-    err = tpb_k_add_output("array_size", "Actual number of elements per array per rank.",
-                           TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
-    if (err != 0) return err;
-    
-    /* Set runner function. */
-    err = tpb_k_add_runner(_tpbk_run_stream_mpi);
-    if (err != 0) return err;
-    
-    return 0;
-}
-
-int
-_tpbk_run_stream_mpi(void)
+static int
+run_stream_mpi(void)
 {
     int tpberr;
-    /* Input */
+    int64_t ntest64;
     int ntest;
+    int rank;
+    int nprocs;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
-    double total_memsize;
-    uint32_t array_size;
+    uint64_t agg_elems;
     int64_t twarm_ms;
-    /* Output */
     void *copy_time = NULL;
     void *scale_time = NULL;
     void *add_time = NULL;
     void *triad_time = NULL;
     uint64_t *real_total_memsize = NULL;
+    uint32_t *array_size_out = NULL;
     double *copy_bw = NULL;
     double *scale_bw = NULL;
     double *add_bw = NULL;
     double *triad_bw = NULL;
+    double *summary_ptrs[16];
+    int i;
 
-    /* Get timer */
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+
     tpberr = tpb_k_get_timer(&timer);
-    if (tpberr) return tpberr;
+    if (tpberr) {
+        return tpberr;
+    }
 
-    /* Get arguments by names */
-    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
-    if (tpberr) return tpberr;
+    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest64);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_get_arg("stream_array_size", TPB_UINT64_T,
+        (void *)&agg_elems);
+    if (tpberr) {
+        return tpberr;
+    }
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
-    if (tpberr) return tpberr;
+    if (tpberr) {
+        return tpberr;
+    }
 
-    /* Malloc callbacks for kernel's outputs - 4 separate timing arrays */
-    tpberr = tpb_k_alloc_output("copy_time", ntest, &copy_time);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("scale_time", ntest, &scale_time);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("add_time", ntest, &add_time);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("triad_time", ntest, &triad_time);
-    if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
-    if (tpberr) return tpberr;
-    uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
-    if (tpberr) return tpberr;
+    if (ntest64 < 2) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "stream_mpi: ntest must be >= 2, got %" PRId64 "\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    if (ntest64 > (int64_t)INT_MAX) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "stream_mpi: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    ntest = (int)ntest64;
 
-    /* Measured data throughput rate is a derived metrics, adding at run-time */
+    tpberr = tpb_k_alloc_output("Time::Copy", (uint64_t)ntest, &copy_time);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_alloc_output("Time::Scale", (uint64_t)ntest, &scale_time);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_alloc_output("Time::Add", (uint64_t)ntest, &add_time);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_alloc_output("Time::Triad", (uint64_t)ntest, &triad_time);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_alloc_output("Allocated memory size", 1,
+        (void **)&real_total_memsize);
+    if (tpberr) {
+        return tpberr;
+    }
+    tpberr = tpb_k_alloc_output("STREAM array size", 1,
+        (void **)&array_size_out);
+    if (tpberr) {
+        return tpberr;
+    }
+
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpb_k_add_output("copy_bw_walltime", "Measured copy bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("copy_bw_walltime", ntest, &copy_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("scale_bw_walltime", "Measured scale bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("scale_bw_walltime", ntest, &scale_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("add_bw_walltime", "Measured add bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("add_bw_walltime", ntest, &add_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("triad_bw_walltime", "Measured triad bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("triad_bw_walltime", ntest, &triad_bw);
-        if (tpberr) return tpberr;
-    } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpb_k_add_output("copy_bw_phystime", "Measured copy bandwidth in binary based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("copy_bw_phystime", ntest, &copy_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("scale_bw_phystime", "Measured scale bandwidth in binary based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("scale_bw_phystime", ntest, &scale_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("add_bw_phystime", "Measured add bandwidth in binary based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("add_bw_phystime", ntest, &add_bw);
-        if (tpberr) return tpberr;
-        tpb_k_add_output("triad_bw_phystime", "Measured triad bandwidth in binary based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("triad_bw_phystime", ntest, &triad_bw);
-        if (tpberr) return tpberr;
+        tpberr = tpb_k_alloc_output("Bandwidth::Copy", (uint64_t)ntest,
+            (void **)&copy_bw);
+        if (tpberr) {
+            return tpberr;
+        }
+        tpberr = tpb_k_alloc_output("Bandwidth::Scale", (uint64_t)ntest,
+            (void **)&scale_bw);
+        if (tpberr) {
+            return tpberr;
+        }
+        tpberr = tpb_k_alloc_output("Bandwidth::Add", (uint64_t)ntest,
+            (void **)&add_bw);
+        if (tpberr) {
+            return tpberr;
+        }
+        tpberr = tpb_k_alloc_output("Bandwidth::Triad", (uint64_t)ntest,
+            (void **)&triad_bw);
+        if (tpberr) {
+            return tpberr;
+        }
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel stream_mpi: unknown timer unit name %llx\n", 
-                   (unsigned long long)tpb_uname);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\n The STREAM benchmark only support wallclock timer. ", timer.name);
         return TPBE_KERN_ARG_FAIL;
     }
 
-    /* Call the actual kernel implementation */
-    tpberr = d_stream_mpi(&timer, ntest, total_memsize, array_size, twarm_ms,
-                          copy_time, scale_time, add_time, triad_time,
-                          real_total_memsize, array_size_out, copy_bw, scale_bw,
-                          add_bw, triad_bw);
+    for (i = 0; i < 16; i++) {
+        void *p = NULL;
+        tpberr = tpb_k_alloc_output(s_summary_names[i], 1, &p);
+        if (tpberr) {
+            return tpberr;
+        }
+        summary_ptrs[i] = (double *)p;
+        summary_ptrs[i][0] = 0.0;
+    }
+
+    tpberr = d_stream_mpi(&timer, rank, nprocs, ntest, agg_elems, twarm_ms,
+        copy_time, scale_time, add_time, triad_time,
+        real_total_memsize, array_size_out,
+        copy_bw, scale_bw, add_bw, triad_bw, summary_ptrs);
 
     return tpberr;
 }
 
 static int
-d_stream_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
-             int64_t twarm_ms, int64_t *copy_time, int64_t *scale_time,
-             int64_t *add_time, int64_t *triad_time, uint64_t *real_total_memsize,
-             uint32_t *array_size_out, double *copy_bw, double *scale_bw,
-             double *add_bw, double *triad_bw)
+d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
+    uint64_t agg_elems, int64_t twarm_ms, int64_t *copy_time,
+    int64_t *scale_time, int64_t *add_time, int64_t *triad_time,
+    uint64_t *real_total_memsize, uint32_t *array_size_out,
+    double *copy_bw, double *scale_bw, double *add_bw, double *triad_bw,
+    double **summary16)
 {
-    int narr, err, k;
-    double *a, *b, *c;
-    double s = 0.42;
-    int rank, nprocs;
-    uint64_t total_array_size, base_size, array_bytes;
+    int err = 0;
+    int BytesPerWord;
+    ssize_t j;
+    int i, k;
+    STREAM_TYPE scalar;
+    uint64_t base_sz;
+    int local_n;
+    size_t array_bytes;
+    int quantum;
+    double t_est_us;
+    int64_t tcal_lo;
+    STREAM_TYPE AvgError[3];
+    STREAM_TYPE *AvgErrByRank = NULL;
+    double *TimesByRank = NULL;
+    int64_t *loc_flat;
+    int64_t *glob_flat = NULL;
+    STREAM_TYPE s = (STREAM_TYPE)SCALAR;
+    double bytes_agg[4];
+    static char *label[4] = {"Copy:      ", "Scale:     ", "Add:       ",
+        "Triad:     "};
 
-    /* Local timing arrays */
-    int64_t *local_copy_time = NULL;
-    int64_t *local_scale_time = NULL;
-    int64_t *local_add_time = NULL;
-    int64_t *local_triad_time = NULL;
+    if (agg_elems == 0 || (uint64_t)nprocs > agg_elems) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "stream_mpi: illegal stream_array_size %" PRIu64 " nprocs %d\n",
+            agg_elems, nprocs);
+        return TPBE_KERN_ARG_FAIL;
+    }
 
-    /* All timing arrays for gather (rank 0 only) */
-    int64_t *all_copy_time = NULL;
-    int64_t *all_scale_time = NULL;
-    int64_t *all_add_time = NULL;
-    int64_t *all_triad_time = NULL;
+    base_sz = agg_elems / (uint64_t)nprocs;
+    local_n = (int)base_sz;
+    if (rank == nprocs - 1) {
+        local_n += (int)(agg_elems % (uint64_t)nprocs);
+    }
+    if (local_n <= 0) {
+        return TPBE_KERN_ARG_FAIL;
+    }
 
-    /* Error arrays for gathering */
-    double local_errval = 0.0;
-    double *all_errvals = NULL;
+    array_elements = (size_t)local_n;
+    *array_size_out = (uint32_t)local_n;
+    *real_total_memsize = (uint64_t)(3 * sizeof(STREAM_TYPE) * local_n);
+
+    a = NULL;
+    b = NULL;
+    c = NULL;
+    MALLOC_ALIGN_GOTO(a, local_n, cleanup_none);
+    MALLOC_ALIGN_GOTO(b, local_n, cleanup_a);
+    MALLOC_ALIGN_GOTO(c, local_n, cleanup_ab);
+
+    array_bytes = (size_t)local_n * sizeof(STREAM_TYPE);
+    (void)array_bytes;
+
+    bytes_agg[0] = 2.0 * (double)sizeof(STREAM_TYPE) * (double)agg_elems;
+    bytes_agg[1] = bytes_agg[0];
+    bytes_agg[2] = 3.0 * (double)sizeof(STREAM_TYPE) * (double)agg_elems;
+    bytes_agg[3] = bytes_agg[2];
+
+    loc_flat = (int64_t *)malloc(sizeof(int64_t) * 4 * (size_t)ntest);
+    if (loc_flat == NULL) {
+        err = TPBE_MALLOC_FAIL;
+        goto cleanup_alloc;
+    }
+
+    if (rank == 0) {
+        glob_flat = (int64_t *)malloc(sizeof(int64_t) * 4
+            * (size_t)ntest * (size_t)nprocs);
+        TimesByRank = (double *)malloc(sizeof(double) * 4
+            * (size_t)ntest * (size_t)nprocs);
+        AvgErrByRank = (STREAM_TYPE *)malloc(3 * sizeof(STREAM_TYPE)
+            * (size_t)nprocs);
+        if (glob_flat == NULL || TimesByRank == NULL
+            || AvgErrByRank == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                "stream_mpi: rank 0 gather buffer malloc failed\n");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+        memset(AvgErrByRank, 0,
+            3 * sizeof(STREAM_TYPE) * (size_t)nprocs);
+        memset(TimesByRank, 0,
+            sizeof(double) * 4 * (size_t)ntest * (size_t)nprocs);
+    }
+
+    if (rank == 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "STREAM version $Revision: 1.8 $ (TPBench stream_mpi)\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        BytesPerWord = (int)sizeof(STREAM_TYPE);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "This system uses %d bytes per array element.\n", BytesPerWord);
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Total Aggregate Array size = %" PRIu64 " (elements)\n",
+            agg_elems);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Total Aggregate Memory per array = %.1f MiB (= %.1f GiB).\n",
+            BytesPerWord * ((double)agg_elems / 1024.0 / 1024.0),
+            BytesPerWord * ((double)agg_elems / 1024.0 / 1024.0 / 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Total Aggregate memory required = %.1f MiB (= %.1f GiB).\n",
+            (3.0 * BytesPerWord) * ((double)agg_elems / 1024.0 / 1024.0),
+            (3.0 * BytesPerWord) * ((double)agg_elems / 1024.0 / 1024.0
+                / 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Data is distributed across %d MPI ranks\n", nprocs);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "   Array size per MPI rank = %zu (elements)\n", array_elements);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "   Memory per array per MPI rank = %.1f MiB (= %.1f GiB).\n",
+            BytesPerWord * ((double)array_elements / 1024.0 / 1024.0),
+            BytesPerWord * ((double)array_elements / 1024.0 / 1024.0
+                / 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "   Total memory per MPI rank = %.1f MiB (= %.1f GiB).\n",
+            (3.0 * BytesPerWord) * ((double)array_elements / 1024.0 / 1024.0),
+            (3.0 * BytesPerWord) * ((double)array_elements / 1024.0 / 1024.0
+                / 1024.0));
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Each kernel will be executed %d times.\n", ntest);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            " The *best* time for each kernel (excluding the first iteration)\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            " will be used to compute the reported bandwidth.\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "The SCALAR value used for this run is %f\n", SCALAR);
+#ifdef _OPENMP
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+#pragma omp parallel
+        {
+#pragma omp master
+            {
+                k = omp_get_num_threads();
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                    "Number of Threads requested for each MPI rank = %i\n", k);
+            }
+        }
+#endif
+#ifdef _OPENMP
+        k = 0;
+#pragma omp parallel
+#pragma omp atomic
+        k++;
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Number of Threads counted for rank 0 = %i\n", k);
+#endif
+    }
+
+#pragma omp parallel for
+    for (j = 0; j < (ssize_t)array_elements; j++) {
+        a[j] = 1.0;
+        b[j] = 2.0;
+        c[j] = 0.0;
+    }
+
+    MPI_Barrier(MPI_COMM_WORLD);
+
+    {
+        struct timespec wts;
+        uint64_t wns0, wns1;
+        clock_gettime(CLOCK_MONOTONIC, &wts);
+        wns0 = (uint64_t)wts.tv_sec * 1000000000ULL
+            + (uint64_t)wts.tv_nsec;
+        wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
+        while (wns0 < wns1) {
+            MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel for
+            for (j = 0; j < (ssize_t)array_elements; j++) {
+                a[j] = b[j] + s * c[j];
+            }
+            MPI_Barrier(MPI_COMM_WORLD);
+            clock_gettime(CLOCK_MONOTONIC, &wts);
+            wns0 = (uint64_t)wts.tv_sec * 1000000000ULL
+                + (uint64_t)wts.tv_nsec;
+        }
+    }
+
+#pragma omp parallel for
+    for (j = 0; j < (ssize_t)array_elements; j++) {
+        a[j] = 1.0;
+        b[j] = 2.0;
+        c[j] = 0.0;
+    }
+
+    if (rank == 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        quantum = checktick();
+        if (quantum >= 1) {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                "Your timer granularity/precision appears to be "
+                "%d microseconds.\n", quantum);
+        } else {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                "Your timer granularity appears to be "
+                "less than one microsecond.\n");
+            quantum = 1;
+        }
+    }
+
+    timer->tick(&tcal_lo);
+#pragma omp parallel for
+    for (j = 0; j < (ssize_t)array_elements; j++) {
+        a[j] = 2.0E0 * a[j];
+    }
+    timer->tock(&tcal_lo);
+    t_est_us = (double)tcal_lo / 1000.0;
+
+    if (rank == 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Each test below will take on the order of %d microseconds.\n",
+            (int)t_est_us);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "   (= %d timer ticks)\n", (int)(t_est_us / (double)quantum));
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Increase the size of the arrays if this shows that\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "you are not getting at least 20 timer ticks per test.\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "WARNING -- The above is only a rough guideline.\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "For best results, please be sure you know the\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "precision of your system timer.\n");
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+    }
+
+    scalar = (STREAM_TYPE)SCALAR;
+    timer->init();
+
+    for (k = 0; k < ntest; k++) {
+        timer->tick(&copy_time[k]);
+        MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel for
+        for (j = 0; j < (ssize_t)array_elements; j++) {
+            c[j] = a[j];
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        timer->tock(&copy_time[k]);
+        loc_flat[0 * ntest + k] = copy_time[k];
+
+        timer->tick(&scale_time[k]);
+        MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel for
+        for (j = 0; j < (ssize_t)array_elements; j++) {
+            b[j] = scalar * c[j];
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        timer->tock(&scale_time[k]);
+        loc_flat[1 * ntest + k] = scale_time[k];
+
+        timer->tick(&add_time[k]);
+        MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel for
+        for (j = 0; j < (ssize_t)array_elements; j++) {
+            c[j] = a[j] + b[j];
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        timer->tock(&add_time[k]);
+        loc_flat[2 * ntest + k] = add_time[k];
+
+        timer->tick(&triad_time[k]);
+        MPI_Barrier(MPI_COMM_WORLD);
+#pragma omp parallel for
+        for (j = 0; j < (ssize_t)array_elements; j++) {
+            a[j] = b[j] + scalar * c[j];
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+        timer->tock(&triad_time[k]);
+        loc_flat[3 * ntest + k] = triad_time[k];
+    }
+
+    for (k = 0; k < ntest; k++) {
+        uint64_t cbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+        uint64_t sbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+        uint64_t abytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+        uint64_t tbytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+        copy_bw[k] = ((double)cbytes * 1e-6)
+            / ((double)copy_time[k] * 1e-9);
+        scale_bw[k] = ((double)sbytes * 1e-6)
+            / ((double)scale_time[k] * 1e-9);
+        add_bw[k] = ((double)abytes * 1e-6)
+            / ((double)add_time[k] * 1e-9);
+        triad_bw[k] = ((double)tbytes * 1e-6)
+            / ((double)triad_time[k] * 1e-9);
+    }
+
+    MPI_Gather(loc_flat, 4 * ntest, MPI_INT64_T, glob_flat, 4 * ntest,
+        MPI_INT64_T, 0, MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        double avgtime[4];
+        double maxtime[4];
+        double mintime[4];
+        int64_t tmin_ns[4];
+        int64_t *gtimes = NULL;
+
+        gtimes = (int64_t *)malloc(sizeof(int64_t) * 4 * (size_t)ntest);
+        if (gtimes == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                "stream_mpi: malloc gtimes failed\n");
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        for (k = 0; k < ntest; k++) {
+            for (j = 0; j < 4; j++) {
+                double tmin = 1.0e36;
+                for (i = 0; i < nprocs; i++) {
+                    int64_t v = glob_flat[i * 4 * ntest + j * ntest + k];
+                    double sec = (double)v * 1e-9;
+                    TimesByRank[i * 4 * ntest + j * ntest + k] = sec;
+                    if (sec < tmin) {
+                        tmin = sec;
+                    }
+                }
+                gtimes[(size_t)j * (size_t)ntest + (size_t)k] =
+                    (int64_t)(tmin * 1e9);
+            }
+        }
+
+        for (j = 0; j < 4; j++) {
+            avgtime[j] = 0.0;
+            maxtime[j] = 0.0;
+            mintime[j] = FLT_MAX;
+            tmin_ns[j] = INT64_MAX;
+        }
+
+        for (k = 1; k < ntest; k++) {
+            for (j = 0; j < 4; j++) {
+                int64_t tns = gtimes[(size_t)j * (size_t)ntest + (size_t)k];
+                double ts = (double)tns * 1e-9;
+                avgtime[j] += ts;
+                mintime[j] = MIN(mintime[j], ts);
+                maxtime[j] = MAX(maxtime[j], ts);
+                if (tns < tmin_ns[j]) {
+                    tmin_ns[j] = tns;
+                }
+            }
+        }
+
+        for (j = 0; j < 4; j++) {
+            avgtime[j] /= (double)(ntest - 1);
+        }
+
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
+        for (j = 0; j < 4; j++) {
+            double best_mb_s = 0.0;
+            if (tmin_ns[j] > 0 && tmin_ns[j] < INT64_MAX) {
+                best_mb_s = 1.0E-6 * bytes_agg[j]
+                    / ((double)tmin_ns[j] * 1e-9);
+            }
+            tpb_printf(TPBM_PRTN_M_DIRECT,
+                "%s%11.1f  %11.6f  %11.6f  %11.6f\n",
+                label[j], best_mb_s, avgtime[j], mintime[j], maxtime[j]);
+
+            summary16[j * 4 + 0][0] = best_mb_s;
+            summary16[j * 4 + 1][0] = avgtime[j];
+            summary16[j * 4 + 2][0] = mintime[j];
+            summary16[j * 4 + 3][0] = maxtime[j];
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        free(gtimes);
+    }
+
+cleanup_after_mpi:
+
+    computeSTREAMerrors(&AvgError[0], &AvgError[1], &AvgError[2], ntest);
+    MPI_Gather(AvgError, 3, MPI_DOUBLE, AvgErrByRank, 3, MPI_DOUBLE, 0,
+        MPI_COMM_WORLD);
+
+    if (rank == 0) {
+        checkSTREAMresults(AvgErrByRank, nprocs, ntest);
+        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+    }
+
+cleanup_alloc:
+    free(loc_flat);
+    if (glob_flat) {
+        free(glob_flat);
+    }
+    if (TimesByRank) {
+        free(TimesByRank);
+    }
+    if (AvgErrByRank) {
+        free(AvgErrByRank);
+    }
+    free(c);
+    free(b);
+    free(a);
+    a = b = c = NULL;
+
+    return err;
+
+cleanup_ab:
+    free(b);
+    free(a);
+    a = b = NULL;
+    return TPBE_MALLOC_FAIL;
+
+cleanup_a:
+    free(a);
+    a = NULL;
+    return TPBE_MALLOC_FAIL;
+
+cleanup_none:
+    return TPBE_MALLOC_FAIL;
+}
+
+static int
+recover_task_id_after_write(unsigned char id_out[20])
+{
+    char workspace[PATH_MAX];
+    task_entry_t *entries = NULL;
+    int n = 0;
+    int err;
+    uint32_t handle_index = 0;
+    unsigned char want_kid[20];
+    unsigned char want_bid[20];
+    int have_kid = 0;
+    int have_bid = 0;
+    const char *ev;
+    uint32_t pid;
+    uint64_t best_btime = 0;
+    int have = 0;
+    unsigned char best_id[20];
+    int ii;
+
+    err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+    if (err != 0) {
+        return err;
+    }
+
+    ev = getenv("TPB_HANDLE_INDEX");
+    if (ev != NULL) {
+        handle_index = (uint32_t)atoi(ev);
+    }
+
+    ev = getenv("TPB_KERNEL_ID");
+    if (ev != NULL && strlen(ev) == 40) {
+        if (tpb_rawdb_hex_to_id(ev, want_kid) == 0) {
+            have_kid = 1;
+        }
+    }
+    ev = getenv("TPB_TBATCH_ID");
+    if (ev != NULL && strlen(ev) == 40) {
+        if (tpb_rawdb_hex_to_id(ev, want_bid) == 0) {
+            have_bid = 1;
+        }
+    }
+
+    pid = (uint32_t)getpid();
+
+    err = tpb_rawdb_entry_list_task(workspace, &entries, &n);
+    if (err != 0) {
+        return err;
+    }
+
+    for (ii = 0; ii < n; ii++) {
+        task_attr_t attr;
+        void *data = NULL;
+        uint64_t ds = 0;
+
+        memset(&attr, 0, sizeof(attr));
+        err = tpb_rawdb_record_read_task(workspace,
+            entries[ii].task_record_id, &attr, &data, &ds);
+        if (err != 0) {
+            continue;
+        }
+        if (data != NULL) {
+            free(data);
+        }
+        tpb_rawdb_free_headers(attr.headers, attr.nheader);
+
+        if (attr.pid != pid) {
+            continue;
+        }
+        if (attr.handle_index != handle_index) {
+            continue;
+        }
+        if (have_kid != 0
+            && memcmp(attr.kernel_id, want_kid, 20) != 0) {
+            continue;
+        }
+        if (have_bid != 0
+            && memcmp(attr.tbatch_id, want_bid, 20) != 0) {
+            continue;
+        }
+
+        if (have == 0 || attr.btime >= best_btime) {
+            best_btime = attr.btime;
+            memcpy(best_id, entries[ii].task_record_id, 20);
+            have = 1;
+        }
+    }
+
+    free(entries);
+
+    if (have == 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    memcpy(id_out, best_id, 20);
+    return 0;
+}
+
+int
+checktick(void)
+{
+    int i, minDelta, Delta;
+    struct timespec w0, w1;
+    double timesfound[M];
+    int64_t a0, a1;
+
+    for (i = 0; i < M; i++) {
+        clock_gettime(CLOCK_MONOTONIC, &w0);
+        a0 = (int64_t)w0.tv_sec * 1000000000LL + w0.tv_nsec;
+        do {
+            clock_gettime(CLOCK_MONOTONIC, &w1);
+            a1 = (int64_t)w1.tv_sec * 1000000000LL + w1.tv_nsec;
+        } while ((a1 - a0) < 1000);
+        timesfound[i] = (double)a1 * 1e-9;
+    }
+
+    minDelta = 1000000;
+    for (i = 1; i < M; i++) {
+        Delta = (int)(1.0E6 * (timesfound[i] - timesfound[i - 1]));
+        minDelta = MIN(minDelta, MAX(Delta, 0));
+    }
+
+    return minDelta;
+}
+
+void
+computeSTREAMerrors(STREAM_TYPE *aAvgErr, STREAM_TYPE *bAvgErr,
+    STREAM_TYPE *cAvgErr, int ntimes)
+{
+    STREAM_TYPE aj, bj, cj, scalar;
+    STREAM_TYPE aSumErr, bSumErr, cSumErr;
+    ssize_t jj;
+    int kk;
+
+    aj = 1.0;
+    bj = 2.0;
+    cj = 0.0;
+    aj = 2.0E0 * aj;
+    scalar = (STREAM_TYPE)SCALAR;
+    for (kk = 0; kk < ntimes; kk++) {
+        cj = aj;
+        bj = scalar * cj;
+        cj = aj + bj;
+        aj = bj + scalar * cj;
+    }
+
+    aSumErr = 0.0;
+    bSumErr = 0.0;
+    cSumErr = 0.0;
+    for (jj = 0; jj < (ssize_t)array_elements; jj++) {
+        aSumErr += abs(a[jj] - aj);
+        bSumErr += abs(b[jj] - bj);
+        cSumErr += abs(c[jj] - cj);
+    }
+    *aAvgErr = aSumErr / (STREAM_TYPE)array_elements;
+    *bAvgErr = bSumErr / (STREAM_TYPE)array_elements;
+    *cAvgErr = cSumErr / (STREAM_TYPE)array_elements;
+}
+
+void
+checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
+{
+    STREAM_TYPE aj, bj, cj, scalar;
+    STREAM_TYPE aSumErr, bSumErr, cSumErr;
+    STREAM_TYPE aAvgErr, bAvgErr, cAvgErr;
+    double epsilon;
+    ssize_t jj;
+    int ierr, err;
+    int kk;
+
+    aj = 1.0;
+    bj = 2.0;
+    cj = 0.0;
+    aj = 2.0E0 * aj;
+    scalar = (STREAM_TYPE)SCALAR;
+    for (kk = 0; kk < ntimes; kk++) {
+        cj = aj;
+        bj = scalar * cj;
+        cj = aj + bj;
+        aj = bj + scalar * cj;
+    }
+
+    aSumErr = 0.0;
+    bSumErr = 0.0;
+    cSumErr = 0.0;
+    for (kk = 0; kk < numranks; kk++) {
+        aSumErr += AvgErrByRank[3 * kk + 0];
+        bSumErr += AvgErrByRank[3 * kk + 1];
+        cSumErr += AvgErrByRank[3 * kk + 2];
+    }
+    aAvgErr = aSumErr / (STREAM_TYPE)numranks;
+    bAvgErr = bSumErr / (STREAM_TYPE)numranks;
+    cAvgErr = cSumErr / (STREAM_TYPE)numranks;
+
+    if (sizeof(STREAM_TYPE) == 4) {
+        epsilon = 1.e-6;
+    } else if (sizeof(STREAM_TYPE) == 8) {
+        epsilon = 1.e-13;
+    } else {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "WEIRD: sizeof(STREAM_TYPE) = %zu\n", sizeof(STREAM_TYPE));
+        epsilon = 1.e-6;
+    }
 
     err = 0;
+    if (abs(aAvgErr / aj) > epsilon) {
+        err++;
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Failed Validation on array a[], AvgRelAbsErr > epsilon (%e)\n",
+            epsilon);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
+            aj, aAvgErr, abs(aAvgErr) / aj);
+        ierr = 0;
+        for (jj = 0; jj < (ssize_t)array_elements; jj++) {
+            if (abs(a[jj] / aj - 1.0) > epsilon) {
+                ierr++;
+#ifdef VERBOSE
+                if (ierr < 10) {
+                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                        "         array a: index: %ld, expected: %e, "
+                        "observed: %e, relative error: %e\n",
+                        (long)jj, aj, a[jj], abs((aj - a[jj]) / aAvgErr));
+                }
+#endif
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     For array a[], %d errors were found.\n", ierr);
+    }
+    if (abs(bAvgErr / bj) > epsilon) {
+        err++;
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Failed Validation on array b[], AvgRelAbsErr > epsilon (%e)\n",
+            epsilon);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
+            bj, bAvgErr, abs(bAvgErr) / bj);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     AvgRelAbsErr > Epsilon (%e)\n", epsilon);
+        ierr = 0;
+        for (jj = 0; jj < (ssize_t)array_elements; jj++) {
+            if (abs(b[jj] / bj - 1.0) > epsilon) {
+                ierr++;
+#ifdef VERBOSE
+                if (ierr < 10) {
+                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                        "         array b: index: %ld, expected: %e, "
+                        "observed: %e, relative error: %e\n",
+                        (long)jj, bj, b[jj], abs((bj - b[jj]) / bAvgErr));
+                }
+#endif
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     For array b[], %d errors were found.\n", ierr);
+    }
+    if (abs(cAvgErr / cj) > epsilon) {
+        err++;
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Failed Validation on array c[], AvgRelAbsErr > epsilon (%e)\n",
+            epsilon);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
+            cj, cAvgErr, abs(cAvgErr) / cj);
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     AvgRelAbsErr > Epsilon (%e)\n", epsilon);
+        ierr = 0;
+        for (jj = 0; jj < (ssize_t)array_elements; jj++) {
+            if (abs(c[jj] / cj - 1.0) > epsilon) {
+                ierr++;
+#ifdef VERBOSE
+                if (ierr < 10) {
+                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                        "         array c: index: %ld, expected: %e, "
+                        "observed: %e, relative error: %e\n",
+                        (long)jj, cj, c[jj], abs((cj - c[jj]) / cAvgErr));
+                }
+#endif
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "     For array c[], %d errors were found.\n", ierr);
+    }
+    if (err == 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "Solution Validates: avg error less than %e on all three arrays\n",
+            epsilon);
+    }
+#ifdef VERBOSE
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+        "Results Validation Verbose Results: \n");
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+        "    Expected a(1), b(1), c(1): %f %f %f \n", aj, bj, cj);
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+        "    Observed a(1), b(1), c(1): %f %f %f \n", a[1], b[1], c[1]);
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+        "    Rel Errors on a, b, c:     %e %e %e \n",
+        abs(aAvgErr / aj), abs(bAvgErr / bj), abs(cAvgErr / cj));
+#endif
+}
 
-    /* Get MPI info */
+#ifdef TPB_K_BUILD_MAIN
+int
+main(int argc, char **argv)
+{
+    int err;
+    int rank;
+    int nprocs;
+    const char *timer_name = NULL;
+    unsigned char my_task_id[20];
+    unsigned char *all_task_ids = NULL;
+    unsigned char merged_id[20];
+
+    memset(my_task_id, 0, sizeof(my_task_id));
+    memset(merged_id, 0, sizeof(merged_id));
+
+    MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
-    /* Use array_size if specified (non-zero), otherwise use total_memsize */
-    if (array_size > 0) {
-        /* If array_size is specified, it's the total across all ranks */
-        total_array_size = array_size;
+    /*
+     * Required for tpb_rawdb_resolve_workspace (write_task + task ID recovery).
+     * Uses TPB_WORKSPACE from the environment when non-NULL.
+     */
+    err = tpb_k_corelib_init(NULL);
+    if (err != 0 && err != TPBE_ILLEGAL_CALL) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        }
+        MPI_Finalize();
+        return err;
+    }
+
+    if (argc >= 2) {
+        timer_name = argv[1];
     } else {
-        /* Calculate total_array_size from total_memsize across all ranks */
-        total_array_size = (uint64_t)(kib * 1024 / sizeof(double) / 3);
+        timer_name = getenv("TPBENCH_TIMER");
     }
-    
-    /* Distribute array size across ranks */
-    base_size = total_array_size / nprocs;
-    narr = (int)base_size;
-    
-    /* Last rank gets the remainder */
-    if (rank == nprocs - 1) {
-        narr += (int)(total_array_size % nprocs);
-    }
-
-    /* Allocate arrays using posix_memalign */
-    array_bytes = narr * sizeof(double);
-    k = posix_memalign((void **)&a, ARRAY_ALIGNMENT, array_bytes);
-    if (k != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array a failed, return code is %d\n", rank, k);
-        return TPBE_MALLOC_FAIL;
-    }
-    k = posix_memalign((void **)&b, ARRAY_ALIGNMENT, array_bytes);
-    if (k != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array b failed, return code is %d\n", rank, k);
-        free(a);
-        return TPBE_MALLOC_FAIL;
-    }
-    k = posix_memalign((void **)&c, ARRAY_ALIGNMENT, array_bytes);
-    if (k != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array c failed, return code is %d\n", rank, k);
-        free(a);
-        free(b);
-        return TPBE_MALLOC_FAIL;
-    }
-
-    /* Calculate actual memory footprint per rank */
-    *real_total_memsize = (narr * nprocs + total_array_size % nprocs ) * sizeof(double) * 3;
-    *array_size_out = narr;
-
-    /* Print MPI info on rank 0 */
-    if (rank == 0) {
-        uint64_t total_mem = 0;
-        /* Gather array sizes from all ranks to compute total memory */
-        uint32_t *all_narrs = (uint32_t *)malloc(sizeof(uint32_t) * nprocs);
-        if (all_narrs == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Rank 0: Failed to allocate array for gathering sizes\n");
-            free(a); free(b); free(c);
-            return TPBE_MALLOC_FAIL;
+    if (timer_name == NULL) {
+        if (rank == 0) {
+            fprintf(stderr,
+                "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         }
-        
-        MPI_Gather(&narr, 1, MPI_UINT32_T, all_narrs, 1, MPI_UINT32_T, 0, MPI_COMM_WORLD);
-        
-        for (int i = 0; i < nprocs; i++) {
-            total_mem += all_narrs[i] * sizeof(double) * 3;
-        }
-        
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "MPI STREAM Benchmark\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "This system uses %lu bytes per array element.\n", sizeof(double));
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate Array size = %llu (elements)\n", 
-                   (unsigned long long)total_array_size);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate Memory per array = %.1f MiB (= %.1f GiB).\n",
-                   (double)total_array_size * sizeof(double) / (1024.0 * 1024.0),
-                   (double)total_array_size * sizeof(double) / (1024.0 * 1024.0 * 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Total Aggregate memory required = %.1f MiB (= %.1f GiB).\n",
-                   (double)total_mem / (1024.0 * 1024.0),
-                   (double)total_mem / (1024.0 * 1024.0 * 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Data is distributed across %d MPI ranks\n", nprocs);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "   Array size per MPI rank = %u (elements, base) ", (unsigned int)base_size);
-        if (total_array_size % nprocs != 0) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "+ %llu (remainder on last rank)\n", 
-                       (unsigned long long)(total_array_size % nprocs));
-        } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "   Memory per array per MPI rank = %.1f MiB (= %.1f GiB).\n",
-                   (double)base_size * sizeof(double) / (1024.0 * 1024.0),
-                   (double)base_size * sizeof(double) / (1024.0 * 1024.0 * 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT, "   Total memory per MPI rank = %.1f MiB (= %.1f GiB).\n",
-                   (double)base_size * sizeof(double) * 3 / (1024.0 * 1024.0),
-                   (double)base_size * sizeof(double) * 3 / (1024.0 * 1024.0 * 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Each kernel will be executed %d times.\n", ntest);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "The *best* time for each kernel (excluding the first iteration)\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, " will be used to compute the reported bandwidth.\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "The SCALAR value used for this run is %f\n", s);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        
-        free(all_narrs);
-    } else {
-        /* Other ranks also participate in the gather */
-        MPI_Gather(&narr, 1, MPI_UINT32_T, NULL, 0, MPI_UINT32_T, 0, MPI_COMM_WORLD);
+        MPI_Finalize();
+        return TPBE_CLI_FAIL;
     }
 
-    /* Allocate local timing arrays */
-    local_copy_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
-    local_scale_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
-    local_add_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
-    local_triad_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
-    if (!local_copy_time || !local_scale_time || !local_add_time || !local_triad_time) {
-        return TPBE_MALLOC_FAIL;
+    err = tpb_k_pli_set_timer(timer_name);
+    if (err != 0) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        }
+        MPI_Finalize();
+        return err;
     }
 
-    /* Rank 0 allocates gather buffers */
-    if (rank == 0) {
-        all_copy_time = (int64_t *)malloc(sizeof(int64_t) * ntest * nprocs);
-        all_scale_time = (int64_t *)malloc(sizeof(int64_t) * ntest * nprocs);
-        all_add_time = (int64_t *)malloc(sizeof(int64_t) * ntest * nprocs);
-        all_triad_time = (int64_t *)malloc(sizeof(int64_t) * ntest * nprocs);
-        if (!all_copy_time || !all_scale_time || !all_add_time || !all_triad_time) {
-            return TPBE_MALLOC_FAIL;
+    err = tpbk_pli_register_stream_mpi();
+    if (err != 0) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: Failed to register kernel\n");
         }
+        MPI_Finalize();
+        return err;
     }
 
-    /* Initialize arrays */
-    for (int i = 0; i < narr; i++) {
-        a[i] = 1.0;
-        b[i] = 2.0;
-        c[i] = 3.0;
-    }
-
-    /* Synchronize before warm-up */
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    /* Kernel warm-up */
-    struct timespec wts;
-    uint64_t wns0, wns1;
-
-    clock_gettime(CLOCK_MONOTONIC, &wts);
-    wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
-    wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
-    while (wns0 < wns1) {
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for (int j = 0; j < narr; j++) {
-            a[j] = b[j] + s * c[j];
-        }
-        clock_gettime(CLOCK_MONOTONIC, &wts);
-        wns0 = wts.tv_sec * 1e9 + wts.tv_nsec;
-    }
-
-    /* Reset arrays to initial values after warm-up for verification */
-    for (int i = 0; i < narr; i++) {
-        a[i] = 1.0;
-        b[i] = 2.0;
-        c[i] = 3.0;
-    }
-
-    /* Synchronize before timing */
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    timer->init();
-
-    /* Kernel execution - 4 separate timing sections */
-    for (int i = 0; i < ntest; i++) {
-        /* Synchronize all ranks before each iteration */
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /* Copy: c[j] = a[j] */
-        timer->tick(local_copy_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for (int j = 0; j < narr; j++) {
-            c[j] = a[j];
-        }
-        timer->tock(local_copy_time + i);
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /* Scale: b[j] = s * c[j] */
-        timer->tick(local_scale_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for (int j = 0; j < narr; j++) {
-            b[j] = s * c[j];
-        }
-        timer->tock(local_scale_time + i);
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /* Add: c[j] = a[j] + b[j] */
-        timer->tick(local_add_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for (int j = 0; j < narr; j++) {
-            c[j] = a[j] + b[j];
-        }
-        timer->tock(local_add_time + i);
-        
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        /* Triad: a[j] = b[j] + s * c[j] */
-        timer->tick(local_triad_time + i);
-        #pragma omp parallel for shared(a, b, c, s, narr)
-        for (int j = 0; j < narr; j++) {
-            a[j] = b[j] + s * c[j];
-        }
-        timer->tock(local_triad_time + i);
-    }
-
-    /* Gather timing data from all ranks to rank 0 */
-    MPI_Gather(local_copy_time, ntest, MPI_INT64_T, 
-               all_copy_time, ntest, MPI_INT64_T, 0, MPI_COMM_WORLD);
-    MPI_Gather(local_scale_time, ntest, MPI_INT64_T,
-               all_scale_time, ntest, MPI_INT64_T, 0, MPI_COMM_WORLD);
-    MPI_Gather(local_add_time, ntest, MPI_INT64_T,
-               all_add_time, ntest, MPI_INT64_T, 0, MPI_COMM_WORLD);
-    MPI_Gather(local_triad_time, ntest, MPI_INT64_T,
-               all_triad_time, ntest, MPI_INT64_T, 0, MPI_COMM_WORLD);
-
-    /* Rank 0: compute min time across all ranks for each iteration */
-    if (rank == 0) {
-        for (int i = 0; i < ntest; i++) {
-            int64_t min_copy = all_copy_time[i];
-            int64_t min_scale = all_scale_time[i];
-            int64_t min_add = all_add_time[i];
-            int64_t min_triad = all_triad_time[i];
-
-            for (int r = 1; r < nprocs; r++) {
-                if (all_copy_time[r * ntest + i] < min_copy)
-                    min_copy = all_copy_time[r * ntest + i];
-                if (all_scale_time[r * ntest + i] < min_scale)
-                    min_scale = all_scale_time[r * ntest + i];
-                if (all_add_time[r * ntest + i] < min_add)
-                    min_add = all_add_time[r * ntest + i];
-                if (all_triad_time[r * ntest + i] < min_triad)
-                    min_triad = all_triad_time[r * ntest + i];
+    {
+        tpb_k_rthdl_t handle;
+        err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
+        if (err != 0) {
+            if (rank == 0) {
+                fprintf(stderr, "Error: Failed to build handle\n");
             }
-
-            copy_time[i] = min_copy;
-            scale_time[i] = min_scale;
-            add_time[i] = min_add;
-            triad_time[i] = min_triad;
+            MPI_Finalize();
+            return err;
         }
 
-        /* Calculate bandwidth for each operation (aggregate across all ranks) */
-        /* Copy: 2 arrays per rank = 2 * narr * sizeof(double) * nprocs */
-        for (int i = 0; i < ntest; i++) {
-            uint64_t copy_bytes = 2 * (uint64_t)narr * sizeof(double) * nprocs;
-            copy_bw[i] = ((double)copy_bytes * 1e-6) / ((double)(copy_time[i]) * 1e-9);
+        if (rank == 0) {
+            tpb_cliout_args(&handle);
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
         }
-        
-        /* Scale: 2 arrays per rank */
-        for (int i = 0; i < ntest; i++) {
-            uint64_t scale_bytes = 2 * (uint64_t)narr * sizeof(double) * nprocs;
-            scale_bw[i] = ((double)scale_bytes * 1e-6) / ((double)(scale_time[i]) * 1e-9);
-        }
-        
-        /* Add: 3 arrays per rank */
-        for (int i = 0; i < ntest; i++) {
-            uint64_t add_bytes = 3 * (uint64_t)narr * sizeof(double) * nprocs;
-            add_bw[i] = ((double)add_bytes * 1e-6) / ((double)(add_time[i]) * 1e-9);
-        }
-        
-        /* Triad: 3 arrays per rank */
-        for (int i = 0; i < ntest; i++) {
-            uint64_t triad_bytes = 3 * (uint64_t)narr * sizeof(double) * nprocs;
-            triad_bw[i] = ((double)triad_bytes * 1e-6) / ((double)(triad_time[i]) * 1e-9);
-        }
-    }
 
-    /* Verify results on each rank */
-    err = check_d_stream(narr, ntest, a, b, c, s, epsilon, &local_errval);
-    
-    /* Rank 0 allocates array to gather all errors */
-    if (rank == 0) {
-        all_errvals = (double *)malloc(sizeof(double) * nprocs);
-        if (all_errvals == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Rank 0: Failed to allocate array for gathering errors\n");
-            free(a); free(b); free(c);
-            free(local_copy_time); free(local_scale_time);
-            free(local_add_time); free(local_triad_time);
-            free(all_copy_time); free(all_scale_time);
-            free(all_add_time); free(all_triad_time);
-            return TPBE_MALLOC_FAIL;
-        }
-    }
-    
-    /* Gather all errors to rank 0 */
-    MPI_Gather(&local_errval, 1, MPI_DOUBLE, all_errvals, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-    
-    /* Rank 0 computes and reports min, max, mean errors */
-    if (rank == 0) {
-        double min_err = all_errvals[0];
-        double max_err = all_errvals[0];
-        double sum_err = 0.0;
-        int min_rank = 0;
-        int max_rank = 0;
-        
-        for (int r = 0; r < nprocs; r++) {
-            sum_err += all_errvals[r];
-            if (all_errvals[r] < min_err) {
-                min_err = all_errvals[r];
-                min_rank = r;
+        err = run_stream_mpi();
+        if (err != 0) {
+            if (rank == 0) {
+                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                    "Kernel stream_mpi failed: %d\n", err);
             }
-            if (all_errvals[r] > max_err) {
-                max_err = all_errvals[r];
-                max_rank = r;
+            tpb_k_write_task(&handle, err);
+            tpb_driver_clean_handle(&handle);
+            MPI_Finalize();
+            return err;
+        }
+
+        if (rank == 0) {
+            tpb_cliout_results(&handle);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                "Kernel stream_mpi finished successfully.\n");
+        }
+
+        tpb_k_write_task(&handle, 0);
+
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        err = recover_task_id_after_write(my_task_id);
+        if (err != 0) {
+            if (rank == 0) {
+                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                    "stream_mpi: recover_task_id_after_write failed %d\n", err);
+            }
+        } else if (nprocs >= 2) {
+            if (rank == 0) {
+                all_task_ids = (unsigned char *)malloc((size_t)nprocs * 20U);
+                if (all_task_ids == NULL) {
+                    err = TPBE_MALLOC_FAIL;
+                }
+            }
+            if (err == 0) {
+                MPI_Gather(my_task_id, 20, MPI_BYTE, all_task_ids, 20,
+                    MPI_BYTE, 0, MPI_COMM_WORLD);
+            }
+            if (rank == 0 && err == 0) {
+                err = tpb_k_merge_record_process(
+                    (const unsigned char (*)[20])all_task_ids, nprocs,
+                    merged_id);
+                if (err != 0) {
+                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                        "stream_mpi: tpb_k_merge_record_process failed %d\n",
+                        err);
+                }
+            }
+            if (all_task_ids != NULL) {
+                free(all_task_ids);
             }
         }
-        
-        double mean_err = sum_err / nprocs;
-        
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Solution Validation:\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "  Min error: %.6e (rank %d)\n", min_err, min_rank);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "  Max error: %.6e (rank %d)\n", max_err, max_rank);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "  Mean error: %.6e (across all ranks)\n", mean_err);
-        
-        if (max_err <= epsilon) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "  Solution validates: avg error less than %.6e on all ranks\n", epsilon);
-        } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "  WARNING: Solution validation failed on some ranks\n");
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        
-        free(all_errvals);
+
+        tpb_driver_clean_handle(&handle);
     }
 
-    /* Cleanup */
-    free((void *)a);
-    free((void *)b);
-    free((void *)c);
-    free(local_copy_time);
-    free(local_scale_time);
-    free(local_add_time);
-    free(local_triad_time);
-    if (rank == 0) {
-        free(all_copy_time);
-        free(all_scale_time);
-        free(all_add_time);
-        free(all_triad_time);
-    }
-
-    return err;
-}
-
-static int 
-check_d_stream(int narr, int ntest, double *a, double *b, double *c, 
-               double s, double epsilon, double *errval)
-{
-    double a0 = 1.0;
-    double b0 = 2.0;
-    double c0 = 3.0;
-
-    /* Simulate 4 operations repeated ntest times */
-    for (int i = 0; i < ntest; i++) {
-        c0 = a0;
-        b0 = s * c0;
-        c0 = a0 + b0;
-        a0 = b0 + s * c0;
-    }
-
-    *errval = 0;
-    for (int i = 0; i < narr; i++) {
-        *errval += (a[i] - a0) > 0 ? (a[i] - a0) : (a0 - a[i]);
-    }
-
-    if (*errval > epsilon) return TPBE_KERN_VERIFY_FAIL;
-
+    MPI_Finalize();
     return 0;
 }
+#endif /* TPB_K_BUILD_MAIN */
