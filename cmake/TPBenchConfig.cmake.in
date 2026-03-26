@@ -1,0 +1,32 @@
+# TPBenchConfig.cmake
+#
+# CMake package config for building out-of-tree TPBench kernels.
+#
+# After installing TPBench, build a new kernel with:
+#
+#   cmake_minimum_required(VERSION 3.16)
+#   project(MyKernel C)
+#   find_package(TPBench REQUIRED)
+#   tpbench_add_kernel(
+#       NAME        mykern
+#       SOURCES     tpbk_mykern.c
+#       MAIN_SOURCE tpbk_mykern_main.c
+#   )
+#
+# Then:
+#   cmake -B build -DTPBench_DIR=@CMAKE_INSTALL_PREFIX@/lib/cmake/TPBench
+#   cmake --build build
+#   cmake --install build --prefix @CMAKE_INSTALL_PREFIX@
+
+set(TPBENCH_INCLUDE_DIR "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@")
+set(TPBENCH_LIB_DIR     "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@")
+
+if(NOT TARGET tpbench)
+    add_library(tpbench SHARED IMPORTED)
+    set_target_properties(tpbench PROPERTIES
+        IMPORTED_LOCATION "${TPBENCH_LIB_DIR}/libtpbench.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${TPBENCH_INCLUDE_DIR}"
+    )
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/TPBenchKernel.cmake")

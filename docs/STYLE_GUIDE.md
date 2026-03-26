@@ -57,11 +57,15 @@ static void init_cliout(void);
 ```
 
 ### Format for Public Functions (in headers)
-Use Doxygen-compatible comments:
+
+Per-item execute following rules:
+
+1. Use Doxygen-compatible comments, param lists and return 
+2. clearly describe the behavior of the function: Run/Register/Set/Convert/Parse/Format/Clean ... on what kinds/names/types/... of structures/files/objects/... for what reasons. Input what, output what a return what.
 
 ```c
 /**
- * @brief Register a new benchmark kernel.
+ * @brief Register a new benchmark kernel and set its name/note/function pointers, appending to the global kernel_all lists. Input the char* name and functions, return the error code.
  * @param name Kernel name (max 32 characters)
  * @param funcs Pointer to kernel function table
  * @return 0 on success, negative error code on failure

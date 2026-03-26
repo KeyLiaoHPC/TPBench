@@ -26,6 +26,15 @@ int tpb_driver_set_timer(tpb_timer_t timer);
 int tpb_driver_get_timer(tpb_timer_t *timer);
 
 /**
+ * @brief Set resolved KernelID for a registered kernel by name.
+ * @param kernel_name Kernel name.
+ * @param kernel_id 20-byte KernelID value.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_kernel_id(const char *kernel_name,
+                             const unsigned char kernel_id[20]);
+
+/**
  * @brief Get number of registered kernels.
  * @return Number of registered kernels.
  */
@@ -151,16 +160,11 @@ void tpb_driver_disable_kernel_reg(void);
 int tpb_driver_reset_handles(void);
 
 /**
- * @brief Set the integration mode for the driver.
- * @param mode TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI
- * @return 0 on success, error code otherwise.
+ * @brief Get element size in bytes for a given TPB_DTYPE.
+ * @param dtype Data type (masked with TPB_PARM_TYPE_MASK internally).
+ * @param out   Non-NULL pointer to receive element size.
+ * @return 0 on success, TPBE_LIST_NOT_FOUND for unsupported types.
  */
-int tpb_driver_set_integ_mode(int mode);
-
-/**
- * @brief Get the current integration mode.
- * @return Current integration mode (TPB_INTEG_MODE_FLI or TPB_INTEG_MODE_PLI).
- */
-int tpb_driver_get_integ_mode(void);
+int tpb_dtype_elem_size(TPB_DTYPE dtype, size_t *out);
 
 #endif /* TPB_DRIVER_H */

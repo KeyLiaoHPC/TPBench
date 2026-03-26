@@ -20,7 +20,6 @@
 #include "tpb-bench-yaml.h"
 #include "tpb-bench-score.h"
 #include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 #include "corelib/tpb-driver.h"
 #include "corelib/tpb-dynloader.h"
 #include "corelib/tpb-argp.h"
@@ -145,9 +144,15 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
     }
     
     while (fgets(line, sizeof(line), fp) != NULL) {
-        /* Check for metrics section: "### Metrics: <name>" */
+        /* Metrics section: "Metrics: <name>" */
+        const char *metric_prefix = NULL;
         if (strncmp(line, "### Metrics:", 12) == 0) {
-            char *name_start = line + 12;
+            metric_prefix = line + 12;
+        } else if (strncmp(line, "Metrics:", 8) == 0) {
+            metric_prefix = line + 8;
+        }
+        if (metric_prefix != NULL) {
+            char *name_start = (char *)metric_prefix;
             while (*name_start && isspace((unsigned char)*name_start)) name_start++;
             
             /* Copy metric name, removing trailing newline */
@@ -406,9 +411,6 @@ tpbcli_benchmark(int argc, char **argv)
     }
     tpb_printf(TPBM_PRTN_M_DIRECT, "Batches: %d, Scores: %d\n", 
                bench.nbatches, bench.nscores);
-    
-    /* Set PLI integration mode */
-    tpb_driver_set_integ_mode(TPB_INTEG_MODE_PLI);
     
     /* Set default timer (same as tpbcli-run) */
     err = tpb_argp_set_timer("clock_gettime");

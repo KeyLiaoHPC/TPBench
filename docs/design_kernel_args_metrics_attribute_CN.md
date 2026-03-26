@@ -62,7 +62,6 @@ typedef struct tpb_rt_parm {
     char name[TPBM_NAME_STR_MAX_LEN];      // 参数名称 (最大 256 字符)
     char note[TPBM_NOTE_STR_MAX_LEN];      // 参数描述 (最大 2048 字符)
     tpb_parm_value_t value;                // 当前值
-    tpb_parm_value_t default_value;        // 默认值
     TPB_DTYPE ctrlbits;                    // 控制位 (source|check|type)
     int nlims;                             // 限制值数量
     tpb_parm_value_t *plims;               // 限制值数组 (范围边界或列表值)
@@ -262,7 +261,7 @@ tpb_k_add_output("data_size", "Total data processed",
 |----------|----------|----------|
 | **名称** | `name` (256 字符) | `name` (256 字符) |
 | **描述** | `note` (2048 字符) | `note` (2048 字符) |
-| **值/数据** | `value` + `default_value` | `p` (指针) + `n` (数量) |
+| **值/数据** | `value` | `p` (指针) + `n` (数量) |
 | **类型** | `ctrlbits` (32 位编码) | `dtype` (数据类型) |
 | **校验** | `nlims` + `plims` | 无 |
 | **单位** | 无 | `unit` (64 位编码) |

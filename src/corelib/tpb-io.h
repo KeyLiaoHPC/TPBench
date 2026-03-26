@@ -17,12 +17,21 @@
 #define DHLINE "==="
 #define HLINE  "---"
 
+/**
+ * @brief Environment variable: absolute path of the active run log for PLI children.
+ *
+ * Set by the driver before fork/exec; read by tpb_log_init() to open the log in append
+ * mode without writing a second session header. Cleared at the start of tpb_corelib_init().
+ */
+#define TPB_LOG_FILE_ENV "TPB_LOG_FILE"
+
 #define TPBM_HELP_DOC_TOTAL \
     "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
-    "Usage: tpbcli <action> <option>\n" \
-    "Action: run, benchmark, list, help\n" \
+    "Usage: tpbcli [--workspace PATH] <action> <option>\n" \
+    "Global (before action): --workspace PATH — TPBench data root; omit to use $TPB_WORKSPACE or $HOME/.tpbench.\n" \
+    "Action: run/r, benchmark/b, database/d, list/l, help/h\n" \
     "Options and explanation for each action:\n" \
-    "    run: Run one or more benchmark kernels.\n" \
+    "    r, run: Run one or more benchmark kernels.\n" \
     "        -P          Use Process-Level Integration mode (default). Kernels run as\n" \
     "                    separate processes via fork/exec.\n" \
     "        -F          Use Function-Level Integration mode. Kernels run as linked\n" \
@@ -47,14 +56,15 @@
     "                    Optional. Timer name. Supported: clock_gettime, tsc_asym.\n" \
     "        -l          List available kernels.\n" \
     "        -h, --help  Print usages of the `tpbcli run` subcommand.\n" \
-    "    benchmark: Run predefined benchmark suites.\n" \
+    "    b, benchmark: Run predefined benchmark suites.\n" \
     "        --suite     <PATH> (Default: $CWD/workspace)\n" \
     "        --workdir   <PATH> (Optional. Default: $CWD/workspace)\n" \
     "                    Path to the directory of the workspace. \n" \
     "        --outdir    <PATH> (Optional. Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
     "                    Path to the data directory of the current test. \n" \
     "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
-    "    list: List available kernels.\n" \
+    "    d, database: Read and manage TPBench database.\n" \
+    "    l, list: List objects.\n" \
     "        -P          Use Process-Level Integration mode (default).\n" \
     "        -F          Use Function-Level Integration mode.\n" \
     "    help: Print help message for an object and exit.\n" \
@@ -98,12 +108,16 @@ int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
 
 /**
- * @brief Initialize the logging system.
+ * @brief Open or reopen the run log for this process.
  *
- * Creates ${TPB_DIR}/log directory and opens a timestamped log file.
- * Log filename format: tpbrunlog_YYYYMMDDThhmmss_<hostname>.md
+ * If the log FILE* is already open, returns TPBE_SUCCESS. Else if environment variable
+ * TPB_LOG_FILE (TPB_LOG_FILE_ENV) is set and non-empty, opens that path in append mode
+ * without writing the session banner (shared log between tpbcli parent and PLI child).
+ * Otherwise requires workspace from tpb_corelib_init, creates
+ * <workspace>/rawdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log with mode "w", and writes
+ * the session header.
  *
- * @return 0 on success, error code on failure (non-fatal).
+ * @return TPBE_SUCCESS on success, error code on failure (non-fatal to some callers).
  */
 int tpb_log_init(void);
 
@@ -111,15 +125,6 @@ int tpb_log_init(void);
  * @brief Cleanup and close the log file.
  */
 void tpb_log_cleanup(void);
-
-/**
- * @brief Write output directly to the log file.
- *
- * This is used by PLI kernels to write captured stdout/stderr to the log.
- *
- * @param output String to write to log file.
- */
-void tpb_log_write_output(const char *output);
 
 /**
  * @brief Get the current log file path.

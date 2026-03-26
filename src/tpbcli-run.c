@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 #ifdef __linux__
 #include <linux/limits.h>
 #else
@@ -20,8 +21,7 @@
 #include "corelib/tpb-driver.h"
 #include "corelib/tpb-impl.h"
 #include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
-#include "kernels/kernels.h"
+#include "corelib/tpb-autorecord.h"
 
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16
@@ -63,24 +63,6 @@ static int parse_kmpiargs_quoted(const char *arg, int is_kernel_specific);
 static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
 
 /* Local Function Implementations */
-
-static void
-parse_integ_mode(int argc, char **argv)
-{
-    /* Default is PLI mode */
-    int mode = TPB_INTEG_MODE_PLI;
-
-    /* Scan for -P or -F switches */
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "-P") == 0) {
-            mode = TPB_INTEG_MODE_PLI;
-        } else if (strcmp(argv[i], "-F") == 0) {
-            mode = TPB_INTEG_MODE_FLI;
-        }
-    }
-
-    tpb_driver_set_integ_mode(mode);
-}
 
 static int
 parse_outargs_string(const char *outargs_str)
@@ -158,15 +140,7 @@ parse_run(int argc, char **argv)
     }
 
     for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "-P") == 0) {
-            /* Already handled in parse_integ_mode */
-            continue;
-
-        } else if (strcmp(argv[i], "-F") == 0) {
-            /* Already handled in parse_integ_mode */
-            continue;
-
-        } else if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
+        if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
             /* Before adding new kernel, expand any pending dimension config */
             if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
                 err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
@@ -1072,27 +1046,9 @@ tpbcli_run(int argc, char **argv)
         return TPBE_EXIT_ON_HELP;
     }
 
-    /* Parse integration mode BEFORE registering kernels */
-    parse_integ_mode(argc, argv);
-
-    /* Print integration mode */
-    int mode = tpb_driver_get_integ_mode();
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench kernel integration mode: %s\n",
-               mode == TPB_INTEG_MODE_PLI ? "PLI" : "FLI");
-
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
-
-    /* For FLI mode, register the statically linked kernels */
-    if (mode == TPB_INTEG_MODE_FLI) {
-        tpb_driver_enable_kernel_reg();
-        err = register_triad();
-        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_triad");
-        err = register_stream();
-        __tpbm_exit_on_error(err, "At tpbcli-run.c: register_stream");
-        tpb_driver_disable_kernel_reg();
-    }
 
     err = parse_run(argc, argv);
     if (err == TPBE_EXIT_ON_HELP) {
@@ -1107,8 +1063,29 @@ tpbcli_run(int argc, char **argv)
     }
 
     /* Run all handles using driver */
+
+    // Sleep 1.x seconds to prevent tbatch conflicting.
+    usleep((useconds_t)(1000000 + (rand() % 1000) * 1000));
+
+    /* Begin auto-record batch */
+    int rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
+    if (rec_err) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Auto-record: begin_batch failed (%d), continuing without recording.\n", rec_err);
+    }
+
     err = tpb_driver_run_all();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_driver_run_all");
+
+    /* End auto-record batch */
+    if (!rec_err) {
+        int ntask = (nhdl > 1) ? nhdl - 1 : 0;
+        rec_err = tpb_record_end_batch(ntask);
+        if (rec_err) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Auto-record: end_batch failed (%d)\n", rec_err);
+        }
+    }
 
     return err;
 }

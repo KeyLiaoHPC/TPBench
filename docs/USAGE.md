@@ -16,15 +16,15 @@ bin  CMakeCache.txt  CMakeFiles  cmake_install.cmake  etc  lib  log  Makefile
 
 **2) SIMD and Parallelization Build Options**
 
-TPBench supports enabling SIMD instruction sets and OpenMP parallelization through CMake options. Available `-DTPB_USE_*` options are as follows:
+TPBench supports enabling SIMD instruction sets (`TPB_USE_AVX512`, `TPB_USE_AVX2`, `TPB_USE_KP_SVE`) and optional OpenMP on kernel targets (`TPB_ENABLE_OPENMP`). Common options:
 
 | CMake Option | Default | Description |
 | -------- | -------- | -------- |
 | `-DTPB_USE_AVX512=ON` | OFF | Enable AVX-512 instruction set (x86_64) |
 | `-DTPB_USE_AVX2=ON` | OFF | Enable AVX2 instruction set (x86_64) |
 | `-DTPB_USE_KP_SVE=ON` | OFF | Enable ARM SVE instruction set (aarch64) |
-| `-DTPB_USE_OPENMP=ON` | OFF | Enable OpenMP |
-| `-DTPB_USE_MPI=</path/to/mpi/install/dir>` | OFF | Enable MPI |
+| `-DTPB_ENABLE_OPENMP=ON` | OFF | Add OpenMP to built kernel targets (does not select kernels) |
+| `-DTPB_MPI_PATH=</path/to/mpi>` | empty | MPI root when an MPI-conditioned kernel is selected (empty = auto-detect) |
 
 Example: Enable AVX-512 instruction set compilation on x86_64 platform
 ```bash
@@ -70,7 +70,7 @@ tpbcli run <tpbench_options> <default_args> \
 ```
 
 `<tpbench_options>` supported options include:
-- `-P/-F`: Select PLI-integrated kernels or FLI-integrated kernels, default is `-P`.
+- `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
@@ -117,13 +117,13 @@ Use `--kernel -l` to list currently available evaluation kernels. Use `--kernel 
 
 ### 2.2.3 Build and Run Heterogeneous Evaluation
 
-TPBench supports heterogeneous computing evaluation with ROCm/HIP for AMD GPUs. To enable ROCm support, configure and build with the `TPB_USE_ROCM` option.
+TPBench enables HIP only when a `rocm`-tagged GPU kernel is selected (for example `-DTPB_KERNEL_TAGS=rocm` or `-DTPB_KERNELS=roofline_rocm`). Set `TPB_ROCM_PATH` if the toolchain is not found automatically.
 
 **1) Build with ROCm Support**
 
 ```bash
-# Configure with ROCm enabled (requires ROCm installation)
-$ cmake -B build_rocm -DTPB_USE_ROCM=ON -DCMAKE_PREFIX_PATH=/opt/rocm
+# Configure when a ROCm kernel is selected (requires ROCm installation)
+$ cmake -B build_rocm -DTPB_KERNEL_TAGS=rocm -DTPB_ROCM_PATH=/opt/rocm
 
 # Build all targets including tpbcli
 $ cmake --build build_rocm -j$(nproc)

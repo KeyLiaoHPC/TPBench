@@ -16,15 +16,15 @@ bin  CMakeCache.txt  CMakeFiles  cmake_install.cmake  etc  lib  log  Makefile
 
 **2）SIMD 和并行化编译选项**
 
-TPBench 支持通过 CMake 选项启用 SIMD 指令集和 OpenMP 并行化。可用的 `-DTPB_USE_*` 选项如下：
+TPBench 支持通过 CMake 启用 SIMD（`TPB_USE_AVX512` 等）以及为已选中的 kernel 目标添加 OpenMP（`TPB_ENABLE_OPENMP`）。常用选项如下：
 
 | CMake 选项 | 默认值 | 描述 |
 | -------- | -------- | -------- |
 | `-DTPB_USE_AVX512=ON` | OFF | 启用AVX-512指令集（x86_64） |
 | `-DTPB_USE_AVX2=ON` | OFF | 启用AVX2指令集（x86_64） |
 | `-DTPB_USE_KP_SVE=ON` | OFF | 启用ARM SVE指令集（aarch64） |
-| `-DTPB_USE_OPENMP=ON` | OFF | 启用OpenMP |
-| `-DTPB_USE_MPI=</path/to/mpi/install/dir>` | OFF | 启用MPI |
+| `-DTPB_ENABLE_OPENMP=ON` | OFF | 为已选中的 kernel 目标添加 OpenMP（不决定编哪些内核） |
+| `-DTPB_MPI_PATH=</path/to/mpi>` | 空 | 选中需 MPI 的内核时的 MPI 根目录（空则自动探测） |
 
 示例：在 x86_64 平台上启用 AVX-512 指令集编译
 ```bash
@@ -65,7 +65,7 @@ tpbcli run <tpbench_options> <default_args> \
 [--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
 \<tpbench_options\>支持的选项包括：
-- `-P/-F`: 选择PLI集成内核或FLI集成内核，默认为-P。
+- `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。
 - `--outargs`: 日志及数据输出格式设置
     - `unit_cast=[0/1]`: 是否进行自动单位转换，默认为0，不进行转换。

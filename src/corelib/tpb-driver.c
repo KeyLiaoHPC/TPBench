@@ -21,9 +21,9 @@
 #include "tpb-driver.h"
 #include "tpb-impl.h"
 #include "tpb-io.h"
-#include "tpb-types.h"
 #include "tpb-dynloader.h"
 #include "tpb-argp.h"
+#include "tpb-autorecord.h"
 
 /* Module-level state variables */
 static int nkern = 0, nhdl, ihdl;  // number of registered kernels，number of handles， handle id
@@ -37,9 +37,159 @@ static tpb_timer_t timer;
 /* Handle management state */
 static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
 static int timer_set = 0;                  // flag to track if timer is set
+static int s_pli_handle_index = 0;         // 0-based handle index for auto-record
 
-/* Integration mode: PLI (default) or FLI */
-static int integration_mode = TPB_INTEG_MODE_PLI;
+static int
+_tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
+{
+    if (name == NULL || kernel_out == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if (strcmp(kernel_common.info.name, name) == 0) {
+        *kernel_out = &kernel_common;
+        return 0;
+    }
+
+    for (int i = 0; i < nkern; i++) {
+        if (strcmp(kernel_all[i].info.name, name) == 0) {
+            *kernel_out = &kernel_all[i];
+            return 0;
+        }
+    }
+
+    return TPBE_LIST_NOT_FOUND;
+}
+
+static int
+_tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
+{
+    if (kernel_out == NULL) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    if (idx < 0 || idx >= nkern) {
+        return TPBE_LIST_NOT_FOUND;
+    }
+
+    *kernel_out = &kernel_all[idx];
+    return 0;
+}
+
+/**
+ * @brief Deep copy kernel info from source to destination.
+ *
+ * Allocates and returns a new tpb_kernel_t with fully isolated copy:
+ * - All arrays (parms, plims, outs) are newly allocated
+ * - No pointers in dst point to driver-internal data
+ *
+ * @param src Source kernel (driver-internal)
+ * @return Allocated deep copy on success, NULL on failure
+ */
+static tpb_kernel_t *
+_tpb_deep_copy_kernel(const tpb_kernel_t *src)
+{
+    if (src == NULL) {
+        return NULL;
+    }
+
+    tpb_kernel_t *dst = (tpb_kernel_t *)malloc(sizeof(tpb_kernel_t));
+    if (dst == NULL) {
+        return NULL;
+    }
+
+    /* Copy scalar fields in info */
+    snprintf(dst->info.name, TPBM_NAME_STR_MAX_LEN, "%s", src->info.name);
+    snprintf(dst->info.note, TPBM_NOTE_STR_MAX_LEN, "%s", src->info.note);
+    memcpy(dst->info.kernel_id, src->info.kernel_id, 20);
+    dst->info.kctrl = src->info.kctrl;
+    dst->info.nparms = src->info.nparms;
+    dst->info.nouts = src->info.nouts;
+
+    /* Copy parms array */
+    if (src->info.nparms > 0 && src->info.parms != NULL) {
+        dst->info.parms = (tpb_rt_parm_t *)malloc(
+            sizeof(tpb_rt_parm_t) * src->info.nparms);
+        if (dst->info.parms == NULL) {
+            free(dst);
+            return NULL;
+        }
+
+        for (int i = 0; i < src->info.nparms; i++) {
+            /* Copy scalar fields */
+            snprintf(dst->info.parms[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
+                     src->info.parms[i].name);
+            snprintf(dst->info.parms[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
+                     src->info.parms[i].note);
+            dst->info.parms[i].value = src->info.parms[i].value;
+            dst->info.parms[i].ctrlbits = src->info.parms[i].ctrlbits;
+            dst->info.parms[i].nlims = src->info.parms[i].nlims;
+
+            /* Deep copy plims if present */
+            if (src->info.parms[i].plims != NULL && src->info.parms[i].nlims > 0) {
+                dst->info.parms[i].plims = (tpb_parm_value_t *)malloc(
+                    sizeof(tpb_parm_value_t) * src->info.parms[i].nlims);
+                if (dst->info.parms[i].plims == NULL) {
+                    /* Clean up already allocated plims */
+                    for (int j = 0; j < i; j++) {
+                        if (dst->info.parms[j].plims != NULL) {
+                            free(dst->info.parms[j].plims);
+                        }
+                    }
+                    free(dst->info.parms);
+                    free(dst);
+                    return NULL;
+                }
+                for (int j = 0; j < src->info.parms[i].nlims; j++) {
+                    dst->info.parms[i].plims[j] = src->info.parms[i].plims[j];
+                }
+            } else {
+                dst->info.parms[i].plims = NULL;
+            }
+        }
+    } else {
+        dst->info.parms = NULL;
+    }
+
+    /* Copy outs array */
+    if (src->info.nouts > 0 && src->info.outs != NULL) {
+        dst->info.outs = (tpb_k_output_t *)malloc(
+            sizeof(tpb_k_output_t) * src->info.nouts);
+        if (dst->info.outs == NULL) {
+            /* Clean up parms and plims */
+            if (dst->info.parms != NULL) {
+                for (int i = 0; i < dst->info.nparms; i++) {
+                    if (dst->info.parms[i].plims != NULL) {
+                        free(dst->info.parms[i].plims);
+                    }
+                }
+                free(dst->info.parms);
+            }
+            free(dst);
+            return NULL;
+        }
+
+        for (int i = 0; i < src->info.nouts; i++) {
+            snprintf(dst->info.outs[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
+                     src->info.outs[i].name);
+            snprintf(dst->info.outs[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
+                     src->info.outs[i].note);
+            dst->info.outs[i].dtype = src->info.outs[i].dtype;
+            dst->info.outs[i].unit = src->info.outs[i].unit;
+            dst->info.outs[i].n = src->info.outs[i].n;
+            dst->info.outs[i].p = NULL;  /* Runtime data, not static info */
+        }
+    } else {
+        dst->info.outs = NULL;
+    }
+
+    /* Copy function pointers */
+    dst->func.k_output_decorator = src->func.k_output_decorator;
+
+    return dst;
+}
+
+/* ========== Public API functions ========== */
 
 static int
 _tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
@@ -234,6 +384,27 @@ tpb_k_get_timer(tpb_timer_t *timer_out)
 }
 
 int
+tpb_driver_set_kernel_id(const char *kernel_name,
+                         const unsigned char kernel_id[20])
+{
+    tpb_kernel_t *kernel = NULL;
+    int err;
+
+    if (kernel_name == NULL || kernel_id == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+    if (err != 0) {
+        return err;
+    }
+
+    /* Persist resolved KernelID for later handle/env propagation. */
+    memcpy(kernel->info.kernel_id, kernel_id, 20);
+    return 0;
+}
+
+int
 tpb_get_nkern(void)
 {
     return (int)nkern;
@@ -264,7 +435,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
     snprintf(kernel_common.info.parms[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
     kernel_common.info.parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[0].default_value.i64 = 10;
     kernel_common.info.parms[0].value.i64 = 10;
     kernel_common.info.parms[0].nlims = 2;
     kernel_common.info.parms[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -278,7 +448,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "twarm");
     snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Warm-up time in milliseconds");
     kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[1].default_value.i64 = 100;
     kernel_common.info.parms[1].value.i64 = 100;
     kernel_common.info.parms[1].nlims = 2;
     kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -293,7 +462,6 @@ tpb_register_common()
     snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "total_memsize");
     snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
     kernel_common.info.parms[2].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[2].default_value.u64 = 32;
     kernel_common.info.parms[2].value.u64 = 32;
     kernel_common.info.parms[2].nlims = 2;
     kernel_common.info.parms[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
@@ -329,15 +497,11 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Register kernels based on integration mode */
-    if (integration_mode == TPB_INTEG_MODE_PLI) {
-        /* PLI mode: dynamically scan for kernels */
-        err = tpb_dl_scan();
-        if (err != 0) {
-            return err;
-        }
+    /* Dynamically scan for kernel shared libraries */
+    err = tpb_dl_scan();
+    if (err != 0) {
+        return err;
     }
-    /* FLI mode: kernels are registered by tpbcli after this call */
 
     /* Create pseudo handle (ihdl=0) for _tpb_common */
     handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));
@@ -362,81 +526,6 @@ tpb_register_kernel()
     current_kernel = &kernel_common;
 
     return 0;
-}
-
-int
-tpb_run_fli(tpb_k_rthdl_t *hdl)
-{
-    int err;
-
-    if (hdl == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-    current_rthdl = hdl;
-
-
-    /* Initialize handle\'s respack from kernel\'s registered outputs */
-    for (int i = 0; i < nkern; i++) {
-        if (strcmp(kernel_all[i].info.name, hdl->kernel.info.name) == 0) {
-            int nouts = kernel_all[i].info.nouts;
-            tpb_k_output_t *src_outs = kernel_all[i].info.outs;
-            if (nouts > 0 && src_outs != NULL) {
-                hdl->respack.n = nouts;
-                hdl->respack.outputs = (tpb_k_output_t *)malloc(
-                    sizeof(tpb_k_output_t) * nouts);
-                if (hdl->respack.outputs == NULL) {
-                    return TPBE_MALLOC_FAIL;
-                }
-                for (int j = 0; j < nouts; j++) {
-                    memcpy(&hdl->respack.outputs[j], &src_outs[j],
-                           sizeof(tpb_k_output_t));
-                    hdl->respack.outputs[j].p = NULL;
-                    hdl->respack.outputs[j].n = 0;
-
-                    /* Resolve TPB_UNIT_TIMER: use the timer\'s unit, preserve attributes */
-                    TPB_UNIT_T base_unit = src_outs[j].unit & ~TPB_UATTR_MASK;
-                    if (base_unit == TPB_UNIT_TIMER) {
-                        TPB_UNIT_T attrs = src_outs[j].unit & TPB_UATTR_MASK;
-                        hdl->respack.outputs[j].unit = timer.unit | attrs;
-                    }
-                }
-            }
-            break;
-        }
-    }
-
-    if (hdl->kernel.func.k_run == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s has empty runner.\n", hdl->kernel.info.name);
-        return TPBE_KERN_ARG_FAIL;
-    }
-
-    /* Print running message and kernel arguments */
-    tpb_printf(TPBM_PRTN_M_TSTAG, "Running Kernel %s\n", hdl->kernel.info.name);
-    tpb_cliout_args(hdl);
-
-    /* Call kernel runner */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
-    err = hdl->kernel.func.k_run();
-    if (err) {
-        if (tpb_get_err_exit_flag(err) == TPBE_WARN) {
-            /* WARN case - print warning but continue */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, "Kernel %s: %s\n",
-                       hdl->kernel.info.name, tpb_get_err_msg(err));
-        } else {
-            /* FAIL case - return immediately */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed: %s\n",
-                       hdl->kernel.info.name, tpb_get_err_msg(err));
-            current_rthdl = NULL;
-            return err;
-        }
-    }
-
-    /* Print results and success message */
-    tpb_cliout_results(hdl);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s finished successfully.\n",
-               hdl->kernel.info.name);
-    current_rthdl = NULL;
-    return err;
 }
 
 /**
@@ -551,120 +640,6 @@ tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out)
     return count;
 }
 
-/**
- * @brief Deep copy kernel info from source to destination.
- *
- * Allocates and returns a new tpb_kernel_t with fully isolated copy:
- * - All arrays (parms, plims, outs) are newly allocated
- * - No pointers in dst point to driver-internal data
- *
- * @param src Source kernel (driver-internal)
- * @return Allocated deep copy on success, NULL on failure
- */
-static tpb_kernel_t *
-_tpb_kernel_deep_copy(const tpb_kernel_t *src)
-{
-    if (src == NULL) {
-        return NULL;
-    }
-
-    tpb_kernel_t *dst = (tpb_kernel_t *)malloc(sizeof(tpb_kernel_t));
-    if (dst == NULL) {
-        return NULL;
-    }
-
-    /* Copy scalar fields in info */
-    snprintf(dst->info.name, TPBM_NAME_STR_MAX_LEN, "%s", src->info.name);
-    snprintf(dst->info.note, TPBM_NOTE_STR_MAX_LEN, "%s", src->info.note);
-    dst->info.kctrl = src->info.kctrl;
-    dst->info.nparms = src->info.nparms;
-    dst->info.nouts = src->info.nouts;
-
-    /* Copy parms array */
-    if (src->info.nparms > 0 && src->info.parms != NULL) {
-        dst->info.parms = (tpb_rt_parm_t *)malloc(
-            sizeof(tpb_rt_parm_t) * src->info.nparms);
-        if (dst->info.parms == NULL) {
-            free(dst);
-            return NULL;
-        }
-
-        for (int i = 0; i < src->info.nparms; i++) {
-            /* Copy scalar fields */
-            snprintf(dst->info.parms[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
-                     src->info.parms[i].name);
-            snprintf(dst->info.parms[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
-                     src->info.parms[i].note);
-            dst->info.parms[i].value = src->info.parms[i].value;
-            dst->info.parms[i].default_value = src->info.parms[i].default_value;
-            dst->info.parms[i].ctrlbits = src->info.parms[i].ctrlbits;
-            dst->info.parms[i].nlims = src->info.parms[i].nlims;
-
-            /* Deep copy plims if present */
-            if (src->info.parms[i].plims != NULL && src->info.parms[i].nlims > 0) {
-                dst->info.parms[i].plims = (tpb_parm_value_t *)malloc(
-                    sizeof(tpb_parm_value_t) * src->info.parms[i].nlims);
-                if (dst->info.parms[i].plims == NULL) {
-                    /* Clean up already allocated plims */
-                    for (int j = 0; j < i; j++) {
-                        if (dst->info.parms[j].plims != NULL) {
-                            free(dst->info.parms[j].plims);
-                        }
-                    }
-                    free(dst->info.parms);
-                    free(dst);
-                    return NULL;
-                }
-                for (int j = 0; j < src->info.parms[i].nlims; j++) {
-                    dst->info.parms[i].plims[j] = src->info.parms[i].plims[j];
-                }
-            } else {
-                dst->info.parms[i].plims = NULL;
-            }
-        }
-    } else {
-        dst->info.parms = NULL;
-    }
-
-    /* Copy outs array */
-    if (src->info.nouts > 0 && src->info.outs != NULL) {
-        dst->info.outs = (tpb_k_output_t *)malloc(
-            sizeof(tpb_k_output_t) * src->info.nouts);
-        if (dst->info.outs == NULL) {
-            /* Clean up parms and plims */
-            if (dst->info.parms != NULL) {
-                for (int i = 0; i < dst->info.nparms; i++) {
-                    if (dst->info.parms[i].plims != NULL) {
-                        free(dst->info.parms[i].plims);
-                    }
-                }
-                free(dst->info.parms);
-            }
-            free(dst);
-            return NULL;
-        }
-
-        for (int i = 0; i < src->info.nouts; i++) {
-            snprintf(dst->info.outs[i].name, TPBM_NAME_STR_MAX_LEN, "%s",
-                     src->info.outs[i].name);
-            snprintf(dst->info.outs[i].note, TPBM_NOTE_STR_MAX_LEN, "%s",
-                     src->info.outs[i].note);
-            dst->info.outs[i].dtype = src->info.outs[i].dtype;
-            dst->info.outs[i].unit = src->info.outs[i].unit;
-            dst->info.outs[i].n = src->info.outs[i].n;
-            dst->info.outs[i].p = NULL;  /* Runtime data, not static info */
-        }
-    } else {
-        dst->info.outs = NULL;
-    }
-
-    /* Copy function pointers */
-    dst->func.k_run = src->func.k_run;
-    dst->func.k_output_decorator = src->func.k_output_decorator;
-
-    return dst;
-}
-
 int
 tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE_STR_MAX_LEN], TPB_K_CTRL kctrl)
 {
@@ -707,7 +682,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
 
 int
 tpb_k_add_parm(const char *name, const char *note,
-               const char *default_value, TPB_DTYPE dtype, ...)
+               const char *default_val, TPB_DTYPE dtype, ...)
 {
     int tpberr = 0;
     int nparms;
@@ -723,7 +698,7 @@ tpb_k_add_parm(const char *name, const char *note,
                    "tpb_k_add_parm cannot be called during kernel execution.\n");
         return TPBE_ILLEGAL_CALL;
     }
-    if (name == NULL || default_value == NULL || note == NULL) {
+    if (name == NULL || default_val == NULL || note == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
@@ -764,27 +739,22 @@ tpb_k_add_parm(const char *name, const char *note,
         case TPB_INT16_T:
         case TPB_INT32_T:
         case TPB_INT64_T:
-            parm->default_value.i64 = atoll(default_value);
-            parm->value.i64 = parm->default_value.i64;
+            parm->value.i64 = atoll(default_val);
             break;
         case TPB_UINT8_T:
         case TPB_UINT16_T:
         case TPB_UINT32_T:
         case TPB_UINT64_T:
-            parm->default_value.u64 = strtoull(default_value, NULL, 10);
-            parm->value.u64 = parm->default_value.u64;
+            parm->value.u64 = strtoull(default_val, NULL, 10);
             break;
         case TPB_FLOAT_T:
-            parm->default_value.f32 = (float)atof(default_value);
-            parm->value.f32 = parm->default_value.f32;
+            parm->value.f32 = (float)atof(default_val);
             break;
         case TPB_DOUBLE_T:
-            parm->default_value.f64 = atof(default_value);
-            parm->value.f64 = parm->default_value.f64;
+            parm->value.f64 = atof(default_val);
             break;
         case TPB_CHAR_T:
-            parm->default_value.c = default_value[0];
-            parm->value.c = default_value[0];
+            parm->value.c = default_val[0];
             break;
         default:
             va_end(args);
@@ -886,28 +856,6 @@ tpb_k_add_parm(const char *name, const char *note,
     va_end(args);
     
     current_kernel->info.nparms++;
-    return 0;
-}
-
-int
-tpb_k_add_runner(int (*runner)(void))
-{
-    if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
-                  "No kernel registered. Call tpb_k_register first.\n");
-        return TPBE_KERN_ARG_FAIL;
-    }
-    
-    if (runner == NULL) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-    
-    current_kernel->func.k_run = runner;
-
-    /* Finalize registration: increment kernel count */
-    nkern++;
-    current_kernel = NULL;
-
     return 0;
 }
 
@@ -1019,9 +967,47 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
 }
 
 int
+tpb_dtype_elem_size(TPB_DTYPE dtype, size_t *out)
+{
+    if (!out) return TPBE_NULLPTR_ARG;
+
+    switch (dtype & TPB_PARM_TYPE_MASK) {
+        case TPB_INT_T:
+            *out = sizeof(int);
+            break;
+        case TPB_INT8_T:
+        case TPB_UINT8_T:
+        case TPB_CHAR_T:
+            *out = 1;
+            break;
+        case TPB_INT16_T:
+        case TPB_UINT16_T:
+            *out = 2;
+            break;
+        case TPB_INT32_T:
+        case TPB_UINT32_T:
+            *out = 4;
+            break;
+        case TPB_FLOAT_T:
+            *out = sizeof(float);
+            break;
+        case TPB_INT64_T:
+        case TPB_UINT64_T:
+        case TPB_DOUBLE_T:
+            *out = sizeof(double);
+            break;
+        case TPB_LONG_DOUBLE_T:
+            *out = sizeof(long double);
+            break;
+        default:
+            return TPBE_LIST_NOT_FOUND;
+    }
+    return 0;
+}
+
+int
 tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 {
-    int tpberr = 0;
     size_t elem_size = 0;
 
     if (current_rthdl == NULL || name == NULL || ptr == NULL) {
@@ -1036,54 +1022,21 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
 
     for (int i = 0; i < current_rthdl->respack.n; i++) {
         if (strcmp(current_rthdl->respack.outputs[i].name, name) == 0) {
-            /* Determine element size based on dtype */
-            TPB_DTYPE dtype = current_rthdl->respack.outputs[i].dtype;
-            switch (dtype & TPB_PARM_TYPE_MASK) {
-                case TPB_INT_T:
-                    elem_size = sizeof(int);
-                    break;
-                case TPB_INT8_T:
-                case TPB_UINT8_T:
-                case TPB_CHAR_T:
-                    elem_size = 1;
-                    break;
-                case TPB_INT16_T:
-                case TPB_UINT16_T:
-                    elem_size = 2;
-                    break;
-                case TPB_INT32_T:
-                case TPB_UINT32_T:
-                    elem_size = 4;
-                    break;
-                case TPB_FLOAT_T:
-                    elem_size = sizeof(float);
-                    break;
-                case TPB_INT64_T:
-                case TPB_UINT64_T:
-                case TPB_DOUBLE_T:
-                    elem_size = sizeof(double);
-                    break;
-                case TPB_LONG_DOUBLE_T:
-                    elem_size = sizeof(long double);
-                    break;
-                case TPB_STRING_T:
-                    elem_size = sizeof(char *);
-                    break;
-                default:
-                    tpb_printf(TPBM_PRTN_M_DIRECT,
-                               "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
-                               dtype);
-                    return TPBE_LIST_NOT_FOUND;
+            int err = tpb_dtype_elem_size(current_rthdl->respack.outputs[i].dtype,
+                                          &elem_size);
+            if (err != 0) {
+                tpb_printf(TPBM_PRTN_M_DIRECT,
+                           "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
+                           (unsigned long long)current_rthdl->respack.outputs[i].dtype);
+                return TPBE_LIST_NOT_FOUND;
             }
 
-            /* Allocate memory for output data */
             current_rthdl->respack.outputs[i].p = malloc(n * elem_size);
             if (current_rthdl->respack.outputs[i].p == NULL) {
                 return TPBE_MALLOC_FAIL;
             }
             current_rthdl->respack.outputs[i].n = n;
 
-            /* Return pointer to caller */
             *((void **)ptr) = current_rthdl->respack.outputs[i].p;
             return 0;
         }
@@ -1107,6 +1060,7 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
             free(hdl->respack.outputs[i].p);
             hdl->respack.outputs[i].p = NULL;
         }
+
     }
 
     /* Free the outputs array itself */
@@ -1199,11 +1153,9 @@ tpb_driver_add_handle(const char *kernel_name)
         }
         hdl->argpack.n = k_nparms;
 
-        /* Step 1: Copy kernel-specific parameters with their default values */
+        /* Step 1: Copy kernel-specific parameters (value already holds the default) */
         for (int i = 0; i < k_nparms; i++) {
             memcpy(&hdl->argpack.args[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
-            /* Set value to default_value */
-            hdl->argpack.args[i].value = kernel->info.parms[i].default_value;
         }
 
         /* Step 2: Check each argument's name and set common argument from pseudo handle */
@@ -1616,11 +1568,17 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
     char *full_cmd;
+    char workspace[PATH_MAX];
+    char kernel_id_hex[41];
+    kernel_attr_t kernel_attr;
+    void *kernel_data = NULL;
+    uint64_t kernel_datasize = 0;
     pid_t pid;
     int status;
-    int pipefd[2];
-    char buffer[4096];
-    ssize_t nbytes;
+    int err;
+    const char *ar_bid;
+    const char *log_path;
+    unsigned char zero_id[20] = {0};
 
     if (hdl == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -1632,6 +1590,42 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Incomplete kernel: '%s'\n", hdl->kernel.info.name);
         return TPBE_KERNEL_INCOMPLETE;
+    }
+
+    ar_bid = tpb_record_get_tbatch_id_hex();
+    if (ar_bid != NULL) {
+        if (memcmp(hdl->kernel.info.kernel_id, zero_id, 20) == 0) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Kernel %s has zero KernelID, stop before fork.\n",
+                       hdl->kernel.info.name);
+            return TPBE_KERNEL_NE_FAIL;
+        }
+
+        err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+        if (err != TPBE_SUCCESS) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Failed to resolve workspace for kernel %s (%d)\n",
+                       hdl->kernel.info.name, err);
+            return err;
+        }
+
+        memset(&kernel_attr, 0, sizeof(kernel_attr));
+        err = tpb_rawdb_record_read_kernel(workspace, hdl->kernel.info.kernel_id,
+                                           &kernel_attr, &kernel_data,
+                                           &kernel_datasize);
+        if (kernel_attr.headers != NULL) {
+            tpb_rawdb_free_headers(kernel_attr.headers, kernel_attr.nheader);
+        }
+        if (kernel_data != NULL) {
+            free(kernel_data);
+        }
+        if (err != TPBE_SUCCESS) {
+            tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "Kernel %s has unrecorded KernelID=%s, stop before fork.\n",
+                       hdl->kernel.info.name, kernel_id_hex);
+            return err;
+        }
     }
 
     /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...> */
@@ -1646,6 +1640,22 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         size_t pos = 0;
 
         pos += snprintf(full_cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer.name);
+        tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+        pos += snprintf(full_cmd + pos, cmd_size - pos,
+                        "TPB_KERNEL_ID=%s ", kernel_id_hex);
+
+        /* Inject auto-record env vars if a batch is active */
+        const char *ar_ws = tpb_record_get_workspace();
+        if (ar_bid != NULL) {
+            pos += snprintf(full_cmd + pos, cmd_size - pos,
+                            "TPB_TBATCH_ID=%s ", ar_bid);
+            pos += snprintf(full_cmd + pos, cmd_size - pos,
+                            "TPB_HANDLE_INDEX=%d ", s_pli_handle_index);
+            if (ar_ws != NULL) {
+                pos += snprintf(full_cmd + pos, cmd_size - pos,
+                                "TPB_WORKSPACE=%s ", ar_ws);
+            }
+        }
 
         for (int i = 0; i < hdl->envpack.n; i++) {
             pos += snprintf(full_cmd + pos, cmd_size - pos, "%s=%s ",
@@ -1682,52 +1692,35 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     /* Print full command for debugging/analysis */
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Exec: %s\n", full_cmd);
 
-    /* Create pipe for capturing child output */
-    if (pipe(pipefd) == -1) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "pipe() failed\n");
-        free(full_cmd);
-        return TPBE_FILE_IO_FAIL;
+    /*
+     * Close parent's log stream and publish path so the PLI child opens the same file
+     * in append mode; reopen in the parent after fork.
+     */
+    tpb_log_cleanup();
+    log_path = tpb_log_get_filepath();
+    if (log_path != NULL) {
+        setenv(TPB_LOG_FILE_ENV, log_path, 1);
     }
 
-    /* Fork and exec */
     pid = fork();
     if (pid < 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
-        close(pipefd[0]);
-        close(pipefd[1]);
+        (void)tpb_log_init();
         free(full_cmd);
         return TPBE_FILE_IO_FAIL;
     }
 
     if (pid == 0) {
-        /* Child process: redirect stdout and stderr to pipe, then exec via shell */
-        close(pipefd[0]);  /* Close read end */
-        dup2(pipefd[1], STDOUT_FILENO);
-        dup2(pipefd[1], STDERR_FILENO);
-        close(pipefd[1]);
-
         /* Execute via shell to handle env vars and mpiargs correctly */
         execl("/bin/sh", "sh", "-c", full_cmd, (char *)NULL);
         fprintf(stderr, "execl failed for /bin/sh\n");
         _exit(127);
     }
 
-    /* Parent process: close write end and read from pipe */
-    close(pipefd[1]);
-
-    /* Read and forward child output to both console and log */
-    while ((nbytes = read(pipefd[0], buffer, sizeof(buffer) - 1)) > 0) {
-        buffer[nbytes] = '\0';
-        /* Write to console */
-        fputs(buffer, stdout);
-        fflush(stdout);
-        /* Write to log file */
-        tpb_log_write_output(buffer);
+    if (tpb_log_init() != TPBE_SUCCESS) {
+        fprintf(stderr, "Warning: could not reopen run log after fork\n");
     }
 
-    close(pipefd[0]);
-
-    /* Wait for child to complete */
     waitpid(pid, &status, 0);
 
     /* Clean up */
@@ -1768,23 +1761,13 @@ tpb_driver_run_all(void)
     /* Loop from ihdl=1 to nhdl-1 (skip pseudo handle at index 0) */
     for (int i = 1; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
-        TPB_K_CTRL ktype = handle->kernel.info.kctrl & TPB_KTYPE_MASK;
-
         /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "# Test %d/%d  \n", i, nhdl - 1);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Test %d/%d  \n", i, nhdl - 1);
 
-        if (ktype == TPB_KTYPE_PLI) {
-            /* PLI mode: fork and exec */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
-                       handle->kernel.info.name);
-            err = tpb_run_pli(handle);
-        } else {
-            /* FLI mode: call runner directly */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started.\n",
-                       handle->kernel.info.name);
-            err = tpb_run_fli(handle);
-            tpb_driver_clean_handle(handle);
-        }
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
+                   handle->kernel.info.name);
+        s_pli_handle_index = i - 1;
+        err = tpb_run_pli(handle);
 
         if (err != 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed.\n",
@@ -1856,22 +1839,6 @@ tpb_driver_reset_handles(void)
 }
 
 int
-tpb_driver_set_integ_mode(int mode)
-{
-    if (mode != TPB_INTEG_MODE_FLI && mode != TPB_INTEG_MODE_PLI) {
-        return TPBE_KERN_ARG_FAIL;
-    }
-    integration_mode = mode;
-    return 0;
-}
-
-int
-tpb_driver_get_integ_mode(void)
-{
-    return integration_mode;
-}
-
-int
 tpb_k_finalize_pli(void)
 {
     if (current_kernel == NULL) {
@@ -1879,9 +1846,6 @@ tpb_k_finalize_pli(void)
                    "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
     }
-
-    /* PLI kernels don't have a runner function */
-    current_kernel->func.k_run = NULL;
 
     /* Finalize registration: increment kernel count */
     nkern++;
@@ -1949,10 +1913,8 @@ tpb_k_pli_build_handle(tpb_k_rthdl_t *handle, int argc, char **argv)
                 } else if (type_code == TPB_CHAR_T) {
                     value->c = argv[i][0];
                 }
-            } else {
-                /* Use default value */
-                handle->argpack.args[i].value = kernel->info.parms[i].default_value;
             }
+            /* else: memcpy already set value to the default from kernel template */
         }
     } else {
         handle->argpack.n = 0;

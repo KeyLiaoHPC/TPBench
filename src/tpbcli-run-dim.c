@@ -10,7 +10,6 @@
 #include <ctype.h>
 #include <math.h>
 #include "tpbcli-run-dim.h"
-#include "corelib/tpb-io.h"
 
 /* Local Helper Functions */
 
