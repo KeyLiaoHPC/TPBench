@@ -1,10 +1,10 @@
 /**
- * @file tpbcli-list.h
- * @brief Header for TPBench CLI kernel list output.
+ * @file tpbcli-kernel-list.h
+ * @brief `tpbcli kernel list` / `ls` — print integrated kernel table.
  */
 
-#ifndef TPBCLI_LIST_H
-#define TPBCLI_LIST_H
+#ifndef TPBCLI_KERNEL_LIST_H
+#define TPBCLI_KERNEL_LIST_H
 
 /**
  * @brief Print the integrated kernel table (assumes tpb_register_kernel() already ran).
@@ -14,4 +14,4 @@
  */
 int tpbcli_kernel_list(int argc, char **argv);
 
-#endif /* TPBCLI_LIST_H */
+#endif /* TPBCLI_KERNEL_LIST_H */

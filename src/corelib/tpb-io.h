@@ -69,11 +69,6 @@
     "    help: Print help message for an object and exit.\n" \
 
 /**
- * @brief List all registered kernels.
- */
-void tpb_list(void);
-
-/**
  * @brief Create a directory recursively.
  * @param dirpath Path to the directory.
  * @return 0 on success, -1 on error.

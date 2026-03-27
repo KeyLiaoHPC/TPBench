@@ -399,6 +399,13 @@ int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
  */
 int tpb_run_pli(tpb_k_rthdl_t *hdl);
 
+/**
+ * @brief Register common parameters, scan PLI kernel shared libraries, and sync kernel
+ *        records with the active workspace. Call once before tpb_query_kernel or run.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_register_kernel(void);
+
 /* ===== CLI Output Helpers ===== */
 
 /**

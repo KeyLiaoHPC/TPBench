@@ -219,13 +219,17 @@ void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 ---
 
-### `tpb_list`
+### `tpb_register_kernel`
 
-List all registered kernels to stdout.
+Register common parameters, scan PLI kernel shared libraries from the install tree, and sync kernel records with the active workspace. Call once before `tpb_query_kernel` or run. Used by `tpbcli` and may be called by embedding applications.
 
 ```c
-void tpb_list(void);
+int tpb_register_kernel(void);
 ```
+
+**Returns:** `0` on success, or a `TPBE_*` error code.
+
+To list kernels programmatically, call `tpb_register_kernel()`, then iterate with `tpb_query_kernel()` (see Kernel Query API).
 
 ---
 

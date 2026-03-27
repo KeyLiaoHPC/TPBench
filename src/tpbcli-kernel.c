@@ -7,10 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "include/tpb-public.h"
+
 #include "tpbcli-kernel.h"
-#include "tpbcli-list.h"
-#include "corelib/tpb-driver.h"
-#include "corelib/tpb-impl.h"
+#include "tpbcli-kernel-list.h"
 
 int
 tpbcli_kernel(int argc, char **argv)
@@ -23,8 +23,9 @@ tpbcli_kernel(int argc, char **argv)
     }
 
     err = tpb_register_kernel();
-    __tpbm_exit_on_error(err, "At tpbcli-kernel.c: tpb_register_kernel");
     if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "tpbcli kernel: tpb_register_kernel failed (%d).\n", err);
         return err;
     }
 

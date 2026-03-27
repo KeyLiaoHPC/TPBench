@@ -134,11 +134,7 @@ int tpb_driver_run_all(void);
  */
 int tpb_register_common();
 
-/**
- * @brief Initialize kernel registry and register common parameters.
- * @return Error code (0 on success)
- */
-int tpb_register_kernel();
+/* tpb_register_kernel() is declared in tpb-public.h / tpbench.h */
 
 /* PLI (Process-Level Integration) internal API */
 
