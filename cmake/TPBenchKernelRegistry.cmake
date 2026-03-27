@@ -12,7 +12,7 @@ set(TPB_CPU_KERNEL_DEFS
     "stream|default,bandwidth||"
     # "triad|bandwidth||"
     # "scale|bandwidth||"
-    # "axpy|bandwidth||"
+    "axpy|default,bandwidth||"
     # "rtriad|bandwidth||"
     # "sum|bandwidth||"
     # "staxpy|bandwidth,stanza||"
