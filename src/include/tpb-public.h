@@ -100,6 +100,9 @@ typedef uint32_t TPB_DTYPE_U32;
 typedef uint32_t TPB_K_CTRL;
 #define TPB_KTYPE_MASK      ((TPB_K_CTRL)0x0000000F)
 #define TPB_KTYPE_PLI       ((TPB_K_CTRL)(1 << 1))
+/* Legacy names; same value as TPB_KTYPE_PLI (no separate integration mode). */
+#define TPB_KTYPE_FLI       TPB_KTYPE_PLI
+#define TPB_KTYPE_ALI       TPB_KTYPE_PLI
 
 /* Error codes */
 enum _tpb_errno {
