@@ -396,6 +396,8 @@ tpb_dl_scan(void)
         unsigned char kernel_id[20] = {0};
         char kernel_id_hex[41];
         int is_new_kernel = 0;
+        int ws_err = TPBE_SUCCESS;
+        int record_ok = 0;
 
         /* Look for libtpbk_*.so files */
         if (extract_kernel_name(entry->d_name, "libtpbk_", ".so",
@@ -457,8 +459,6 @@ tpb_dl_scan(void)
                                           kernel_id);
         }
         if (err == TPBE_SUCCESS) {
-            int ws_err;
-
             ws_err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
             if (ws_err == TPBE_SUCCESS) {
                 ws_err = resolve_kernel_id_for_workspace(workspace, kernel_name,
@@ -470,6 +470,8 @@ tpb_dl_scan(void)
             memset(kernel_id, 0, 20);
         }
 
+        record_ok = (err == TPBE_SUCCESS && ws_err == TPBE_SUCCESS) ? 1 : 0;
+
         tpb_rawdb_id_to_hex(kernel_id, kernel_id_hex);
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                    " KernelID=%s\n", kernel_id_hex);
@@ -478,6 +480,7 @@ tpb_dl_scan(void)
                        "New kernel found, add to kernel records.\n");
         }
         tpb_driver_set_kernel_id(kernel_name, kernel_id);
+        tpb_driver_set_kernel_record_ok(kernel_name, record_ok);
 
         /* Store kernel info */
         dyn_kernel_entry_t *k = &dyn_kernels[num_dyn_kernels];

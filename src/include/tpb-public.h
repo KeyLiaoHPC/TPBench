@@ -204,6 +204,7 @@ typedef struct tpb_k_static_info {
     char name[TPBM_NAME_STR_MAX_LEN];
     char note[TPBM_NOTE_STR_MAX_LEN];
     unsigned char kernel_id[20];   /**< Resolved KernelID for this kernel */
+    int kernel_record_ok;          /**< 1 if workspace kernel record update succeeded */
     TPB_K_CTRL kctrl;
     int nparms, nouts;
     tpb_rt_parm_t *parms;

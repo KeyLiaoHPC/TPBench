@@ -187,6 +187,7 @@ add_executable(tpbcli
     src/tpbcli-run.c
     src/tpbcli-run-dim.c
     src/tpbcli-list.c
+    src/tpbcli-kernel.c
     src/tpbcli-benchmark.c
     src/tpbcli-help.c
     src/tpb-bench-yaml.c

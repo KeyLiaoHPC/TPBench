@@ -17,6 +17,7 @@
 #include <inttypes.h>
 #include "tpb-io.h"
 #include "tpb-stat.h"
+#include "tpb-public.h"
 #include "tpb-driver.h"
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
@@ -441,21 +442,63 @@ tpb_print_help_total(void)
     printf(TPBM_HELP_DOC_TOTAL);
 }
 
-void
-tpb_list()
+static int
+kernel_id_is_zero(const unsigned char id[20])
 {
-    /* Get kernel count via tpb_query_kernel with NULL kernel_out */
+    static const unsigned char z[20] = {0};
+
+    return memcmp(id, z, 20) == 0;
+}
+
+void
+tpb_list(void)
+{
     int nkern = tpb_query_kernel(0, NULL, NULL);
+    int i;
+
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Type    Description\n");
-    for (int i = 0; i < nkern; i++) {
+
+    for (i = 0; i < nkern; i++) {
         tpb_kernel_t *kernel = NULL;
+
         tpb_query_kernel(i, NULL, &kernel);
         if (kernel == NULL) {
             continue;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-7s %s\n",
-                   kernel->info.name, "PLI", kernel->info.note);
+        if (!kernel->info.kernel_record_ok) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Kernel %s: workspace kernel record update failed.\n",
+                       kernel->info.name);
+        }
+        tpb_free_kernel(kernel);
+        free(kernel);
+    }
+
+    tpb_printf(TPBM_PRTN_M_DIRECT,
+               "Kernel          KernelID  Description\n");
+
+    for (i = 0; i < nkern; i++) {
+        tpb_kernel_t *kernel = NULL;
+        char kid_str[16];
+
+        tpb_query_kernel(i, NULL, &kernel);
+        if (kernel == NULL) {
+            continue;
+        }
+
+        if (!kernel->info.kernel_record_ok) {
+            snprintf(kid_str, sizeof(kid_str), "[ERROR]");
+        } else if (kernel_id_is_zero(kernel->info.kernel_id)) {
+            snprintf(kid_str, sizeof(kid_str), "-");
+        } else {
+            char hex[41];
+
+            tpb_rawdb_id_to_hex(kernel->info.kernel_id, hex);
+            snprintf(kid_str, sizeof(kid_str), "%.6s*", hex);
+        }
+
+        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-9s %s\n",
+                   kernel->info.name, kid_str, kernel->info.note);
         tpb_free_kernel(kernel);
         free(kernel);
     }
