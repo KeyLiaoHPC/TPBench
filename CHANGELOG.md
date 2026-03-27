@@ -18,3 +18,4 @@
 ### Kernel
 
 - During `tpb_dl_scan()`, workspace kernel record sync sets `kernel_record_ok` per loaded PLI kernel.
+- AXPY: Migrate to the new PLI kernel format.
