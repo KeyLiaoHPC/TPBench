@@ -49,7 +49,7 @@ int tpb_dl_is_complete(const char *kernel_name);
 /**
  * @brief Get the integration type for a registered kernel.
  * @param kernel_name Name of the kernel.
- * @return Kernel integration type (TPB_KTYPE_PLI, TPB_KTYPE_FLI, etc.), or 0 if not found.
+ * @return Kernel integration type (`TPB_KTYPE_PLI`), or 0 if not found.
  */
 TPB_K_CTRL tpb_dl_get_ktype(const char *kernel_name);
 

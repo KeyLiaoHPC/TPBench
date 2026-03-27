@@ -414,7 +414,7 @@ SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
 ```
 
 注意：
-- `kctrl` 使用 `tpb-public.h` 中的 `TPB_KTYPE_PLI`。`TPB_KTYPE_FLI` 和 `TPB_KTYPE_ALI` 是 `TPB_KTYPE_PLI` 的已废弃别名。
+- `kctrl` 存放来自 `tpb-public.h` 的内核集成类型。仅支持 `TPB_KTYPE_PLI`。
 - 对于规范记录，`dup_to` 全为零；否则它指向规范的 `kernel_id`。
 - `dup_from` 全为零，除非此记录由另一条 kernel 记录派生（溯源）。
 

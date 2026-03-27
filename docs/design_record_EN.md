@@ -422,7 +422,7 @@ SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
 ```
 
 Notes:
-- `kctrl` uses `TPB_KTYPE_PLI` from `tpb-public.h`. `TPB_KTYPE_FLI` and `TPB_KTYPE_ALI` are deprecated aliases for `TPB_KTYPE_PLI`.
+- `kctrl` stores the kernel integration type from `tpb-public.h`. Always set to `TPB_KTYPE_PLI`.
 - `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
 - `dup_from` is all-zero unless this record was derived from another kernel record (provenance).
 
