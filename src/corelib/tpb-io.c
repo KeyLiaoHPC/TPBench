@@ -17,6 +17,7 @@
 #include <inttypes.h>
 #include "tpb-io.h"
 #include "tpb-stat.h"
+#include "tpb-public.h"
 #include "tpb-driver.h"
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
@@ -439,26 +440,6 @@ void
 tpb_print_help_total(void)
 {
     printf(TPBM_HELP_DOC_TOTAL);
-}
-
-void
-tpb_list()
-{
-    /* Get kernel count via tpb_query_kernel with NULL kernel_out */
-    int nkern = tpb_query_kernel(0, NULL, NULL);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel          Type    Description\n");
-    for (int i = 0; i < nkern; i++) {
-        tpb_kernel_t *kernel = NULL;
-        tpb_query_kernel(i, NULL, &kernel);
-        if (kernel == NULL) {
-            continue;
-        }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-15s %-7s %s\n",
-                   kernel->info.name, "PLI", kernel->info.note);
-        tpb_free_kernel(kernel);
-        free(kernel);
-    }
 }
 
 int

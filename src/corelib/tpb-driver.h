@@ -35,6 +35,14 @@ int tpb_driver_set_kernel_id(const char *kernel_name,
                              const unsigned char kernel_id[20]);
 
 /**
+ * @brief Set whether workspace kernel record update succeeded for a kernel (dynloader).
+ * @param kernel_name Kernel name.
+ * @param ok Nonzero if record update succeeded, zero on failure.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_driver_set_kernel_record_ok(const char *kernel_name, int ok);
+
+/**
  * @brief Get number of registered kernels.
  * @return Number of registered kernels.
  */
@@ -126,11 +134,7 @@ int tpb_driver_run_all(void);
  */
 int tpb_register_common();
 
-/**
- * @brief Initialize kernel registry and register common parameters.
- * @return Error code (0 on success)
- */
-int tpb_register_kernel();
+/* tpb_register_kernel() is declared in tpb-public.h / tpbench.h */
 
 /* PLI (Process-Level Integration) internal API */
 

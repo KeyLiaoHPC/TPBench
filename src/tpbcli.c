@@ -13,7 +13,7 @@
 #endif
 
 #include "tpbcli-run.h"
-#include "tpbcli-list.h"
+#include "tpbcli-kernel.h"
 #include "tpbcli-benchmark.h"
 #include "tpbcli-help.h"
 #include "tpbcli-database.h"
@@ -45,7 +45,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
         if (argv[i][0] == '-') {
             fprintf(stderr, "tpbcli: unknown option \"%s\"\n", argv[i]);
             fprintf(stderr, "Set \"--workspace\" or one of sub applications. \n"
-                            "r[un], b[enchmark], d[atabase], l[ist], h[elp].\n");
+                            "r[un], b[enchmark], d[atabase], k[ernel], h[elp].\n");
             return TPBE_CLI_FAIL;
         }
         break;
@@ -74,8 +74,8 @@ tpbcli_main(int argc, char **argv)
     if (strcmp(argv[1], "database") == 0 || strcmp(argv[1], "d") == 0) {
         return tpbcli_database(argc, argv);
     }
-    if (strcmp(argv[1], "list") == 0 || strcmp(argv[1], "l") == 0) {
-        return tpbcli_list(argc, argv);
+    if (strcmp(argv[1], "kernel") == 0 || strcmp(argv[1], "k") == 0) {
+        return tpbcli_kernel(argc, argv);
     }
     if (strcmp(argv[1], "help") == 0 || strcmp(argv[1], "h") == 0) {
         return tpbcli_help(argc, argv);
@@ -83,7 +83,7 @@ tpbcli_main(int argc, char **argv)
 
     tpb_printf(TPBM_PRTN_M_DIRECT,
                "Unsupported action: %s. Please use one of sub applications:\n"
-               "r[un], b[enchmark], d[atabase], l[ist], h[elp].\n", argv[1]);
+               "r[un], b[enchmark], d[atabase], k[ernel], h[elp].\n", argv[1]);
     tpb_print_help_total();
     return TPBE_CLI_FAIL;
 }

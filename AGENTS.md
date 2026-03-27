@@ -74,7 +74,8 @@ TPBench/
 │   ├── tpbcli-database-ls.c    # `database list` / `ls`
 │   ├── tpbcli-database-dump.c  # `database dump`
 │   ├── tpbcli-database.h       # `tpbcli_database`, `tpbcli_database_ls`, `tpbcli_database_dump`
-│   ├── tpbcli-*.c/h            # Other CLI subcommands (run/list/benchmark/help)
+│   ├── tpbcli-kernel*.c/h      # `kernel` subcommand (e.g. kernel list)
+│   ├── tpbcli-*.c/h            # Other CLI subcommands (run/benchmark/help)
 │   ├── tpb-bench-*.c/h         # Benchmark execution engine
 │   ├── tpb-timer.c/h           # Timer abstraction
 │   │
