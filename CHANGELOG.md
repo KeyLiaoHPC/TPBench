@@ -22,3 +22,4 @@
 - SCALE: Migrate to the new PLI kernel format.
 - TRIAD: Migrate to the new PLI kernel format.
 - SUM: Migrate to the new PLI kernel format.
+- RTRIAD: Migrate to the new PLI kernel format.
