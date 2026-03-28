@@ -23,3 +23,5 @@
 - TRIAD: Migrate to the new PLI kernel format.
 - SUM: Migrate to the new PLI kernel format.
 - RTRIAD: Migrate to the new PLI kernel format.
+- STAXPY: Migrate to the new PLI kernel format.
+- STRIAD: Migrate to the new PLI kernel format.
