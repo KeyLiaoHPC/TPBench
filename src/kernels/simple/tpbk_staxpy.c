@@ -4,6 +4,7 @@
  */
 
 #include <inttypes.h>
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -11,6 +12,7 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
+#include "tpb-public.h"
 #include "tpbench.h"
 
 #ifdef TPB_USE_KP_SVE
@@ -28,11 +30,9 @@
 
 static double epsilon = 1.e-8;
 
-// Forward declarations
-int register_staxpy(void);
-int _tpbk_register_staxpy(void);
-int _tpbk_run_staxpy(void);
+/* Local Function Prototypes */
 int tpbk_pli_register_staxpy(void);
+int run_staxpy(void);
 static int d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
                     int64_t twarm_ms, int stride, int jump,
                     int64_t *tot_time, int64_t *step_time, uint64_t *real_total_memsize,
@@ -40,65 +40,15 @@ static int d_staxpy(tpb_timer_t *timer, int ntest, double kib, uint32_t array_si
 static int check_d_staxpy(int narr, int ntest, int stride, int jump,
                           double *a, double *b, double s, double epsilon, double *errval);
 
-int
-register_staxpy(void)
-{
-    /* Wrapper function for backward compatibility */
-    return _tpbk_register_staxpy();
-}
-
-/* PLI registration: register only name, note, and parameters (no outputs, no runner) */
+/* PLI registration */
 int
 tpbk_pli_register_staxpy(void)
 {
     int err;
 
-    /* Register to TPBench as PLI kernel */
     err = tpb_k_register("staxpy", "Stanza AXPY: a[i] = a[i] + s * b[i] with stride/jump pattern", TPB_KTYPE_PLI);
     if (err != 0) return err;
 
-    /* Kernel input parameters - same as FLI registration */
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)100000);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
-                         TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
-                         0.0009765625, DBL_MAX);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
-                         TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)4294967295);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds, 0<=twarm<=600000, default 1", "1",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)600000);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("stride", "Contiguous access element count", "8",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)1000000);
-    if (err != 0) return err;
-    err = tpb_k_add_parm("jump", "Skip element count between stanzas", "8",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)0, (int64_t)1000000);
-    if (err != 0) return err;
-
-    /* NO outputs registered here - kernel registers them in its own process */
-    /* NO runner function - PLI uses exec */
-
-    return tpb_k_finalize_pli();
-}
-
-int
-_tpbk_register_staxpy(void)
-{
-    int err;
-    
-    /* Register to TPBench */
-    err = tpb_k_register("staxpy", "Stanza AXPY: a[i] = a[i] + s * b[i] with stride/jump pattern", TPB_KTYPE_FLI);
-    if (err != 0) return err;
-
-    /* Kernel input parameters */
     err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
@@ -125,50 +75,63 @@ _tpbk_register_staxpy(void)
     if (err != 0) return err;
 
     /* Kernel outputs */
-    err = tpb_k_add_output("tot_time", "Measured runtime of the outer loop (all steps).", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
-    if (err != 0) return err;
-    err = tpb_k_add_output("step_time", "Measured runtime of per loop step.", 
-                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
-    if (err != 0) return err;
-    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of two staxpy arrays.",
+    err = tpb_k_add_output("Allocated memory size", "Actual memory footprint of two staxpy arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("array_size", "Actual number of elements per array.",
+    err = tpb_k_add_output("STaxpy array size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    // Set runner function.
-    err = tpb_k_add_runner(_tpbk_run_staxpy);
+    err = tpb_k_add_output("Time::Total", "Measured runtime of the outer loop (all steps).",
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    
-    return 0;
+    err = tpb_k_add_output("Time::Step", "Measured runtime of per loop step.",
+                           TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Walltime",
+                           "Measured sustainable memory bandwidth in decimal based MB/s.",
+                           TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+    err = tpb_k_add_output("Bandwidth::Phystime",
+                           "Measured sustainable memory bandwidth in binary based Byte/cy.",
+                           TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
+    if (err != 0) return err;
+
+    return tpb_k_finalize_pli();
 }
 
 int
-_tpbk_run_staxpy(void)
+run_staxpy(void)
 {
     int tpberr;
-    /* Input */
     int ntest;
+    int64_t ntest64;
     TPB_UNIT_T tpb_uname;
     tpb_timer_t timer;
     double total_memsize;
     uint32_t array_size;
     int64_t twarm_ms;
     int64_t stride, jump;
-    /* Output */
     void *tot_time = NULL;
     void *step_time = NULL;
     uint64_t *real_total_memsize = NULL;
     double *bw = NULL;
 
-    /* Get timer */
     tpberr = tpb_k_get_timer(&timer);
     if (tpberr) return tpberr;
 
-    /* Get arguments by names */
-    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest);
+    tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest64);
     if (tpberr) return tpberr;
+    if (ntest64 < 1) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "staxpy: ntest must be >= 1, got %" PRId64 "\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    if (ntest64 > (int64_t)INT_MAX) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "staxpy: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
+        return TPBE_KERN_ARG_FAIL;
+    }
+    ntest = (int)ntest64;
     tpberr = tpb_k_get_arg("total_memsize", TPB_DOUBLE_T, (void *)&total_memsize);
     if (tpberr) return tpberr;
     tpberr = tpb_k_get_arg("array_size", TPB_UINT32_T, (void *)&array_size);
@@ -180,37 +143,30 @@ _tpbk_run_staxpy(void)
     tpberr = tpb_k_get_arg("jump", TPB_INT64_T, (void *)&jump);
     if (tpberr) return tpberr;
 
-    /* Malloc callbacks for kernel's outputs */
-    tpberr = tpb_k_alloc_output("tot_time", 1, &tot_time);
+    tpberr = tpb_k_alloc_output("Time::Total", 1, &tot_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("step_time", ntest, &step_time);
+    tpberr = tpb_k_alloc_output("Time::Step", ntest, &step_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
+    tpberr = tpb_k_alloc_output("Allocated memory size", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("STaxpy array size", 1, &array_size_out);
     if (tpberr) return tpberr;
 
-    /* Measured data throughput rate is a derived metrics, adding at run-time */
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpb_k_add_output("bw_walltime", "Measured sustainable memory bandwidth in decimal based MB/s.", 
-                         TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("bw_walltime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Walltime", ntest, &bw);
         if (tpberr) return tpberr;
     } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpb_k_add_output("bw_phystime", "Measured sustainable memory bandwidth in binary based Byte/cy.", 
-                         TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
-        tpberr = tpb_k_alloc_output("bw_phystime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("Bandwidth::Phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
         tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel staxpy: unknown timer unit name %llx", tpb_uname);
         return TPBE_KERN_ARG_FAIL;
     }
 
-    /* Call the actual kernel implementation */
     tpberr = d_staxpy(&timer, ntest, total_memsize, array_size, twarm_ms, (int)stride, (int)jump,
-                      tot_time, step_time, real_total_memsize, array_size_out, bw);
+                      (int64_t *)tot_time, (int64_t *)step_time, real_total_memsize, array_size_out, bw);
 
     return tpberr;
 }
@@ -416,3 +372,68 @@ check_d_staxpy(int narr, int ntest, int stride, int jump,
 
     return 0;
 }
+
+/* =========================================================================
+ * PLI executable entry point (only compiled into .tpbx, not into .so)
+ * ========================================================================= */
+#ifdef TPB_K_BUILD_MAIN
+int
+main(int argc, char **argv)
+{
+    int err;
+
+    err = tpb_k_corelib_init(NULL);
+    if (err != 0) {
+        fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        return err;
+    }
+
+    const char *timer_name = NULL;
+    if (argc >= 2) {
+        timer_name = argv[1];
+    } else {
+        timer_name = getenv("TPBENCH_TIMER");
+    }
+    if (timer_name == NULL) {
+        fprintf(stderr, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        return TPBE_CLI_FAIL;
+    }
+
+    err = tpb_k_pli_set_timer(timer_name);
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        return err;
+    }
+
+    err = tpbk_pli_register_staxpy();
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to register kernel\n");
+        return err;
+    }
+
+    tpb_k_rthdl_t handle;
+    err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
+    if (err != 0) {
+        fprintf(stderr, "Error: Failed to build handle\n");
+        return err;
+    }
+
+    tpb_cliout_args(&handle);
+
+    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
+    err = run_staxpy();
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel staxpy failed: %d\n", err);
+        return err;
+    }
+
+    tpb_cliout_results(&handle);
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel staxpy finished successfully.\n");
+
+    tpb_k_write_task(&handle, 0);
+
+    tpb_driver_clean_handle(&handle);
+
+    return 0;
+}
+#endif /* TPB_K_BUILD_MAIN */
