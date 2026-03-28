@@ -10,7 +10,7 @@
 
 set(TPB_CPU_KERNEL_DEFS
     "stream|default,bandwidth||"
-    # "triad|bandwidth||"
+    "triad|default,bandwidth||"
     "scale|default,bandwidth||"
     "axpy|default,bandwidth||"
     # "rtriad|bandwidth||"
