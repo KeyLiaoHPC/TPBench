@@ -10,11 +10,11 @@ set_target_properties(test-tri-record PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
 )
 
-# The integration test depends on tpbcli and stream kernel being built
-add_dependencies(test-tri-record tpbcli tpbk_stream.tpbx)
-
-# Pack C1 sub-cases
-tpb_add_subcase(C1 C1.1 tri_tests_record test-tri-record integration)
+# Depends on tpbcli and stream kernel; omit when TPB_KERNELS excludes stream
+if(TARGET tpbk_stream.tpbx)
+    add_dependencies(test-tri-record tpbcli tpbk_stream.tpbx)
+    tpb_add_subcase(C1 C1.1 tri_tests_record test-tri-record integration)
+endif()
 
 # --- Integration test: merge_pthread (Pack C2) ---
 add_executable(test-merge-pthread EXCLUDE_FROM_ALL
@@ -55,13 +55,21 @@ set_target_properties(test-merge-hybrid PROPERTIES
 )
 tpb_add_subcase(C2 C2.3 merge_hybrid test-merge-hybrid integration)
 
-# Aggregate targets
+# Aggregate targets (tri-record only when stream kernel is in the build)
+set(_tpb_integration_depends test-merge-pthread test-merge-fork test-merge-hybrid)
+if(TARGET tpbk_stream.tpbx)
+    list(PREPEND _tpb_integration_depends test-tri-record)
+endif()
 add_custom_target(test_integration
-    DEPENDS test-tri-record test-merge-pthread test-merge-fork test-merge-hybrid
+    DEPENDS ${_tpb_integration_depends}
 )
 
+set(_tpb_check_integration_kernels "")
+if(TARGET tpbk_stream.tpbx)
+    list(APPEND _tpb_check_integration_kernels tpbk_stream.tpbx)
+endif()
 add_custom_target(check_integration
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L "^integration$"
-    DEPENDS test_integration tpbcli tpbk_stream.tpbx
+    DEPENDS test_integration tpbcli ${_tpb_check_integration_kernels}
     USES_TERMINAL
 )
