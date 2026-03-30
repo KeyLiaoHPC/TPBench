@@ -1,6 +1,6 @@
 /*
  * tpbcli-database-dump.c
- * `tpbcli database dump` — CSV-style dump of rawdb .tpbr/.tpbe files.
+ * `tpbcli database dump` — CSV-style dump of rafdb .tpbr/.tpbe files.
  */
 
 #include <ctype.h>
@@ -13,7 +13,7 @@
 #include <inttypes.h>
 
 #include "corelib/strftime.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "tpbcli-database.h"
 
 /* Scan every tpbr subdirectory when searching by id prefix (global --id). */
@@ -58,7 +58,7 @@ static int normalize_entry_name(const char *in, char *out, size_t outlen);
 /*
  * When: After normalize_entry_name for `--entry`.
  * Input: norm — normalized entry keyword string.
- * Output: Sets *domain_out to TPB_RAWDB_DOM_*; TPBE_SUCCESS or TPBE_CLI_FAIL.
+ * Output: Sets *domain_out to TPB_RAF_DOM_*; TPBE_SUCCESS or TPBE_CLI_FAIL.
  */
 static int entry_name_to_domain(const char *norm, uint8_t *domain_out);
 
@@ -184,7 +184,7 @@ static void print_elem_csv(const uint8_t *p, uint32_t type_bits,
 
 /*
  * When: After headers; walk record payload blocks per header slot.
- * Input: hdrs, nheader; data blob and datasize from rawdb read.
+ * Input: hdrs, nheader; data blob and datasize from rafdb read.
  * Output: "Record Data" section and per-header CSV lines to stdout.
  */
 static void dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
@@ -216,7 +216,7 @@ static int dump_tpbr_task(const char *workspace,
 
 /*
  * When: `--entry` or .tpbe file detected; list domain index file contents.
- * Input: workspace; domain — TPB_RAWDB_DOM_* for which entry file to read.
+ * Input: workspace; domain — TPB_RAF_DOM_* for which entry file to read.
  * Output: Prints all indexed entries as CSV-like key/value lines.
  */
 static int dump_tpbe_domain(const char *workspace, uint8_t domain);
@@ -250,7 +250,7 @@ static void
 dump_print_kv_hex20(const char *key, const unsigned char id[20])
 {
     char hex[41];
-    tpb_rawdb_id_to_hex(id, hex);
+    tpb_raf_id_to_hex(id, hex);
     tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %s\n", key, hex);
 }
 
@@ -282,15 +282,15 @@ entry_name_to_domain(const char *norm, uint8_t *domain_out)
     if (strcmp(norm, "task_batch") == 0 ||
         strcmp(norm, "tbatch") == 0 ||
         strcmp(norm, "taskbatch") == 0) {
-        *domain_out = TPB_RAWDB_DOM_TBATCH;
+        *domain_out = TPB_RAF_DOM_TBATCH;
         return TPBE_SUCCESS;
     }
     if (strcmp(norm, "kernel") == 0) {
-        *domain_out = TPB_RAWDB_DOM_KERNEL;
+        *domain_out = TPB_RAF_DOM_KERNEL;
         return TPBE_SUCCESS;
     }
     if (strcmp(norm, "task") == 0) {
-        *domain_out = TPB_RAWDB_DOM_TASK;
+        *domain_out = TPB_RAF_DOM_TASK;
         return TPBE_SUCCESS;
     }
     return TPBE_CLI_FAIL;
@@ -302,7 +302,7 @@ resolve_file_path(const char *workspace, const char *inpath,
 {
     struct stat st;
     const char *base;
-    char trybuf[TPB_RAWDB_PATH_MAX];
+    char trybuf[TPB_RAF_PATH_MAX];
 
     if (!workspace || !inpath || !out || outlen == 0) {
         return TPBE_NULLPTR_ARG;
@@ -317,19 +317,19 @@ resolve_file_path(const char *workspace, const char *inpath,
     base = base ? base + 1 : inpath;
 
     snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAWDB_TBATCH_DIR, base);
+             workspace, TPB_RAF_TBATCH_DIR, base);
     if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
         snprintf(out, outlen, "%s", trybuf);
         return TPBE_SUCCESS;
     }
     snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAWDB_KERNEL_DIR, base);
+             workspace, TPB_RAF_KERNEL_DIR, base);
     if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
         snprintf(out, outlen, "%s", trybuf);
         return TPBE_SUCCESS;
     }
     snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAWDB_TASK_DIR, base);
+             workspace, TPB_RAF_TASK_DIR, base);
     if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
         snprintf(out, outlen, "%s", trybuf);
         return TPBE_SUCCESS;
@@ -394,11 +394,11 @@ scan_tpbr_prefix_matches(const char *workspace, const char *prefix,
         const char *reldir;
         uint8_t     domain;
     } dirs[3] = {
-        { TPB_RAWDB_TBATCH_DIR, TPB_RAWDB_DOM_TBATCH },
-        { TPB_RAWDB_KERNEL_DIR, TPB_RAWDB_DOM_KERNEL },
-        { TPB_RAWDB_TASK_DIR,   TPB_RAWDB_DOM_TASK },
+        { TPB_RAF_TBATCH_DIR, TPB_RAF_DOM_TBATCH },
+        { TPB_RAF_KERNEL_DIR, TPB_RAF_DOM_KERNEL },
+        { TPB_RAF_TASK_DIR,   TPB_RAF_DOM_TASK },
     };
-    char dirpath[TPB_RAWDB_PATH_MAX];
+    char dirpath[TPB_RAF_PATH_MAX];
     id_prefix_match_t *matches = NULL;
     int n = 0, cap = 0;
     size_t di;
@@ -492,15 +492,15 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
         double dur_sec = 0.0;
         int have_dur = 0;
 
-        if (tpb_rawdb_hex_to_id(matches[i].full_hex, id) != TPBE_SUCCESS) {
+        if (tpb_raf_hex_to_id(matches[i].full_hex, id) != TPBE_SUCCESS) {
             continue;
         }
 
         tsbuf[0] = '\0';
-        if (matches[i].domain == TPB_RAWDB_DOM_TBATCH) {
+        if (matches[i].domain == TPB_RAF_DOM_TBATCH) {
             tbatch_attr_t attr;
             memset(&attr, 0, sizeof(attr));
-            if (tpb_rawdb_record_read_tbatch(workspace, id, &attr,
+            if (tpb_raf_record_read_tbatch(workspace, id, &attr,
                                               NULL, NULL) == TPBE_SUCCESS) {
                 if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
                     snprintf(tsbuf, sizeof(tsbuf), "%s", ts.str);
@@ -508,12 +508,12 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
                 }
                 dur_sec = (double)attr.duration / 1e9;
                 have_dur = 1;
-                tpb_rawdb_free_headers(attr.headers, attr.nheader);
+                tpb_raf_free_headers(attr.headers, attr.nheader);
             }
-        } else if (matches[i].domain == TPB_RAWDB_DOM_TASK) {
+        } else if (matches[i].domain == TPB_RAF_DOM_TASK) {
             task_attr_t attr;
             memset(&attr, 0, sizeof(attr));
-            if (tpb_rawdb_record_read_task(workspace, id, &attr,
+            if (tpb_raf_record_read_task(workspace, id, &attr,
                                            NULL, NULL) == TPBE_SUCCESS) {
                 if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
                     snprintf(tsbuf, sizeof(tsbuf), "%s", ts.str);
@@ -521,7 +521,7 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
                 }
                 dur_sec = (double)attr.duration / 1e9;
                 have_dur = 1;
-                tpb_rawdb_free_headers(attr.headers, attr.nheader);
+                tpb_raf_free_headers(attr.headers, attr.nheader);
             }
         } else {
             utc_col = "N/A";
@@ -529,8 +529,8 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
 
         {
             const char *dname =
-                (matches[i].domain == TPB_RAWDB_DOM_TBATCH) ? "task_batch" :
-                (matches[i].domain == TPB_RAWDB_DOM_KERNEL) ? "kernel" : "task";
+                (matches[i].domain == TPB_RAF_DOM_TBATCH) ? "task_batch" :
+                (matches[i].domain == TPB_RAF_DOM_KERNEL) ? "kernel" : "task";
 
             if (have_dur) {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
@@ -549,10 +549,10 @@ static int
 dump_tpbr_by_domain(const char *workspace, uint8_t domain,
                     const unsigned char id[20])
 {
-    if (domain == TPB_RAWDB_DOM_TBATCH) {
+    if (domain == TPB_RAF_DOM_TBATCH) {
         return dump_tpbr_tbatch(workspace, id);
     }
-    if (domain == TPB_RAWDB_DOM_KERNEL) {
+    if (domain == TPB_RAF_DOM_KERNEL) {
         return dump_tpbr_kernel(workspace, id);
     }
     return dump_tpbr_task(workspace, id);
@@ -580,24 +580,24 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
         dom_filter = DOMAIN_FILTER_ALL;
         break;
     case DUMP_T_TBATCH_ID:
-        dom_filter = TPB_RAWDB_DOM_TBATCH;
+        dom_filter = TPB_RAF_DOM_TBATCH;
         break;
     case DUMP_T_KERNEL_ID:
-        dom_filter = TPB_RAWDB_DOM_KERNEL;
+        dom_filter = TPB_RAF_DOM_KERNEL;
         break;
     case DUMP_T_TASK_ID:
-        dom_filter = TPB_RAWDB_DOM_TASK;
+        dom_filter = TPB_RAF_DOM_TASK;
         break;
     default:
         return TPBE_CLI_FAIL;
     }
 
     if (plen == 40) {
-        if (tpb_rawdb_hex_to_id(norm, id) != TPBE_SUCCESS) {
+        if (tpb_raf_hex_to_id(norm, id) != TPBE_SUCCESS) {
             return TPBE_CLI_FAIL;
         }
         if (t == DUMP_T_ID_GLOBAL) {
-            err = tpb_rawdb_find_record(workspace, id, &dom);
+            err = tpb_raf_find_record(workspace, id, &dom);
             if (err != TPBE_SUCCESS) {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "No .tpbr found for id in workspace.\n");
@@ -631,7 +631,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
             return TPBE_CLI_FAIL;
         }
 
-        if (tpb_rawdb_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
+        if (tpb_raf_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
             free(matches);
             return TPBE_CLI_FAIL;
         }
@@ -815,7 +815,7 @@ print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
 
     if (elem_size == 20u) {
         char hx[41];
-        tpb_rawdb_id_to_hex(p, hx);
+        tpb_raf_id_to_hex(p, hx);
         tpb_printf(TPBM_PRTN_M_DIRECT, "%s", hx);
         return;
     }
@@ -968,7 +968,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     int err;
 
     memset(&attr, 0, sizeof(attr));
-    err = tpb_rawdb_record_read_tbatch(workspace, id, &attr,
+    err = tpb_raf_record_read_tbatch(workspace, id, &attr,
                                         &data, &datasize);
     if (err != TPBE_SUCCESS) {
         return err;
@@ -998,7 +998,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     dump_record_data(attr.headers, attr.nheader, data, datasize);
 
     free(data);
-    tpb_rawdb_free_headers(attr.headers, attr.nheader);
+    tpb_raf_free_headers(attr.headers, attr.nheader);
     return TPBE_SUCCESS;
 }
 
@@ -1011,7 +1011,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     int err;
 
     memset(&attr, 0, sizeof(attr));
-    err = tpb_rawdb_record_read_kernel(workspace, id, &attr,
+    err = tpb_raf_record_read_kernel(workspace, id, &attr,
                                        &data, &datasize);
     if (err != TPBE_SUCCESS) {
         return err;
@@ -1037,7 +1037,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     dump_record_data(attr.headers, attr.nheader, data, datasize);
 
     free(data);
-    tpb_rawdb_free_headers(attr.headers, attr.nheader);
+    tpb_raf_free_headers(attr.headers, attr.nheader);
     return TPBE_SUCCESS;
 }
 
@@ -1051,7 +1051,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     int err;
 
     memset(&attr, 0, sizeof(attr));
-    err = tpb_rawdb_record_read_task(workspace, id, &attr,
+    err = tpb_raf_record_read_task(workspace, id, &attr,
                                      &data, &datasize);
     if (err != TPBE_SUCCESS) {
         return err;
@@ -1083,7 +1083,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     dump_record_data(attr.headers, attr.nheader, data, datasize);
 
     free(data);
-    tpb_rawdb_free_headers(attr.headers, attr.nheader);
+    tpb_raf_free_headers(attr.headers, attr.nheader);
     return TPBE_SUCCESS;
 }
 
@@ -1094,19 +1094,19 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
     int n, i;
     const char *fname = NULL;
 
-    if (domain == TPB_RAWDB_DOM_KERNEL) {
-        fname = TPB_RAWDB_KERNEL_ENTRY;
-    } else if (domain == TPB_RAWDB_DOM_TASK) {
-        fname = TPB_RAWDB_TASK_ENTRY;
+    if (domain == TPB_RAF_DOM_KERNEL) {
+        fname = TPB_RAF_KERNEL_ENTRY;
+    } else if (domain == TPB_RAF_DOM_TASK) {
+        fname = TPB_RAF_TASK_ENTRY;
     } else {
-        fname = TPB_RAWDB_TBATCH_ENTRY;
+        fname = TPB_RAF_TBATCH_ENTRY;
     }
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Entry File: %s\n", fname);
 
-    if (domain == TPB_RAWDB_DOM_TBATCH) {
+    if (domain == TPB_RAF_DOM_TBATCH) {
         tbatch_entry_t *e = NULL;
-        err = tpb_rawdb_entry_list_tbatch(workspace, &e, &n);
+        err = tpb_raf_entry_list_tbatch(workspace, &e, &n);
         if (err != TPBE_SUCCESS) {
             return err;
         }
@@ -1142,9 +1142,9 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
         return TPBE_SUCCESS;
     }
 
-    if (domain == TPB_RAWDB_DOM_KERNEL) {
+    if (domain == TPB_RAF_DOM_KERNEL) {
         kernel_entry_t *e = NULL;
-        err = tpb_rawdb_entry_list_kernel(workspace, &e, &n);
+        err = tpb_raf_entry_list_kernel(workspace, &e, &n);
         if (err != TPBE_SUCCESS) {
             return err;
         }
@@ -1172,7 +1172,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 
     {
         task_entry_t *e = NULL;
-        err = tpb_rawdb_entry_list_task(workspace, &e, &n);
+        err = tpb_raf_entry_list_task(workspace, &e, &n);
         if (err != TPBE_SUCCESS) {
             return err;
         }
@@ -1212,7 +1212,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 static int
 dump_file_path(const char *workspace, const char *filepath)
 {
-    char resolved[TPB_RAWDB_PATH_MAX];
+    char resolved[TPB_RAF_PATH_MAX];
     uint8_t ftype, domain;
     int err;
     unsigned char id[20];
@@ -1224,12 +1224,12 @@ dump_file_path(const char *workspace, const char *filepath)
         return err;
     }
 
-    err = tpb_rawdb_detect_file(resolved, &ftype, &domain);
+    err = tpb_raf_detect_file(resolved, &ftype, &domain);
     if (err != TPBE_SUCCESS) {
         return err;
     }
 
-    if (ftype == TPB_RAWDB_FTYPE_ENTRY) {
+    if (ftype == TPB_RAF_FTYPE_ENTRY) {
         return dump_tpbe_domain(workspace, domain);
     }
 
@@ -1242,7 +1242,7 @@ dump_file_path(const char *workspace, const char *filepath)
             *dot = '\0';
         }
     }
-    if (tpb_rawdb_hex_to_id(base, id) == TPBE_SUCCESS) {
+    if (tpb_raf_hex_to_id(base, id) == TPBE_SUCCESS) {
         /* full 40-char id */
     } else {
         char norm[48];
@@ -1270,17 +1270,17 @@ dump_file_path(const char *workspace, const char *filepath)
             free(matches);
             return TPBE_CLI_FAIL;
         }
-        if (tpb_rawdb_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
+        if (tpb_raf_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
             free(matches);
             return TPBE_CLI_FAIL;
         }
         free(matches);
     }
 
-    if (domain == TPB_RAWDB_DOM_TBATCH) {
+    if (domain == TPB_RAF_DOM_TBATCH) {
         return dump_tpbr_tbatch(workspace, id);
     }
-    if (domain == TPB_RAWDB_DOM_KERNEL) {
+    if (domain == TPB_RAF_DOM_KERNEL) {
         return dump_tpbr_kernel(workspace, id);
     }
     return dump_tpbr_task(workspace, id);
@@ -1296,7 +1296,7 @@ tpbcli_database_dump(int argc, char **argv, const char *workspace)
 {
     dump_target_t t;
     int dummy;
-    char buf[TPB_RAWDB_PATH_MAX];
+    char buf[TPB_RAF_PATH_MAX];
     char entrybuf[256];
     uint8_t dom;
 
@@ -1315,7 +1315,7 @@ tpbcli_database_dump(int argc, char **argv, const char *workspace)
     if (t == DUMP_T_SCORE_ID) {
         (void)buf;
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-                   "Score records are not implemented in rawdb yet.\n");
+                   "Score records are not implemented in rafdb yet.\n");
         return TPBE_SUCCESS;
     }
 

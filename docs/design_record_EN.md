@@ -15,7 +15,7 @@ Each domain has fixed-name record and dynamic record. Fixed-named records are at
 - **Header**: Headers are used to define the name and purpose of a single- or multi-dimension record data, including the fixed headers and customize headers. A header is the description section providing information of the record data it holds.
 - **Record Data**: Data recorded by TPBench.
 
-In the **rawdb** backend, the **attributes**, **headers** and **record data** are stored in the TPBench entry files and TPBench record files:
+In the **rafdb** backend, the **attributes**, **headers** and **record data** are stored in the TPBench entry files and TPBench record files:
 - **TPBench Entry File** (`<DomainName>.tpbe`): Recording attributes of each single record in the workspace, starting with a 8-Byte TPBench magic signature as a notation to the file type and the domain. All attribute values in the data is stored positional with fixed data size. Each new record appends a set of attributes as an entry to the record file.
 - **TPBench Record File** (`<RecordID>.tpbr`): Dynamic record data, constructing by a metadata section, and data sections. Data in the record file is self explained and self pointed. Each new record generate a new record file.
 
@@ -88,13 +88,13 @@ For more information related to the build system and filesystem structure, refer
 
 **2) File Structure**
 
-TPBench implement a integrated `rawdb` backend for data management and operations. More backend (e.g. SQLite, HDF5) will be added in future.
+TPBench implement a integrated `rafdb` backend for data management and operations. More backend (e.g. SQLite, HDF5) will be added in future.
 
-In `rawdb`, each record domain has two kinds of file, the TPBench header (.tpbe) and the TPBench record (.tpbr). `.tpbe` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
+In `rafdb`, each record domain has two kinds of file, the TPBench header (.tpbe) and the TPBench record (.tpbr). `.tpbe` is the incremental header that chases all record of the domain in current workspace, and `.tpbr` stores parts of attributes, headers, and detail record data.
 
 File tree:
 ```
-${TPB_WORKSPACE}/rawdb/
+${TPB_WORKSPACE}/rafdb/
 ├── task_batch/
 │   ├── task_batch.tpbe 
 │   ├── <TBatchID_0>.tpbr
@@ -289,7 +289,7 @@ File structure:
 +----------------16+264N-+
 ```
 
-**Migration:** Older 128-byte `.tpbe` / prior `.tpbr` fixed layouts are incompatible; remove or re-initialize `rawdb/` in the workspace after upgrading.
+**Migration:** Older 128-byte `.tpbe` / prior `.tpbr` fixed layouts are incompatible; remove or re-initialize `rafdb/` in the workspace after upgrading. If you still have a `rawdb/` tree from an older release, rename it to `rafdb/` (or merge into `rafdb/`) so paths match the current layout.
 
 Entry member:
 |name|size|
@@ -303,7 +303,7 @@ Entry member:
 |ntask | 4 |
 |nscore | 4 |
 |batch_type | 4 |
-|reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+|reserve | 128 (`TPB_RAF_RESERVE_SIZE`) |
 |**Total**|264|
 
 
@@ -356,7 +356,7 @@ File structure:
 +------------------256-+
 | nheader              |  <- 4B
 +------------------260-+
-| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
+| 128-Byte reserve     |  <- `TPB_RAF_RESERVE_SIZE`, opaque
 +------------------388-+
 | fixed_headers[i]     |  <- 3 x tpb_meta_header_t and customize headers
 +-------------metasize-+
@@ -450,7 +450,7 @@ Entry member (slim subset of `kernel_attr_t`):
 | kctrl | 4 |
 | nparm | 4 |
 | nmetric | 4 |
-| reserve | 128 (`TPB_RAWDB_RESERVE_SIZE`) |
+| reserve | 128 (`TPB_RAF_RESERVE_SIZE`) |
 | **Total** | **264** |
 
 Magic signature:
@@ -499,7 +499,7 @@ File structure:
 +-----------------2524-+
 | nheader              |  <- 4B
 +-----------------2528-+
-| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
+| 128-Byte reserve     |  <- `TPB_RAF_RESERVE_SIZE`, opaque
 +-----------------2656-+
 | fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + user headers
 +-------------metasize-+
@@ -656,7 +656,7 @@ File structure:
 +------------------176-+
 | reserve              |  <- 4B
 +------------------180-+
-| 128-Byte reserve     |  <- `TPB_RAWDB_RESERVE_SIZE`, opaque
+| 128-Byte reserve     |  <- `TPB_RAF_RESERVE_SIZE`, opaque
 +------------------308-+
 | headers[i]           |  <- (ninput + noutput) x tpb_meta_header_t + user headers
 +-------------metasize-+
@@ -855,20 +855,20 @@ The ChassisStatic domain stores static information about the system chassis/encl
 
 **Link ID Formula:** `SHA1("chassis_static" + <UTC_timestamp> + <hostname> + <manufacturer> + <model>)`
 
-## 3. Record Backend: `rawdb`
+## 3. Record Backend: `rafdb`
 
 ### 3.1. Module Structure
 
-The `rawdb` backend is implemented as a set of C source files in `src/corelib/raw_db/`:
+The `rafdb` backend is implemented as a set of C source files in `src/corelib/rafdb/`:
 
 ```
-src/corelib/raw_db/
-├── tpb-rawdb-types.h      # Internal constants, magic defs, file path defs
-├── tpb-rawdb-workspace.c  # Workspace resolution, init, config.json R/W
-├── tpb-rawdb-magic.c      # Magic signature build, validate, scan
-├── tpb-rawdb-entry.c      # .tpbe append/read/list for all 3 domains
-├── tpb-rawdb-record.c     # .tpbr write/read for all 3 domains
-├── tpb-rawdb-id.c         # SHA1-based ID generation
+src/corelib/rafdb/
+├── tpb-raf-types.h      # Internal constants, magic defs, file path defs
+├── tpb-raf-workspace.c  # Workspace resolution, init, config.json R/W
+├── tpb-raf-magic.c      # Magic signature build, validate, scan
+├── tpb-raf-entry.c      # .tpbe append/read/list for all 3 domains
+├── tpb-raf-record.c     # .tpbr write/read for all 3 domains
+├── tpb-raf-id.c         # SHA1-based ID generation
 ├── tpb-sha1.c             # Pure-C SHA1 implementation (RFC 3174)
 └── tpb-sha1.h             # SHA1 internal header
 ```
@@ -877,37 +877,37 @@ All public types and function declarations are in `src/include/tpb-public.h`, ex
 
 ### 3.2. Workspace Resolution
 
-`tpb_rawdb_resolve_workspace()` is called at the start of every `tpbcli` subcommand. Resolution order:
+`tpb_raf_resolve_workspace()` is called at the start of every `tpbcli` subcommand. Resolution order:
 
 1. If `$TPB_WORKSPACE` is set and non-empty, use that directory.
 2. If `$HOME/.tpbench/etc/config.json` exists and contains a `"name"` field, use `$HOME/.tpbench/`.
-3. Otherwise, create a default workspace at `$HOME/.tpbench/` with `etc/config.json` (`{"name": "default"}`) and `rawdb/{task_batch,kernel,task}/` directories.
+3. Otherwise, create a default workspace at `$HOME/.tpbench/` with `etc/config.json` (`{"name": "default"}`) and `rafdb/{task_batch,kernel,task}/` directories.
 
 ### 3.3. API Summary
 
 Workspace:
-- `tpb_rawdb_resolve_workspace(out_path, pathlen)` -- resolve workspace path
-- `tpb_rawdb_init_workspace(workspace_path)` -- create directory structure and config
+- `tpb_raf_resolve_workspace(out_path, pathlen)` -- resolve workspace path
+- `tpb_raf_init_workspace(workspace_path)` -- create directory structure and config
 
 Magic:
-- `tpb_rawdb_build_magic(ftype, domain, pos, out)` -- construct 8-byte magic
-- `tpb_rawdb_validate_magic(magic, ftype, domain, pos)` -- validate magic bytes
-- `tpb_rawdb_magic_scan(buf, len, offsets, nfound, max)` -- scan buffer for magic signatures
+- `tpb_raf_build_magic(ftype, domain, pos, out)` -- construct 8-byte magic
+- `tpb_raf_validate_magic(magic, ftype, domain, pos)` -- validate magic bytes
+- `tpb_raf_magic_scan(buf, len, offsets, nfound, max)` -- scan buffer for magic signatures
 
 Entry (.tpbe):
-- `tpb_rawdb_entry_append_{tbatch,kernel,task}(workspace, entry)` -- append entry
-- `tpb_rawdb_entry_list_{tbatch,kernel,task}(workspace, entries, count)` -- list all entries
+- `tpb_raf_entry_append_{tbatch,kernel,task}(workspace, entry)` -- append entry
+- `tpb_raf_entry_list_{tbatch,kernel,task}(workspace, entries, count)` -- list all entries
 
 Record (.tpbr):
-- `tpb_rawdb_record_write_{tbatch,kernel,task}(workspace, attr, data, datasize)` -- write record
-- `tpb_rawdb_record_read_{tbatch,kernel,task}(workspace, id, attr, data, datasize)` -- read record
-- `tpb_rawdb_free_headers(headers, nheader)` -- free allocated header arrays
+- `tpb_raf_record_write_{tbatch,kernel,task}(workspace, attr, data, datasize)` -- write record
+- `tpb_raf_record_read_{tbatch,kernel,task}(workspace, id, attr, data, datasize)` -- read record
+- `tpb_raf_free_headers(headers, nheader)` -- free allocated header arrays
 
 ID Generation:
-- `tpb_rawdb_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
-- `tpb_rawdb_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
-- `tpb_rawdb_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
-- `tpb_rawdb_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string
+- `tpb_raf_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
+- `tpb_raf_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
+- `tpb_raf_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
+- `tpb_raf_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string
 
 ### 3.4. Header Serialization
 
@@ -930,7 +930,7 @@ dimnames[0..6]   (448B) -- 7 x 64-byte strings, parallel to dimsizes
 
 - Entry structs (`tbatch_entry_t` / `kernel_entry_t` 264 bytes, `task_entry_t`
   232 bytes) are stack-allocated or caller-provided.
-- `tpb_meta_header_t` arrays are heap-allocated during record read; freed via `tpb_rawdb_free_headers()`.
+- `tpb_meta_header_t` arrays are heap-allocated during record read; freed via `tpb_raf_free_headers()`.
 - All pointer arguments are NULL-checked; functions return `TPBE_NULLPTR_ARG` on failure.
 - File I/O uses explicit size checks; no buffer overruns.
 
@@ -1051,7 +1051,7 @@ Source data blocks are concatenated with 4-byte size prefixes:
 
 #### 5.2.8. Merged Task ID
 
-Generated via `tpb_rawdb_gen_task_id()` with:
+Generated via `tpb_raf_gen_task_id()` with:
 - `utc_bits`, `btime` from the earliest source
 - `order` = `UINT32_MAX` (sentinel distinguishing merged records)
 - `pid`, `tid` from the calling (merging) thread
@@ -1068,7 +1068,7 @@ int tpb_k_merge_record_process(const unsigned char task_ids[][20],
                                unsigned char merged_id_out[20]);
 ```
 
-Both resolve the workspace internally, then call the core merge function `tpb_rawdb_merge_par()` with `is_process_merge` = 0 or 1.
+Both resolve the workspace internally, then call the core merge function `tpb_raf_merge_par()` with `is_process_merge` = 0 or 1.
 
 ### 5.4. Hybrid Merge Sequence
 

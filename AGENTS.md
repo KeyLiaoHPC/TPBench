@@ -94,8 +94,8 @@ TPBench/
 │   │   ├── tpb-argp.c/h        # Argument parsing
 │   │   ├── tpb-unitcast.c/h    # Unit conversion
 │   │   ├── strftime.c/h        # Time formatting
-│   │   └── raw_db/             # Raw database backend
-│   │       ├── tpb-rawdb-*.c/h # Database operations
+│   │   └── rafdb/              # Run-and-forget database backend
+│   │       ├── tpb-raf-*.c/h # Database operations
 │   │       └── tpb-sha1.c/h    # SHA-1 checksum
 │   │
 │   ├── kernels/
@@ -134,7 +134,7 @@ TPBench/
     ├── CMakeLists.txt          # Test suite configuration
     ├── RunBuiltTest.cmake      # Test runner script
     ├── corelib/
-    │   ├── test_rawdb.c        # Raw database tests
+    │   ├── test_raf.c          # rafdb tests
     │   ├── test_strftime.c     # Time formatting tests
     │   ├── mock_*.c/h          # Mock implementations for testing
     │   └── tpb_run_pli.c       # PLI interface tests
@@ -150,7 +150,7 @@ TPBench/
 | Core Library | `src/corelib/` | Kernel loading, execution, and result collection |
 | Benchmark Kernels | `src/kernels/simple/` | CPU benchmark implementations (STREAM, TRIAD, etc.) |
 | GPU Kernels | `src/kernels/rocm/` | ROCm GPU benchmark implementations |
-| Raw Database | `src/corelib/raw_db/` | Persistent storage for benchmark results |
+| rafdb (run-and-forget DB) | `src/corelib/rafdb/` | Persistent storage for benchmark results |
 | Timer Backend | `src/timers/` | High-resolution timing implementations |
 | PMU Support | `src/libpfc/`, `src/pmu/` | Hardware performance counter access |
 

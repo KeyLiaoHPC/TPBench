@@ -20,7 +20,7 @@
 #include <sys/syscall.h>
 #endif
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "corelib/strftime.h"
 
 #define N_PROCS 4
@@ -129,7 +129,7 @@ test_merge_fork(void)
              "/tmp/tpb_merge_fork_%d", (int)getpid());
     mkdir(g_workspace, 0755);
 
-    err = tpb_rawdb_init_workspace(g_workspace);
+    err = tpb_raf_init_workspace(g_workspace);
     CHECK("init_workspace", err == 0);
     if (err != 0) {
         cleanup_workspace();
@@ -157,14 +157,14 @@ test_merge_fork(void)
     btime_base = (uint64_t)ts_boot.tv_sec * 1000000000ULL
                + (uint64_t)ts_boot.tv_nsec;
 
-    err = tpb_rawdb_gen_tbatch_id(utc_bits, btime_base,
+    err = tpb_raf_gen_tbatch_id(utc_bits, btime_base,
                                    hostname, username,
                                    (uint32_t)getpid(),
                                    tbatch_id);
     CHECK("gen_tbatch_id", err == 0);
 
     memset(dummy_sha, 0xAB, 20);
-    err = tpb_rawdb_gen_kernel_id("test_fork_kernel",
+    err = tpb_raf_gen_kernel_id("test_fork_kernel",
                                    dummy_sha, dummy_sha,
                                    kernel_id);
     CHECK("gen_kernel_id", err == 0);
@@ -223,7 +223,7 @@ test_merge_fork(void)
             tpb_ts_get_datetime(TPBM_TS_UTC, &cdt);
             tpb_ts_datetime_to_bits(&cdt, 0, &cutc);
 
-            err = tpb_rawdb_gen_task_id(
+            err = tpb_raf_gen_task_id(
                 cutc, bt_s, hostname, username,
                 tbatch_id, kernel_id,
                 (uint32_t)ci,
@@ -246,7 +246,7 @@ test_merge_fork(void)
             tattr.nheader       = 0;
             tattr.headers       = NULL;
 
-            err = tpb_rawdb_record_write_task(
+            err = tpb_raf_record_write_task(
                 g_workspace, &tattr, NULL, 0);
             if (err) _exit(2);
 
@@ -297,7 +297,7 @@ test_merge_fork(void)
         }
         /* Parent writes all .tpbe entries (single-writer) */
         for (i = 0; i < N_PROCS; i++) {
-            err = tpb_rawdb_entry_append_task(
+            err = tpb_raf_entry_append_task(
                 g_workspace, &child_entries[i]);
             CHECK("parent entry_append", err == 0);
         }
@@ -321,7 +321,7 @@ test_merge_fork(void)
         int hi;
 
         memset(&merged, 0, sizeof(merged));
-        err = tpb_rawdb_record_read_task(
+        err = tpb_raf_record_read_task(
             g_workspace, merged_id,
             &merged, &mdata, &mdatasize);
         CHECK("read merged record", err == 0);
@@ -376,7 +376,7 @@ test_merge_fork(void)
             task_entry_t *entries = NULL;
             int ecount = 0;
 
-            err = tpb_rawdb_entry_list_task(
+            err = tpb_raf_entry_list_task(
                 g_workspace, &entries, &ecount);
             CHECK("list_task ok", err == 0);
             CHECK_INT("total entries",
@@ -408,7 +408,7 @@ test_merge_fork(void)
         }
 
         if (mdata) free(mdata);
-        tpb_rawdb_free_headers(merged.headers,
+        tpb_raf_free_headers(merged.headers,
                                merged.nheader);
     }
 

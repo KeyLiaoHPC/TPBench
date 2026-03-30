@@ -1,5 +1,5 @@
 /*
- * tpb-rawdb-entry.c
+ * tpb-raf-entry.c
  * Entry file (.tpbe) append, read, and list operations for all domains.
  *
  * .tpbe files are small index files; only rank 0 (main thread /
@@ -10,13 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-types.h"
 
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L
 _Static_assert(sizeof(tbatch_entry_t) == 264, "tbatch_entry_t on-disk size");
 _Static_assert(sizeof(kernel_entry_t) == 264, "kernel_entry_t on-disk size");
 _Static_assert(sizeof(task_entry_t) == 232, "task_entry_t on-disk size");
-_Static_assert(TPB_RAWDB_RESERVE_SIZE == 128, "TPB_RAWDB_RESERVE_SIZE");
+_Static_assert(TPB_RAF_RESERVE_SIZE == 128, "TPB_RAF_RESERVE_SIZE");
 #endif
 
 /* Local Function Prototypes */
@@ -39,17 +39,17 @@ build_entry_path(const char *workspace, uint8_t domain,
     const char *dir, *fname;
 
     switch (domain) {
-    case TPB_RAWDB_DOM_KERNEL:
-        dir = TPB_RAWDB_KERNEL_DIR;
-        fname = TPB_RAWDB_KERNEL_ENTRY;
+    case TPB_RAF_DOM_KERNEL:
+        dir = TPB_RAF_KERNEL_DIR;
+        fname = TPB_RAF_KERNEL_ENTRY;
         break;
-    case TPB_RAWDB_DOM_TASK:
-        dir = TPB_RAWDB_TASK_DIR;
-        fname = TPB_RAWDB_TASK_ENTRY;
+    case TPB_RAF_DOM_TASK:
+        dir = TPB_RAF_TASK_DIR;
+        fname = TPB_RAF_TASK_ENTRY;
         break;
     default:
-        dir = TPB_RAWDB_TBATCH_DIR;
-        fname = TPB_RAWDB_TBATCH_ENTRY;
+        dir = TPB_RAF_TBATCH_DIR;
+        fname = TPB_RAF_TBATCH_ENTRY;
         break;
     }
     snprintf(out, outlen, "%s/%s/%s", workspace, dir, fname);
@@ -65,31 +65,31 @@ static int
 entry_append_generic(const char *workspace, uint8_t domain,
                      const void *entry_data, size_t entry_size)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char start_magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char end_magic[TPB_RAWDB_MAGIC_LEN];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char start_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char end_magic[TPB_RAF_MAGIC_LEN];
     FILE *fp;
     struct stat st;
     long fsize;
 
     build_entry_path(workspace, domain, fpath, sizeof(fpath));
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY, domain,
-                          TPB_RAWDB_POS_START, start_magic);
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY, domain,
-                          TPB_RAWDB_POS_END, end_magic);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY, domain,
+                          TPB_RAF_POS_START, start_magic);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY, domain,
+                          TPB_RAF_POS_END, end_magic);
 
     if (stat(fpath, &st) != 0) {
         fp = fopen(fpath, "wb");
         if (!fp) return TPBE_FILE_IO_FAIL;
 
-        if (fwrite(start_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-            != TPB_RAWDB_MAGIC_LEN)
+        if (fwrite(start_magic, 1, TPB_RAF_MAGIC_LEN, fp)
+            != TPB_RAF_MAGIC_LEN)
             goto fail;
         if (fwrite(entry_data, 1, entry_size, fp) != entry_size)
             goto fail;
-        if (fwrite(end_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-            != TPB_RAWDB_MAGIC_LEN)
+        if (fwrite(end_magic, 1, TPB_RAF_MAGIC_LEN, fp)
+            != TPB_RAF_MAGIC_LEN)
             goto fail;
 
         fclose(fp);
@@ -100,31 +100,31 @@ entry_append_generic(const char *workspace, uint8_t domain,
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     fsize = (long)st.st_size;
-    if (fsize < (long)(2 * TPB_RAWDB_MAGIC_LEN))
+    if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN))
         goto fail;
 
     /* Verify trailing end_magic */
-    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0)
+    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0)
         goto fail;
     {
-        unsigned char check[TPB_RAWDB_MAGIC_LEN];
-        if (fread(check, 1, TPB_RAWDB_MAGIC_LEN, fp)
-            != TPB_RAWDB_MAGIC_LEN)
+        unsigned char check[TPB_RAF_MAGIC_LEN];
+        if (fread(check, 1, TPB_RAF_MAGIC_LEN, fp)
+            != TPB_RAF_MAGIC_LEN)
             goto fail;
-        if (!tpb_rawdb_validate_magic(check,
-                                      TPB_RAWDB_FTYPE_ENTRY,
+        if (!tpb_raf_validate_magic(check,
+                                      TPB_RAF_FTYPE_ENTRY,
                                       domain,
-                                      TPB_RAWDB_POS_END))
+                                      TPB_RAF_POS_END))
             goto fail;
     }
 
     /* Overwrite old end_magic with entry + new end_magic */
-    if (fseek(fp, fsize - TPB_RAWDB_MAGIC_LEN, SEEK_SET) != 0)
+    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0)
         goto fail;
     if (fwrite(entry_data, 1, entry_size, fp) != entry_size)
         goto fail;
-    if (fwrite(end_magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN)
+    if (fwrite(end_magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN)
         goto fail;
 
     fclose(fp);
@@ -144,12 +144,12 @@ entry_list_generic(const char *workspace, uint8_t domain,
                    void **entries_out, int *count_out,
                    size_t entry_size)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
+    char fpath[TPB_RAF_PATH_MAX];
     FILE *fp;
     struct stat st;
     long fsize, data_size;
     int n;
-    unsigned char magic_check[TPB_RAWDB_MAGIC_LEN];
+    unsigned char magic_check[TPB_RAF_MAGIC_LEN];
     void *buf;
 
     build_entry_path(workspace, domain, fpath, sizeof(fpath));
@@ -161,13 +161,13 @@ entry_list_generic(const char *workspace, uint8_t domain,
     }
 
     fsize = (long)st.st_size;
-    if (fsize < (long)(2 * TPB_RAWDB_MAGIC_LEN)) {
+    if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN)) {
         *entries_out = NULL;
         *count_out = 0;
         return TPBE_FILE_IO_FAIL;
     }
 
-    data_size = fsize - 2 * TPB_RAWDB_MAGIC_LEN;
+    data_size = fsize - 2 * TPB_RAF_MAGIC_LEN;
     if (data_size < 0 || (data_size % (long)entry_size) != 0) {
         *entries_out = NULL;
         *count_out = 0;
@@ -179,15 +179,15 @@ entry_list_generic(const char *workspace, uint8_t domain,
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     /* Verify start magic */
-    if (fread(magic_check, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic_check, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (!tpb_rawdb_validate_magic(magic_check,
-                                  TPB_RAWDB_FTYPE_ENTRY,
+    if (!tpb_raf_validate_magic(magic_check,
+                                  TPB_RAF_FTYPE_ENTRY,
                                   domain,
-                                  TPB_RAWDB_POS_START)) {
+                                  TPB_RAF_POS_START)) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
@@ -212,16 +212,16 @@ entry_list_generic(const char *workspace, uint8_t domain,
     }
 
     /* Verify end magic */
-    if (fread(magic_check, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic_check, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         free(buf);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (!tpb_rawdb_validate_magic(magic_check,
-                                  TPB_RAWDB_FTYPE_ENTRY,
+    if (!tpb_raf_validate_magic(magic_check,
+                                  TPB_RAF_FTYPE_ENTRY,
                                   domain,
-                                  TPB_RAWDB_POS_END)) {
+                                  TPB_RAF_POS_END)) {
         free(buf);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
@@ -236,67 +236,67 @@ entry_list_generic(const char *workspace, uint8_t domain,
 /* Public API wrappers */
 
 int
-tpb_rawdb_entry_append_tbatch(const char *workspace,
+tpb_raf_entry_append_tbatch(const char *workspace,
                               const tbatch_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAWDB_DOM_TBATCH,
+    return entry_append_generic(workspace, TPB_RAF_DOM_TBATCH,
                                 entry, sizeof(tbatch_entry_t));
 }
 
 int
-tpb_rawdb_entry_append_kernel(const char *workspace,
+tpb_raf_entry_append_kernel(const char *workspace,
                               const kernel_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAWDB_DOM_KERNEL,
+    return entry_append_generic(workspace, TPB_RAF_DOM_KERNEL,
                                 entry, sizeof(kernel_entry_t));
 }
 
 int
-tpb_rawdb_entry_append_task(const char *workspace,
+tpb_raf_entry_append_task(const char *workspace,
                             const task_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAWDB_DOM_TASK,
+    return entry_append_generic(workspace, TPB_RAF_DOM_TASK,
                                 entry, sizeof(task_entry_t));
 }
 
 int
-tpb_rawdb_entry_list_tbatch(const char *workspace,
+tpb_raf_entry_list_tbatch(const char *workspace,
                             tbatch_entry_t **entries,
                             int *count)
 {
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAWDB_DOM_TBATCH,
+    return entry_list_generic(workspace, TPB_RAF_DOM_TBATCH,
                               (void **)entries, count,
                               sizeof(tbatch_entry_t));
 }
 
 int
-tpb_rawdb_entry_list_kernel(const char *workspace,
+tpb_raf_entry_list_kernel(const char *workspace,
                             kernel_entry_t **entries,
                             int *count)
 {
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAWDB_DOM_KERNEL,
+    return entry_list_generic(workspace, TPB_RAF_DOM_KERNEL,
                               (void **)entries, count,
                               sizeof(kernel_entry_t));
 }
 
 int
-tpb_rawdb_entry_list_task(const char *workspace,
+tpb_raf_entry_list_task(const char *workspace,
                           task_entry_t **entries,
                           int *count)
 {
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAWDB_DOM_TASK,
+    return entry_list_generic(workspace, TPB_RAF_DOM_TASK,
                               (void **)entries, count,
                               sizeof(task_entry_t));
 }

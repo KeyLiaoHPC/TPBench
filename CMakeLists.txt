@@ -220,7 +220,7 @@ if(BUILD_TESTING)
 endif()
 
 # Workspace layout under install root (DESTDIR + CMAKE_INSTALL_PREFIX at install time).
-# Creates dirs only; does not touch rawdb files. etc/config.json only if missing.
+# Creates dirs only; does not touch rafdb files. etc/config.json only if missing.
 install(CODE "
   if(NOT \"\$ENV{DESTDIR}\" STREQUAL \"\")
     set(_tpb_install_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
@@ -229,10 +229,10 @@ install(CODE "
   endif()
   file(MAKE_DIRECTORY
     \"\${_tpb_install_root}/etc\"
-    \"\${_tpb_install_root}/rawdb/task_batch\"
-    \"\${_tpb_install_root}/rawdb/kernel\"
-    \"\${_tpb_install_root}/rawdb/task\"
-    \"\${_tpb_install_root}/rawdb/log\")
+    \"\${_tpb_install_root}/rafdb/task_batch\"
+    \"\${_tpb_install_root}/rafdb/kernel\"
+    \"\${_tpb_install_root}/rafdb/task\"
+    \"\${_tpb_install_root}/rafdb/log\")
   if(NOT EXISTS \"\${_tpb_install_root}/etc/config.json\")
     file(WRITE \"\${_tpb_install_root}/etc/config.json\"
       \"{\\n    \\\"name\\\": \\\"default\\\"\\n}\\n\")

@@ -9,13 +9,13 @@ set(TPB_CORELIB_SOURCES
     tpb-dynloader.c
     tpb-autorecord.c
     strftime.c
-    raw_db/tpb-rawdb-workspace.c
-    raw_db/tpb-rawdb-magic.c
-    raw_db/tpb-rawdb-entry.c
-    raw_db/tpb-rawdb-record.c
-    raw_db/tpb-rawdb-id.c
-    raw_db/tpb-rawdb-merge.c
-    raw_db/tpb-sha1.c
+    rafdb/tpb-raf-workspace.c
+    rafdb/tpb-raf-magic.c
+    rafdb/tpb-raf-entry.c
+    rafdb/tpb-raf-record.c
+    rafdb/tpb-raf-id.c
+    rafdb/tpb-raf-merge.c
+    rafdb/tpb-sha1.c
 )
 
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})

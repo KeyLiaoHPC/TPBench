@@ -785,7 +785,7 @@ recover_task_id_after_write(unsigned char id_out[20])
     unsigned char best_id[20];
     int ii;
 
-    err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
     if (err != 0) {
         return err;
     }
@@ -797,20 +797,20 @@ recover_task_id_after_write(unsigned char id_out[20])
 
     ev = getenv("TPB_KERNEL_ID");
     if (ev != NULL && strlen(ev) == 40) {
-        if (tpb_rawdb_hex_to_id(ev, want_kid) == 0) {
+        if (tpb_raf_hex_to_id(ev, want_kid) == 0) {
             have_kid = 1;
         }
     }
     ev = getenv("TPB_TBATCH_ID");
     if (ev != NULL && strlen(ev) == 40) {
-        if (tpb_rawdb_hex_to_id(ev, want_bid) == 0) {
+        if (tpb_raf_hex_to_id(ev, want_bid) == 0) {
             have_bid = 1;
         }
     }
 
     pid = (uint32_t)getpid();
 
-    err = tpb_rawdb_entry_list_task(workspace, &entries, &n);
+    err = tpb_raf_entry_list_task(workspace, &entries, &n);
     if (err != 0) {
         return err;
     }
@@ -821,7 +821,7 @@ recover_task_id_after_write(unsigned char id_out[20])
         uint64_t ds = 0;
 
         memset(&attr, 0, sizeof(attr));
-        err = tpb_rawdb_record_read_task(workspace,
+        err = tpb_raf_record_read_task(workspace,
             entries[ii].task_record_id, &attr, &data, &ds);
         if (err != 0) {
             continue;
@@ -829,7 +829,7 @@ recover_task_id_after_write(unsigned char id_out[20])
         if (data != NULL) {
             free(data);
         }
-        tpb_rawdb_free_headers(attr.headers, attr.nheader);
+        tpb_raf_free_headers(attr.headers, attr.nheader);
 
         if (attr.pid != pid) {
             continue;
@@ -1086,7 +1086,7 @@ main(int argc, char **argv)
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
     /*
-     * Required for tpb_rawdb_resolve_workspace (write_task + task ID recovery).
+     * Required for tpb_raf_resolve_workspace (write_task + task ID recovery).
      * Uses TPB_WORKSPACE from the environment when non-NULL.
      */
     err = tpb_k_corelib_init(NULL);

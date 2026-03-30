@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "mock_kernel.h"
 #include "mock_timer.h"
 
@@ -56,7 +56,7 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
     tpb_k_rthdl_t hdl;
 
     setup_test_dir(tag);
-    err = tpb_rawdb_init_workspace(g_test_dir);
+    err = tpb_raf_init_workspace(g_test_dir);
     if (err) { cleanup_test_dir(); return 1; }
 
     err = mock_setup_driver();
@@ -99,7 +99,7 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
     /* Count existing task entries */
     task_entry_t *entries_before = NULL;
     int count_before = 0;
-    tpb_rawdb_entry_list_task(g_test_dir, &entries_before, &count_before);
+    tpb_raf_entry_list_task(g_test_dir, &entries_before, &count_before);
     free(entries_before);
 
     /* Write via public API */
@@ -113,7 +113,7 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
     /* Find the new task id */
     task_entry_t *entries_after = NULL;
     int count_after = 0;
-    err = tpb_rawdb_entry_list_task(g_test_dir, &entries_after, &count_after);
+    err = tpb_raf_entry_list_task(g_test_dir, &entries_after, &count_after);
     if (err || count_after != count_before + 1) {
         fprintf(stderr, "  FAIL: expected %d task entries, got %d (err=%d)\n",
                 count_before + 1, count_after, err);
@@ -131,10 +131,10 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
     void *rdata = NULL;
     uint64_t rdatasize = 0;
 
-    err = tpb_rawdb_record_read_task(g_test_dir, new_task_id,
+    err = tpb_raf_record_read_task(g_test_dir, new_task_id,
                                      &rattr, &rdata, &rdatasize);
     if (err) {
-        fprintf(stderr, "  FAIL: tpb_rawdb_record_read_task returned %d\n", err);
+        fprintf(stderr, "  FAIL: tpb_raf_record_read_task returned %d\n", err);
         ret = 1;
         goto done;
     }
@@ -215,7 +215,7 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
         }
     }
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
 
 done:

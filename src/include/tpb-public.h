@@ -135,7 +135,7 @@ typedef enum {
 } tpb_corelib_caller_t;
 
 /**
- * @brief Initialize TPBench corelib for this process: resolve workspace, create rawdb
+ * @brief Initialize TPBench corelib for this process: resolve workspace, create rafdb
  *        layout under that root, open the run log, and record caller as tpbcli.
  *        Call before any other corelib API that depends on workspace or logging.
  * @param tpb_workspace_path Optional workspace root override, or NULL to use $TPB_WORKSPACE then $HOME/.tpbench.
@@ -329,7 +329,7 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
 /**
  * @brief Write a task record after kernel execution.
  *
- * Records kernel inputs and outputs to the raw database.
+ * Records kernel inputs and outputs to the RAFDB database.
  * Reads TPB_TBATCH_ID / TPB_HANDLE_INDEX / TPB_WORKSPACE from env.
  * Outputs are written as 1-D arrays.
  *
@@ -436,10 +436,10 @@ int tpb_cliout_args(tpb_k_rthdl_t *handle);
  */
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
-/* ===== Record Data Types (rawdb) ===== */
+/* ===== Record Data Types (rafdb) ===== */
 
 /** @brief Opaque reserve size in .tpbr meta and tail of .tpbe entry rows (bytes) */
-#define TPB_RAWDB_RESERVE_SIZE 128
+#define TPB_RAF_RESERVE_SIZE 128
 
 /** @brief 64-bit bit-packed datetime representation */
 typedef uint64_t tpb_dtbits_t;
@@ -502,7 +502,7 @@ typedef struct tbatch_entry {
     uint32_t ntask;               /**< Number of tasks */
     uint32_t nscore;              /**< Number of scores */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; /**< Reserved */
 } tbatch_entry_t;
 
 /** @brief Kernel full attributes (.tpbr meta section) */
@@ -533,7 +533,7 @@ typedef struct kernel_entry {
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nparm;               /**< Number of parameters */
     uint32_t nmetric;             /**< Number of metrics */
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE]; /**< Reserved */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; /**< Reserved */
 } kernel_entry_t;
 
 /** @brief Task full attributes (.tpbr meta section) */
@@ -568,10 +568,10 @@ typedef struct task_entry {
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
     unsigned char dup_to[20];         /**< Merge target: merged TaskRecordID, or zero */
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE - 20]; /**< Reserved */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20]; /**< Reserved */
 } task_entry_t;
 
-/* ===== rawdb Workspace API ===== */
+/* ===== rafdb Workspace API ===== */
 
 /**
  * @brief Copy the workspace path set by tpb_corelib_init into out_path.
@@ -583,40 +583,40 @@ typedef struct task_entry {
  * @param pathlen  Buffer size
  * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if corelib not initialized, or TPBE_FILE_IO_FAIL
  */
-int tpb_rawdb_resolve_workspace(char *out_path, size_t pathlen);
+int tpb_raf_resolve_workspace(char *out_path, size_t pathlen);
 
 /**
  * @brief Initialize workspace directory structure.
  *
- * Creates etc/config.json and rawdb/{task_batch,kernel,task,log}
+ * Creates etc/config.json and rafdb/{task_batch,kernel,task,log}
  * directories if they do not exist.
  *
  * @param workspace_path Root workspace directory
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_init_workspace(const char *workspace_path);
+int tpb_raf_init_workspace(const char *workspace_path);
 
-/* ===== rawdb Magic API ===== */
+/* ===== rafdb Magic API ===== */
 
 /** @brief Entry file (.tpbe) type nibble for magic byte 4 (high nibble) */
-#define TPB_RAWDB_FTYPE_ENTRY   ((uint8_t)0xE0)
+#define TPB_RAF_FTYPE_ENTRY   ((uint8_t)0xE0)
 /** @brief Record file (.tpbr) type nibble for magic byte 4 (high nibble) */
-#define TPB_RAWDB_FTYPE_RECORD  ((uint8_t)0xD0)
+#define TPB_RAF_FTYPE_RECORD  ((uint8_t)0xD0)
 /** @brief Task batch domain (magic byte 4 low nibble) */
-#define TPB_RAWDB_DOM_TBATCH    ((uint8_t)0x00)
+#define TPB_RAF_DOM_TBATCH    ((uint8_t)0x00)
 /** @brief Kernel domain (magic byte 4 low nibble) */
-#define TPB_RAWDB_DOM_KERNEL    ((uint8_t)0x01)
+#define TPB_RAF_DOM_KERNEL    ((uint8_t)0x01)
 /** @brief Task domain (magic byte 4 low nibble) */
-#define TPB_RAWDB_DOM_TASK      ((uint8_t)0x02)
+#define TPB_RAF_DOM_TASK      ((uint8_t)0x02)
 
 /**
  * @brief Build an 8-byte magic signature.
- * @param ftype  File type (TPB_RAWDB_FTYPE_ENTRY or _RECORD)
- * @param domain Domain (TPB_RAWDB_DOM_TBATCH/KERNEL/TASK)
- * @param pos    Position (TPB_RAWDB_POS_START/SPLIT/END)
+ * @param ftype  File type (TPB_RAF_FTYPE_ENTRY or _RECORD)
+ * @param domain Domain (TPB_RAF_DOM_TBATCH/KERNEL/TASK)
+ * @param pos    Position (TPB_RAF_POS_START/SPLIT/END)
  * @param out    Output buffer, at least 8 bytes
  */
-void tpb_rawdb_build_magic(uint8_t ftype, uint8_t domain,
+void tpb_raf_build_magic(uint8_t ftype, uint8_t domain,
                            uint8_t pos, unsigned char out[8]);
 
 /**
@@ -627,7 +627,7 @@ void tpb_rawdb_build_magic(uint8_t ftype, uint8_t domain,
  * @param pos    Expected position
  * @return 1 if valid, 0 if invalid
  */
-int tpb_rawdb_validate_magic(const unsigned char magic[8],
+int tpb_raf_validate_magic(const unsigned char magic[8],
                              uint8_t ftype, uint8_t domain,
                              uint8_t pos);
 
@@ -640,22 +640,22 @@ int tpb_rawdb_validate_magic(const unsigned char magic[8],
  * @param max_results Maximum offsets to return
  * @return 0 on success
  */
-int tpb_rawdb_magic_scan(const void *buf, size_t len,
+int tpb_raf_magic_scan(const void *buf, size_t len,
                          size_t *offsets, int *nfound,
                          int max_results);
 
 /**
- * @brief Detect rawdb file type and domain from the first 8-byte magic.
+ * @brief Detect rafdb file type and domain from the first 8-byte magic.
  * @param filepath Path to a .tpbe or .tpbr file
- * @param ftype_out Receives TPB_RAWDB_FTYPE_ENTRY or TPB_RAWDB_FTYPE_RECORD
- * @param domain_out Receives TPB_RAWDB_DOM_TBATCH, _KERNEL, or _TASK
+ * @param ftype_out Receives TPB_RAF_FTYPE_ENTRY or TPB_RAF_FTYPE_RECORD
+ * @param domain_out Receives TPB_RAF_DOM_TBATCH, _KERNEL, or _TASK
  * @return 0 on success, TPBE_FILE_IO_FAIL if unreadable or invalid magic
  */
-int tpb_rawdb_detect_file(const char *filepath,
+int tpb_raf_detect_file(const char *filepath,
                           uint8_t *ftype_out,
                           uint8_t *domain_out);
 
-/* ===== rawdb Entry API (.tpbe) ===== */
+/* ===== rafdb Entry API (.tpbe) ===== */
 
 /**
  * @brief Append a tbatch entry to the .tpbe file.
@@ -663,7 +663,7 @@ int tpb_rawdb_detect_file(const char *filepath,
  * @param entry     Entry to append
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_append_tbatch(const char *workspace,
+int tpb_raf_entry_append_tbatch(const char *workspace,
                                   const tbatch_entry_t *entry);
 
 /**
@@ -672,7 +672,7 @@ int tpb_rawdb_entry_append_tbatch(const char *workspace,
  * @param entry     Entry to append
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_append_kernel(const char *workspace,
+int tpb_raf_entry_append_kernel(const char *workspace,
                                   const kernel_entry_t *entry);
 
 /**
@@ -681,7 +681,7 @@ int tpb_rawdb_entry_append_kernel(const char *workspace,
  * @param entry     Entry to append
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_append_task(const char *workspace,
+int tpb_raf_entry_append_task(const char *workspace,
                                 const task_entry_t *entry);
 
 /**
@@ -691,7 +691,7 @@ int tpb_rawdb_entry_append_task(const char *workspace,
  * @param count     Output: number of entries
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_list_tbatch(const char *workspace,
+int tpb_raf_entry_list_tbatch(const char *workspace,
                                 tbatch_entry_t **entries,
                                 int *count);
 
@@ -702,7 +702,7 @@ int tpb_rawdb_entry_list_tbatch(const char *workspace,
  * @param count     Output: number of entries
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_list_kernel(const char *workspace,
+int tpb_raf_entry_list_kernel(const char *workspace,
                                 kernel_entry_t **entries,
                                 int *count);
 
@@ -713,11 +713,11 @@ int tpb_rawdb_entry_list_kernel(const char *workspace,
  * @param count     Output: number of entries
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_entry_list_task(const char *workspace,
+int tpb_raf_entry_list_task(const char *workspace,
                               task_entry_t **entries,
                               int *count);
 
-/* ===== rawdb Record API (.tpbr) ===== */
+/* ===== rafdb Record API (.tpbr) ===== */
 
 /**
  * @brief Write a tbatch .tpbr record file.
@@ -727,7 +727,7 @@ int tpb_rawdb_entry_list_task(const char *workspace,
  * @param datasize  Size of record data in bytes
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_write_tbatch(const char *workspace,
+int tpb_raf_record_write_tbatch(const char *workspace,
                                   const tbatch_attr_t *attr,
                                   const void *data,
                                   uint64_t datasize);
@@ -736,12 +736,12 @@ int tpb_rawdb_record_write_tbatch(const char *workspace,
  * @brief Read a tbatch .tpbr record file.
  * @param workspace Workspace root path
  * @param tbatch_id 20-byte TBatchID
- * @param attr      Output attributes (headers allocated; free with tpb_rawdb_free_headers)
+ * @param attr      Output attributes (headers allocated; free with tpb_raf_free_headers)
  * @param data      Output data buffer (caller must free, may be NULL)
  * @param datasize  Output data size
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_read_tbatch(const char *workspace,
+int tpb_raf_record_read_tbatch(const char *workspace,
                                  const unsigned char tbatch_id[20],
                                  tbatch_attr_t *attr,
                                  void **data,
@@ -755,7 +755,7 @@ int tpb_rawdb_record_read_tbatch(const char *workspace,
  * @param datasize  Size of record data in bytes
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_write_kernel(const char *workspace,
+int tpb_raf_record_write_kernel(const char *workspace,
                                   const kernel_attr_t *attr,
                                   const void *data,
                                   uint64_t datasize);
@@ -769,7 +769,7 @@ int tpb_rawdb_record_write_kernel(const char *workspace,
  * @param datasize  Output data size
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_read_kernel(const char *workspace,
+int tpb_raf_record_read_kernel(const char *workspace,
                                  const unsigned char kernel_id[20],
                                  kernel_attr_t *attr,
                                  void **data,
@@ -783,7 +783,7 @@ int tpb_rawdb_record_read_kernel(const char *workspace,
  * @param datasize  Size of record data in bytes
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_write_task(const char *workspace,
+int tpb_raf_record_write_task(const char *workspace,
                                 const task_attr_t *attr,
                                 const void *data,
                                 uint64_t datasize);
@@ -797,7 +797,7 @@ int tpb_rawdb_record_write_task(const char *workspace,
  * @param datasize  Output data size
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_record_read_task(const char *workspace,
+int tpb_raf_record_read_task(const char *workspace,
                                const unsigned char task_id[20],
                                task_attr_t *attr,
                                void **data,
@@ -808,10 +808,10 @@ int tpb_rawdb_record_read_task(const char *workspace,
  * @param headers Header array
  * @param nheader Number of headers
  */
-void tpb_rawdb_free_headers(tpb_meta_header_t *headers,
+void tpb_raf_free_headers(tpb_meta_header_t *headers,
                             uint32_t nheader);
 
-/* ===== rawdb ID Generation ===== */
+/* ===== rafdb ID Generation ===== */
 
 /**
  * @brief Generate TBatchID via SHA1.
@@ -823,7 +823,7 @@ void tpb_rawdb_free_headers(tpb_meta_header_t *headers,
  * @param id_out    20-byte output buffer
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_gen_tbatch_id(tpb_dtbits_t utc_bits,
+int tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
                             uint64_t btime,
                             const char *hostname,
                             const char *username,
@@ -838,7 +838,7 @@ int tpb_rawdb_gen_tbatch_id(tpb_dtbits_t utc_bits,
  * @param id_out      20-byte output buffer
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_gen_kernel_id(const char *kernel_name,
+int tpb_raf_gen_kernel_id(const char *kernel_name,
                             const unsigned char so_sha1[20],
                             const unsigned char bin_sha1[20],
                             unsigned char id_out[20]);
@@ -857,7 +857,7 @@ int tpb_rawdb_gen_kernel_id(const char *kernel_name,
  * @param id_out     20-byte output buffer
  * @return 0 on success, error code otherwise
  */
-int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
+int tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                           uint64_t btime,
                           const char *hostname,
                           const char *username,
@@ -873,7 +873,7 @@ int tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
  * @param id  20-byte ID
  * @param hex Output buffer, at least 41 bytes (40 hex + NUL)
  */
-void tpb_rawdb_id_to_hex(const unsigned char id[20],
+void tpb_raf_id_to_hex(const unsigned char id[20],
                          char hex[41]);
 
 /**
@@ -882,16 +882,16 @@ void tpb_rawdb_id_to_hex(const unsigned char id[20],
  * @param id  Output 20-byte buffer
  * @return 0 on success, TPBE_NULLPTR_ARG or TPBE_CLI_FAIL on error
  */
-int tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20]);
+int tpb_raf_hex_to_id(const char *hex, unsigned char id[20]);
 
 /**
  * @brief Find which domain directory contains a .tpbr for the given ID.
  * @param workspace Workspace root
  * @param id 20-byte record ID
- * @param domain_out Receives TPB_RAWDB_DOM_TBATCH, _KERNEL, or _TASK
+ * @param domain_out Receives TPB_RAF_DOM_TBATCH, _KERNEL, or _TASK
  * @return 0 on success, TPBE_FILE_IO_FAIL if no matching file
  */
-int tpb_rawdb_find_record(const char *workspace,
+int tpb_raf_find_record(const char *workspace,
                           const unsigned char id[20],
                           uint8_t *domain_out);
 

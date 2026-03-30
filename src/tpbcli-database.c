@@ -5,7 +5,7 @@
 
 #include <string.h>
 
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "tpbcli-database.h"
 
 /*
@@ -16,7 +16,7 @@
 int
 tpbcli_database(int argc, char **argv)
 {
-    char workspace[TPB_RAWDB_PATH_MAX];
+    char workspace[TPB_RAF_PATH_MAX];
     int err;
 
     if (argc < 3) {
@@ -25,7 +25,7 @@ tpbcli_database(int argc, char **argv)
         return TPBE_CLI_FAIL;
     }
 
-    err = tpb_rawdb_resolve_workspace(workspace,
+    err = tpb_raf_resolve_workspace(workspace,
                                       sizeof(workspace));
     if (err != TPBE_SUCCESS) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,

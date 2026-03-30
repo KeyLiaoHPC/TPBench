@@ -20,7 +20,7 @@
 #include "tpb-dynloader.h"
 #include "tpb-driver.h"
 #include "tpb-public.h"
-#include "raw_db/tpb-sha1.h"
+#include "rafdb/tpb-sha1.h"
 
 /* Compile-time TPB_DIR from CMake, may be empty */
 #ifndef TPB_DIR
@@ -234,10 +234,10 @@ follow_kernel_dup_chain(const char *workspace,
         uint64_t rec_datasize = 0;
 
         memset(&attr, 0, sizeof(attr));
-        err = tpb_rawdb_record_read_kernel(workspace, cur_id,
+        err = tpb_raf_record_read_kernel(workspace, cur_id,
                                            &attr, &rec_data, &rec_datasize);
         if (attr.headers != NULL) {
-            tpb_rawdb_free_headers(attr.headers, attr.nheader);
+            tpb_raf_free_headers(attr.headers, attr.nheader);
         }
         if (rec_data != NULL) {
             free(rec_data);
@@ -279,12 +279,12 @@ resolve_kernel_id_for_workspace(const char *workspace,
     }
     *is_new_kernel = 0;
 
-    err = tpb_rawdb_gen_kernel_id(kernel_name, so_sha1, bin_sha1, computed_id);
+    err = tpb_raf_gen_kernel_id(kernel_name, so_sha1, bin_sha1, computed_id);
     if (err != TPBE_SUCCESS) {
         return err;
     }
 
-    err = tpb_rawdb_entry_list_kernel(workspace, &entries, &nentries);
+    err = tpb_raf_entry_list_kernel(workspace, &entries, &nentries);
     if (err != TPBE_SUCCESS) {
         nentries = 0;
         entries = NULL;
@@ -320,7 +320,7 @@ resolve_kernel_id_for_workspace(const char *workspace,
         attr.kctrl = 0;
         attr.nheader = 0;
 
-        err = tpb_rawdb_record_write_kernel(workspace, &attr, NULL, 0);
+        err = tpb_raf_record_write_kernel(workspace, &attr, NULL, 0);
         if (err != TPBE_SUCCESS) {
             free(entries);
             return err;
@@ -334,7 +334,7 @@ resolve_kernel_id_for_workspace(const char *workspace,
         ent.nparm = 0;
         ent.nmetric = 0;
 
-        err = tpb_rawdb_entry_append_kernel(workspace, &ent);
+        err = tpb_raf_entry_append_kernel(workspace, &ent);
         if (err != TPBE_SUCCESS) {
             free(entries);
             return err;
@@ -455,11 +455,11 @@ tpb_dl_scan(void)
             err = hash_file_sha1(tpbx_path, bin_sha1);
         }
         if (err == TPBE_SUCCESS) {
-            err = tpb_rawdb_gen_kernel_id(kernel_name, so_sha1, bin_sha1,
+            err = tpb_raf_gen_kernel_id(kernel_name, so_sha1, bin_sha1,
                                           kernel_id);
         }
         if (err == TPBE_SUCCESS) {
-            ws_err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+            ws_err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
             if (ws_err == TPBE_SUCCESS) {
                 ws_err = resolve_kernel_id_for_workspace(workspace, kernel_name,
                                                          so_sha1, bin_sha1,
@@ -472,7 +472,7 @@ tpb_dl_scan(void)
 
         record_ok = (err == TPBE_SUCCESS && ws_err == TPBE_SUCCESS) ? 1 : 0;
 
-        tpb_rawdb_id_to_hex(kernel_id, kernel_id_hex);
+        tpb_raf_id_to_hex(kernel_id, kernel_id_hex);
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                    " KernelID=%s\n", kernel_id_hex);
         if (is_new_kernel) {

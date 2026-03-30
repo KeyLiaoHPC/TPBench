@@ -1,6 +1,6 @@
 /*
- * test_rawdb.c
- * Test pack A4: rawdb module unit tests (A4.1-A4.19).
+ * test_raf.c
+ * Test pack A4: rafdb module unit tests (A4.1-A4.19).
  */
 
 #include <stdio.h>
@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
-#include "corelib/raw_db/tpb-sha1.h"
+#include "corelib/rafdb/tpb-raf-types.h"
+#include "corelib/rafdb/tpb-sha1.h"
 #include "corelib/strftime.h"
 
 typedef struct {
@@ -75,13 +75,13 @@ static void
 setup_test_dir(void)
 {
     snprintf(g_test_dir, sizeof(g_test_dir),
-             "/tmp/tpb_rawdb_test_%d", (int)getpid());
+             "/tmp/tpb_raf_test_%d", (int)getpid());
     mkdir(g_test_dir, 0755);
 
     char path[600];
     snprintf(path, sizeof(path), "%s/%s",
-             g_test_dir, TPB_RAWDB_TBATCH_DIR);
-    tpb_rawdb_init_workspace(g_test_dir);
+             g_test_dir, TPB_RAF_TBATCH_DIR);
+    tpb_raf_init_workspace(g_test_dir);
 }
 
 static void
@@ -98,9 +98,9 @@ test_magic_construct(void)
 {
     unsigned char m[8];
     /* tbatch entry start */
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY,
-                          TPB_RAWDB_DOM_TBATCH,
-                          TPB_RAWDB_POS_START, m);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
+                          TPB_RAF_DOM_TBATCH,
+                          TPB_RAF_POS_START, m);
     if (m[0] != 0xE1 || m[1] != 0x54 || m[2] != 0x50 ||
         m[3] != 0x42 || m[4] != 0xE0 || m[5] != 0x53 ||
         m[6] != 0x31 || m[7] != 0xE0) {
@@ -108,15 +108,15 @@ test_magic_construct(void)
     }
 
     /* kernel record split */
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_KERNEL,
-                          TPB_RAWDB_POS_SPLIT, m);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_KERNEL,
+                          TPB_RAF_POS_SPLIT, m);
     if (m[4] != 0xD1 || m[5] != 0x44) return 1;
 
     /* task entry end */
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY,
-                          TPB_RAWDB_DOM_TASK,
-                          TPB_RAWDB_POS_END, m);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
+                          TPB_RAF_DOM_TASK,
+                          TPB_RAF_POS_END, m);
     if (m[4] != 0xE2 || m[5] != 0x45) return 1;
 
     return 0;
@@ -127,21 +127,21 @@ static int
 test_magic_validate_ok(void)
 {
     unsigned char m[8];
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY,
-                          TPB_RAWDB_DOM_TBATCH,
-                          TPB_RAWDB_POS_START, m);
-    if (!tpb_rawdb_validate_magic(m, TPB_RAWDB_FTYPE_ENTRY,
-                                  TPB_RAWDB_DOM_TBATCH,
-                                  TPB_RAWDB_POS_START)) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
+                          TPB_RAF_DOM_TBATCH,
+                          TPB_RAF_POS_START, m);
+    if (!tpb_raf_validate_magic(m, TPB_RAF_FTYPE_ENTRY,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_START)) {
         return 1;
     }
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_TASK,
-                          TPB_RAWDB_POS_END, m);
-    if (!tpb_rawdb_validate_magic(m, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TASK,
-                                  TPB_RAWDB_POS_END)) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_TASK,
+                          TPB_RAF_POS_END, m);
+    if (!tpb_raf_validate_magic(m, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TASK,
+                                  TPB_RAF_POS_END)) {
         return 1;
     }
     return 0;
@@ -152,22 +152,22 @@ static int
 test_magic_validate_bad(void)
 {
     unsigned char m[8];
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY,
-                          TPB_RAWDB_DOM_TBATCH,
-                          TPB_RAWDB_POS_START, m);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
+                          TPB_RAF_DOM_TBATCH,
+                          TPB_RAF_POS_START, m);
 
     /* Wrong domain should fail */
-    if (tpb_rawdb_validate_magic(m, TPB_RAWDB_FTYPE_ENTRY,
-                                 TPB_RAWDB_DOM_KERNEL,
-                                 TPB_RAWDB_POS_START)) {
+    if (tpb_raf_validate_magic(m, TPB_RAF_FTYPE_ENTRY,
+                                 TPB_RAF_DOM_KERNEL,
+                                 TPB_RAF_POS_START)) {
         return 1;
     }
 
     /* Corrupted byte */
     m[0] = 0x00;
-    if (tpb_rawdb_validate_magic(m, TPB_RAWDB_FTYPE_ENTRY,
-                                 TPB_RAWDB_DOM_TBATCH,
-                                 TPB_RAWDB_POS_START)) {
+    if (tpb_raf_validate_magic(m, TPB_RAF_FTYPE_ENTRY,
+                                 TPB_RAF_DOM_TBATCH,
+                                 TPB_RAF_POS_START)) {
         return 1;
     }
     return 0;
@@ -184,13 +184,13 @@ test_magic_scan_tpbe(void)
 
     memset(buf, 0xAB, sizeof(buf));
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_ENTRY,
-                          TPB_RAWDB_DOM_TBATCH,
-                          TPB_RAWDB_POS_START, magic);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
+                          TPB_RAF_DOM_TBATCH,
+                          TPB_RAF_POS_START, magic);
     memcpy(buf + 50, magic, 8);
     memcpy(buf + 200, magic, 8);
 
-    tpb_rawdb_magic_scan(buf, sizeof(buf), offsets,
+    tpb_raf_magic_scan(buf, sizeof(buf), offsets,
                          &nfound, 4);
     if (nfound != 2) return 1;
     if (offsets[0] != 50 || offsets[1] != 200) return 1;
@@ -208,12 +208,12 @@ test_magic_scan_tpbr(void)
 
     memset(buf, 0xCD, sizeof(buf));
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_KERNEL,
-                          TPB_RAWDB_POS_START, magic);
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_KERNEL,
+                          TPB_RAF_POS_START, magic);
     memcpy(buf + 30, magic, 8);
 
-    tpb_rawdb_magic_scan(buf, sizeof(buf), offsets,
+    tpb_raf_magic_scan(buf, sizeof(buf), offsets,
                          &nfound, 4);
     if (nfound != 1) return 1;
     if (offsets[0] != 30) return 1;
@@ -226,9 +226,9 @@ test_id_tbatch(void)
 {
     unsigned char id1[20], id2[20];
 
-    tpb_rawdb_gen_tbatch_id(12345, 67890,
+    tpb_raf_gen_tbatch_id(12345, 67890,
                             "node01", "testuser", 1000, id1);
-    tpb_rawdb_gen_tbatch_id(12345, 67890,
+    tpb_raf_gen_tbatch_id(12345, 67890,
                             "node01", "testuser", 1000, id2);
 
     if (memcmp(id1, id2, 20) != 0) return 1;
@@ -245,8 +245,8 @@ test_id_kernel(void)
     memset(so, 0xAA, 20);
     memset(bin, 0xBB, 20);
 
-    tpb_rawdb_gen_kernel_id("triad", so, bin, id1);
-    tpb_rawdb_gen_kernel_id("triad", so, bin, id2);
+    tpb_raf_gen_kernel_id("triad", so, bin, id1);
+    tpb_raf_gen_kernel_id("triad", so, bin, id2);
 
     if (memcmp(id1, id2, 20) != 0) return 1;
     return 0;
@@ -262,13 +262,13 @@ test_id_task(void)
     memset(tb, 0x11, 20);
     memset(kn, 0x22, 20);
 
-    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+    tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 333, 444, id1);
-    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+    tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 333, 444, id2);
-    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+    tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 334, 444, id3);
-    tpb_rawdb_gen_task_id(111, 222, "host", "user",
+    tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 333, 445, id4);
 
     if (memcmp(id1, id2, 20) != 0) return 1;
@@ -287,13 +287,13 @@ test_id_uniqueness(void)
     memset(so, 0xAA, 20);
     memset(bin, 0xBB, 20);
 
-    tpb_rawdb_gen_kernel_id("triad", so, bin, id_a);
-    tpb_rawdb_gen_kernel_id("stream", so, bin, id_b);
+    tpb_raf_gen_kernel_id("triad", so, bin, id_a);
+    tpb_raf_gen_kernel_id("stream", so, bin, id_b);
 
     if (memcmp(id_a, id_b, 20) == 0) return 1;
 
-    tpb_rawdb_gen_tbatch_id(100, 200, "h", "u", 1, id_a);
-    tpb_rawdb_gen_tbatch_id(100, 200, "h", "u", 2, id_b);
+    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 1, id_a);
+    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 2, id_b);
 
     if (memcmp(id_a, id_b, 20) == 0) return 1;
     return 0;
@@ -317,12 +317,12 @@ test_entry_tbatch(void)
     e.nscore = 0;
     e.batch_type = TPB_BATCH_TYPE_RUN;
 
-    int err = tpb_rawdb_entry_append_tbatch(g_test_dir, &e);
+    int err = tpb_raf_entry_append_tbatch(g_test_dir, &e);
     if (err) { cleanup_test_dir(); return 1; }
 
     tbatch_entry_t *entries = NULL;
     int count = 0;
-    err = tpb_rawdb_entry_list_tbatch(g_test_dir, &entries,
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &entries,
                                       &count);
     if (err || count != 1) {
         free(entries);
@@ -362,12 +362,12 @@ test_entry_kernel(void)
     e.nparm = 3;
     e.nmetric = 1;
 
-    int err = tpb_rawdb_entry_append_kernel(g_test_dir, &e);
+    int err = tpb_raf_entry_append_kernel(g_test_dir, &e);
     if (err) { cleanup_test_dir(); return 1; }
 
     kernel_entry_t *entries = NULL;
     int count = 0;
-    err = tpb_rawdb_entry_list_kernel(g_test_dir, &entries,
+    err = tpb_raf_entry_list_kernel(g_test_dir, &entries,
                                       &count);
     if (err || count != 1) {
         free(entries);
@@ -406,12 +406,12 @@ test_entry_task(void)
     e.exit_code = 0;
     e.handle_index = 1;
 
-    int err = tpb_rawdb_entry_append_task(g_test_dir, &e);
+    int err = tpb_raf_entry_append_task(g_test_dir, &e);
     if (err) { cleanup_test_dir(); return 1; }
 
     task_entry_t *entries = NULL;
     int count = 0;
-    err = tpb_rawdb_entry_list_task(g_test_dir, &entries,
+    err = tpb_raf_entry_list_task(g_test_dir, &entries,
                                     &count);
     if (err || count != 1) {
         free(entries);
@@ -450,13 +450,13 @@ test_entry_multi(void)
         e.ntask = (uint32_t)(i * 2);
         e.batch_type = TPB_BATCH_TYPE_RUN;
 
-        err = tpb_rawdb_entry_append_tbatch(g_test_dir, &e);
+        err = tpb_raf_entry_append_tbatch(g_test_dir, &e);
         if (err) { cleanup_test_dir(); return 1; }
     }
 
     tbatch_entry_t *entries = NULL;
     int count = 0;
-    err = tpb_rawdb_entry_list_tbatch(g_test_dir, &entries,
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &entries,
                                       &count);
     if (err || count != 5) {
         free(entries);
@@ -493,7 +493,7 @@ make_test_header(const char *name, uint32_t ndim,
     h.uattr_bits = TPB_UNIT_NS;
     snprintf(h.name, TPBM_NAME_STR_MAX_LEN, "%s", name);
     snprintf(h.note, TPBM_NOTE_STR_MAX_LEN, "Test header %s", name);
-    h.block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    h.block_size = TPB_RAF_HDR_FIXED_SIZE;
 
     for (j = 0; j < ndim; j++) {
         snprintf(h.dimnames[j], 64, "dim%u", j);
@@ -538,7 +538,7 @@ test_record_tbatch(void)
     unsigned char data[20];
     memset(data, 0xFF, 20);
 
-    int err = tpb_rawdb_record_write_tbatch(g_test_dir, &attr,
+    int err = tpb_raf_record_write_tbatch(g_test_dir, &attr,
                                             data, 20);
     free_test_header(&h);
     if (err) { cleanup_test_dir(); return 1; }
@@ -546,7 +546,7 @@ test_record_tbatch(void)
     tbatch_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_tbatch(g_test_dir,
+    err = tpb_raf_record_read_tbatch(g_test_dir,
                                        attr.tbatch_id,
                                        &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -568,7 +568,7 @@ test_record_tbatch(void)
         fail = 1;
     }
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;
@@ -599,7 +599,7 @@ test_record_kernel(void)
     attr.headers = &h;
 
     uint64_t data = 100;
-    int err = tpb_rawdb_record_write_kernel(g_test_dir, &attr,
+    int err = tpb_raf_record_write_kernel(g_test_dir, &attr,
                                             &data, 8);
     free_test_header(&h);
     if (err) { cleanup_test_dir(); return 1; }
@@ -607,7 +607,7 @@ test_record_kernel(void)
     kernel_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_kernel(g_test_dir,
+    err = tpb_raf_record_read_kernel(g_test_dir,
                                        attr.kernel_id,
                                        &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -620,7 +620,7 @@ test_record_kernel(void)
     if (rsize != 8) fail = 1;
     if (rdata && *(uint64_t *)rdata != 100) fail = 1;
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;
@@ -654,7 +654,7 @@ test_record_task(void)
     attr.headers = &h;
 
     int64_t elapsed = 123456789LL;
-    int err = tpb_rawdb_record_write_task(g_test_dir, &attr,
+    int err = tpb_raf_record_write_task(g_test_dir, &attr,
                                           &elapsed, 8);
     free_test_header(&h);
     if (err) { cleanup_test_dir(); return 1; }
@@ -662,7 +662,7 @@ test_record_task(void)
     task_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_task(g_test_dir,
+    err = tpb_raf_record_read_task(g_test_dir,
                                      attr.task_record_id,
                                      &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -677,7 +677,7 @@ test_record_task(void)
     if (rsize != 8) fail = 1;
     if (rdata && *(int64_t *)rdata != 123456789LL) fail = 1;
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;
@@ -700,7 +700,7 @@ test_header_1d(void)
     attr.headers = &h;
 
     uint64_t data[4] = {10, 20, 30, 40};
-    int err = tpb_rawdb_record_write_tbatch(g_test_dir, &attr,
+    int err = tpb_raf_record_write_tbatch(g_test_dir, &attr,
                                             data, 32);
     free_test_header(&h);
     if (err) { cleanup_test_dir(); return 1; }
@@ -708,7 +708,7 @@ test_header_1d(void)
     tbatch_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_tbatch(g_test_dir,
+    err = tpb_raf_record_read_tbatch(g_test_dir,
                                        attr.tbatch_id,
                                        &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -724,7 +724,7 @@ test_header_1d(void)
     if (rattr.nheader >= 1 && rattr.headers[0].uattr_bits != TPB_UNIT_NS) fail = 1;
     if (rsize != 32) fail = 1;
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;
@@ -754,7 +754,7 @@ test_header_multidim(void)
     int k;
     for (k = 0; k < 12; k++) data[k] = (uint64_t)(k + 1);
 
-    int err = tpb_rawdb_record_write_tbatch(g_test_dir, &attr,
+    int err = tpb_raf_record_write_tbatch(g_test_dir, &attr,
                                             data, 96);
     free_test_header(&h);
     if (err) { cleanup_test_dir(); return 1; }
@@ -762,7 +762,7 @@ test_header_multidim(void)
     tbatch_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_tbatch(g_test_dir,
+    err = tpb_raf_record_read_tbatch(g_test_dir,
                                        attr.tbatch_id,
                                        &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -777,7 +777,7 @@ test_header_multidim(void)
         fail = 1;
     }
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;
@@ -810,7 +810,7 @@ test_header_mixed(void)
     unsigned char data[148];
     memset(data, 0x42, sizeof(data));
 
-    int err = tpb_rawdb_record_write_tbatch(g_test_dir, &attr,
+    int err = tpb_raf_record_write_tbatch(g_test_dir, &attr,
                                             data, 148);
     free_test_header(&hdrs[0]);
     free_test_header(&hdrs[1]);
@@ -820,7 +820,7 @@ test_header_mixed(void)
     tbatch_attr_t rattr;
     void *rdata = NULL;
     uint64_t rsize = 0;
-    err = tpb_rawdb_record_read_tbatch(g_test_dir,
+    err = tpb_raf_record_read_tbatch(g_test_dir,
                                        attr.tbatch_id,
                                        &rattr, &rdata, &rsize);
     if (err) { cleanup_test_dir(); return 1; }
@@ -848,7 +848,7 @@ test_header_mixed(void)
         if (rp[0] != 0x42 || rp[147] != 0x42) fail = 1;
     }
 
-    tpb_rawdb_free_headers(rattr.headers, rattr.nheader);
+    tpb_raf_free_headers(rattr.headers, rattr.nheader);
     free(rdata);
     cleanup_test_dir();
     return fail;

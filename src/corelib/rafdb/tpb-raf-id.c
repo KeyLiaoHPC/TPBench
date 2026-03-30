@@ -1,5 +1,5 @@
 /*
- * tpb-rawdb-id.c
+ * tpb-raf-id.c
  * SHA1-based ID generation for tbatch, kernel, and task records.
  */
 
@@ -7,11 +7,11 @@
 #include <string.h>
 #include <ctype.h>
 #include "../tpb-types.h"
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-types.h"
 #include "tpb-sha1.h"
 
 int
-tpb_rawdb_gen_tbatch_id(tpb_dtbits_t utc_bits,
+tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
                         uint64_t btime,
                         const char *hostname,
                         const char *username,
@@ -49,7 +49,7 @@ tpb_rawdb_gen_tbatch_id(tpb_dtbits_t utc_bits,
 }
 
 int
-tpb_rawdb_gen_kernel_id(const char *kernel_name,
+tpb_raf_gen_kernel_id(const char *kernel_name,
                         const unsigned char so_sha1[20],
                         const unsigned char bin_sha1[20],
                         unsigned char id_out[20])
@@ -70,7 +70,7 @@ tpb_rawdb_gen_kernel_id(const char *kernel_name,
 }
 
 int
-tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
+tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                       uint64_t btime,
                       const char *hostname,
                       const char *username,
@@ -123,7 +123,7 @@ tpb_rawdb_gen_task_id(tpb_dtbits_t utc_bits,
 }
 
 void
-tpb_rawdb_id_to_hex(const unsigned char id[20], char hex[41])
+tpb_raf_id_to_hex(const unsigned char id[20], char hex[41])
 {
     int i;
     for (i = 0; i < 20; i++) {
@@ -142,7 +142,7 @@ hex_nibble(int c)
 }
 
 int
-tpb_rawdb_hex_to_id(const char *hex, unsigned char id[20])
+tpb_raf_hex_to_id(const char *hex, unsigned char id[20])
 {
     size_t i;
 

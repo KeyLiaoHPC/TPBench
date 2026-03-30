@@ -1,5 +1,5 @@
 /*
- * tpb-rawdb-workspace.c
+ * tpb-raf-workspace.c
  * Workspace resolution, initialization, and config.json management.
  */
 
@@ -11,7 +11,7 @@
 #include <errno.h>
 #include "../tpb-types.h"
 #include "../tpb_corelib_state.h"
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-types.h"
 
 /* Local Function Prototypes */
 static int dir_exists(const char *path);
@@ -40,7 +40,7 @@ file_exists(const char *path)
 static int
 mkdir_recursive(const char *path)
 {
-    char tmp[TPB_RAWDB_PATH_MAX];
+    char tmp[TPB_RAF_PATH_MAX];
     char *p;
     size_t len;
 
@@ -83,7 +83,7 @@ write_default_config(const char *config_path)
 }
 
 int
-tpb_rawdb_resolve_workspace(char *out_path, size_t pathlen)
+tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
 {
     const char *ws;
     struct stat st;
@@ -115,9 +115,9 @@ tpb_rawdb_resolve_workspace(char *out_path, size_t pathlen)
 }
 
 int
-tpb_rawdb_init_workspace(const char *workspace_path)
+tpb_raf_init_workspace(const char *workspace_path)
 {
-    char path[TPB_RAWDB_PATH_MAX];
+    char path[TPB_RAF_PATH_MAX];
 
     if (!workspace_path) {
         return TPBE_NULLPTR_ARG;
@@ -130,34 +130,34 @@ tpb_rawdb_init_workspace(const char *workspace_path)
     }
 
     snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAWDB_CONFIG_REL);
+             workspace_path, TPB_RAF_CONFIG_REL);
     if (!file_exists(path)) {
         if (write_default_config(path) != 0) {
             return TPBE_FILE_IO_FAIL;
         }
     }
 
-    /* Create rawdb domain directories */
+    /* Create rafdb domain directories */
     snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAWDB_TBATCH_DIR);
+             workspace_path, TPB_RAF_TBATCH_DIR);
     if (mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAWDB_KERNEL_DIR);
+             workspace_path, TPB_RAF_KERNEL_DIR);
     if (mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAWDB_TASK_DIR);
+             workspace_path, TPB_RAF_TASK_DIR);
     if (mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAWDB_LOG_REL);
+             workspace_path, TPB_RAF_LOG_REL);
     if (mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }

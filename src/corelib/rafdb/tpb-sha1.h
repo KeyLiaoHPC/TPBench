@@ -1,6 +1,6 @@
 /**
  * @file tpb-sha1.h
- * @brief Internal SHA1 hash implementation for TPBench rawdb.
+ * @brief Internal SHA1 hash implementation for TPBench rafdb.
  */
 
 #ifndef TPB_SHA1_H

@@ -20,7 +20,7 @@ int tpbcli_database(int argc, char **argv);
  * @brief Implements `database list` / `database ls`.
  * @details When: Subcommand is list or ls. Input: resolved workspace path.
  *          Output: Prints latest tbatch rows or empty notice; TPBE_* code.
- * @param workspace NUL-terminated workspace root from tpb_rawdb_resolve_workspace
+ * @param workspace NUL-terminated workspace root from tpb_raf_resolve_workspace
  * @return TPBE_SUCCESS or a TPBE_* error code
  */
 int tpbcli_database_ls(const char *workspace);

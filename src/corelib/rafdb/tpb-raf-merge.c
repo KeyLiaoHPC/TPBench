@@ -1,5 +1,5 @@
 /*
- * tpb-rawdb-merge.c
+ * tpb-raf-merge.c
  * Merge multiple task records into a single combined record.
  */
 
@@ -14,8 +14,8 @@
 #include <sys/syscall.h>
 #endif
 
-#include "tpb-rawdb-merge.h"
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-merge.h"
+#include "tpb-raf-types.h"
 #include "../strftime.h"
 
 #define MERGE_MAX_UNIQUE_NAMES 256
@@ -77,8 +77,8 @@ validate_batch_kernel(task_attr_t *tasks, int n)
             memcmp(tasks[i].kernel_id,
                    tasks[0].kernel_id, 20) != 0) {
             char hex0[41], hexi[41];
-            tpb_rawdb_id_to_hex(tasks[0].tbatch_id, hex0);
-            tpb_rawdb_id_to_hex(tasks[i].tbatch_id, hexi);
+            tpb_raf_id_to_hex(tasks[0].tbatch_id, hex0);
+            tpb_raf_id_to_hex(tasks[i].tbatch_id, hexi);
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                        "merge: tbatch/kernel ID mismatch "
                        "task[0]=%s vs task[%d]=%s\n",
@@ -152,7 +152,7 @@ fill_special_hdr(tpb_meta_header_t *h, const char *name,
                  int n, uint32_t type_bits, uint64_t elem_sz)
 {
     memset(h, 0, sizeof(*h));
-    h->block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    h->block_size = TPB_RAF_HDR_FIXED_SIZE;
     h->ndim = 1;
     h->dimsizes[0] = (uint64_t)n;
     h->type_bits = type_bits;
@@ -235,7 +235,7 @@ build_merge_headers(task_attr_t *tasks,
                            &tasks[ti].headers[hj],
                            sizeof(tpb_meta_header_t));
                     hdrs[hi].block_size =
-                        TPB_RAWDB_HDR_FIXED_SIZE;
+                        TPB_RAF_HDR_FIXED_SIZE;
                     found = 1;
                     break;
                 }
@@ -243,7 +243,7 @@ build_merge_headers(task_attr_t *tasks,
             if (!found) {
                 memset(&hdrs[hi], 0, sizeof(hdrs[hi]));
                 hdrs[hi].block_size =
-                    TPB_RAWDB_HDR_FIXED_SIZE;
+                    TPB_RAF_HDR_FIXED_SIZE;
                 hdrs[hi].ndim = 0;
                 hdrs[hi].data_size = 0;
                 strncpy(hdrs[hi].name, unames[ui],
@@ -364,7 +364,7 @@ update_source_dup_to(const char *workspace,
     uint64_t datasize;
     task_entry_t *entries;
     int count, row, j;
-    char fpath[TPB_RAWDB_PATH_MAX];
+    char fpath[TPB_RAF_PATH_MAX];
     long offset;
     FILE *fp;
 
@@ -372,30 +372,30 @@ update_source_dup_to(const char *workspace,
         /* Read and rewrite .tpbr with updated dup_to */
         data = NULL;
         memset(&attr, 0, sizeof(attr));
-        err = tpb_rawdb_record_read_task(workspace,
+        err = tpb_raf_record_read_task(workspace,
                                          task_ids[i],
                                          &attr, &data,
                                          &datasize);
         if (err) {
             free(data);
-            tpb_rawdb_free_headers(attr.headers,
+            tpb_raf_free_headers(attr.headers,
                                    attr.nheader);
             return err;
         }
 
         memcpy(attr.dup_to, merged_id, 20);
 
-        err = tpb_rawdb_record_write_task(workspace,
+        err = tpb_raf_record_write_task(workspace,
                                           &attr,
                                           data, datasize);
         free(data);
-        tpb_rawdb_free_headers(attr.headers, attr.nheader);
+        tpb_raf_free_headers(attr.headers, attr.nheader);
         if (err) return err;
 
         /* Update dup_to in .tpbe via direct seek */
         entries = NULL;
         count = 0;
-        err = tpb_rawdb_entry_list_task(workspace,
+        err = tpb_raf_entry_list_task(workspace,
                                         &entries, &count);
         if (err) return err;
 
@@ -412,8 +412,8 @@ update_source_dup_to(const char *workspace,
         if (row < 0) continue;
 
         snprintf(fpath, sizeof(fpath), "%s/%s/%s",
-                 workspace, TPB_RAWDB_TASK_DIR,
-                 TPB_RAWDB_TASK_ENTRY);
+                 workspace, TPB_RAF_TASK_DIR,
+                 TPB_RAF_TASK_ENTRY);
 
         /* dup_to offset in task_entry_t = 104 */
         offset = 8L + (long)row * 232L + 104L;
@@ -435,7 +435,7 @@ update_source_dup_to(const char *workspace,
 }
 
 int
-tpb_rawdb_merge_par(const char *workspace,
+tpb_raf_merge_par(const char *workspace,
                     const unsigned char task_ids[][20],
                     int n_tasks,
                     int is_process_merge,
@@ -480,7 +480,7 @@ tpb_rawdb_merge_par(const char *workspace,
 
     /* Read all source task records */
     for (i = 0; i < n_tasks; i++) {
-        err = tpb_rawdb_record_read_task(workspace,
+        err = tpb_raf_record_read_task(workspace,
                                          task_ids[i],
                                          &tasks[i],
                                          &src_data[i],
@@ -549,7 +549,7 @@ tpb_rawdb_merge_par(const char *workspace,
     pw = getpwuid(geteuid());
     username = pw ? pw->pw_name : "unknown";
 
-    err = tpb_rawdb_gen_task_id(
+    err = tpb_raf_gen_task_id(
         tasks[earliest_idx].utc_bits,
         m_btime, hostname, username,
         tasks[0].tbatch_id,
@@ -583,7 +583,7 @@ tpb_rawdb_merge_par(const char *workspace,
     merged_attr.headers = mhdrs;
 
     /* Write merged .tpbr */
-    err = tpb_rawdb_record_write_task(workspace,
+    err = tpb_raf_record_write_task(workspace,
                                       &merged_attr,
                                       mdata, mdatasize);
     if (err) goto cleanup;
@@ -603,7 +603,7 @@ tpb_rawdb_merge_par(const char *workspace,
     merged_entry.exit_code = 0;
     merged_entry.handle_index = UINT32_MAX;
 
-    err = tpb_rawdb_entry_append_task(workspace,
+    err = tpb_raf_entry_append_task(workspace,
                                       &merged_entry);
     if (err) goto cleanup;
 
@@ -629,7 +629,7 @@ cleanup:
     free(src_datasize);
     if (tasks) {
         for (i = 0; i < n_tasks; i++) {
-            tpb_rawdb_free_headers(tasks[i].headers,
+            tpb_raf_free_headers(tasks[i].headers,
                                    tasks[i].nheader);
         }
     }
@@ -645,10 +645,10 @@ tpb_k_merge_record_thread(const unsigned char task_ids[][20],
                            unsigned char merged_id_out[20])
 {
     char workspace[PATH_MAX];
-    int err = tpb_rawdb_resolve_workspace(workspace,
+    int err = tpb_raf_resolve_workspace(workspace,
                                           sizeof(workspace));
     if (err) return err;
-    return tpb_rawdb_merge_par(workspace, task_ids,
+    return tpb_raf_merge_par(workspace, task_ids,
                                n_tasks, 0,
                                merged_id_out);
 }
@@ -659,10 +659,10 @@ tpb_k_merge_record_process(const unsigned char task_ids[][20],
                             unsigned char merged_id_out[20])
 {
     char workspace[PATH_MAX];
-    int err = tpb_rawdb_resolve_workspace(workspace,
+    int err = tpb_raf_resolve_workspace(workspace,
                                           sizeof(workspace));
     if (err) return err;
-    return tpb_rawdb_merge_par(workspace, task_ids,
+    return tpb_raf_merge_par(workspace, task_ids,
                                n_tasks, 1,
                                merged_id_out);
 }

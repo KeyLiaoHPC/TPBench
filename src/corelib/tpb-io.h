@@ -108,7 +108,7 @@ void tpb_set_outargs(int unit_cast, int sigbit_trim);
  * TPB_LOG_FILE (TPB_LOG_FILE_ENV) is set and non-empty, opens that path in append mode
  * without writing the session banner (shared log between tpbcli parent and PLI child).
  * Otherwise requires workspace from tpb_corelib_init, creates
- * <workspace>/rawdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log with mode "w", and writes
+ * <workspace>/rafdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log with mode "w", and writes
  * the session header.
  *
  * @return TPBE_SUCCESS on success, error code on failure (non-fatal to some callers).

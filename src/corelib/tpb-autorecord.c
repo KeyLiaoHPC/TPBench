@@ -20,7 +20,7 @@
 #include "tpb-autorecord.h"
 #include "tpb-driver.h"
 #include "strftime.h"
-#include "raw_db/tpb-rawdb-types.h"
+#include "rafdb/tpb-raf-types.h"
 
 /* ===== Batch-side module state (tpbcli parent process) ===== */
 
@@ -102,7 +102,7 @@ tpb_record_begin_batch(uint32_t batch_type)
 {
     int err;
 
-    err = tpb_rawdb_resolve_workspace(s_workspace, sizeof(s_workspace));
+    err = tpb_raf_resolve_workspace(s_workspace, sizeof(s_workspace));
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                    "Auto-record: failed to resolve workspace (%d)\n", err);
@@ -117,12 +117,12 @@ tpb_record_begin_batch(uint32_t batch_type)
     s_batch_pid = (uint32_t)getpid();
     s_batch_type = batch_type;
 
-    err = tpb_rawdb_gen_tbatch_id(s_batch_utc_bits, s_batch_btime_ns,
+    err = tpb_raf_gen_tbatch_id(s_batch_utc_bits, s_batch_btime_ns,
                                    s_batch_hostname, s_batch_username,
                                    s_batch_pid, s_tbatch_id);
     if (err) return err;
 
-    tpb_rawdb_id_to_hex(s_tbatch_id, s_tbatch_id_hex);
+    tpb_raf_id_to_hex(s_tbatch_id, s_tbatch_id_hex);
     s_batch_active = 1;
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
@@ -161,7 +161,7 @@ tpb_record_end_batch(int ntask)
     /* Read task entries to collect TaskRecordIDs belonging to this batch */
     task_entry_t *task_entries = NULL;
     int task_count = 0;
-    err = tpb_rawdb_entry_list_task(s_workspace, &task_entries, &task_count);
+    err = tpb_raf_entry_list_task(s_workspace, &task_entries, &task_count);
 
     int matched = 0;
     int nkernel = 0;
@@ -217,7 +217,7 @@ tpb_record_end_batch(int ntask)
     memset(headers, 0, sizeof(headers));
 
     /* header[0]: KernelRecordIDs (empty) */
-    headers[0].block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    headers[0].block_size = TPB_RAF_HDR_FIXED_SIZE;
     headers[0].ndim = 1;
     headers[0].dimsizes[0] = 0;
     headers[0].data_size = 0;
@@ -225,7 +225,7 @@ tpb_record_end_batch(int ntask)
     snprintf(headers[0].name, sizeof(headers[0].name), "KernelRecordIDs");
 
     /* header[1]: TaskRecordIDs */
-    headers[1].block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    headers[1].block_size = TPB_RAF_HDR_FIXED_SIZE;
     headers[1].ndim = 1;
     headers[1].dimsizes[0] = (uint64_t)matched;
     headers[1].data_size = (uint64_t)(matched * 20);
@@ -233,7 +233,7 @@ tpb_record_end_batch(int ntask)
     snprintf(headers[1].name, sizeof(headers[1].name), "TaskRecordIDs");
 
     /* header[2]: ScoreRecordIDs (empty) */
-    headers[2].block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    headers[2].block_size = TPB_RAF_HDR_FIXED_SIZE;
     headers[2].ndim = 1;
     headers[2].dimsizes[0] = 0;
     headers[2].data_size = 0;
@@ -243,7 +243,7 @@ tpb_record_end_batch(int ntask)
     attr.headers = headers;
 
     uint64_t datasize = (uint64_t)(matched * 20);
-    err = tpb_rawdb_record_write_tbatch(s_workspace, &attr,
+    err = tpb_raf_record_write_tbatch(s_workspace, &attr,
                                          task_id_list, datasize);
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
@@ -265,7 +265,7 @@ tpb_record_end_batch(int ntask)
     entry.nscore = 0;
     entry.batch_type = s_batch_type;
 
-    err = tpb_rawdb_entry_append_tbatch(s_workspace, &entry);
+    err = tpb_raf_entry_append_tbatch(s_workspace, &entry);
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                    "Auto-record: failed to append tbatch entry (%d)\n", err);
@@ -330,7 +330,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     }
 
     /* Resolve workspace */
-    err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
     if (err) return err;
 
     err = get_current_timestamps(&utc_bits, &btime_ns);
@@ -340,7 +340,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     pid = (uint32_t)getpid();
     tid = get_current_tid();
 
-    err = tpb_rawdb_gen_task_id(utc_bits, btime_ns, hostname, username,
+    err = tpb_raf_gen_task_id(utc_bits, btime_ns, hostname, username,
                                 tbatch_id, kernel_id, handle_index,
                                 pid, tid, task_id);
     if (err) return err;
@@ -382,7 +382,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
             uint32_t elem_size = (type_code >> 8) & 0xFF;
             if (elem_size == 0) elem_size = 8;
 
-            headers[i].block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+            headers[i].block_size = TPB_RAF_HDR_FIXED_SIZE;
             headers[i].ndim = 1;
             headers[i].dimsizes[0] = 1;
             headers[i].data_size = elem_size;
@@ -406,7 +406,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
                 esz = 0;
             }
 
-            headers[i].block_size  = TPB_RAWDB_HDR_FIXED_SIZE;
+            headers[i].block_size  = TPB_RAF_HDR_FIXED_SIZE;
             headers[i].ndim        = 1;
             headers[i].dimsizes[0] = (uint64_t)out->n;
             headers[i].data_size   = (uint64_t)(out->n * esz);
@@ -446,7 +446,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     attr.headers = headers;
 
     /* Write task record (.tpbr) */
-    err = tpb_rawdb_record_write_task(workspace, &attr, rec_data, rec_datasize);
+    err = tpb_raf_record_write_task(workspace, &attr, rec_data, rec_datasize);
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                    "Auto-record: failed to write task record (%d)\n", err);
@@ -466,13 +466,13 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
     entry.exit_code = (uint32_t)exit_code;
     entry.handle_index = handle_index;
 
-    err = tpb_rawdb_entry_append_task(workspace, &entry);
+    err = tpb_raf_entry_append_task(workspace, &entry);
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                    "Auto-record: failed to append task entry (%d)\n", err);
     } else {
         char task_hex[41];
-        tpb_rawdb_id_to_hex(task_id, task_hex);
+        tpb_raf_id_to_hex(task_id, task_hex);
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                    "Auto-record: task recorded, TaskID=%s\n", task_hex);
     }

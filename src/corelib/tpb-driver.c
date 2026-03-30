@@ -1468,7 +1468,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
             return TPBE_KERNEL_NE_FAIL;
         }
 
-        err = tpb_rawdb_resolve_workspace(workspace, sizeof(workspace));
+        err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
         if (err != TPBE_SUCCESS) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                        "Failed to resolve workspace for kernel %s (%d)\n",
@@ -1477,17 +1477,17 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         }
 
         memset(&kernel_attr, 0, sizeof(kernel_attr));
-        err = tpb_rawdb_record_read_kernel(workspace, hdl->kernel.info.kernel_id,
+        err = tpb_raf_record_read_kernel(workspace, hdl->kernel.info.kernel_id,
                                            &kernel_attr, &kernel_data,
                                            &kernel_datasize);
         if (kernel_attr.headers != NULL) {
-            tpb_rawdb_free_headers(kernel_attr.headers, kernel_attr.nheader);
+            tpb_raf_free_headers(kernel_attr.headers, kernel_attr.nheader);
         }
         if (kernel_data != NULL) {
             free(kernel_data);
         }
         if (err != TPBE_SUCCESS) {
-            tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+            tpb_raf_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                        "Kernel %s has unrecorded KernelID=%s, stop before fork.\n",
                        hdl->kernel.info.name, kernel_id_hex);
@@ -1507,7 +1507,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         size_t pos = 0;
 
         pos += snprintf(full_cmd + pos, cmd_size - pos, "TPBENCH_TIMER=%s ", timer.name);
-        tpb_rawdb_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
+        tpb_raf_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
         pos += snprintf(full_cmd + pos, cmd_size - pos,
                         "TPB_KERNEL_ID=%s ", kernel_id_hex);
 

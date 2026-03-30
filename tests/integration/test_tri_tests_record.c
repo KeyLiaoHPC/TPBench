@@ -20,7 +20,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 
 static char g_test_dir[512];
 static char g_bin_dir[512];
@@ -89,7 +89,7 @@ test_tri_record(void)
     setup_test_dir();
 
     /* Initialize workspace */
-    err = tpb_rawdb_init_workspace(g_test_dir);
+    err = tpb_raf_init_workspace(g_test_dir);
     CHECK("init_workspace", err == 0);
     if (err != 0) {
         cleanup_test_dir();
@@ -121,7 +121,7 @@ test_tri_record(void)
     /* --- Verify tbatch entries --- */
     tbatch_entry_t *tb_entries = NULL;
     int tb_count = 0;
-    err = tpb_rawdb_entry_list_tbatch(g_test_dir, &tb_entries, &tb_count);
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &tb_entries, &tb_count);
     CHECK("list_tbatch ok", err == 0);
     CHECK_INT("tbatch count", 2, tb_count);
 
@@ -139,7 +139,7 @@ test_tri_record(void)
     /* --- Verify task entries --- */
     task_entry_t *tk_entries = NULL;
     int tk_count = 0;
-    err = tpb_rawdb_entry_list_task(g_test_dir, &tk_entries, &tk_count);
+    err = tpb_raf_entry_list_task(g_test_dir, &tk_entries, &tk_count);
     CHECK("list_task ok", err == 0);
     CHECK_INT("task count", 5, tk_count);
 

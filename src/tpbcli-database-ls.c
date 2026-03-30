@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "corelib/strftime.h"
 #include "tpbcli-database.h"
 
@@ -23,7 +23,7 @@ static void print_list_header(void);
 
 /*
  * When: For each tbatch entry row in the list.
- * Input: e — pointer to one tbatch_entry_t from rawdb.
+ * Input: e — pointer to one tbatch_entry_t from rafdb.
  * Output: Writes one formatted data row to stdout.
  */
 static void print_list_row(const tbatch_entry_t *e);
@@ -45,7 +45,7 @@ print_list_row(const tbatch_entry_t *e)
     const char *type_str;
     double dur_sec;
 
-    tpb_rawdb_id_to_hex(e->tbatch_id, hex);
+    tpb_raf_id_to_hex(e->tbatch_id, hex);
     tpb_ts_bits_to_isoutc(e->start_utc_bits, &ts);
 
     type_str = (e->batch_type == TPB_BATCH_TYPE_BENCHMARK)
@@ -61,8 +61,8 @@ print_list_row(const tbatch_entry_t *e)
 
 /*
  * When: `database list` or `database ls` is selected (see tpbcli_database).
- * Input: workspace — path from tpb_rawdb_resolve_workspace.
- * Output: User-visible table; return TPBE_SUCCESS or rawdb error code.
+ * Input: workspace — path from tpb_raf_resolve_workspace.
+ * Output: User-visible table; return TPBE_SUCCESS or rafdb error code.
  */
 int
 tpbcli_database_ls(const char *workspace)
@@ -77,7 +77,7 @@ tpbcli_database_ls(const char *workspace)
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                "Reading records ... ");
 
-    err = tpb_rawdb_entry_list_tbatch(workspace, &entries,
+    err = tpb_raf_entry_list_tbatch(workspace, &entries,
                                       &count);
     if (err != TPBE_SUCCESS) {
         tpb_printf(TPBM_PRTN_M_DIRECT, "Failed\n");

@@ -20,7 +20,7 @@
 #endif
 
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "corelib/strftime.h"
 
 #define N_PROCS            2
@@ -136,7 +136,7 @@ thread_worker(void *arg)
     uint32_t tid = get_cur_tid();
 
     unsigned char task_id[20];
-    tpb_rawdb_gen_task_id(utc_bits, btime_ns,
+    tpb_raf_gen_task_id(utc_bits, btime_ns,
                           hostname, username,
                           ta->tbatch_id, ta->kernel_id,
                           (uint32_t)ta->thread_index,
@@ -160,7 +160,7 @@ thread_worker(void *arg)
 
     tpb_meta_header_t hdr;
     memset(&hdr, 0, sizeof(hdr));
-    hdr.block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    hdr.block_size = TPB_RAF_HDR_FIXED_SIZE;
     hdr.ndim = 1;
     hdr.dimsizes[0] = 1;
     hdr.type_bits = (uint32_t)(TPB_DOUBLE_T
@@ -174,7 +174,7 @@ thread_worker(void *arg)
 
     double triad_time = (double)duration_ns;
 
-    err = tpb_rawdb_record_write_task(ta->workspace,
+    err = tpb_raf_record_write_task(ta->workspace,
                                       &attr, &triad_time,
                                       sizeof(double));
     if (err) {
@@ -230,7 +230,7 @@ run_child(int proc_index, int write_fd,
 
     /* Child main thread writes .tpbe entries (single-writer) */
     for (i = 0; i < N_THREADS_PER_PROC; i++) {
-        err = tpb_rawdb_entry_append_task(workspace,
+        err = tpb_raf_entry_append_task(workspace,
                                           &targs[i].entry);
         if (err) {
             fprintf(stderr, "  child %d: entry_append "
@@ -280,7 +280,7 @@ test_merge_hybrid(void)
              "/tmp/tpb_merge_hybrid_%d", (int)getpid());
     mkdir(g_workspace, 0755);
 
-    err = tpb_rawdb_init_workspace(g_workspace);
+    err = tpb_raf_init_workspace(g_workspace);
     CHECK("init_workspace", err == 0);
     if (err) return 1;
 
@@ -310,7 +310,7 @@ test_merge_hybrid(void)
         pw ? pw->pw_name : "unknown";
 
     unsigned char tbatch_id[20];
-    tpb_rawdb_gen_tbatch_id(utc_bits, btime_ns,
+    tpb_raf_gen_tbatch_id(utc_bits, btime_ns,
                             hostname, username,
                             (uint32_t)getpid(),
                             tbatch_id);
@@ -319,7 +319,7 @@ test_merge_hybrid(void)
     memset(so_sha1, 0xAA, 20);
     memset(bin_sha1, 0xBB, 20);
     unsigned char kernel_id[20];
-    tpb_rawdb_gen_kernel_id("stream",
+    tpb_raf_gen_kernel_id("stream",
                             so_sha1, bin_sha1,
                             kernel_id);
 
@@ -331,7 +331,7 @@ test_merge_hybrid(void)
             sizeof(kattr.kernel_name) - 1);
     kattr.kctrl = (uint32_t)TPB_KTYPE_PLI;
 
-    err = tpb_rawdb_record_write_kernel(g_workspace,
+    err = tpb_raf_record_write_kernel(g_workspace,
                                         &kattr,
                                         NULL, 0);
     CHECK("write kernel record", err == 0);
@@ -343,7 +343,7 @@ test_merge_hybrid(void)
             sizeof(kentry.kernel_name) - 1);
     kentry.kctrl = (uint32_t)TPB_KTYPE_PLI;
 
-    err = tpb_rawdb_entry_append_kernel(g_workspace,
+    err = tpb_raf_entry_append_kernel(g_workspace,
                                         &kentry);
     CHECK("append kernel entry", err == 0);
 
@@ -361,7 +361,7 @@ test_merge_hybrid(void)
             sizeof(battr.username) - 1);
     battr.front_pid = (uint32_t)getpid();
 
-    err = tpb_rawdb_record_write_tbatch(g_workspace,
+    err = tpb_raf_record_write_tbatch(g_workspace,
                                         &battr,
                                         NULL, 0);
     CHECK("write tbatch record", err == 0);
@@ -375,7 +375,7 @@ test_merge_hybrid(void)
     strncpy(bentry.hostname, hostname,
             sizeof(bentry.hostname) - 1);
 
-    err = tpb_rawdb_entry_append_tbatch(g_workspace,
+    err = tpb_raf_entry_append_tbatch(g_workspace,
                                         &bentry);
     CHECK("append tbatch entry", err == 0);
 
@@ -417,7 +417,7 @@ test_merge_hybrid(void)
         CHECK("read merged id", rd == 20);
         close(pipes[i][0]);
 
-        tpb_rawdb_id_to_hex(proc_merged_ids[i], hex);
+        tpb_raf_id_to_hex(proc_merged_ids[i], hex);
         printf("  proc %d merged: %s\n", i, hex);
     }
 
@@ -428,7 +428,7 @@ test_merge_hybrid(void)
                                      final_merged_id);
     CHECK("merge_record_process", err == 0);
 
-    tpb_rawdb_id_to_hex(final_merged_id, hex);
+    tpb_raf_id_to_hex(final_merged_id, hex);
     printf("  final merged: %s\n", hex);
 
     /* 8. Verify final merged record */
@@ -438,7 +438,7 @@ test_merge_hybrid(void)
         uint64_t final_datasize = 0;
         memset(&final_attr, 0, sizeof(final_attr));
 
-        err = tpb_rawdb_record_read_task(
+        err = tpb_raf_record_read_task(
             g_workspace, final_merged_id,
             &final_attr, &final_data,
             &final_datasize);
@@ -532,7 +532,7 @@ test_merge_hybrid(void)
                       tt_found >= 2);
             }
 
-            tpb_rawdb_free_headers(final_attr.headers,
+            tpb_raf_free_headers(final_attr.headers,
                                    final_attr.nheader);
             free(final_data);
         }
@@ -540,7 +540,7 @@ test_merge_hybrid(void)
         /* 8g: Total task entries = 7 */
         task_entry_t *all_entries = NULL;
         int entry_count = 0;
-        err = tpb_rawdb_entry_list_task(g_workspace,
+        err = tpb_raf_entry_list_task(g_workspace,
                                         &all_entries,
                                         &entry_count);
         CHECK("list_task ok", err == 0);

@@ -21,7 +21,7 @@
 #endif
 
 #include "include/tpb-public.h"
-#include "corelib/raw_db/tpb-rawdb-types.h"
+#include "corelib/rafdb/tpb-raf-types.h"
 #include "corelib/strftime.h"
 
 /* Test harness */
@@ -164,7 +164,7 @@ thread_worker(void *arg)
 
     /* Generate task record ID */
     unsigned char task_id[20];
-    err = tpb_rawdb_gen_task_id(
+    err = tpb_raf_gen_task_id(
         utc_bits, btime_start,
         hostname, username,
         ta->tbatch_id, ta->kernel_id,
@@ -198,7 +198,7 @@ thread_worker(void *arg)
     /* Build output header: triad_bw */
     tpb_meta_header_t hdr;
     memset(&hdr, 0, sizeof(hdr));
-    hdr.block_size = TPB_RAWDB_HDR_FIXED_SIZE;
+    hdr.block_size = TPB_RAF_HDR_FIXED_SIZE;
     hdr.ndim       = 1;
     hdr.dimsizes[0] = 1;
     hdr.type_bits  = (uint32_t)(TPB_DOUBLE_T
@@ -209,7 +209,7 @@ thread_worker(void *arg)
     attr.headers = &hdr;
 
     /* Write .tpbr */
-    err = tpb_rawdb_record_write_task(ta->workspace,
+    err = tpb_raf_record_write_task(ta->workspace,
                                       &attr,
                                       &bw_value, 8);
     if (err) {
@@ -251,7 +251,7 @@ test_merge_pthread(void)
     setup_test_dir();
 
     /* Initialize workspace */
-    err = tpb_rawdb_init_workspace(g_test_dir);
+    err = tpb_raf_init_workspace(g_test_dir);
     CHECK("init_workspace", err == 0);
     if (err != 0) {
         cleanup_test_dir();
@@ -280,7 +280,7 @@ test_merge_pthread(void)
     struct passwd *pw = getpwuid(geteuid());
     const char *username = pw ? pw->pw_name : "unknown";
 
-    err = tpb_rawdb_gen_tbatch_id(utc_bits, btime_now,
+    err = tpb_raf_gen_tbatch_id(utc_bits, btime_now,
                                   hostname, username,
                                   (uint32_t)getpid(),
                                   tbatch_id);
@@ -288,7 +288,7 @@ test_merge_pthread(void)
 
     /* Generate a fake KernelID */
     memset(dummy_sha1, 0xAB, 20);
-    err = tpb_rawdb_gen_kernel_id("test_stream",
+    err = tpb_raf_gen_kernel_id("test_stream",
                                   dummy_sha1, dummy_sha1,
                                   kernel_id);
     CHECK("gen_kernel_id", err == 0);
@@ -323,7 +323,7 @@ test_merge_pthread(void)
 
     /* Main thread writes all .tpbe entries (single-writer) */
     for (i = 0; i < N_THREADS; i++) {
-        err = tpb_rawdb_entry_append_task(g_test_dir,
+        err = tpb_raf_entry_append_task(g_test_dir,
                                           &targs[i].entry);
         CHECK("main entry_append", err == 0);
     }
@@ -333,7 +333,7 @@ test_merge_pthread(void)
                                     merged_id);
     CHECK("merge_record_thread", err == 0);
 
-    tpb_rawdb_id_to_hex(merged_id, hex);
+    tpb_raf_id_to_hex(merged_id, hex);
     printf("  merged_id: %s\n", hex);
 
     if (err != 0) {
@@ -347,7 +347,7 @@ test_merge_pthread(void)
     uint64_t merged_datasize = 0;
     memset(&merged, 0, sizeof(merged));
 
-    err = tpb_rawdb_record_read_task(g_test_dir,
+    err = tpb_raf_record_read_task(g_test_dir,
                                      merged_id,
                                      &merged,
                                      &merged_data,
@@ -356,7 +356,7 @@ test_merge_pthread(void)
 
     if (err != 0) {
         free(merged_data);
-        tpb_rawdb_free_headers(merged.headers,
+        tpb_raf_free_headers(merged.headers,
                                merged.nheader);
         cleanup_test_dir();
         return 1;
@@ -405,13 +405,13 @@ test_merge_pthread(void)
     CHECK("found ThreadIDs", found_tid);
 
     free(merged_data);
-    tpb_rawdb_free_headers(merged.headers,
+    tpb_raf_free_headers(merged.headers,
                            merged.nheader);
 
     /* Read source task entries, verify dup_to = merged_id */
     task_entry_t *entries = NULL;
     int entry_count = 0;
-    err = tpb_rawdb_entry_list_task(g_test_dir,
+    err = tpb_raf_entry_list_task(g_test_dir,
                                     &entries, &entry_count);
     CHECK("list_task ok", err == 0);
     CHECK_INT("entry_count", N_THREADS + 1, entry_count);
@@ -424,7 +424,7 @@ test_merge_pthread(void)
 
             /* Source entry: dup_to must be merged_id */
             char tag[64];
-            tpb_rawdb_id_to_hex(
+            tpb_raf_id_to_hex(
                 entries[i].task_record_id, hex);
             snprintf(tag, sizeof(tag),
                      "src dup_to %.8s", hex);

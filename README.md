@@ -26,7 +26,7 @@ cmake -B build
 cmake --build build --config Release
 cmake --install build 
 ls ~/tpbench
-bin  etc  include  lib  rawdb
+bin  etc  include  lib  rafdb
 ```
 
 For running `tpbcli` linking `libtpbench.so`, set the library search path. You can also set $PATH for convenient:
@@ -68,12 +68,12 @@ This command expands to three runs and records three tasks in one batch.
 
 ### 1.3. Checking results
 
-Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rawdb`. So you don't have to keep terminal outputs. Here the "node01" is the hostname of your system, you need to adjust to align with your own system:
+Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rafdb`. So you don't have to keep terminal outputs. Here the "node01" is the hostname of your system, you need to adjust to align with your own system:
 
 ```bash
 # Here the "node01" is the hostname of your system, you need to adjust to align with your own system.
-tree ~/tpbench/rawdb
-/home/hpckey/tpbench/rawdb/
+tree ~/tpbench/rafdb
+/home/hpckey/tpbench/rafdb/
 ├── kernel
 │   ├── ad57c7c94b52b18c042ed7036b9818391968c8b5.tpbr
 │   └── kernel.tpbe
@@ -90,7 +90,7 @@ tree ~/tpbench/rawdb
     ├── 28d62c15ee2941aceb75b66f26d3d03641233520.tpbr
     ├── ca394f1f07e576ff0a281cf3af3029eb38b8cba3.tpbr
     └── task_batch.tpbe
-tail ~/tpbench/rawdb/log/tpbrunlog_20260324T151817_node01.log
+tail ~/tpbench/rafdb/log/tpbrunlog_20260324T151817_node01.log
 Result quantiles: Q0.05=1.1609E5, Q0.25=1.1766E5, Q0.50=1.1816E5, Q0.75=1.1871E5, Q0.95=1.3181E5
 Metrics: triad_bw_walltime
 Units: MB/s

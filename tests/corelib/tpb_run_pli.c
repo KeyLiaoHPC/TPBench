@@ -225,7 +225,7 @@ test_kernel_id_env(void)
         kernel_id[i] = (unsigned char)(i + 1);
     }
     memcpy(hdl.kernel.info.kernel_id, kernel_id, 20);
-    tpb_rawdb_id_to_hex(kernel_id, exp_hex);
+    tpb_raf_id_to_hex(kernel_id, exp_hex);
 
     unlink(path_kernel_id_out);
     mock_dl_set_exec_path(path_capture_kid);

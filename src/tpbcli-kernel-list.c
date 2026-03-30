@@ -67,7 +67,7 @@ tpbcli_kernel_list(int argc, char **argv)
         } else {
             char hex[41];
 
-            tpb_rawdb_id_to_hex(kernel->info.kernel_id, hex);
+            tpb_raf_id_to_hex(kernel->info.kernel_id, hex);
             snprintf(kid_str, sizeof(kid_str), "%.6s*", hex);
         }
 

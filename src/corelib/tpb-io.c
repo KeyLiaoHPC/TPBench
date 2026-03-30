@@ -22,7 +22,7 @@
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
 #include "tpb_corelib_state.h"
-#include "raw_db/tpb-rawdb-types.h"
+#include "rafdb/tpb-raf-types.h"
 
 /* Local Function Prototypes */
 
@@ -219,7 +219,7 @@ tpb_log_init(void)
         return TPBE_FILE_IO_FAIL;
     }
 
-    if (snprintf(logdir, sizeof(logdir), "%s/%s", ws, TPB_RAWDB_LOG_REL)
+    if (snprintf(logdir, sizeof(logdir), "%s/%s", ws, TPB_RAF_LOG_REL)
         >= (int)sizeof(logdir)) {
         fprintf(stderr, "Warning: Log directory path too long\n");
         return TPBE_FILE_IO_FAIL;

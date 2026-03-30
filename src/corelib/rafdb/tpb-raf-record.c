@@ -1,5 +1,5 @@
 /*
- * tpb-rawdb-record.c
+ * tpb-raf-record.c
  * Record file (.tpbr) write and read operations including header
  * serialization for tbatch, kernel, and task domains.
  */
@@ -9,7 +9,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include "../tpb-types.h"
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-types.h"
 
 /* Local Function Prototypes */
 static void build_record_path(const char *workspace,
@@ -60,17 +60,17 @@ build_record_path(const char *workspace, uint8_t domain,
     char hex[41];
     const char *dir;
 
-    tpb_rawdb_id_to_hex(id, hex);
+    tpb_raf_id_to_hex(id, hex);
 
     switch (domain) {
-    case TPB_RAWDB_DOM_KERNEL:
-        dir = TPB_RAWDB_KERNEL_DIR;
+    case TPB_RAF_DOM_KERNEL:
+        dir = TPB_RAF_KERNEL_DIR;
         break;
-    case TPB_RAWDB_DOM_TASK:
-        dir = TPB_RAWDB_TASK_DIR;
+    case TPB_RAF_DOM_TASK:
+        dir = TPB_RAF_TASK_DIR;
         break;
     default:
-        dir = TPB_RAWDB_TBATCH_DIR;
+        dir = TPB_RAF_TBATCH_DIR;
         break;
     }
     snprintf(out, outlen, "%s/%s/%s.tpbr",
@@ -78,11 +78,11 @@ build_record_path(const char *workspace, uint8_t domain,
 }
 
 int
-tpb_rawdb_find_record(const char *workspace,
+tpb_raf_find_record(const char *workspace,
                       const unsigned char id[20],
                       uint8_t *domain_out)
 {
-    char path[TPB_RAWDB_PATH_MAX];
+    char path[TPB_RAF_PATH_MAX];
     struct stat st;
     uint8_t doms[3];
     int d;
@@ -91,9 +91,9 @@ tpb_rawdb_find_record(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    doms[0] = TPB_RAWDB_DOM_TBATCH;
-    doms[1] = TPB_RAWDB_DOM_KERNEL;
-    doms[2] = TPB_RAWDB_DOM_TASK;
+    doms[0] = TPB_RAF_DOM_TBATCH;
+    doms[1] = TPB_RAF_DOM_KERNEL;
+    doms[2] = TPB_RAF_DOM_TASK;
 
     for (d = 0; d < 3; d++) {
         build_record_path(workspace, doms[d], id, path, sizeof(path));
@@ -118,7 +118,7 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
     uint32_t i, j;
 
     for (i = 0; i < n; i++) {
-        uint32_t bs = TPB_RAWDB_HDR_FIXED_SIZE;
+        uint32_t bs = TPB_RAF_HDR_FIXED_SIZE;
 
         if (write_u32(fp, bs) != 0) return -1;
         if (write_u32(fp, hdrs[i].ndim) != 0) return -1;
@@ -200,12 +200,12 @@ static int
 write_magic_and_data(FILE *fp, uint8_t domain,
                      const void *data, uint64_t datasize)
 {
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD, domain,
-                          TPB_RAWDB_POS_SPLIT, magic);
-    if (fwrite(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD, domain,
+                          TPB_RAF_POS_SPLIT, magic);
+    if (fwrite(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         return -1;
     }
 
@@ -216,10 +216,10 @@ write_magic_and_data(FILE *fp, uint8_t domain,
         }
     }
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD, domain,
-                          TPB_RAWDB_POS_END, magic);
-    if (fwrite(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD, domain,
+                          TPB_RAF_POS_END, magic);
+    if (fwrite(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         return -1;
     }
 
@@ -227,7 +227,7 @@ write_magic_and_data(FILE *fp, uint8_t domain,
 }
 
 void
-tpb_rawdb_free_headers(tpb_meta_header_t *headers,
+tpb_raf_free_headers(tpb_meta_header_t *headers,
                        uint32_t nheader)
 {
     (void)nheader;
@@ -236,21 +236,21 @@ tpb_rawdb_free_headers(tpb_meta_header_t *headers,
 
 /* TBatch record write */
 int
-tpb_rawdb_record_write_tbatch(const char *workspace,
+tpb_raf_record_write_tbatch(const char *workspace,
                               const tbatch_attr_t *attr,
                               const void *data,
                               uint64_t datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize;
     uint32_t i;
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAWDB_DOM_TBATCH,
+    build_record_path(workspace, TPB_RAF_DOM_TBATCH,
                       attr->tbatch_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "wb");
@@ -258,15 +258,15 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
 
     /* Calculate metasize: fixed attrs + reserve + headers */
     /* Fixed: 20+20+20+8+8+8+64+64+4+4+4+4+4+4 = 236 bytes */
-    metasize = 236 + TPB_RAWDB_RESERVE_SIZE;
-    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
+    metasize = 236 + TPB_RAF_RESERVE_SIZE;
+    metasize += attr->nheader * TPB_RAF_HDR_FIXED_SIZE;
 
     /* meta_magic */
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_TBATCH,
-                          TPB_RAWDB_POS_START, magic);
-    if (fwrite(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_TBATCH,
+                          TPB_RAF_POS_START, magic);
+    if (fwrite(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
 
@@ -291,9 +291,9 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
     if (write_u32(fp, attr->nheader) != 0) goto fail;
 
     /* Reserve */
-    memset(reserve, 0, TPB_RAWDB_RESERVE_SIZE);
-    if (fwrite(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
+    if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -305,7 +305,7 @@ tpb_rawdb_record_write_tbatch(const char *workspace,
     }
 
     /* Record data section */
-    if (write_magic_and_data(fp, TPB_RAWDB_DOM_TBATCH,
+    if (write_magic_and_data(fp, TPB_RAF_DOM_TBATCH,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -320,15 +320,15 @@ fail:
 
 /* TBatch record read */
 int
-tpb_rawdb_record_read_tbatch(const char *workspace,
+tpb_raf_record_read_tbatch(const char *workspace,
                              const unsigned char tbatch_id[20],
                              tbatch_attr_t *attr,
                              void **data,
                              uint64_t *datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize, ds;
 
@@ -336,20 +336,20 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAWDB_DOM_TBATCH,
+    build_record_path(workspace, TPB_RAF_DOM_TBATCH,
                       tbatch_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     /* meta_magic */
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TBATCH,
-                                  TPB_RAWDB_POS_START)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_START)) {
         goto fail;
     }
 
@@ -372,8 +372,8 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
     if (read_u32(fp, &attr->batch_type) != 0) goto fail;
     if (read_u32(fp, &attr->nheader) != 0) goto fail;
 
-    if (fread(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -387,13 +387,13 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
     }
 
     /* record_magic */
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TBATCH,
-                                  TPB_RAWDB_POS_SPLIT)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_SPLIT)) {
         goto fail_hdrs;
     }
 
@@ -419,13 +419,13 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
     }
 
     /* end_magic */
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TBATCH,
-                                  TPB_RAWDB_POS_END)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_END)) {
         goto fail_hdrs;
     }
 
@@ -433,7 +433,7 @@ tpb_rawdb_record_read_tbatch(const char *workspace,
     return TPBE_SUCCESS;
 
 fail_hdrs:
-    tpb_rawdb_free_headers(attr->headers, attr->nheader);
+    tpb_raf_free_headers(attr->headers, attr->nheader);
     attr->headers = NULL;
 fail:
     fclose(fp);
@@ -442,35 +442,35 @@ fail:
 
 /* Kernel record write */
 int
-tpb_rawdb_record_write_kernel(const char *workspace,
+tpb_raf_record_write_kernel(const char *workspace,
                               const kernel_attr_t *attr,
                               const void *data,
                               uint64_t datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize;
     uint32_t i;
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAWDB_DOM_KERNEL,
+    build_record_path(workspace, TPB_RAF_DOM_KERNEL,
                       attr->kernel_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "wb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     /* Fixed attrs: 6*20 + 256 + 64 + 2048 + 5*4 = 2508 */
-    metasize = 2508 + TPB_RAWDB_RESERVE_SIZE;
-    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
+    metasize = 2508 + TPB_RAF_RESERVE_SIZE;
+    metasize += attr->nheader * TPB_RAF_HDR_FIXED_SIZE;
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_KERNEL,
-                          TPB_RAWDB_POS_START, magic);
-    if (fwrite(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_KERNEL,
+                          TPB_RAF_POS_START, magic);
+    if (fwrite(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
 
@@ -494,9 +494,9 @@ tpb_rawdb_record_write_kernel(const char *workspace,
     if (write_u32(fp, attr->nheader) != 0) goto fail;
     if (write_u32(fp, attr->reserve) != 0) goto fail;
 
-    memset(reserve, 0, TPB_RAWDB_RESERVE_SIZE);
-    if (fwrite(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
+    if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -506,7 +506,7 @@ tpb_rawdb_record_write_kernel(const char *workspace,
         }
     }
 
-    if (write_magic_and_data(fp, TPB_RAWDB_DOM_KERNEL,
+    if (write_magic_and_data(fp, TPB_RAF_DOM_KERNEL,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -520,15 +520,15 @@ fail:
 
 /* Kernel record read */
 int
-tpb_rawdb_record_read_kernel(const char *workspace,
+tpb_raf_record_read_kernel(const char *workspace,
                              const unsigned char kernel_id[20],
                              kernel_attr_t *attr,
                              void **data,
                              uint64_t *datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize, ds;
 
@@ -536,19 +536,19 @@ tpb_rawdb_record_read_kernel(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAWDB_DOM_KERNEL,
+    build_record_path(workspace, TPB_RAF_DOM_KERNEL,
                       kernel_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_KERNEL,
-                                  TPB_RAWDB_POS_START)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_KERNEL,
+                                  TPB_RAF_POS_START)) {
         goto fail;
     }
 
@@ -571,8 +571,8 @@ tpb_rawdb_record_read_kernel(const char *workspace,
     if (read_u32(fp, &attr->nheader) != 0) goto fail;
     if (read_u32(fp, &attr->reserve) != 0) goto fail;
 
-    if (fread(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -585,13 +585,13 @@ tpb_rawdb_record_read_kernel(const char *workspace,
         attr->headers = NULL;
     }
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_KERNEL,
-                                  TPB_RAWDB_POS_SPLIT)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_KERNEL,
+                                  TPB_RAF_POS_SPLIT)) {
         goto fail_hdrs;
     }
 
@@ -615,13 +615,13 @@ tpb_rawdb_record_read_kernel(const char *workspace,
         }
     }
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_KERNEL,
-                                  TPB_RAWDB_POS_END)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_KERNEL,
+                                  TPB_RAF_POS_END)) {
         goto fail_hdrs;
     }
 
@@ -629,7 +629,7 @@ tpb_rawdb_record_read_kernel(const char *workspace,
     return TPBE_SUCCESS;
 
 fail_hdrs:
-    tpb_rawdb_free_headers(attr->headers, attr->nheader);
+    tpb_raf_free_headers(attr->headers, attr->nheader);
     attr->headers = NULL;
 fail:
     fclose(fp);
@@ -638,21 +638,21 @@ fail:
 
 /* Task record write */
 int
-tpb_rawdb_record_write_task(const char *workspace,
+tpb_raf_record_write_task(const char *workspace,
                             const task_attr_t *attr,
                             const void *data,
                             uint64_t datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize;
     uint32_t i;
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAWDB_DOM_TASK,
+    build_record_path(workspace, TPB_RAF_DOM_TASK,
                       attr->task_record_id, fpath,
                       sizeof(fpath));
 
@@ -660,14 +660,14 @@ tpb_rawdb_record_write_task(const char *workspace,
     if (!fp) return TPBE_FILE_IO_FAIL;
 
     /* Fixed: 5*20 + 3*8 + 8*4 = 156 bytes */
-    metasize = 156 + TPB_RAWDB_RESERVE_SIZE;
-    metasize += attr->nheader * TPB_RAWDB_HDR_FIXED_SIZE;
+    metasize = 156 + TPB_RAF_RESERVE_SIZE;
+    metasize += attr->nheader * TPB_RAF_HDR_FIXED_SIZE;
 
-    tpb_rawdb_build_magic(TPB_RAWDB_FTYPE_RECORD,
-                          TPB_RAWDB_DOM_TASK,
-                          TPB_RAWDB_POS_START, magic);
-    if (fwrite(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
+                          TPB_RAF_DOM_TASK,
+                          TPB_RAF_POS_START, magic);
+    if (fwrite(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
 
@@ -691,9 +691,9 @@ tpb_rawdb_record_write_task(const char *workspace,
     if (write_u32(fp, attr->nheader) != 0) goto fail;
     if (write_u32(fp, attr->reserve) != 0) goto fail;
 
-    memset(reserve, 0, TPB_RAWDB_RESERVE_SIZE);
-    if (fwrite(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
+    if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -703,7 +703,7 @@ tpb_rawdb_record_write_task(const char *workspace,
         }
     }
 
-    if (write_magic_and_data(fp, TPB_RAWDB_DOM_TASK,
+    if (write_magic_and_data(fp, TPB_RAF_DOM_TASK,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -717,15 +717,15 @@ fail:
 
 /* Task record read */
 int
-tpb_rawdb_record_read_task(const char *workspace,
+tpb_raf_record_read_task(const char *workspace,
                            const unsigned char task_id[20],
                            task_attr_t *attr,
                            void **data,
                            uint64_t *datasize)
 {
-    char fpath[TPB_RAWDB_PATH_MAX];
-    unsigned char magic[TPB_RAWDB_MAGIC_LEN];
-    unsigned char reserve[TPB_RAWDB_RESERVE_SIZE];
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
     FILE *fp;
     uint64_t metasize, ds;
 
@@ -733,19 +733,19 @@ tpb_rawdb_record_read_task(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAWDB_DOM_TASK,
+    build_record_path(workspace, TPB_RAF_DOM_TASK,
                       task_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TASK,
-                                  TPB_RAWDB_POS_START)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TASK,
+                                  TPB_RAF_POS_START)) {
         goto fail;
     }
 
@@ -770,8 +770,8 @@ tpb_rawdb_record_read_task(const char *workspace,
     if (read_u32(fp, &attr->nheader) != 0) goto fail;
     if (read_u32(fp, &attr->reserve) != 0) goto fail;
 
-    if (fread(reserve, 1, TPB_RAWDB_RESERVE_SIZE, fp)
-        != TPB_RAWDB_RESERVE_SIZE) {
+    if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
+        != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
 
@@ -784,13 +784,13 @@ tpb_rawdb_record_read_task(const char *workspace,
         attr->headers = NULL;
     }
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TASK,
-                                  TPB_RAWDB_POS_SPLIT)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TASK,
+                                  TPB_RAF_POS_SPLIT)) {
         goto fail_hdrs;
     }
 
@@ -814,13 +814,13 @@ tpb_rawdb_record_read_task(const char *workspace,
         }
     }
 
-    if (fread(magic, 1, TPB_RAWDB_MAGIC_LEN, fp)
-        != TPB_RAWDB_MAGIC_LEN) {
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
         goto fail_hdrs;
     }
-    if (!tpb_rawdb_validate_magic(magic, TPB_RAWDB_FTYPE_RECORD,
-                                  TPB_RAWDB_DOM_TASK,
-                                  TPB_RAWDB_POS_END)) {
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TASK,
+                                  TPB_RAF_POS_END)) {
         goto fail_hdrs;
     }
 
@@ -828,7 +828,7 @@ tpb_rawdb_record_read_task(const char *workspace,
     return TPBE_SUCCESS;
 
 fail_hdrs:
-    tpb_rawdb_free_headers(attr->headers, attr->nheader);
+    tpb_raf_free_headers(attr->headers, attr->nheader);
     attr->headers = NULL;
 fail:
     fclose(fp);

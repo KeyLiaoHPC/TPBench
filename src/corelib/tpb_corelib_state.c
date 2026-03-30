@@ -10,7 +10,7 @@
 
 #include "tpb-types.h"
 #include "tpb-io.h"
-#include "raw_db/tpb-rawdb-types.h"
+#include "rafdb/tpb-raf-types.h"
 #include "tpb_corelib_state.h"
 
 /* Local Function Prototypes */
@@ -89,14 +89,14 @@ resolve_workspace_root(const char *override, char *out, size_t outlen)
     if (home == NULL || home[0] == '\0') {
         return TPBE_FILE_IO_FAIL;
     }
-    if (snprintf(out, outlen, "%s/%s", home, TPB_RAWDB_DEFAULT_DIR) >= (int)outlen) {
+    if (snprintf(out, outlen, "%s/%s", home, TPB_RAF_DEFAULT_DIR) >= (int)outlen) {
         return TPBE_FILE_IO_FAIL;
     }
     return TPBE_SUCCESS;
 }
 
 /*
- * Shared corelib startup: resolve workspace, rawdb layout, run log, caller tag.
+ * Shared corelib startup: resolve workspace, rafdb layout, run log, caller tag.
  * For tpbcli only, clears TPB_LOG_FILE so a new timestamped log is always created.
  */
 static int
@@ -123,7 +123,7 @@ init_corelib(const char *tpb_workspace_path, int caller_after)
 
     _tpb_workspace_path_set(resolved);
 
-    err = tpb_rawdb_init_workspace(resolved);
+    err = tpb_raf_init_workspace(resolved);
     if (err != TPBE_SUCCESS) {
         _tpb_workspace_path_set("");
         return err;

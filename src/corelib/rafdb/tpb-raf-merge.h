@@ -1,12 +1,12 @@
 /**
- * @file tpb-rawdb-merge.h
+ * @file tpb-raf-merge.h
  * @brief Internal API for merging multiple task records.
  */
 
-#ifndef TPB_RAWDB_MERGE_H
-#define TPB_RAWDB_MERGE_H
+#ifndef TPB_RAF_MERGE_H
+#define TPB_RAF_MERGE_H
 
-#include "tpb-rawdb-types.h"
+#include "tpb-raf-types.h"
 
 /**
  * @brief Merge multiple task records into one combined record.
@@ -27,10 +27,10 @@
  * @return TPBE_SUCCESS, TPBE_MERGE_MISMATCH, TPBE_MERGE_FAIL,
  *         or other TPBE_* code
  */
-int tpb_rawdb_merge_par(const char *workspace,
+int tpb_raf_merge_par(const char *workspace,
                         const unsigned char task_ids[][20],
                         int n_tasks,
                         int is_process_merge,
                         unsigned char merged_id_out[20]);
 
-#endif /* TPB_RAWDB_MERGE_H */
+#endif /* TPB_RAF_MERGE_H */
