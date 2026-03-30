@@ -436,7 +436,7 @@ main(int argc, char **argv)
     tpb_cliout_results(&handle);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel striad finished successfully.\n");
 
-    tpb_k_write_task(&handle, 0);
+    tpb_k_write_task(&handle, 0, NULL);
 
     tpb_driver_clean_handle(&handle);
 

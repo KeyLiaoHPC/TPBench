@@ -103,7 +103,7 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
     free(entries_before);
 
     /* Write via public API */
-    err = tpb_k_write_task(&hdl, 0);
+    err = tpb_k_write_task(&hdl, 0, NULL);
     if (err) {
         fprintf(stderr, "  FAIL: tpb_k_write_task returned %d\n", err);
         ret = 1;

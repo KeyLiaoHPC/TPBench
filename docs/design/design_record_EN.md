@@ -694,6 +694,43 @@ Magic signature:
 | record_magic      | . T P B . D 1 . | `E1 54 50 42 D2 44 31 E0` | Record data section  |
 | end_magic         | . T P B . E 1 . | `E1 54 50 42 D2 45 31 E0` | End of tpbr          |
 
+### 2.4.4. Task Capsule Record
+
+A **task capsule record** is a special task-domain `.tpbr` that does not store kernel arguments or performance outputs. It groups every per-rank or per-thread **TaskRecordID** produced by a single logical kernel invocation into one file for analysis.
+
+**Purpose:** Multi-thread or multi-process runs each produce a normal task record with a distinct TaskRecordID. A capsule provides one link record whose payload is only the list of those IDs, without merging argument/metric headers (unlike `tpb_k_merge_record_*`).
+
+**TaskCapsuleRecordID:**
+
+```
+SHA1("taskcapsule" + <utc_bits> + <btime> + <hostname> + <username>
+     + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)
+```
+
+The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbatch_id`, `kernel_id`, `handle_index` (order), `pid`, and `tid` as the **first** writer (e.g. MPI rank 0 or the primary thread). Only the leading hash literal differs from a normal task ID (`"task"` vs `"taskcapsule"`).
+
+**Attributes (`task_attr_t`):**
+
+- `dup_from`: all bytes `0xFF` (multi-source sentinel; same convention as merged task records).
+- `dup_to`: all zero.
+- `ninput` = 0, `noutput` = 0, `nheader` = 1.
+- `exit_code`, `duration`: typically 0 for the capsule itself.
+
+**Fixed header (single):**
+
+- **Name:** `TPBLINK::TaskID`
+- **Semantics:** 1-D array of 20-byte task record IDs, stored contiguously in the record data section. The inner dimension length grows as each rank/thread appends its ID after writing its own task record.
+
+**Entry (`.tpbe`):** Same `task.tpbe` row layout as a normal task entry; the capsule appears as another task row distinguished by its TaskCapsuleRecordID.
+
+**Lifecycle (kernel responsibility):**
+
+1. Each unit writes its normal task record via `tpb_k_write_task` and obtains its TaskRecordID (optional output pointer).
+2. The designated leader (rank 0 / thread 0) calls `tpb_k_create_capsule_task(first_task_id, capsule_id_out)`, which creates the capsule `.tpbr` with the first ID in the data section and appends the capsule entry.
+3. Other units synchronize on the capsule ID (e.g. POSIX shared memory `tpb_k_sync_capsule_task`, or `MPI_Bcast` when appropriate).
+4. Each non-leader calls `tpb_k_append_capsule_task(capsule_id, own_task_id)`. Appends use an advisory file lock on the capsule `.tpbr`: read the header dimension and `datasize`, strip the trailing end magic, append 20 bytes, rewrite the end magic, then update `datasize` and the header's `dimsizes[0]` / `data_size`.
+
+**Magic bytes:** Same task-domain record magics as section 2.4.3 (`.tpbr` task domain).
 
 ### 2.5. Score Record
 
@@ -901,12 +938,15 @@ Entry (.tpbe):
 Record (.tpbr):
 - `tpb_raf_record_write_{tbatch,kernel,task}(workspace, attr, data, datasize)` -- write record
 - `tpb_raf_record_read_{tbatch,kernel,task}(workspace, id, attr, data, datasize)` -- read record
+- `tpb_raf_record_create_task_capsule(workspace, attr, first_task_id)` -- new task capsule
+- `tpb_raf_record_append_task_capsule(workspace, capsule_id, task_id)` -- append member ID
 - `tpb_raf_free_headers(headers, nheader)` -- free allocated header arrays
 
 ID Generation:
 - `tpb_raf_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
 - `tpb_raf_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
 - `tpb_raf_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
+- `tpb_raf_gen_taskcapsule_id(...)` -- same inputs as task ID, leading literal `"taskcapsule"` -- TaskCapsuleRecordID
 - `tpb_raf_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string
 
 ### 3.4. Header Serialization
@@ -972,13 +1012,17 @@ Column details:
 
 ### 5.1. Overview
 
-When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently. After all units finish, the caller merges the per-unit task records into a single **merged task record** that represents the combined execution.
+When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently.
+
+**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. The leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or collective messaging (e.g. `MPI_Bcast`) distributes the capsule ID to non-leader ranks.
+
+**Legacy merge API:** The caller may still merge per-unit task records into a single **merged task record** via `tpb_k_merge_record_thread` / `tpb_k_merge_record_process` (section 5.2). That path synthesizes combined headers and payload; it remains available for older workflows.
 
 Two merge levels exist:
 1) **Thread merge** -- merges task records from threads within one process.
 2) **Process merge** -- merges task records (or already thread-merged records) from multiple processes, potentially across nodes.
 
-A hybrid kernel (multi-process x multi-thread) performs thread merge first inside each process, then process merge across the intermediate results.
+A hybrid kernel (multi-process x multi-thread) may use capsules per process then a top-level capsule, or use thread merge first then process merge across intermediate results.
 
 ### 5.2. Merge Procedure
 

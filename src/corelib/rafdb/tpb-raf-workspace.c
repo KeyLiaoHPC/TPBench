@@ -92,13 +92,21 @@ tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!tpb_corelib_workspace_ready()) {
-        return TPBE_ILLEGAL_CALL;
+    if (tpb_corelib_workspace_ready() != 0) {
+        ws = _tpb_workspace_path_get();
+    } else {
+        /*
+         * Unit tests and minimal tools may set TPB_WORKSPACE without
+         * tpb_corelib_init.
+         */
+        ws = getenv("TPB_WORKSPACE");
     }
 
-    ws = _tpb_workspace_path_get();
     if (ws == NULL || ws[0] == '\0') {
-        return TPBE_FILE_IO_FAIL;
+        if (tpb_corelib_workspace_ready() != 0) {
+            return TPBE_FILE_IO_FAIL;
+        }
+        return TPBE_ILLEGAL_CALL;
     }
 
     if (strlen(ws) >= pathlen) {

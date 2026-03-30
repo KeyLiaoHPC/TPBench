@@ -58,10 +58,13 @@ int tpb_record_end_batch(int ntask);
  * Reads TPB_TBATCH_ID and TPB_HANDLE_INDEX from environment.
  * If TPB_TBATCH_ID is absent, uses all-zero (direct invocation).
  *
- * @param hdl Runtime handle with argpack populated
- * @param exit_code Kernel exit code (0 = success)
+ * @param hdl            Runtime handle with argpack populated
+ * @param exit_code      Kernel exit code (0 = success)
+ * @param task_id_out    Optional 20-byte TaskRecordID output (after successful
+ *                       .tpbr write)
  * @return 0 on success, error code otherwise
  */
-int tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code);
+int tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
+                          unsigned char *task_id_out);
 
 #endif /* TPB_AUTORECORD_H */

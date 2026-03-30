@@ -41,7 +41,6 @@
     } while (0)
 
 /* Local Function Prototypes */
-static int recover_task_id_after_write(unsigned char id_out[20]);
 int tpbk_pli_register_stream_mpi(void);
 static int run_stream_mpi(void);
 
@@ -766,102 +765,6 @@ cleanup_none:
     return TPBE_MALLOC_FAIL;
 }
 
-static int
-recover_task_id_after_write(unsigned char id_out[20])
-{
-    char workspace[PATH_MAX];
-    task_entry_t *entries = NULL;
-    int n = 0;
-    int err;
-    uint32_t handle_index = 0;
-    unsigned char want_kid[20];
-    unsigned char want_bid[20];
-    int have_kid = 0;
-    int have_bid = 0;
-    const char *ev;
-    uint32_t pid;
-    uint64_t best_btime = 0;
-    int have = 0;
-    unsigned char best_id[20];
-    int ii;
-
-    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != 0) {
-        return err;
-    }
-
-    ev = getenv("TPB_HANDLE_INDEX");
-    if (ev != NULL) {
-        handle_index = (uint32_t)atoi(ev);
-    }
-
-    ev = getenv("TPB_KERNEL_ID");
-    if (ev != NULL && strlen(ev) == 40) {
-        if (tpb_raf_hex_to_id(ev, want_kid) == 0) {
-            have_kid = 1;
-        }
-    }
-    ev = getenv("TPB_TBATCH_ID");
-    if (ev != NULL && strlen(ev) == 40) {
-        if (tpb_raf_hex_to_id(ev, want_bid) == 0) {
-            have_bid = 1;
-        }
-    }
-
-    pid = (uint32_t)getpid();
-
-    err = tpb_raf_entry_list_task(workspace, &entries, &n);
-    if (err != 0) {
-        return err;
-    }
-
-    for (ii = 0; ii < n; ii++) {
-        task_attr_t attr;
-        void *data = NULL;
-        uint64_t ds = 0;
-
-        memset(&attr, 0, sizeof(attr));
-        err = tpb_raf_record_read_task(workspace,
-            entries[ii].task_record_id, &attr, &data, &ds);
-        if (err != 0) {
-            continue;
-        }
-        if (data != NULL) {
-            free(data);
-        }
-        tpb_raf_free_headers(attr.headers, attr.nheader);
-
-        if (attr.pid != pid) {
-            continue;
-        }
-        if (attr.handle_index != handle_index) {
-            continue;
-        }
-        if (have_kid != 0
-            && memcmp(attr.kernel_id, want_kid, 20) != 0) {
-            continue;
-        }
-        if (have_bid != 0
-            && memcmp(attr.tbatch_id, want_bid, 20) != 0) {
-            continue;
-        }
-
-        if (have == 0 || attr.btime >= best_btime) {
-            best_btime = attr.btime;
-            memcpy(best_id, entries[ii].task_record_id, 20);
-            have = 1;
-        }
-    }
-
-    free(entries);
-
-    if (have == 0) {
-        return TPBE_FILE_IO_FAIL;
-    }
-    memcpy(id_out, best_id, 20);
-    return 0;
-}
-
 int
 checktick(void)
 {
@@ -1075,18 +978,23 @@ main(int argc, char **argv)
     int nprocs;
     const char *timer_name = NULL;
     unsigned char my_task_id[20];
-    unsigned char *all_task_ids = NULL;
-    unsigned char merged_id[20];
+    unsigned char capsule_id[20];
+    unsigned char kernel_id_bin[20];
+    uint32_t handle_index = 0;
+    int werr;
+    int cap_err;
+    const char *ev;
 
     memset(my_task_id, 0, sizeof(my_task_id));
-    memset(merged_id, 0, sizeof(merged_id));
+    memset(capsule_id, 0, sizeof(capsule_id));
+    memset(kernel_id_bin, 0, sizeof(kernel_id_bin));
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
     /*
-     * Required for tpb_raf_resolve_workspace (write_task + task ID recovery).
+     * Required for tpb_raf_resolve_workspace (write_task + capsule paths).
      * Uses TPB_WORKSPACE from the environment when non-NULL.
      */
     err = tpb_k_corelib_init(NULL);
@@ -1146,13 +1054,23 @@ main(int argc, char **argv)
             tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
         }
 
+        ev = getenv("TPB_HANDLE_INDEX");
+        if (ev != NULL) {
+            handle_index = (uint32_t)atoi(ev);
+        }
+        ev = getenv("TPB_KERNEL_ID");
+        if (ev != NULL && strlen(ev) == 40) {
+            (void)tpb_raf_hex_to_id(ev, kernel_id_bin);
+        }
+
         err = run_stream_mpi();
         if (err != 0) {
             if (rank == 0) {
                 tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                     "Kernel stream_mpi failed: %d\n", err);
             }
-            tpb_k_write_task(&handle, err);
+            werr = tpb_k_write_task(&handle, err, NULL);
+            (void)werr;
             tpb_driver_clean_handle(&handle);
             MPI_Finalize();
             return err;
@@ -1164,40 +1082,39 @@ main(int argc, char **argv)
                 "Kernel stream_mpi finished successfully.\n");
         }
 
-        tpb_k_write_task(&handle, 0);
+        werr = tpb_k_write_task(&handle, 0, my_task_id);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
-        err = recover_task_id_after_write(my_task_id);
-        if (err != 0) {
-            if (rank == 0) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                    "stream_mpi: recover_task_id_after_write failed %d\n", err);
-            }
-        } else if (nprocs >= 2) {
-            if (rank == 0) {
-                all_task_ids = (unsigned char *)malloc((size_t)nprocs * 20U);
-                if (all_task_ids == NULL) {
-                    err = TPBE_MALLOC_FAIL;
-                }
-            }
-            if (err == 0) {
-                MPI_Gather(my_task_id, 20, MPI_BYTE, all_task_ids, 20,
-                    MPI_BYTE, 0, MPI_COMM_WORLD);
-            }
-            if (rank == 0 && err == 0) {
-                err = tpb_k_merge_record_process(
-                    (const unsigned char (*)[20])all_task_ids, nprocs,
-                    merged_id);
-                if (err != 0) {
+        memset(capsule_id, 0, sizeof(capsule_id));
+        cap_err = TPBE_SUCCESS;
+        if (rank == 0) {
+            if (werr == 0) {
+                cap_err = tpb_k_create_capsule_task(my_task_id, capsule_id);
+                if (cap_err != 0) {
                     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                        "stream_mpi: tpb_k_merge_record_process failed %d\n",
-                        err);
+                        "stream_mpi: tpb_k_create_capsule_task failed %d\n",
+                        cap_err);
                 }
+            } else {
+                cap_err = werr;
             }
-            if (all_task_ids != NULL) {
-                free(all_task_ids);
+        }
+        (void)MPI_Bcast(capsule_id, 20, MPI_BYTE, 0, MPI_COMM_WORLD);
+        (void)MPI_Bcast(&cap_err, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+        if (nprocs >= 2 && cap_err == 0 && rank != 0) {
+            cap_err = tpb_k_append_capsule_task(capsule_id, my_task_id);
+            if (cap_err != 0) {
+                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                    "stream_mpi: tpb_k_append_capsule_task failed %d\n",
+                    cap_err);
             }
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
+        if (rank == 0 && werr == 0 && cap_err == 0) {
+            (void)tpb_k_unlink_capsule_sync_shm(kernel_id_bin, handle_index);
         }
 
         tpb_driver_clean_handle(&handle);

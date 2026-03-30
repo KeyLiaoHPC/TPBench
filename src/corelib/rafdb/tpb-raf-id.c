@@ -122,6 +122,59 @@ tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
     return TPBE_SUCCESS;
 }
 
+int
+tpb_raf_gen_taskcapsule_id(tpb_dtbits_t utc_bits,
+                             uint64_t btime,
+                             const char *hostname,
+                             const char *username,
+                             const unsigned char tbatch_id[20],
+                             const unsigned char kernel_id[20],
+                             uint32_t hdl_id,
+                             uint32_t pid,
+                             uint32_t tid,
+                             unsigned char id_out[20])
+{
+    tpb_sha1_ctx_t ctx;
+    char numbuf[32];
+    int len;
+
+    if (!hostname || !username || !tbatch_id ||
+        !kernel_id || !id_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    tpb_sha1_init(&ctx);
+    tpb_sha1_update(&ctx, "taskcapsule", 12);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%lu",
+                   (unsigned long)utc_bits);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%lu",
+                   (unsigned long)btime);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    tpb_sha1_update(&ctx, hostname, strlen(hostname));
+    tpb_sha1_update(&ctx, username, strlen(username));
+    tpb_sha1_update(&ctx, tbatch_id, 20);
+    tpb_sha1_update(&ctx, kernel_id, 20);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%u",
+                   (unsigned)hdl_id);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%u",
+                   (unsigned)pid);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    len = snprintf(numbuf, sizeof(numbuf), "%u",
+                   (unsigned)tid);
+    tpb_sha1_update(&ctx, numbuf, (size_t)len);
+
+    tpb_sha1_final(&ctx, id_out);
+    return TPBE_SUCCESS;
+}
+
 void
 tpb_raf_id_to_hex(const unsigned char id[20], char hex[41])
 {
