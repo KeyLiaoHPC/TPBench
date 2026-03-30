@@ -6,6 +6,7 @@
  * parent process) writes to them.  No locking is needed.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -81,6 +82,7 @@ entry_append_generic(const char *workspace, uint8_t domain,
 
     if (stat(fpath, &st) != 0) {
         fp = fopen(fpath, "wb");
+        printf("%s\n", strerror(errno));
         if (!fp) return TPBE_FILE_IO_FAIL;
 
         if (fwrite(start_magic, 1, TPB_RAF_MAGIC_LEN, fp)
