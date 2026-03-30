@@ -76,7 +76,7 @@ tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                       const char *username,
                       const unsigned char tbatch_id[20],
                       const unsigned char kernel_id[20],
-                      uint32_t order,
+                      uint32_t hdl_id,
                       uint32_t pid,
                       uint32_t tid,
                       unsigned char id_out[20])
@@ -107,7 +107,7 @@ tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
     tpb_sha1_update(&ctx, kernel_id, 20);
 
     len = snprintf(numbuf, sizeof(numbuf), "%u",
-                   (unsigned)order);
+                   (unsigned)hdl_id);
     tpb_sha1_update(&ctx, numbuf, (size_t)len);
 
     len = snprintf(numbuf, sizeof(numbuf), "%u",

@@ -851,7 +851,7 @@ int tpb_raf_gen_kernel_id(const char *kernel_name,
  * @param username   Username string
  * @param tbatch_id  20-byte TBatchID
  * @param kernel_id  20-byte KernelID
- * @param order      Order in batch (0-based)
+ * @param hdl_id     Handle ID (0-based kernel index in batch)
  * @param pid        Writer process ID
  * @param tid        Writer thread ID
  * @param id_out     20-byte output buffer
@@ -863,7 +863,7 @@ int tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                           const char *username,
                           const unsigned char tbatch_id[20],
                           const unsigned char kernel_id[20],
-                          uint32_t order,
+                          uint32_t hdl_id,
                           uint32_t pid,
                           uint32_t tid,
                           unsigned char id_out[20]);
