@@ -602,6 +602,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     memset(&entry, 0, sizeof(entry));
     memcpy(entry.task_record_id, capsule_id_out, 20);
+    memset(entry.dup_from, 0xFF, 20);
     memcpy(entry.tbatch_id, src.tbatch_id, 20);
     memcpy(entry.kernel_id, src.kernel_id, 20);
     entry.utc_bits = src.utc_bits;

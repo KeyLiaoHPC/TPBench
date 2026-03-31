@@ -1064,30 +1064,8 @@ main(int argc, char **argv)
             return err;
         }
 
-        if (rank == 0) {
-            int baton = 0;
-            MPI_Status status;
-            tpb_cliout_results(&handle);
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-                "Kernel stream_mpi finished successfully.\n");
-            fflush(stdout);
-            if (nprocs > 1) {
-                MPI_Send(&baton, 1, MPI_INT, rank + 1, rank + 1, MPI_COMM_WORLD);
-            }
-        } else {
-            int baton = 0;
-            MPI_Status status;
-            MPI_Recv(&baton, 1, MPI_INT, rank - 1, rank, MPI_COMM_WORLD, &status);
-            if (rank != nprocs - 1) {
-                MPI_Send(&baton, 1, MPI_INT, (rank + 1) % nprocs, (rank + 1) % nprocs, MPI_COMM_WORLD);
-            }
-        }
-
-        tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank %d starts write task.\n", rank);
-        fflush(stdout);
         werr = tpb_k_write_task(&handle, 0, my_task_id);
-        tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank %d write task ended.\n", rank);
-        fflush(stdout);
+
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1109,13 +1087,38 @@ main(int argc, char **argv)
         (void)MPI_Bcast(capsule_id, 20, MPI_BYTE, 0, MPI_COMM_WORLD);
         (void)MPI_Bcast(&cap_err, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-        if (nprocs >= 2 && cap_err == 0 && rank != 0) {
-            cap_err = tpb_k_append_capsule_task(capsule_id, my_task_id);
-            if (cap_err != 0) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                    "stream_mpi: tpb_k_append_capsule_task failed %d\n",
-                    cap_err);
+        /*
+         * Append non-root task IDs in MPI rank order (1..nprocs-1) so the
+         * TPBLINK::TaskID payload is rank 0, then rank 1, ... (create already
+         * stored rank 0). Parallel appends only gave lock order, not rank order.
+         */
+        {
+            int local_cap = cap_err;
+            int ar;
+
+            if (nprocs >= 2 && cap_err == 0) {
+                for (ar = 1; ar < nprocs; ar++) {
+                    int step_err = TPBE_SUCCESS;
+                    int max_err;
+
+                    MPI_Barrier(MPI_COMM_WORLD);
+                    if (local_cap == 0 && rank == ar) {
+                        step_err = tpb_k_append_capsule_task(capsule_id,
+                            my_task_id);
+                        if (step_err != 0) {
+                            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                                "stream_mpi: tpb_k_append_capsule_task "
+                                "failed %d (rank %d)\n", step_err, ar);
+                        }
+                    } else if (local_cap != 0) {
+                        step_err = local_cap;
+                    }
+                    (void)MPI_Allreduce(&step_err, &max_err, 1, MPI_INT,
+                        MPI_MAX, MPI_COMM_WORLD);
+                    local_cap = max_err;
+                }
             }
+            cap_err = local_cap;
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
