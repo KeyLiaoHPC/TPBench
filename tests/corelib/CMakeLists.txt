@@ -109,9 +109,30 @@ tpb_add_subcase(A5 A5.4  write_read_int32      test-1d-array corelib)
 tpb_add_subcase(A5 A5.5  write_read_random_len test-1d-array corelib)
 tpb_add_subcase(A5 A5.6  write_read_multi      test-1d-array corelib)
 
+# --- Task capsule tests (Pack A6) ---
+add_executable(test-capsule EXCLUDE_FROM_ALL
+    test_capsule.c
+)
+target_include_directories(test-capsule PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-capsule PRIVATE tpbench m rt)
+set_target_properties(test-capsule PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A6 A6.1  id_taskcapsule_differs test-capsule corelib)
+tpb_add_subcase(A6 A6.2  write_task_id_out      test-capsule corelib)
+tpb_add_subcase(A6 A6.3  write_task_null_out    test-capsule corelib)
+tpb_add_subcase(A6 A6.4  create_capsule_header  test-capsule corelib)
+tpb_add_subcase(A6 A6.5  tpbe_lists_capsule     test-capsule corelib)
+tpb_add_subcase(A6 A6.6  append_once            test-capsule corelib)
+tpb_add_subcase(A6 A6.7  append_multi           test-capsule corelib)
+tpb_add_subcase(A6 A6.8  subprocess_append      test-capsule corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
-    DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array
+    DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
 )
 
 add_custom_target(check_corelib

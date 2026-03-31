@@ -6,10 +6,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <pwd.h>
 #include <inttypes.h>
 #include <time.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #ifdef __linux__
 #include <linux/limits.h>
 #include <sys/syscall.h>
@@ -83,6 +87,13 @@ get_current_tid(void)
 #endif
 }
 
+#define TPB_CAPSULE_SHM_SIZE 32
+
+/* Local Function Prototypes */
+static int capsule_shm_build_name(const unsigned char kernel_id[20],
+                                  uint32_t handle_index,
+                                  char *out, size_t outlen);
+
 static int
 hex_to_id(const char *hex, unsigned char id[20])
 {
@@ -93,6 +104,26 @@ hex_to_id(const char *hex, unsigned char id[20])
         id[i] = (unsigned char)byte;
     }
     return 0;
+}
+
+static int
+capsule_shm_build_name(const unsigned char kernel_id[20],
+                         uint32_t handle_index,
+                         char *out, size_t outlen)
+{
+    char hex[41];
+    int n;
+
+    if (!kernel_id || !out || outlen == 0) {
+        return -1;
+    }
+    tpb_raf_id_to_hex(kernel_id, hex);
+    n = snprintf(out, outlen, "/tpbshm_%.8s_%u_capsule", hex,
+                 (unsigned)handle_index);
+    if (n < 0 || (size_t)n >= outlen) {
+        return -1;
+    }
+    return n;
 }
 
 /* ===== Batch-side API ===== */
@@ -282,7 +313,8 @@ tpb_record_end_batch(int ntask)
 /* ===== Task-side API (kernel child process) ===== */
 
 int
-tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
+tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
+                      unsigned char *task_id_out)
 {
     int err;
     char workspace[PATH_MAX];
@@ -455,6 +487,10 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
         return err;
     }
 
+    if (task_id_out != NULL) {
+        memcpy(task_id_out, task_id, 20);
+    }
+
     /* Write task entry (.tpbe) */
     task_entry_t entry;
     memset(&entry, 0, sizeof(entry));
@@ -485,7 +521,216 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code)
 /* ===== Public wrapper for kernel callers ===== */
 
 int
-tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code)
+tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
+                 unsigned char *task_id_out)
 {
-    return tpb_record_write_task(hdl, exit_code);
+    return tpb_record_write_task(hdl, exit_code, task_id_out);
+}
+
+int
+tpb_k_create_capsule_task(const unsigned char first_task_id[20],
+                          unsigned char capsule_id_out[20])
+{
+    char workspace[PATH_MAX];
+    char shm_name[96];
+    char hostname[64], username[64];
+    task_attr_t src;
+    tpb_meta_header_t chdr;
+    task_attr_t cap;
+    task_entry_t entry;
+    int err;
+    int sfd = -1;
+    void *mp = MAP_FAILED;
+
+    if (!first_task_id || !capsule_id_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
+    if (err != 0) {
+        return err;
+    }
+
+    memset(&src, 0, sizeof(src));
+    err = tpb_raf_record_read_task(workspace, first_task_id, &src,
+                                   NULL, NULL);
+    if (err != 0) {
+        return err;
+    }
+
+    get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
+
+    err = tpb_raf_gen_taskcapsule_id(src.utc_bits, src.btime, hostname,
+                                       username, src.tbatch_id, src.kernel_id,
+                                       src.handle_index, src.pid, src.tid,
+                                       capsule_id_out);
+    tpb_raf_free_headers(src.headers, src.nheader);
+    if (err != 0) {
+        return err;
+    }
+
+    memset(&chdr, 0, sizeof(chdr));
+    chdr.block_size = TPB_RAF_HDR_FIXED_SIZE;
+    chdr.ndim = 1;
+    chdr.dimsizes[0] = 1;
+    chdr.data_size = 20;
+    chdr.type_bits = (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
+    snprintf(chdr.name, sizeof(chdr.name), "%s", "TPBLINK::TaskID");
+
+    memset(&cap, 0, sizeof(cap));
+    memcpy(cap.task_record_id, capsule_id_out, 20);
+    memset(cap.dup_from, 0xFF, 20);
+    memcpy(cap.tbatch_id, src.tbatch_id, 20);
+    memcpy(cap.kernel_id, src.kernel_id, 20);
+    cap.utc_bits = src.utc_bits;
+    cap.btime = src.btime;
+    cap.duration = 0;
+    cap.exit_code = 0;
+    cap.handle_index = src.handle_index;
+    cap.pid = src.pid;
+    cap.tid = src.tid;
+    cap.ninput = 0;
+    cap.noutput = 0;
+    cap.nheader = 1;
+    cap.headers = &chdr;
+
+    err = tpb_raf_record_create_task_capsule(workspace, &cap,
+                                             first_task_id);
+    if (err != 0) {
+        return err;
+    }
+
+    memset(&entry, 0, sizeof(entry));
+    memcpy(entry.task_record_id, capsule_id_out, 20);
+    memset(entry.dup_from, 0xFF, 20);
+    memcpy(entry.tbatch_id, src.tbatch_id, 20);
+    memcpy(entry.kernel_id, src.kernel_id, 20);
+    entry.utc_bits = src.utc_bits;
+    entry.duration = 0;
+    entry.exit_code = 0;
+    entry.handle_index = src.handle_index;
+
+    err = tpb_raf_entry_append_task(workspace, &entry);
+    if (err != 0) {
+        return err;
+    }
+
+    if (capsule_shm_build_name(src.kernel_id, src.handle_index,
+                               shm_name, sizeof(shm_name)) < 0) {
+        return TPBE_CLI_FAIL;
+    }
+    (void)shm_unlink(shm_name);
+
+    sfd = shm_open(shm_name, O_CREAT | O_RDWR, 0600);
+    if (sfd < 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (ftruncate(sfd, TPB_CAPSULE_SHM_SIZE) != 0) {
+        close(sfd);
+        (void)shm_unlink(shm_name);
+        return TPBE_FILE_IO_FAIL;
+    }
+    mp = mmap(NULL, TPB_CAPSULE_SHM_SIZE, PROT_READ | PROT_WRITE,
+              MAP_SHARED, sfd, 0);
+    if (mp == MAP_FAILED) {
+        close(sfd);
+        (void)shm_unlink(shm_name);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    memset(mp, 0, TPB_CAPSULE_SHM_SIZE);
+    memcpy((unsigned char *)mp + 1, capsule_id_out, 20);
+    ((volatile unsigned char *)mp)[0] = 1;
+
+    (void)munmap(mp, TPB_CAPSULE_SHM_SIZE);
+    mp = MAP_FAILED;
+    close(sfd);
+
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
+                        uint32_t handle_index,
+                        unsigned char capsule_id_out[20])
+{
+    char shm_name[96];
+    int sfd = -1;
+    void *mp = MAP_FAILED;
+    volatile const unsigned char *p;
+
+    if (!kernel_id || !capsule_id_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (capsule_shm_build_name(kernel_id, handle_index,
+                               shm_name, sizeof(shm_name)) < 0) {
+        return TPBE_CLI_FAIL;
+    }
+
+    for (;;) {
+        sfd = shm_open(shm_name, O_RDONLY, 0600);
+        if (sfd >= 0) {
+            break;
+        }
+        if (errno != ENOENT) {
+            return TPBE_FILE_IO_FAIL;
+        }
+        usleep(1000);
+    }
+
+    mp = mmap(NULL, TPB_CAPSULE_SHM_SIZE, PROT_READ, MAP_SHARED, sfd, 0);
+    if (mp == MAP_FAILED) {
+        close(sfd);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    p = (volatile const unsigned char *)mp;
+    while (p[0] == 0) {
+        usleep(1000);
+    }
+    memcpy(capsule_id_out, (const void *)(p + 1), 20);
+
+    (void)munmap(mp, TPB_CAPSULE_SHM_SIZE);
+    close(sfd);
+    return TPBE_SUCCESS;
+}
+
+int
+tpb_k_append_capsule_task(const unsigned char capsule_id[20],
+                            const unsigned char task_id[20])
+{
+    char workspace[PATH_MAX];
+    int err;
+
+    if (!capsule_id || !task_id) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
+    if (err != 0) {
+        return err;
+    }
+
+    return tpb_raf_record_append_task_capsule(workspace, capsule_id,
+                                              task_id);
+}
+
+int
+tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
+                              uint32_t handle_index)
+{
+    char shm_name[96];
+
+    if (!kernel_id) {
+        return TPBE_NULLPTR_ARG;
+    }
+    if (capsule_shm_build_name(kernel_id, handle_index,
+                               shm_name, sizeof(shm_name)) < 0) {
+        return TPBE_CLI_FAIL;
+    }
+    if (shm_unlink(shm_name) != 0 && errno != ENOENT) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    return TPBE_SUCCESS;
 }

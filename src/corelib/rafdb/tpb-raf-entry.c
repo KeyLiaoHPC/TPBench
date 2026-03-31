@@ -2,14 +2,17 @@
  * tpb-raf-entry.c
  * Entry file (.tpbe) append, read, and list operations for all domains.
  *
- * .tpbe files are small index files; only rank 0 (main thread /
- * parent process) writes to them.  No locking is needed.
+ * .tpbe files are small index files.  The tpbcli parent is single-writer for
+ * most flows; MPI PLI kernels may append concurrently, so entry_append_generic
+ * uses flock(2) around read-modify-write.
  */
 
-#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/file.h>
 #include <sys/stat.h>
 #include "tpb-raf-types.h"
 
@@ -58,7 +61,6 @@ build_entry_path(const char *workspace, uint8_t domain,
 
 /*
  * Append one fixed-size entry row to a .tpbe file.
- * Single-writer only (rank 0).
  *
  * File layout: [start_magic][entry_0]...[entry_N-1][end_magic]
  */
@@ -69,6 +71,7 @@ entry_append_generic(const char *workspace, uint8_t domain,
     char fpath[TPB_RAF_PATH_MAX];
     unsigned char start_magic[TPB_RAF_MAGIC_LEN];
     unsigned char end_magic[TPB_RAF_MAGIC_LEN];
+    int fd;
     FILE *fp;
     struct stat st;
     long fsize;
@@ -80,11 +83,26 @@ entry_append_generic(const char *workspace, uint8_t domain,
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY, domain,
                           TPB_RAF_POS_END, end_magic);
 
-    if (stat(fpath, &st) != 0) {
-        fp = fopen(fpath, "wb");
-        printf("%s\n", strerror(errno));
-        if (!fp) return TPBE_FILE_IO_FAIL;
+    fd = open(fpath, O_RDWR | O_CREAT, 0644);
+    if (fd < 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (flock(fd, LOCK_EX) != 0) {
+        (void)close(fd);
+        return TPBE_FILE_IO_FAIL;
+    }
 
+    fp = fdopen(fd, "r+b");
+    if (!fp) {
+        (void)close(fd);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    if (fstat(fd, &st) != 0) {
+        goto fail;
+    }
+
+    if (st.st_size == 0) {
         if (fwrite(start_magic, 1, TPB_RAF_MAGIC_LEN, fp)
             != TPB_RAF_MAGIC_LEN)
             goto fail;
@@ -94,20 +112,21 @@ entry_append_generic(const char *workspace, uint8_t domain,
             != TPB_RAF_MAGIC_LEN)
             goto fail;
 
-        fclose(fp);
+        if (fclose(fp) != 0) {
+            return TPBE_FILE_IO_FAIL;
+        }
         return TPBE_SUCCESS;
     }
 
-    fp = fopen(fpath, "r+b");
-    if (!fp) return TPBE_FILE_IO_FAIL;
-
     fsize = (long)st.st_size;
-    if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN))
+    if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN)) {
         goto fail;
+    }
 
     /* Verify trailing end_magic */
-    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0)
+    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0) {
         goto fail;
+    }
     {
         unsigned char check[TPB_RAF_MAGIC_LEN];
         if (fread(check, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -121,15 +140,18 @@ entry_append_generic(const char *workspace, uint8_t domain,
     }
 
     /* Overwrite old end_magic with entry + new end_magic */
-    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0)
+    if (fseek(fp, fsize - TPB_RAF_MAGIC_LEN, SEEK_SET) != 0) {
         goto fail;
+    }
     if (fwrite(entry_data, 1, entry_size, fp) != entry_size)
         goto fail;
     if (fwrite(end_magic, 1, TPB_RAF_MAGIC_LEN, fp)
         != TPB_RAF_MAGIC_LEN)
         goto fail;
 
-    fclose(fp);
+    if (fclose(fp) != 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
     return TPBE_SUCCESS;
 
 fail:

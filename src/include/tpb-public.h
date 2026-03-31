@@ -333,11 +333,66 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
  * Reads TPB_TBATCH_ID / TPB_HANDLE_INDEX / TPB_WORKSPACE from env.
  * Outputs are written as 1-D arrays.
  *
- * @param hdl       Runtime handle with argpack and respack populated.
- * @param exit_code Kernel exit code (0 = success).
+ * @param hdl          Runtime handle with argpack and respack populated.
+ * @param exit_code    Kernel exit code (0 = success).
+ * @param task_id_out  Optional; if non-NULL, receives the 20-byte TaskRecordID.
  * @return 0 on success, error code otherwise.
  */
-int tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code);
+int tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
+                     unsigned char *task_id_out);
+
+/**
+ * @brief Create a task capsule record (leader rank / primary thread).
+ *
+ * Reads the first unit's task record to match utc_bits, btime, and linkage
+ * fields, then writes a capsule .tpbr/.tpbe and publishes the capsule ID
+ * to POSIX shared memory for tpb_k_sync_capsule_task().
+ *
+ * @param first_task_id  TaskRecordID of the leader's own task record.
+ * @param capsule_id_out Output 20-byte TaskCapsuleRecordID.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_k_create_capsule_task(const unsigned char first_task_id[20],
+                              unsigned char capsule_id_out[20]);
+
+/**
+ * @brief Read the task capsule ID from POSIX shm (non-leader ranks).
+ *
+ * Shm object name is derived from kernel_id and handle_id. Blocks until the
+ * leader sets the ready flag after tpb_k_create_capsule_task().
+ *
+ * @param kernel_id       20-byte KernelID (same as env TPB_KERNEL_ID).
+ * @param handle_index    Handle index (same as env TPB_HANDLE_INDEX).
+ * @param capsule_id_out  Output 20-byte TaskCapsuleRecordID.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
+                            uint32_t handle_index,
+                            unsigned char capsule_id_out[20]);
+
+/**
+ * @brief Append a TaskRecordID to an existing task capsule .tpbr.
+ *
+ * Uses advisory locking on the capsule file. The leader's ID must already
+ * be present from tpb_k_create_capsule_task(); this appends one more ID.
+ *
+ * @param capsule_id 20-byte TaskCapsuleRecordID.
+ * @param task_id    20-byte TaskRecordID to append.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_k_append_capsule_task(const unsigned char capsule_id[20],
+                              const unsigned char task_id[20]);
+
+/**
+ * @brief Remove the capsule sync shm object (call on leader after all
+ *        ranks have read the capsule ID and finished appends).
+ *
+ * @param kernel_id    20-byte KernelID.
+ * @param handle_index Handle index.
+ * @return 0 on success, error code otherwise (including ENOENT as success).
+ */
+int tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
+                                    uint32_t handle_index);
 
 /* ===== PLI (Process-Level Integration) API ===== */
 
@@ -581,7 +636,8 @@ typedef struct task_entry {
  *
  * @param out_path Buffer to receive resolved path
  * @param pathlen  Buffer size
- * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if corelib not initialized, or TPBE_FILE_IO_FAIL
+ * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if corelib is not initialized and
+ *         TPB_WORKSPACE is unset, or TPBE_FILE_IO_FAIL if the path is missing
  */
 int tpb_raf_resolve_workspace(char *out_path, size_t pathlen);
 
@@ -789,6 +845,32 @@ int tpb_raf_record_write_task(const char *workspace,
                                 uint64_t datasize);
 
 /**
+ * @brief Write a new task capsule .tpbr (one header, first task ID in data).
+ *
+ * Expects attr->nheader==1, ninput==noutput==0, dup_from all 0xFF, and
+ * attr->task_record_id set to the capsule ID.
+ *
+ * @param workspace      Workspace root
+ * @param attr           Task attributes for the capsule
+ * @param first_task_id  First member TaskRecordID (20 bytes)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_create_task_capsule(const char *workspace,
+                                       const task_attr_t *attr,
+                                       const unsigned char first_task_id[20]);
+
+/**
+ * @brief Append a TaskRecordID to a task capsule .tpbr under file lock.
+ * @param workspace   Workspace root
+ * @param capsule_id  TaskCapsuleRecordID
+ * @param task_id     TaskRecordID to append
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_append_task_capsule(const char *workspace,
+                                       const unsigned char capsule_id[20],
+                                       const unsigned char task_id[20]);
+
+/**
  * @brief Read a task .tpbr record file.
  * @param workspace Workspace root path
  * @param task_id   20-byte TaskRecordID
@@ -851,7 +933,7 @@ int tpb_raf_gen_kernel_id(const char *kernel_name,
  * @param username   Username string
  * @param tbatch_id  20-byte TBatchID
  * @param kernel_id  20-byte KernelID
- * @param order      Order in batch (0-based)
+ * @param hdl_id     Handle ID (0-based kernel index in batch)
  * @param pid        Writer process ID
  * @param tid        Writer thread ID
  * @param id_out     20-byte output buffer
@@ -863,10 +945,25 @@ int tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                           const char *username,
                           const unsigned char tbatch_id[20],
                           const unsigned char kernel_id[20],
-                          uint32_t order,
+                          uint32_t hdl_id,
                           uint32_t pid,
                           uint32_t tid,
                           unsigned char id_out[20]);
+
+/**
+ * @brief Generate TaskCapsuleRecordID (same inputs as task ID, different
+ *        leading hash literal).
+ */
+int tpb_raf_gen_taskcapsule_id(tpb_dtbits_t utc_bits,
+                                 uint64_t btime,
+                                 const char *hostname,
+                                 const char *username,
+                                 const unsigned char tbatch_id[20],
+                                 const unsigned char kernel_id[20],
+                                 uint32_t hdl_id,
+                                 uint32_t pid,
+                                 uint32_t tid,
+                                 unsigned char id_out[20]);
 
 /**
  * @brief Convert 20-byte ID to 40-char hex string.
