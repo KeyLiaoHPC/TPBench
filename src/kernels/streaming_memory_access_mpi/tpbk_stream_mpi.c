@@ -47,7 +47,7 @@ static int run_stream_mpi(void);
 static int d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     uint64_t agg_elems, int64_t twarm_ms, int64_t *copy_time,
     int64_t *scale_time, int64_t *add_time, int64_t *triad_time,
-    uint64_t *real_total_memsize, uint32_t *array_size_out,
+    uint64_t *real_total_memsize, uint64_t *array_size_out,
     double *copy_bw, double *scale_bw, double *add_bw, double *triad_bw,
     double **summary16);
 
@@ -62,7 +62,7 @@ static int d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
 static STREAM_TYPE *a;
 static STREAM_TYPE *b;
 static STREAM_TYPE *c;
-static size_t array_elements;
+static uint64_t array_elements;
 
 #define M 20
 
@@ -137,7 +137,7 @@ tpbk_pli_register_stream_mpi(void)
     }
     err = tpb_k_add_output("STREAM array size",
         "Local number of elements per array on this rank.",
-        TPB_UINT32_T,
+        TPB_UINT64_T,
         TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N
             | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) {
@@ -235,7 +235,7 @@ run_stream_mpi(void)
     void *add_time = NULL;
     void *triad_time = NULL;
     uint64_t *real_total_memsize = NULL;
-    uint32_t *array_size_out = NULL;
+    uint64_t *array_size_out = NULL;
     double *copy_bw = NULL;
     double *scale_bw = NULL;
     double *add_bw = NULL;
@@ -353,7 +353,7 @@ static int
 d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     uint64_t agg_elems, int64_t twarm_ms, int64_t *copy_time,
     int64_t *scale_time, int64_t *add_time, int64_t *triad_time,
-    uint64_t *real_total_memsize, uint32_t *array_size_out,
+    uint64_t *real_total_memsize, uint64_t *array_size_out,
     double *copy_bw, double *scale_bw, double *add_bw, double *triad_bw,
     double **summary16)
 {
@@ -363,18 +363,18 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     int i, k;
     STREAM_TYPE scalar;
     uint64_t base_sz;
-    int local_n;
+    uint64_t local_n;
     size_t array_bytes;
     int quantum;
     double t_est_us;
     int64_t tcal_lo;
     STREAM_TYPE AvgError[3];
     STREAM_TYPE *AvgErrByRank = NULL;
+    double *times_double = NULL;
     double *TimesByRank = NULL;
-    int64_t *loc_flat;
-    int64_t *glob_flat = NULL;
     STREAM_TYPE s = (STREAM_TYPE)SCALAR;
     double bytes_agg[4];
+
     static char *label[4] = {"Copy:      ", "Scale:     ", "Add:       ",
         "Triad:     "};
 
@@ -386,24 +386,33 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     }
 
     base_sz = agg_elems / (uint64_t)nprocs;
-    local_n = (int)base_sz;
+    local_n = base_sz;
     if (rank == nprocs - 1) {
-        local_n += (int)(agg_elems % (uint64_t)nprocs);
+        local_n += agg_elems % nprocs;
     }
     if (local_n <= 0) {
         return TPBE_KERN_ARG_FAIL;
     }
 
-    array_elements = (size_t)local_n;
-    *array_size_out = (uint32_t)local_n;
-    *real_total_memsize = (uint64_t)(3 * sizeof(STREAM_TYPE) * local_n);
+    array_elements = local_n;
+    *array_size_out = local_n;
+    *real_total_memsize = 3 * (uint64_t)sizeof(STREAM_TYPE) * local_n;
 
     a = NULL;
     b = NULL;
     c = NULL;
-    MALLOC_ALIGN_GOTO(a, local_n, cleanup_none);
-    MALLOC_ALIGN_GOTO(b, local_n, cleanup_a);
-    MALLOC_ALIGN_GOTO(c, local_n, cleanup_ab);
+    a = malloc(local_n * sizeof (STREAM_TYPE));
+    b = malloc(local_n * sizeof (STREAM_TYPE));
+    c = malloc(local_n * sizeof (STREAM_TYPE));
+    times_double = malloc(ntest * sizeof(double));
+    if (a == NULL || b == NULL || c == NULL || times_double == NULL) {
+        if (a) free(a);
+        if (b) free(b);
+        if (c) free(c);
+        if (times_double) free(times_double);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "FATAL: Rank %d failed at malloc stream arrays.\n", rank);
+        MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
+    }
 
     array_bytes = (size_t)local_n * sizeof(STREAM_TYPE);
     (void)array_bytes;
@@ -412,31 +421,35 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     bytes_agg[1] = bytes_agg[0];
     bytes_agg[2] = 3.0 * (double)sizeof(STREAM_TYPE) * (double)agg_elems;
     bytes_agg[3] = bytes_agg[2];
+    uint64_t cbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+    uint64_t sbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+    uint64_t abytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
+    uint64_t tbytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
 
-    loc_flat = (int64_t *)malloc(sizeof(int64_t) * 4 * (size_t)ntest);
-    if (loc_flat == NULL) {
-        err = TPBE_MALLOC_FAIL;
-        goto cleanup_alloc;
-    }
+    // Rank 0 needs to allocate arrays to hold error data and timing data from
+	// all ranks for analysis and output.
+	// Allocate and instantiate the arrays here -- after the primary arrays 
+	// have been instantiated -- so there is no possibility of having these 
+	// auxiliary arrays mess up the NUMA placement of the primary arrays.
 
     if (rank == 0) {
-        glob_flat = (int64_t *)malloc(sizeof(int64_t) * 4
-            * (size_t)ntest * (size_t)nprocs);
-        TimesByRank = (double *)malloc(sizeof(double) * 4
-            * (size_t)ntest * (size_t)nprocs);
-        AvgErrByRank = (STREAM_TYPE *)malloc(3 * sizeof(STREAM_TYPE)
-            * (size_t)nprocs);
-        if (glob_flat == NULL || TimesByRank == NULL
-            || AvgErrByRank == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
-                "stream_mpi: rank 0 gather buffer malloc failed\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
+        // There are 3 average error values for each rank (using STREAM_TYPE).
+        AvgErrByRank = (double *) malloc(3 * sizeof(STREAM_TYPE) * nprocs);
+        if (AvgErrByRank == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Ooops -- allocation of arrays to collect errors on MPI rank 0 failed\n");
+            MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
         }
-        memset(AvgErrByRank, 0,
-            3 * sizeof(STREAM_TYPE) * (size_t)nprocs);
-        memset(TimesByRank, 0,
-            sizeof(double) * 4 * (size_t)ntest * (size_t)nprocs);
+        memset(AvgErrByRank,0,3*sizeof(STREAM_TYPE)*nprocs);
+
+        // There are 4*NTIMES timing values for each rank (always doubles)
+        TimesByRank = (double *) malloc(4 * ntest * sizeof(double) * nprocs);
+        if (TimesByRank == NULL) {
+            tpb_printf(TPBM_PRTN_M_DIRECT, "Ooops -- allocation of arrays to collect timing data on MPI rank 0 failed\n");
+            MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
+        }
+        memset(TimesByRank,0,4*ntest*sizeof(double)*nprocs);
     }
+
 
     if (rank == 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
@@ -511,7 +524,6 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         c[j] = 0.0;
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
 
     {
         struct timespec wts;
@@ -521,12 +533,10 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             + (uint64_t)wts.tv_nsec;
         wns1 = wns0 + (uint64_t)twarm_ms * 1000000ULL;
         while (wns0 < wns1) {
-            MPI_Barrier(MPI_COMM_WORLD);
-#pragma omp parallel for
+            #pragma omp parallel for
             for (j = 0; j < (ssize_t)array_elements; j++) {
                 a[j] = b[j] + s * c[j];
             }
-            MPI_Barrier(MPI_COMM_WORLD);
             clock_gettime(CLOCK_MONOTONIC, &wts);
             wns0 = (uint64_t)wts.tv_sec * 1000000000ULL
                 + (uint64_t)wts.tv_nsec;
@@ -554,6 +564,9 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             quantum = 1;
         }
     }
+
+
+
 
     timer->tick(&tcal_lo);
 #pragma omp parallel for
@@ -595,7 +608,6 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         }
         MPI_Barrier(MPI_COMM_WORLD);
         timer->tock(&copy_time[k]);
-        loc_flat[0 * ntest + k] = copy_time[k];
 
         timer->tick(&scale_time[k]);
         MPI_Barrier(MPI_COMM_WORLD);
@@ -605,7 +617,6 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         }
         MPI_Barrier(MPI_COMM_WORLD);
         timer->tock(&scale_time[k]);
-        loc_flat[1 * ntest + k] = scale_time[k];
 
         timer->tick(&add_time[k]);
         MPI_Barrier(MPI_COMM_WORLD);
@@ -615,7 +626,6 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         }
         MPI_Barrier(MPI_COMM_WORLD);
         timer->tock(&add_time[k]);
-        loc_flat[2 * ntest + k] = add_time[k];
 
         timer->tick(&triad_time[k]);
         MPI_Barrier(MPI_COMM_WORLD);
@@ -625,74 +635,69 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         }
         MPI_Barrier(MPI_COMM_WORLD);
         timer->tock(&triad_time[k]);
-        loc_flat[3 * ntest + k] = triad_time[k];
     }
+
+    /*
+     * Gather timings in kernel order (Copy, Scale, Add, Triad). Each block is
+     * nprocs * ntest doubles: rank-major, iteration-minor, same as one
+     * MPI_Gather per kernel with recvcount = ntest per rank.
+     */
+    for (i = 0; i < ntest; i++) {
+        times_double[i] = (double)copy_time[i] * 1e-9;
+    }
+    MPI_Gather(times_double, ntest, MPI_DOUBLE, TimesByRank, ntest, MPI_DOUBLE, 0,
+        MPI_COMM_WORLD);
+
+    for (i = 0; i < ntest; i++) {
+        times_double[i] = (double)scale_time[i] * 1e-9;
+    }
+    MPI_Gather(times_double, ntest, MPI_DOUBLE, TimesByRank + ntest * nprocs, ntest, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    for (i = 0; i < ntest; i++) {
+        times_double[i] = (double)add_time[i] * 1e-9;
+    }
+    MPI_Gather(times_double, ntest, MPI_DOUBLE, TimesByRank + 2 * ntest * nprocs, ntest, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+
+    for (i = 0; i < ntest; i++) {
+        times_double[i] = (double)triad_time[i] * 1e-9;
+    }
+    MPI_Gather(times_double, ntest, MPI_DOUBLE, TimesByRank + 3 * ntest * nprocs, ntest, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
     for (k = 0; k < ntest; k++) {
-        uint64_t cbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
-        uint64_t sbytes = 2 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
-        uint64_t abytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
-        uint64_t tbytes = 3 * (uint64_t)array_elements * sizeof(STREAM_TYPE);
-        copy_bw[k] = ((double)cbytes * 1e-6)
-            / ((double)copy_time[k] * 1e-9);
-        scale_bw[k] = ((double)sbytes * 1e-6)
-            / ((double)scale_time[k] * 1e-9);
-        add_bw[k] = ((double)abytes * 1e-6)
-            / ((double)add_time[k] * 1e-9);
-        triad_bw[k] = ((double)tbytes * 1e-6)
-            / ((double)triad_time[k] * 1e-9);
+        copy_bw[k] = copy_time[k] == 0? 0: (double)cbytes / ((double)(copy_time[k]) * 1e-3);
+        scale_bw[k] = scale_time[k] == 0? 0: (double)sbytes / ((double)(scale_time[k]) * 1e-3);
+        add_bw[k] = add_time[k] == 0? 0: (double)abytes / ((double)(add_time[k]) * 1e-3);
+        triad_bw[k] = triad_time[k] == 0? 0: (double)tbytes / ((double)(triad_time[k]) * 1e-3);
     }
 
-    MPI_Gather(loc_flat, 4 * ntest, MPI_INT64_T, glob_flat, 4 * ntest,
-        MPI_INT64_T, 0, MPI_COMM_WORLD);
-
     if (rank == 0) {
-        double avgtime[4];
-        double maxtime[4];
-        double mintime[4];
-        int64_t tmin_ns[4];
-        int64_t *gtimes = NULL;
+        double avgtime[4] = {0., 0., 0., 0.};
+        double maxtime[4] = {0., 0., 0., 0.};
+        double mintime[4] = {FLT_MAX, FLT_MAX, FLT_MAX, FLT_MAX};
+        size_t blksz;
 
-        gtimes = (int64_t *)malloc(sizeof(int64_t) * 4 * (size_t)ntest);
-        if (gtimes == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
-                "stream_mpi: malloc gtimes failed\n");
-            MPI_Abort(MPI_COMM_WORLD, 1);
-        }
-
-        for (k = 0; k < ntest; k++) {
-            for (j = 0; j < 4; j++) {
-                double tmin = 1.0e36;
-                for (i = 0; i < nprocs; i++) {
-                    int64_t v = glob_flat[i * 4 * ntest + j * ntest + k];
-                    double sec = (double)v * 1e-9;
-                    TimesByRank[i * 4 * ntest + j * ntest + k] = sec;
-                    if (sec < tmin) {
-                        tmin = sec;
-                    }
-                }
-                gtimes[(size_t)j * (size_t)ntest + (size_t)k] =
-                    (int64_t)(tmin * 1e9);
-            }
-        }
-
-        for (j = 0; j < 4; j++) {
-            avgtime[j] = 0.0;
-            maxtime[j] = 0.0;
-            mintime[j] = FLT_MAX;
-            tmin_ns[j] = INT64_MAX;
-        }
-
+        /*
+         * TimesByRank: block j (0..3) is kernel j; within a block, rank i times
+         * start at offset i * ntest (MPI_Gather rank order).
+         * Per stream_mpi.c: for each (iteration, kernel), min over ranks; then
+         * for k >= 1 only, accumulate avg / min / max and best MB/s from mintime.
+         */
+        blksz = (size_t)ntest * (size_t)nprocs;
         for (k = 1; k < ntest; k++) {
             for (j = 0; j < 4; j++) {
-                int64_t tns = gtimes[(size_t)j * (size_t)ntest + (size_t)k];
-                double ts = (double)tns * 1e-9;
-                avgtime[j] += ts;
-                mintime[j] = MIN(mintime[j], ts);
-                maxtime[j] = MAX(maxtime[j], ts);
-                if (tns < tmin_ns[j]) {
-                    tmin_ns[j] = tns;
+                double t_min_rank;
+                size_t jk_base;
+                size_t idx;
+
+                jk_base = (size_t)j * blksz;
+                t_min_rank = 1.0e36;
+                for (i = 0; i < nprocs; i++) {
+                    idx = jk_base + (size_t)i * (size_t)ntest + (size_t)k;
+                    t_min_rank = MIN(t_min_rank, TimesByRank[idx]);
                 }
+                avgtime[j] += t_min_rank;
+                mintime[j] = MIN(mintime[j], t_min_rank);
+                maxtime[j] = MAX(maxtime[j], t_min_rank);
             }
         }
 
@@ -704,9 +709,9 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
         for (j = 0; j < 4; j++) {
             double best_mb_s = 0.0;
-            if (tmin_ns[j] > 0 && tmin_ns[j] < INT64_MAX) {
-                best_mb_s = 1.0E-6 * bytes_agg[j]
-                    / ((double)tmin_ns[j] * 1e-9);
+
+            if (mintime[j] > 0.0 && mintime[j] < (double)FLT_MAX) {
+                best_mb_s = 1.0E-06 * bytes_agg[j] / mintime[j];
             }
             tpb_printf(TPBM_PRTN_M_DIRECT,
                 "%s%11.1f  %11.6f  %11.6f  %11.6f\n",
@@ -718,10 +723,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             summary16[j * 4 + 3][0] = maxtime[j];
         }
         tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-        free(gtimes);
     }
-
-cleanup_after_mpi:
 
     computeSTREAMerrors(&AvgError[0], &AvgError[1], &AvgError[2], ntest);
     MPI_Gather(AvgError, 3, MPI_DOUBLE, AvgErrByRank, 3, MPI_DOUBLE, 0,
@@ -733,15 +735,15 @@ cleanup_after_mpi:
     }
 
 cleanup_alloc:
-    free(loc_flat);
-    if (glob_flat) {
-        free(glob_flat);
-    }
     if (TimesByRank) {
         free(TimesByRank);
     }
     if (AvgErrByRank) {
         free(AvgErrByRank);
+    }
+    if (times_double) {
+        free(times_double);
+        times_double = NULL;
     }
     free(c);
     free(b);
@@ -750,19 +752,6 @@ cleanup_alloc:
 
     return err;
 
-cleanup_ab:
-    free(b);
-    free(a);
-    a = b = NULL;
-    return TPBE_MALLOC_FAIL;
-
-cleanup_a:
-    free(a);
-    a = NULL;
-    return TPBE_MALLOC_FAIL;
-
-cleanup_none:
-    return TPBE_MALLOC_FAIL;
 }
 
 int
@@ -1064,11 +1053,10 @@ main(int argc, char **argv)
         }
 
         err = run_stream_mpi();
+
         if (err != 0) {
-            if (rank == 0) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                    "Kernel stream_mpi failed: %d\n", err);
-            }
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                "Rank %d: Kernel stream_mpi failed: %d\n", rank, err);
             werr = tpb_k_write_task(&handle, err, NULL);
             (void)werr;
             tpb_driver_clean_handle(&handle);
@@ -1077,12 +1065,29 @@ main(int argc, char **argv)
         }
 
         if (rank == 0) {
+            int baton = 0;
+            MPI_Status status;
             tpb_cliout_results(&handle);
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                 "Kernel stream_mpi finished successfully.\n");
+            fflush(stdout);
+            if (nprocs > 1) {
+                MPI_Send(&baton, 1, MPI_INT, rank + 1, rank + 1, MPI_COMM_WORLD);
+            }
+        } else {
+            int baton = 0;
+            MPI_Status status;
+            MPI_Recv(&baton, 1, MPI_INT, rank - 1, rank, MPI_COMM_WORLD, &status);
+            if (rank != nprocs - 1) {
+                MPI_Send(&baton, 1, MPI_INT, (rank + 1) % nprocs, (rank + 1) % nprocs, MPI_COMM_WORLD);
+            }
         }
 
+        tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank %d starts write task.\n", rank);
+        fflush(stdout);
         werr = tpb_k_write_task(&handle, 0, my_task_id);
+        tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank %d write task ended.\n", rank);
+        fflush(stdout);
 
         MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1096,6 +1101,7 @@ main(int argc, char **argv)
                         "stream_mpi: tpb_k_create_capsule_task failed %d\n",
                         cap_err);
                 }
+                tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank 0 created task capsule ended.\n");
             } else {
                 cap_err = werr;
             }

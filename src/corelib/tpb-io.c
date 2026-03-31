@@ -434,6 +434,8 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
         tpb_log_write(header_buf);
     }
     tpb_log_write(msg_buf);
+    fflush(stdout);
+    fflush(stderr);
 }
 
 void
