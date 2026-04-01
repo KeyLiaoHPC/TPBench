@@ -128,10 +128,12 @@ enum _tpb_errno {
 };
 typedef enum _tpb_errno tpb_errno_t;
 
-/** @brief Process context that last completed tpb_corelib_init / tpb_k_corelib_init. */
+/** @brief Process context that last completed corelib init in this process. */
 typedef enum {
     TPB_CORELIB_CTX_CALLER_TPBCLI = 1,
-    TPB_CORELIB_CTX_CALLER_KERNEL = 2
+    TPB_CORELIB_CTX_CALLER_KERNEL = 2,
+    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK = 3,
+    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK = 4
 } tpb_corelib_caller_t;
 
 /**
@@ -149,6 +151,23 @@ int tpb_corelib_init(const char *tpb_workspace_path);
  * @return Same as tpb_corelib_init.
  */
 int tpb_k_corelib_init(const char *tpb_workspace_path);
+
+/**
+ * @brief Initialize TPBench corelib for an MPI kernel process after MPI_Init.
+ *        Rank 0 in the given communicator runs full startup (version, workspace,
+ *        rafdb, log) and broadcasts its error code; other ranks wait, then init
+ *        silently if the code is TPBE_SUCCESS. Rank 0 then prints rank/PID lines
+ *        and a completion line. When TPBench is built without MPI, returns
+ *        TPBE_ILLEGAL_CALL immediately.
+ * @param mpi_comm MPI communicator (pass your @c MPI_Comm, e.g. @c MPI_COMM_WORLD;
+ *        in C you may write @c (void *)MPI_COMM_WORLD if your @c mpi.h types require
+ *        a cast to @c void *).
+ * @param tpb_workspace_path Same as tpb_corelib_init.
+ * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if this build has no MPI support or
+ *         @a mpi_comm is NULL, TPBE_MPI_FAIL on broadcast abort (non-root) or MPI
+ *         errors, or another TPBE_* code from corelib init.
+ */
+int tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path);
 
 /** @brief Timer structure */
 typedef struct tpb_timer {

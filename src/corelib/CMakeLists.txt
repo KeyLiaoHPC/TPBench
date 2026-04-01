@@ -26,3 +26,11 @@ target_include_directories(tpbench
 )
 target_link_libraries(tpbench PUBLIC m dl rt)
 target_compile_definitions(tpbench PRIVATE TPB_DIR="${TPB_DIR_RESOLVED}")
+
+if(TARGET MPI::MPI_C)
+    target_sources(tpbench PRIVATE tpb_corelib_mpi.c)
+    target_include_directories(tpbench PRIVATE ${MPI_C_INCLUDE_DIRS})
+    target_link_libraries(tpbench PRIVATE MPI::MPI_C)
+else()
+    target_sources(tpbench PRIVATE tpb_corelib_mpi_stub.c)
+endif()

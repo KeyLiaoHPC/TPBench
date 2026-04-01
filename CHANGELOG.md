@@ -11,6 +11,7 @@
 
 ### Corelib
 
+- `tpb_mpik_corelib_init(void *mpi_comm, const char *)` is always declared in `tpb-public.h` (opaque communicator, e.g. `(void *)MPI_COMM_WORLD`). With MPI: coordinated init after `MPI_Init` as before. Without MPI: `tpb_corelib_mpi_stub.c` returns `TPBE_ILLEGAL_CALL`. New caller types `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK` / `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK`. `tpb_corelib_init` / `tpb_k_corelib_init` print `TPBench is called by tpbcli|kernel|MPI kernel` after version and workspace lines. When the real MPI object is used, `libtpbench` links `MPI::MPI_C` privately.
 - `tpb_register_kernel()` is part of the public API (`tpb-public.h` / `tpbench.h`).
 - `tpb_list()` removed from `tpb-io`; table printing moved to the CLI.
 - `tpb_k_static_info_t` adds `kernel_record_ok`; `tpb_driver_set_kernel_record_ok()` added.
