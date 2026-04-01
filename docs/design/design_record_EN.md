@@ -573,6 +573,7 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 Notes:
 - `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
 - `dup_to` points to the canonical task record when deduplication is enabled.
+- For an MPI kernel that records via `tpb_mpik_write_task`, each rank's normal task record has `dup_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
 - `dup_from` is all-zero unless this record was derived from another task record (provenance).
 
 #### 2.4.2. Entry Structure (.tpbe)
@@ -719,15 +720,21 @@ The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbat
 **Fixed header (single):**
 
 - **Name:** `TPBLINK::TaskID`
-- **Semantics:** 1-D array of 20-byte task record IDs, stored contiguously in the record data section. The inner dimension length grows as each rank/thread appends its ID after writing its own task record.
+- **Semantics:** 1-D array of 20-byte task record IDs, stored contiguously in the record data section. The inner dimension length grows as member IDs are appended to the capsule `.tpbr` under advisory locking (see lifecycle below).
 
 **Entry (`.tpbe`):** Same `task.tpbe` row layout as a normal task entry; the capsule appears as another task row distinguished by its TaskCapsuleRecordID.
 
+**Per-rank task linkage:** After a successful MPI capsule finalize, each participating rank's normal task `.tpbr` and matching `task.tpbe` row have `dup_to` set to the capsule's TaskCapsuleRecordID (`tpb_k_task_set_dup_to`).
+
 **Lifecycle (kernel responsibility):**
 
+**MPI (recommended):** After `tpb_mpik_corelib_init` on the execution communicator, call `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` once at the end of the collective kernel. It coordinates: each rank `tpb_k_write_task`; barrier; rank 0 `tpb_k_create_capsule_task`; `MPI_Bcast` of capsule ID and status; each rank patches its own task `dup_to` to the capsule; `MPI_Gather` of all TaskRecordIDs to rank 0; rank 0 alone calls `tpb_k_append_capsule_task` for ranks 1..n-1 in MPI rank order (sub ranks do not touch the capsule file).
+
+**Ad-hoc / non-MPI multi-unit:**
+
 1. Each unit writes its normal task record via `tpb_k_write_task` and obtains its TaskRecordID (optional output pointer).
-2. The designated leader (rank 0 / thread 0) calls `tpb_k_create_capsule_task(first_task_id, capsule_id_out)`, which creates the capsule `.tpbr` with the first ID in the data section and appends the capsule entry.
-3. Other units synchronize on the capsule ID (e.g. POSIX shared memory `tpb_k_sync_capsule_task`, or `MPI_Bcast` when appropriate).
+2. The designated leader (thread 0 or rank 0 without `tpb_mpik_write_task`) calls `tpb_k_create_capsule_task(first_task_id, capsule_id_out)`, which creates the capsule `.tpbr` with the first ID in the data section and appends the capsule entry.
+3. Other units synchronize on the capsule ID (e.g. POSIX shared memory `tpb_k_sync_capsule_task`, or `MPI_Bcast` when not using `tpb_mpik_write_task`).
 4. Each non-leader calls `tpb_k_append_capsule_task(capsule_id, own_task_id)`. Appends use an advisory file lock on the capsule `.tpbr`: read the header dimension and `datasize`, strip the trailing end magic, append 20 bytes, rewrite the end magic, then update `datasize` and the header's `dimsizes[0]` / `data_size`.
 
 **Magic bytes:** Same task-domain record magics as section 2.4.3 (`.tpbr` task domain).
@@ -1014,7 +1021,7 @@ Column details:
 
 When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently.
 
-**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. The leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or collective messaging (e.g. `MPI_Bcast`) distributes the capsule ID to non-leader ranks.
+**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. **MPI kernels** should use `tpb_mpik_write_task` so corelib performs the collectives: rank 0 creates the capsule and appends other ranks' IDs after `MPI_Gather`; each rank's task record `dup_to` (`.tpbr` and `task.tpbe` row) points at the capsule ID. **Non-MPI or ad-hoc MPI:** the leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or `MPI_Bcast` can distribute the capsule ID when not using `tpb_mpik_write_task`.
 
 **Legacy merge API:** The caller may still merge per-unit task records into a single **merged task record** via `tpb_k_merge_record_thread` / `tpb_k_merge_record_process` (section 5.2). That path synthesizes combined headers and payload; it remains available for older workflows.
 
