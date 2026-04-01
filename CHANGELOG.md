@@ -11,6 +11,9 @@
 
 ### Corelib
 
+- `tpb_mpik_corelib_init(void *mpi_comm, const char *)` is always declared in `tpb-public.h` (opaque communicator, e.g. `(void *)MPI_COMM_WORLD`). With MPI: coordinated init after `MPI_Init` as before; stores the communicator for `tpb_mpik_write_task`. Without MPI: `tpb_corelib_mpi_stub.c` returns `TPBE_ILLEGAL_CALL`. New caller types `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK` / `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK`. `tpb_corelib_init` / `tpb_k_corelib_init` print `TPBench is called by tpbcli|kernel|MPI kernel` after version and workspace lines. When the real MPI object is used, `libtpbench` links `MPI::MPI_C` privately.
+- `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` — MPI-coordinated `tpb_k_write_task` + capsule: rank 0 creates capsule and `MPI_Bcast`s ID; each rank patches `dup_to` via `tpb_k_task_set_dup_to`; `MPI_Gather` + rank-0-only `tpb_k_append_capsule_task` for ranks 1..n-1. Stub returns `TPBE_ILLEGAL_CALL` without MPI.
+- `tpb_k_task_set_dup_to(task_id, dup_to_id)` — seek-and-patch `dup_to` in task `.tpbr` (validated magic + task ID) and matching `task.tpbe` row (`flock` on entry file).
 - `tpb_register_kernel()` is part of the public API (`tpb-public.h` / `tpbench.h`).
 - `tpb_list()` removed from `tpb-io`; table printing moved to the CLI.
 - `tpb_k_static_info_t` adds `kernel_record_ok`; `tpb_driver_set_kernel_record_ok()` added.
@@ -39,6 +42,6 @@ Design and implement task capsule record to enclose mp/mt task records instead o
 - RTRIAD: Migrate to the new PLI kernel format.
 - STAXPY: Migrate to the new PLI kernel format.
 - STRIAD: Migrate to the new PLI kernel format.
-- stream_mpi: After each rank records its task (with TaskID output), `MPI_Barrier`; rank 0 `tpb_k_create_capsule_task`, `MPI_Bcast` of capsule id and status; non-root ranks append to the capsule in **ascending MPI rank order** (per-rank `MPI_Barrier` + `MPI_Allreduce` on append errors) so `TPBLINK::TaskID` order is rank 0, 1, …; rank 0 `tpb_k_unlink_capsule_sync_shm`. Removes the pre-write MPI baton ring and merge/recover-style task ID recovery (`tpb-raf-merge.c` left as-is for other callers).
+- stream_mpi: Success path calls `tpb_mpik_write_task` (corelib MPI collectives + `dup_to` + rank-0 capsule appends); rank 0 `tpb_k_unlink_capsule_sync_shm` after barrier. Error path still uses `tpb_k_write_task` only.
 - Other CPU PLI kernels: call `tpb_k_write_task(..., NULL)` for the optional TaskID argument (backward compatible).
 

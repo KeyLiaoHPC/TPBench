@@ -14,6 +14,7 @@
 #include <time.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #ifdef __linux__
 #include <linux/limits.h>
 #include <sys/syscall.h>
@@ -525,6 +526,148 @@ tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                  unsigned char *task_id_out)
 {
     return tpb_record_write_task(hdl, exit_code, task_id_out);
+}
+
+/* meta_magic(8) + metasize(8) + datasize(8) + task_record_id(20) */
+#define TPB_TASK_TPBR_DUP_TO_OFF 44L
+
+#define TPB_TASK_TPBE_ENTRY_STRIDE 232L
+#define TPB_TASK_TPBE_DUP_TO_OFF 104L
+
+int
+tpb_k_task_set_dup_to(const unsigned char task_id[20],
+                      const unsigned char dup_to_id[20])
+{
+    char workspace[PATH_MAX];
+    char fpath[TPB_RAF_PATH_MAX];
+    char hex[41];
+    unsigned char idchk[20];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    FILE *fp;
+    task_entry_t *entries;
+    int count;
+    int row;
+    int j;
+    int err;
+    int fd;
+    long offset;
+
+    if (task_id == NULL || dup_to_id == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
+
+    tpb_raf_id_to_hex(task_id, hex);
+    if (snprintf(fpath, sizeof(fpath), "%s/%s/%s.tpbr",
+            workspace, TPB_RAF_TASK_DIR, hex) >= (int)sizeof(fpath)) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    fp = fopen(fpath, "r+b");
+    if (fp == NULL) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+            TPB_RAF_DOM_TASK, TPB_RAF_POS_START)) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    /* After magic: metasize(8) + datasize(8) -> task_record_id at +24 */
+    if (fseek(fp, 24L, SEEK_SET) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fread(idchk, 1, 20, fp) != 20) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (memcmp(idchk, task_id, 20) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fseek(fp, TPB_TASK_TPBR_DUP_TO_OFF, SEEK_SET) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fclose(fp) != 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    entries = NULL;
+    count = 0;
+    err = tpb_raf_entry_list_task(workspace, &entries, &count);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
+
+    row = -1;
+    for (j = 0; j < count; j++) {
+        if (memcmp(entries[j].task_record_id, task_id, 20) == 0) {
+            row = j;
+            break;
+        }
+    }
+    free(entries);
+
+    if (row < 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    if (snprintf(fpath, sizeof(fpath), "%s/%s/%s",
+            workspace, TPB_RAF_TASK_DIR, TPB_RAF_TASK_ENTRY)
+            >= (int)sizeof(fpath)) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    fp = fopen(fpath, "r+b");
+    if (fp == NULL) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    fd = fileno(fp);
+    if (fd < 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (flock(fd, LOCK_EX) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    offset = (long)TPB_RAF_MAGIC_LEN + (long)row * TPB_TASK_TPBE_ENTRY_STRIDE
+        + TPB_TASK_TPBE_DUP_TO_OFF;
+    if (fseek(fp, offset, SEEK_SET) != 0) {
+        (void)flock(fd, LOCK_UN);
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+        (void)flock(fd, LOCK_UN);
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (fflush(fp) != 0) {
+        (void)flock(fd, LOCK_UN);
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    (void)flock(fd, LOCK_UN);
+    if (fclose(fp) != 0) {
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    return TPBE_SUCCESS;
 }
 
 int

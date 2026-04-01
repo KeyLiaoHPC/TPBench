@@ -128,10 +128,12 @@ enum _tpb_errno {
 };
 typedef enum _tpb_errno tpb_errno_t;
 
-/** @brief Process context that last completed tpb_corelib_init / tpb_k_corelib_init. */
+/** @brief Process context that last completed corelib init in this process. */
 typedef enum {
     TPB_CORELIB_CTX_CALLER_TPBCLI = 1,
-    TPB_CORELIB_CTX_CALLER_KERNEL = 2
+    TPB_CORELIB_CTX_CALLER_KERNEL = 2,
+    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK = 3,
+    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK = 4
 } tpb_corelib_caller_t;
 
 /**
@@ -149,6 +151,23 @@ int tpb_corelib_init(const char *tpb_workspace_path);
  * @return Same as tpb_corelib_init.
  */
 int tpb_k_corelib_init(const char *tpb_workspace_path);
+
+/**
+ * @brief Initialize TPBench corelib for an MPI kernel process after MPI_Init.
+ *        Rank 0 in the given communicator runs full startup (version, workspace,
+ *        rafdb, log) and broadcasts its error code; other ranks wait, then init
+ *        silently if the code is TPBE_SUCCESS. Rank 0 then prints rank/PID lines
+ *        and a completion line. When TPBench is built without MPI, returns
+ *        TPBE_ILLEGAL_CALL immediately.
+ * @param mpi_comm MPI communicator (pass your @c MPI_Comm, e.g. @c MPI_COMM_WORLD;
+ *        in C you may write @c (void *)MPI_COMM_WORLD if your @c mpi.h types require
+ *        a cast to @c void *). Stored for @c tpb_mpik_write_task on MPI builds.
+ * @param tpb_workspace_path Same as tpb_corelib_init.
+ * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if this build has no MPI support or
+ *         @a mpi_comm is NULL, TPBE_MPI_FAIL on broadcast abort (non-root) or MPI
+ *         errors, or another TPBE_* code from corelib init.
+ */
+int tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path);
 
 /** @brief Timer structure */
 typedef struct tpb_timer {
@@ -251,6 +270,23 @@ typedef struct tpb_k_rthdl {
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
 
+/**
+ * @brief MPI-coordinated task write and task capsule finalize for MPI kernels.
+ *        Each rank writes its task via tpb_k_write_task; rank 0 creates the
+ *        capsule and broadcasts its ID; each rank patches dup_to on its task
+ *        record to the capsule; rank 0 gathers all TaskRecordIDs and appends
+ *        ranks 1..n-1 to the capsule. Uses the communicator stored by
+ *        tpb_mpik_corelib_init. Without MPI, returns TPBE_ILLEGAL_CALL.
+ * @param hdl           Runtime handle (non-NULL).
+ * @param exit_code     Kernel exit code passed to tpb_k_write_task.
+ * @param task_id_out   Optional 20-byte TaskRecordID output (same rank).
+ * @param tcap_id_out   Optional 20-byte TaskCapsuleRecordID output.
+ * @return TPBE_SUCCESS or TPBE_* from write/create/append/dup_to/MPI.
+ */
+int tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
+                        unsigned char *task_id_out,
+                        unsigned char *tcap_id_out);
+
 /* ===== Kernel Registration API ===== */
 
 /**
@@ -340,6 +376,17 @@ int tpb_k_alloc_output(const char *name, uint64_t n, void *ptr);
  */
 int tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                      unsigned char *task_id_out);
+
+/**
+ * @brief Patch task record dup_to in task .tpbr and matching row in task.tpbe.
+ *        Seeks fixed offsets for current on-disk layout; does not rewrite full
+ *        records. Uses flock on task.tpbe.
+ * @param task_id    20-byte TaskRecordID whose files to update.
+ * @param dup_to_id  20-byte target ID (e.g. TaskCapsuleRecordID).
+ * @return TPBE_SUCCESS, TPBE_NULLPTR_ARG, or TPBE_FILE_IO_FAIL.
+ */
+int tpb_k_task_set_dup_to(const unsigned char task_id[20],
+                          const unsigned char dup_to_id[20]);
 
 /**
  * @brief Create a task capsule record (leader rank / primary thread).

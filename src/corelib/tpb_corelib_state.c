@@ -15,7 +15,6 @@
 
 /* Local Function Prototypes */
 static int resolve_workspace_root(const char *override, char *out, size_t outlen);
-static int init_corelib(const char *tpb_workspace_path, int caller_after);
 
 static int _s_corelib_initialized;
 static int _s_caller;
@@ -98,16 +97,21 @@ resolve_workspace_root(const char *override, char *out, size_t outlen)
 /*
  * Shared corelib startup: resolve workspace, rafdb layout, run log, caller tag.
  * For tpbcli only, clears TPB_LOG_FILE so a new timestamped log is always created.
+ * MPI sub rank skips version/workspace/caller console lines but still initializes
+ * workspace state.
  */
-static int
-init_corelib(const char *tpb_workspace_path, int caller_after)
+int
+_tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
 {
     char resolved[PATH_MAX];
     int err;
+    int silent;
 
     if (_s_corelib_initialized) {
         return TPBE_ILLEGAL_CALL;
     }
+
+    silent = (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK);
 
     if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
         unsetenv(TPB_LOG_FILE_ENV);
@@ -118,8 +122,22 @@ init_corelib(const char *tpb_workspace_path, int caller_after)
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v%g\n", TPB_VERSION);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench workspace: %s\n", resolved);
+    if (!silent) {
+        const char *who;
+
+        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v%g\n", TPB_VERSION);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench workspace: %s\n", resolved);
+        if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
+            who = "tpbcli";
+        } else if (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL) {
+            who = "kernel";
+        } else if (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK) {
+            who = "MPI kernel";
+        } else {
+            who = "unknown";
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench is called by %s\n", who);
+    }
 
     _tpb_workspace_path_set(resolved);
 
@@ -143,11 +161,13 @@ init_corelib(const char *tpb_workspace_path, int caller_after)
 int
 tpb_corelib_init(const char *tpb_workspace_path)
 {
-    return init_corelib(tpb_workspace_path, TPB_CORELIB_CTX_CALLER_TPBCLI);
+    return _tpb_init_corelib(tpb_workspace_path,
+        TPB_CORELIB_CTX_CALLER_TPBCLI);
 }
 
 int
 tpb_k_corelib_init(const char *tpb_workspace_path)
 {
-    return init_corelib(tpb_workspace_path, TPB_CORELIB_CTX_CALLER_KERNEL);
+    return _tpb_init_corelib(tpb_workspace_path,
+        TPB_CORELIB_CTX_CALLER_KERNEL);
 }

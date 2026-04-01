@@ -31,4 +31,10 @@ void _tpb_caller_set(int caller);
 
 int _tpb_caller_get(void);
 
+/**
+ * @brief Shared corelib startup used by tpb_corelib_init, tpb_k_corelib_init, and
+ *        MPI-coordinated init. See tpb_corelib_state.c for caller-specific printing.
+ */
+int _tpb_init_corelib(const char *tpb_workspace_path, int caller_after);
+
 #endif /* TPB_CORELIB_STATE_H */

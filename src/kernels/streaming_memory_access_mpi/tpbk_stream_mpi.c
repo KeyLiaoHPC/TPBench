@@ -964,13 +964,11 @@ main(int argc, char **argv)
 {
     int err;
     int rank;
-    int nprocs;
     const char *timer_name = NULL;
     unsigned char my_task_id[20];
     unsigned char capsule_id[20];
     unsigned char kernel_id_bin[20];
     uint32_t handle_index = 0;
-    int werr;
     int cap_err;
     const char *ev;
 
@@ -980,16 +978,15 @@ main(int argc, char **argv)
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
     /*
      * Required for tpb_raf_resolve_workspace (write_task + capsule paths).
      * Uses TPB_WORKSPACE from the environment when non-NULL.
      */
-    err = tpb_k_corelib_init(NULL);
+    err = tpb_mpik_corelib_init((void *)MPI_COMM_WORLD, NULL);
     if (err != 0 && err != TPBE_ILLEGAL_CALL) {
         if (rank == 0) {
-            fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+            fprintf(stderr, "Error: tpb_mpik_corelib_init failed: %d\n", err);
         }
         MPI_Finalize();
         return err;
@@ -1057,72 +1054,25 @@ main(int argc, char **argv)
         if (err != 0) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                 "Rank %d: Kernel stream_mpi failed: %d\n", rank, err);
-            werr = tpb_k_write_task(&handle, err, NULL);
-            (void)werr;
+            (void)tpb_k_write_task(&handle, err, NULL);
             tpb_driver_clean_handle(&handle);
             MPI_Finalize();
             return err;
         }
 
-        werr = tpb_k_write_task(&handle, 0, my_task_id);
-
-
-        MPI_Barrier(MPI_COMM_WORLD);
-
-        memset(capsule_id, 0, sizeof(capsule_id));
-        cap_err = TPBE_SUCCESS;
+        cap_err = tpb_mpik_write_task(&handle, 0, my_task_id, capsule_id);
         if (rank == 0) {
-            if (werr == 0) {
-                cap_err = tpb_k_create_capsule_task(my_task_id, capsule_id);
-                if (cap_err != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                        "stream_mpi: tpb_k_create_capsule_task failed %d\n",
-                        cap_err);
-                }
-                tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE, "Rank 0 created task capsule ended.\n");
+            if (cap_err == 0) {
+                tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE,
+                    "Rank 0 created task capsule ended.\n");
             } else {
-                cap_err = werr;
+                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                    "stream_mpi: tpb_mpik_write_task failed %d\n", cap_err);
             }
-        }
-        (void)MPI_Bcast(capsule_id, 20, MPI_BYTE, 0, MPI_COMM_WORLD);
-        (void)MPI_Bcast(&cap_err, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-        /*
-         * Append non-root task IDs in MPI rank order (1..nprocs-1) so the
-         * TPBLINK::TaskID payload is rank 0, then rank 1, ... (create already
-         * stored rank 0). Parallel appends only gave lock order, not rank order.
-         */
-        {
-            int local_cap = cap_err;
-            int ar;
-
-            if (nprocs >= 2 && cap_err == 0) {
-                for (ar = 1; ar < nprocs; ar++) {
-                    int step_err = TPBE_SUCCESS;
-                    int max_err;
-
-                    MPI_Barrier(MPI_COMM_WORLD);
-                    if (local_cap == 0 && rank == ar) {
-                        step_err = tpb_k_append_capsule_task(capsule_id,
-                            my_task_id);
-                        if (step_err != 0) {
-                            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                                "stream_mpi: tpb_k_append_capsule_task "
-                                "failed %d (rank %d)\n", step_err, ar);
-                        }
-                    } else if (local_cap != 0) {
-                        step_err = local_cap;
-                    }
-                    (void)MPI_Allreduce(&step_err, &max_err, 1, MPI_INT,
-                        MPI_MAX, MPI_COMM_WORLD);
-                    local_cap = max_err;
-                }
-            }
-            cap_err = local_cap;
         }
 
         MPI_Barrier(MPI_COMM_WORLD);
-        if (rank == 0 && werr == 0 && cap_err == 0) {
+        if (rank == 0 && cap_err == 0) {
             (void)tpb_k_unlink_capsule_sync_shm(kernel_id_bin, handle_index);
         }
 
