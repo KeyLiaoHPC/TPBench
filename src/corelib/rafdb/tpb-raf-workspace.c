@@ -14,13 +14,13 @@
 #include "tpb-raf-types.h"
 
 /* Local Function Prototypes */
-static int dir_exists(const char *path);
-static int file_exists(const char *path);
-static int mkdir_recursive(const char *path);
-static int write_default_config(const char *config_path);
+static int _sf_dir_exists(const char *path);
+static int _sf_file_exists(const char *path);
+static int _sf_mkdir_recursive(const char *path);
+static int _sf_write_default_config(const char *config_path);
 
 static int
-dir_exists(const char *path)
+_sf_dir_exists(const char *path)
 {
     struct stat st;
     if (stat(path, &st) != 0) return 0;
@@ -28,7 +28,7 @@ dir_exists(const char *path)
 }
 
 static int
-file_exists(const char *path)
+_sf_file_exists(const char *path)
 {
     struct stat st;
     return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
@@ -38,7 +38,7 @@ file_exists(const char *path)
  * Create directory and all parents. Returns 0 on success.
  */
 static int
-mkdir_recursive(const char *path)
+_sf_mkdir_recursive(const char *path)
 {
     char tmp[TPB_RAF_PATH_MAX];
     char *p;
@@ -53,7 +53,7 @@ mkdir_recursive(const char *path)
     for (p = tmp + 1; *p; p++) {
         if (*p == '/') {
             *p = '\0';
-            if (!dir_exists(tmp)) {
+            if (!_sf_dir_exists(tmp)) {
                 if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
                     return -1;
                 }
@@ -61,7 +61,7 @@ mkdir_recursive(const char *path)
             *p = '/';
         }
     }
-    if (!dir_exists(tmp)) {
+    if (!_sf_dir_exists(tmp)) {
         if (mkdir(tmp, 0755) != 0 && errno != EEXIST) {
             return -1;
         }
@@ -73,7 +73,7 @@ mkdir_recursive(const char *path)
  * Write a minimal default config.json: {"name": "default"}
  */
 static int
-write_default_config(const char *config_path)
+_sf_write_default_config(const char *config_path)
 {
     FILE *fp = fopen(config_path, "w");
     if (!fp) return -1;
@@ -82,6 +82,9 @@ write_default_config(const char *config_path)
     return 0;
 }
 
+/**
+ * @brief Copy the workspace path set by tpb_corelib_init into out_path.
+ */
 int
 tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
 {
@@ -122,6 +125,9 @@ tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Initialize workspace directory structure.
+ */
 int
 tpb_raf_init_workspace(const char *workspace_path)
 {
@@ -133,14 +139,14 @@ tpb_raf_init_workspace(const char *workspace_path)
 
     /* Create etc/ directory and config.json */
     snprintf(path, sizeof(path), "%s/etc", workspace_path);
-    if (mkdir_recursive(path) != 0) {
+    if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
              workspace_path, TPB_RAF_CONFIG_REL);
-    if (!file_exists(path)) {
-        if (write_default_config(path) != 0) {
+    if (!_sf_file_exists(path)) {
+        if (_sf_write_default_config(path) != 0) {
             return TPBE_FILE_IO_FAIL;
         }
     }
@@ -148,25 +154,25 @@ tpb_raf_init_workspace(const char *workspace_path)
     /* Create rafdb domain directories */
     snprintf(path, sizeof(path), "%s/%s",
              workspace_path, TPB_RAF_TBATCH_DIR);
-    if (mkdir_recursive(path) != 0) {
+    if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
              workspace_path, TPB_RAF_KERNEL_DIR);
-    if (mkdir_recursive(path) != 0) {
+    if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
              workspace_path, TPB_RAF_TASK_DIR);
-    if (mkdir_recursive(path) != 0) {
+    if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(path, sizeof(path), "%s/%s",
              workspace_path, TPB_RAF_LOG_REL);
-    if (mkdir_recursive(path) != 0) {
+    if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 

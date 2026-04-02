@@ -7,18 +7,18 @@
 #include "tpb-sha1.h"
 
 /* Local Function Prototypes */
-static uint32_t rotl32(uint32_t x, int n);
-static void process_block(tpb_sha1_ctx_t *ctx,
-                          const unsigned char block[64]);
+static void _sf_process_block(tpb_sha1_ctx_t *ctx,
+                            const unsigned char block[64]);
+static uint32_t _sf_rotl32(uint32_t x, int n);
 
 static uint32_t
-rotl32(uint32_t x, int n)
+_sf_rotl32(uint32_t x, int n)
 {
     return (x << n) | (x >> (32 - n));
 }
 
 static void
-process_block(tpb_sha1_ctx_t *ctx, const unsigned char block[64])
+_sf_process_block(tpb_sha1_ctx_t *ctx, const unsigned char block[64])
 {
     uint32_t w[80];
     uint32_t a, b, c, d, e, f, k, tmp;
@@ -31,7 +31,7 @@ process_block(tpb_sha1_ctx_t *ctx, const unsigned char block[64])
              | ((uint32_t)block[i * 4 + 3]);
     }
     for (i = 16; i < 80; i++) {
-        w[i] = rotl32(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1);
+        w[i] = _sf_rotl32(w[i-3] ^ w[i-8] ^ w[i-14] ^ w[i-16], 1);
     }
 
     a = ctx->state[0];
@@ -55,10 +55,10 @@ process_block(tpb_sha1_ctx_t *ctx, const unsigned char block[64])
             k = 0xCA62C1D6;
         }
 
-        tmp = rotl32(a, 5) + f + e + k + w[i];
+        tmp = _sf_rotl32(a, 5) + f + e + k + w[i];
         e = d;
         d = c;
-        c = rotl32(b, 30);
+        c = _sf_rotl32(b, 30);
         b = a;
         a = tmp;
     }
@@ -70,6 +70,9 @@ process_block(tpb_sha1_ctx_t *ctx, const unsigned char block[64])
     ctx->state[4] += e;
 }
 
+/**
+ * @brief Initialize SHA1 context.
+ */
 void
 tpb_sha1_init(tpb_sha1_ctx_t *ctx)
 {
@@ -82,6 +85,9 @@ tpb_sha1_init(tpb_sha1_ctx_t *ctx)
     memset(ctx->buf, 0, 64);
 }
 
+/**
+ * @brief Feed data into SHA1 context.
+ */
 void
 tpb_sha1_update(tpb_sha1_ctx_t *ctx, const void *data,
                 size_t len)
@@ -99,13 +105,13 @@ tpb_sha1_update(tpb_sha1_ctx_t *ctx, const void *data,
             return;
         }
         memcpy(ctx->buf + buf_used, p, space);
-        process_block(ctx, ctx->buf);
+        _sf_process_block(ctx, ctx->buf);
         p += space;
         len -= space;
     }
 
     while (len >= 64) {
-        process_block(ctx, p);
+        _sf_process_block(ctx, p);
         p += 64;
         len -= 64;
     }
@@ -115,6 +121,9 @@ tpb_sha1_update(tpb_sha1_ctx_t *ctx, const void *data,
     }
 }
 
+/**
+ * @brief Finalize SHA1 and produce 20-byte digest.
+ */
 void
 tpb_sha1_final(tpb_sha1_ctx_t *ctx, unsigned char digest[20])
 {
@@ -126,7 +135,7 @@ tpb_sha1_final(tpb_sha1_ctx_t *ctx, unsigned char digest[20])
 
     if (buf_used > 56) {
         memset(ctx->buf + buf_used, 0, 64 - buf_used);
-        process_block(ctx, ctx->buf);
+        _sf_process_block(ctx, ctx->buf);
         buf_used = 0;
     }
     memset(ctx->buf + buf_used, 0, 56 - buf_used);
@@ -139,7 +148,7 @@ tpb_sha1_final(tpb_sha1_ctx_t *ctx, unsigned char digest[20])
     ctx->buf[61] = (unsigned char)(total_bits >> 16);
     ctx->buf[62] = (unsigned char)(total_bits >> 8);
     ctx->buf[63] = (unsigned char)(total_bits);
-    process_block(ctx, ctx->buf);
+    _sf_process_block(ctx, ctx->buf);
 
     for (i = 0; i < 5; i++) {
         digest[i * 4 + 0] = (unsigned char)(ctx->state[i] >> 24);
@@ -149,6 +158,9 @@ tpb_sha1_final(tpb_sha1_ctx_t *ctx, unsigned char digest[20])
     }
 }
 
+/**
+ * @brief One-shot SHA1: hash data and produce 20-byte digest.
+ */
 void
 tpb_sha1(const void *data, size_t len, unsigned char digest[20])
 {

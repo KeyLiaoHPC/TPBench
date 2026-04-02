@@ -9,13 +9,13 @@
 #include "tpb-raf-types.h"
 
 /* Local Function Prototypes */
-static int match_magic_prefix(const unsigned char *p);
-
 /*
- * Check if 4-byte prefix matches the TPB magic header (E1 54 50 42).
+ * Return nonzero if the 4-byte prefix matches the TPB magic (E1 54 50 42).
  */
+static int _sf_match_magic_prefix(const unsigned char *p);
+
 static int
-match_magic_prefix(const unsigned char *p)
+_sf_match_magic_prefix(const unsigned char *p)
 {
     return p[0] == TPB_RAF_MAGIC_B0
         && p[1] == TPB_RAF_MAGIC_B1
@@ -23,6 +23,9 @@ match_magic_prefix(const unsigned char *p)
         && p[3] == TPB_RAF_MAGIC_B3;
 }
 
+/**
+ * @brief Build an 8-byte magic signature.
+ */
 void
 tpb_raf_build_magic(uint8_t ftype, uint8_t domain,
                       uint8_t pos, unsigned char out[8])
@@ -37,6 +40,9 @@ tpb_raf_build_magic(uint8_t ftype, uint8_t domain,
     out[7] = TPB_RAF_MAGIC_B7;
 }
 
+/**
+ * @brief Validate an 8-byte magic signature.
+ */
 int
 tpb_raf_validate_magic(const unsigned char magic[8],
                          uint8_t ftype, uint8_t domain,
@@ -47,6 +53,9 @@ tpb_raf_validate_magic(const unsigned char magic[8],
     return (memcmp(magic, expected, 8) == 0) ? 1 : 0;
 }
 
+/**
+ * @brief Scan a buffer for TPBench magic signatures.
+ */
 int
 tpb_raf_magic_scan(const void *buf, size_t len,
                      size_t *offsets, int *nfound,
@@ -67,7 +76,7 @@ tpb_raf_magic_scan(const void *buf, size_t len,
     }
 
     for (i = 0; i <= len - TPB_RAF_MAGIC_LEN; i++) {
-        if (!match_magic_prefix(p + i)) {
+        if (!_sf_match_magic_prefix(p + i)) {
             continue;
         }
         /* Check bytes 6-7 */
@@ -108,6 +117,9 @@ tpb_raf_magic_scan(const void *buf, size_t len,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Detect rafdb file type and domain from the first 8-byte magic.
+ */
 int
 tpb_raf_detect_file(const char *filepath,
                       uint8_t *ftype_out,
@@ -131,7 +143,7 @@ tpb_raf_detect_file(const char *filepath,
     }
     fclose(fp);
 
-    if (!match_magic_prefix(magic)) {
+    if (!_sf_match_magic_prefix(magic)) {
         return TPBE_FILE_IO_FAIL;
     }
     if (magic[6] != TPB_RAF_MAGIC_B6 ||

@@ -10,6 +10,13 @@
 #include "tpb-raf-types.h"
 #include "tpb-sha1.h"
 
+/* Local Function Prototypes */
+/* Map one hex ASCII character to its numeric value, or -1 if invalid. */
+static int _sf_hex_nibble(int c);
+
+/**
+ * @brief Generate TBatchID via SHA1.
+ */
 int
 tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
                         uint64_t btime,
@@ -48,6 +55,9 @@ tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Generate KernelID via SHA1.
+ */
 int
 tpb_raf_gen_kernel_id(const char *kernel_name,
                         const unsigned char so_sha1[20],
@@ -69,6 +79,9 @@ tpb_raf_gen_kernel_id(const char *kernel_name,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Generate TaskRecordID via SHA1.
+ */
 int
 tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
                       uint64_t btime,
@@ -122,6 +135,10 @@ tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Generate TaskCapsuleRecordID (same inputs as task ID, different
+ *        leading hash literal).
+ */
 int
 tpb_raf_gen_taskcapsule_id(tpb_dtbits_t utc_bits,
                              uint64_t btime,
@@ -175,6 +192,9 @@ tpb_raf_gen_taskcapsule_id(tpb_dtbits_t utc_bits,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Convert 20-byte ID to 40-char hex string.
+ */
 void
 tpb_raf_id_to_hex(const unsigned char id[20], char hex[41])
 {
@@ -186,7 +206,7 @@ tpb_raf_id_to_hex(const unsigned char id[20], char hex[41])
 }
 
 static int
-hex_nibble(int c)
+_sf_hex_nibble(int c)
 {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -194,6 +214,9 @@ hex_nibble(int c)
     return -1;
 }
 
+/**
+ * @brief Parse exactly 40 hex digits into a 20-byte ID.
+ */
 int
 tpb_raf_hex_to_id(const char *hex, unsigned char id[20])
 {
@@ -213,8 +236,8 @@ tpb_raf_hex_to_id(const char *hex, unsigned char id[20])
     }
 
     for (i = 0; i < 20; i++) {
-        int hi = hex_nibble((unsigned char)hex[i * 2]);
-        int lo = hex_nibble((unsigned char)hex[i * 2 + 1]);
+        int hi = _sf_hex_nibble((unsigned char)hex[i * 2]);
+        int lo = _sf_hex_nibble((unsigned char)hex[i * 2 + 1]);
         if (hi < 0 || lo < 0) {
             return TPBE_CLI_FAIL;
         }

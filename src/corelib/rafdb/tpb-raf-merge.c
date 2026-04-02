@@ -21,33 +21,39 @@
 #define MERGE_MAX_UNIQUE_NAMES 256
 
 /* Local Function Prototypes */
-static uint32_t get_cur_tid(void);
-static int cmp_task_by_tid(const void *a, const void *b);
-static int validate_batch_kernel(task_attr_t *tasks, int n);
-static void calc_merged_duration(task_attr_t *tasks, int n,
-                                 uint64_t *btime_out,
-                                 uint64_t *duration_out,
-                                 int *earliest_idx);
-static int collect_unique_header_names(task_attr_t *tasks,
-                                       int n,
-                                       char names[][256],
-                                       int *nnames_out);
-static int build_merge_headers(task_attr_t *tasks,
-                               void **src_data,
-                               uint64_t *src_datasize,
-                               int n,
-                               int is_process_merge,
-                               tpb_meta_header_t **hdrs_out,
-                               uint32_t *nhdrs_out,
-                               void **merged_data_out,
-                               uint64_t *merged_datasize_out);
-static int update_source_dup_to(const char *workspace,
-                                const unsigned char task_ids[][20],
-                                int n,
-                                const unsigned char merged_id[20]);
+static int _sf_build_merge_headers(task_attr_t *tasks,
+                                   void **src_data,
+                                   uint64_t *src_datasize,
+                                   int n,
+                                   int is_process_merge,
+                                   tpb_meta_header_t **hdrs_out,
+                                   uint32_t *nhdrs_out,
+                                   void **merged_data_out,
+                                   uint64_t *merged_datasize_out);
+static void _sf_calc_merged_duration(task_attr_t *tasks, int n,
+                                     uint64_t *btime_out,
+                                     uint64_t *duration_out,
+                                     int *earliest_idx);
+static int _sf_cmp_task_by_tid(const void *a, const void *b);
+static int _sf_collect_unique_header_names(task_attr_t *tasks,
+                                           int n,
+                                           char names[][256],
+                                           int *nnames_out);
+/*
+ * Fill one special header in-place with common defaults.
+ */
+static void _sf_fill_special_hdr(tpb_meta_header_t *h, const char *name,
+                                 int n, uint32_t type_bits,
+                                 uint64_t elem_sz);
+static uint32_t _sf_get_cur_tid(void);
+static int _sf_update_source_dup_to(const char *workspace,
+                                    const unsigned char task_ids[][20],
+                                    int n,
+                                    const unsigned char merged_id[20]);
+static int _sf_validate_batch_kernel(task_attr_t *tasks, int n);
 
 static uint32_t
-get_cur_tid(void)
+_sf_get_cur_tid(void)
 {
 #ifdef __linux__
     return (uint32_t)syscall(SYS_gettid);
@@ -57,7 +63,7 @@ get_cur_tid(void)
 }
 
 static int
-cmp_task_by_tid(const void *a, const void *b)
+_sf_cmp_task_by_tid(const void *a, const void *b)
 {
     const task_attr_t *ta = (const task_attr_t *)a;
     const task_attr_t *tb = (const task_attr_t *)b;
@@ -67,7 +73,7 @@ cmp_task_by_tid(const void *a, const void *b)
 }
 
 static int
-validate_batch_kernel(task_attr_t *tasks, int n)
+_sf_validate_batch_kernel(task_attr_t *tasks, int n)
 {
     int i;
 
@@ -90,7 +96,7 @@ validate_batch_kernel(task_attr_t *tasks, int n)
 }
 
 static void
-calc_merged_duration(task_attr_t *tasks, int n,
+_sf_calc_merged_duration(task_attr_t *tasks, int n,
                      uint64_t *btime_out,
                      uint64_t *duration_out,
                      int *earliest_idx)
@@ -116,7 +122,7 @@ calc_merged_duration(task_attr_t *tasks, int n,
 }
 
 static int
-collect_unique_header_names(task_attr_t *tasks, int n,
+_sf_collect_unique_header_names(task_attr_t *tasks, int n,
                             char names[][256],
                             int *nnames_out)
 {
@@ -144,11 +150,8 @@ collect_unique_header_names(task_attr_t *tasks, int n,
     return TPBE_SUCCESS;
 }
 
-/*
- * Fill one special header in-place with common defaults.
- */
 static void
-fill_special_hdr(tpb_meta_header_t *h, const char *name,
+_sf_fill_special_hdr(tpb_meta_header_t *h, const char *name,
                  int n, uint32_t type_bits, uint64_t elem_sz)
 {
     memset(h, 0, sizeof(*h));
@@ -161,7 +164,7 @@ fill_special_hdr(tpb_meta_header_t *h, const char *name,
 }
 
 static int
-build_merge_headers(task_attr_t *tasks,
+_sf_build_merge_headers(task_attr_t *tasks,
                     void **src_data,
                     uint64_t *src_datasize,
                     int n,
@@ -191,7 +194,7 @@ build_merge_headers(task_attr_t *tasks,
 
     n_unames = 0;
     memset(unames, 0, sizeof(unames));
-    collect_unique_header_names(tasks, n,
+    _sf_collect_unique_header_names(tasks, n,
                                 unames, &n_unames);
 
     nhdrs = (uint32_t)(n_special + n_unames * n);
@@ -202,23 +205,23 @@ build_merge_headers(task_attr_t *tasks,
     hi = 0;
 
     /* SourceTaskIDs */
-    fill_special_hdr(&hdrs[hi], "SourceTaskIDs",
+    _sf_fill_special_hdr(&hdrs[hi], "SourceTaskIDs",
                      n, uchar_bits, 20);
     hi++;
 
     /* ThreadIDs */
-    fill_special_hdr(&hdrs[hi], "ThreadIDs",
+    _sf_fill_special_hdr(&hdrs[hi], "ThreadIDs",
                      n, u32_bits, 4);
     hi++;
 
     if (is_process_merge) {
         /* ProcessIDs */
-        fill_special_hdr(&hdrs[hi], "ProcessIDs",
+        _sf_fill_special_hdr(&hdrs[hi], "ProcessIDs",
                          n, u32_bits, 4);
         hi++;
 
         /* Hosts */
-        fill_special_hdr(&hdrs[hi], "Hosts",
+        _sf_fill_special_hdr(&hdrs[hi], "Hosts",
                          n, uchar_bits, 64);
         hi++;
     }
@@ -353,7 +356,7 @@ build_merge_headers(task_attr_t *tasks,
 }
 
 static int
-update_source_dup_to(const char *workspace,
+_sf_update_source_dup_to(const char *workspace,
                      const unsigned char task_ids[][20],
                      int n,
                      const unsigned char merged_id[20])
@@ -434,6 +437,9 @@ update_source_dup_to(const char *workspace,
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Merge multiple task records into one combined record.
+ */
 int
 tpb_raf_merge_par(const char *workspace,
                     const unsigned char task_ids[][20],
@@ -508,7 +514,7 @@ tpb_raf_merge_par(const char *workspace,
 
     /* Sort tasks by tid */
     qsort(tasks, (size_t)n_tasks,
-          sizeof(task_attr_t), cmp_task_by_tid);
+          sizeof(task_attr_t), _sf_cmp_task_by_tid);
 
     /* Rebuild src_data/src_datasize in sorted order */
     for (i = 0; i < n_tasks; i++) {
@@ -527,16 +533,16 @@ tpb_raf_merge_par(const char *workspace,
     free(saved_sz);   saved_sz = NULL;
 
     /* Validate same tbatch_id and kernel_id */
-    err = validate_batch_kernel(tasks, n_tasks);
+    err = _sf_validate_batch_kernel(tasks, n_tasks);
     if (err) goto cleanup;
 
     /* Calculate merged duration */
-    calc_merged_duration(tasks, n_tasks,
+    _sf_calc_merged_duration(tasks, n_tasks,
                          &m_btime, &m_duration,
                          &earliest_idx);
 
     /* Build merged headers and data */
-    err = build_merge_headers(tasks, src_data,
+    err = _sf_build_merge_headers(tasks, src_data,
                               src_datasize, n_tasks,
                               is_process_merge,
                               &mhdrs, &nmhdrs,
@@ -556,7 +562,7 @@ tpb_raf_merge_par(const char *workspace,
         tasks[0].kernel_id,
         UINT32_MAX,
         (uint32_t)getpid(),
-        get_cur_tid(),
+        _sf_get_cur_tid(),
         merged_id);
     if (err) goto cleanup;
 
@@ -576,7 +582,7 @@ tpb_raf_merge_par(const char *workspace,
     merged_attr.exit_code = 0;
     merged_attr.handle_index = UINT32_MAX;
     merged_attr.pid = (uint32_t)getpid();
-    merged_attr.tid = get_cur_tid();
+    merged_attr.tid = _sf_get_cur_tid();
     merged_attr.ninput = 0;
     merged_attr.noutput = 0;
     merged_attr.nheader = nmhdrs;
@@ -608,7 +614,7 @@ tpb_raf_merge_par(const char *workspace,
     if (err) goto cleanup;
 
     /* Update source records' dup_to */
-    err = update_source_dup_to(workspace, task_ids,
+    err = _sf_update_source_dup_to(workspace, task_ids,
                                n_tasks, merged_id);
     if (err) goto cleanup;
 
@@ -639,6 +645,9 @@ cleanup:
 
 /* Public wrappers */
 
+/**
+ * @brief Merge multiple task records from threads within one process.
+ */
 int
 tpb_k_merge_record_thread(const unsigned char task_ids[][20],
                            int n_tasks,
@@ -653,6 +662,9 @@ tpb_k_merge_record_thread(const unsigned char task_ids[][20],
                                merged_id_out);
 }
 
+/**
+ * @brief Merge multiple task records from processes (possibly multi-node).
+ */
 int
 tpb_k_merge_record_process(const unsigned char task_ids[][20],
                             int n_tasks,

@@ -3,8 +3,8 @@
  * Entry file (.tpbe) append, read, and list operations for all domains.
  *
  * .tpbe files are small index files.  The tpbcli parent is single-writer for
- * most flows; MPI PLI kernels may append concurrently, so entry_append_generic
- * uses flock(2) around read-modify-write.
+ * most flows; MPI PLI kernels may append concurrently, so
+ * _sf_entry_append_generic uses flock(2) around read-modify-write.
  */
 
 #include <fcntl.h>
@@ -24,21 +24,29 @@ _Static_assert(TPB_RAF_RESERVE_SIZE == 128, "TPB_RAF_RESERVE_SIZE");
 #endif
 
 /* Local Function Prototypes */
-static void build_entry_path(const char *workspace, uint8_t domain,
-                             char *out, size_t outlen);
-static int entry_append_generic(const char *workspace,
-                                uint8_t domain,
-                                const void *entry_data,
-                                size_t entry_size);
-static int entry_list_generic(const char *workspace,
-                              uint8_t domain,
-                              void **entries_out,
-                              int *count_out,
-                              size_t entry_size);
+static void _sf_build_entry_path(const char *workspace, uint8_t domain,
+                                 char *out, size_t outlen);
+/*
+ * Append one fixed-size entry row to a .tpbe file.
+ * File layout: [start_magic][entry_0]...[entry_N-1][end_magic]
+ */
+static int _sf_entry_append_generic(const char *workspace,
+                                    uint8_t domain,
+                                    const void *entry_data,
+                                    size_t entry_size);
+/*
+ * Read all entries from a .tpbe file.
+ * Returns allocated array in *entries_out; caller must free.
+ */
+static int _sf_entry_list_generic(const char *workspace,
+                                  uint8_t domain,
+                                  void **entries_out,
+                                  int *count_out,
+                                  size_t entry_size);
 
 static void
-build_entry_path(const char *workspace, uint8_t domain,
-                 char *out, size_t outlen)
+_sf_build_entry_path(const char *workspace, uint8_t domain,
+                     char *out, size_t outlen)
 {
     const char *dir, *fname;
 
@@ -59,14 +67,9 @@ build_entry_path(const char *workspace, uint8_t domain,
     snprintf(out, outlen, "%s/%s/%s", workspace, dir, fname);
 }
 
-/*
- * Append one fixed-size entry row to a .tpbe file.
- *
- * File layout: [start_magic][entry_0]...[entry_N-1][end_magic]
- */
 static int
-entry_append_generic(const char *workspace, uint8_t domain,
-                     const void *entry_data, size_t entry_size)
+_sf_entry_append_generic(const char *workspace, uint8_t domain,
+                         const void *entry_data, size_t entry_size)
 {
     char fpath[TPB_RAF_PATH_MAX];
     unsigned char start_magic[TPB_RAF_MAGIC_LEN];
@@ -76,7 +79,7 @@ entry_append_generic(const char *workspace, uint8_t domain,
     struct stat st;
     long fsize;
 
-    build_entry_path(workspace, domain, fpath, sizeof(fpath));
+    _sf_build_entry_path(workspace, domain, fpath, sizeof(fpath));
 
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY, domain,
                           TPB_RAF_POS_START, start_magic);
@@ -159,14 +162,10 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
-/*
- * Read all entries from a .tpbe file.
- * Returns allocated array in *entries_out; caller must free.
- */
 static int
-entry_list_generic(const char *workspace, uint8_t domain,
-                   void **entries_out, int *count_out,
-                   size_t entry_size)
+_sf_entry_list_generic(const char *workspace, uint8_t domain,
+                       void **entries_out, int *count_out,
+                       size_t entry_size)
 {
     char fpath[TPB_RAF_PATH_MAX];
     FILE *fp;
@@ -176,7 +175,7 @@ entry_list_generic(const char *workspace, uint8_t domain,
     unsigned char magic_check[TPB_RAF_MAGIC_LEN];
     void *buf;
 
-    build_entry_path(workspace, domain, fpath, sizeof(fpath));
+    _sf_build_entry_path(workspace, domain, fpath, sizeof(fpath));
 
     if (stat(fpath, &st) != 0) {
         *entries_out = NULL;
@@ -259,33 +258,45 @@ entry_list_generic(const char *workspace, uint8_t domain,
 
 /* Public API wrappers */
 
+/**
+ * @brief Append a tbatch entry to the .tpbe file.
+ */
 int
 tpb_raf_entry_append_tbatch(const char *workspace,
                               const tbatch_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAF_DOM_TBATCH,
-                                entry, sizeof(tbatch_entry_t));
+    return _sf_entry_append_generic(workspace, TPB_RAF_DOM_TBATCH,
+                                   entry, sizeof(tbatch_entry_t));
 }
 
+/**
+ * @brief Append a kernel entry to the .tpbe file.
+ */
 int
 tpb_raf_entry_append_kernel(const char *workspace,
                               const kernel_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAF_DOM_KERNEL,
-                                entry, sizeof(kernel_entry_t));
+    return _sf_entry_append_generic(workspace, TPB_RAF_DOM_KERNEL,
+                                   entry, sizeof(kernel_entry_t));
 }
 
+/**
+ * @brief Append a task entry to the .tpbe file.
+ */
 int
 tpb_raf_entry_append_task(const char *workspace,
                             const task_entry_t *entry)
 {
     if (!workspace || !entry) return TPBE_NULLPTR_ARG;
-    return entry_append_generic(workspace, TPB_RAF_DOM_TASK,
-                                entry, sizeof(task_entry_t));
+    return _sf_entry_append_generic(workspace, TPB_RAF_DOM_TASK,
+                                   entry, sizeof(task_entry_t));
 }
 
+/**
+ * @brief List all tbatch entries from the .tpbe file.
+ */
 int
 tpb_raf_entry_list_tbatch(const char *workspace,
                             tbatch_entry_t **entries,
@@ -294,11 +305,14 @@ tpb_raf_entry_list_tbatch(const char *workspace,
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAF_DOM_TBATCH,
-                              (void **)entries, count,
-                              sizeof(tbatch_entry_t));
+    return _sf_entry_list_generic(workspace, TPB_RAF_DOM_TBATCH,
+                                  (void **)entries, count,
+                                  sizeof(tbatch_entry_t));
 }
 
+/**
+ * @brief List all kernel entries from the .tpbe file.
+ */
 int
 tpb_raf_entry_list_kernel(const char *workspace,
                             kernel_entry_t **entries,
@@ -307,11 +321,14 @@ tpb_raf_entry_list_kernel(const char *workspace,
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAF_DOM_KERNEL,
-                              (void **)entries, count,
-                              sizeof(kernel_entry_t));
+    return _sf_entry_list_generic(workspace, TPB_RAF_DOM_KERNEL,
+                                  (void **)entries, count,
+                                  sizeof(kernel_entry_t));
 }
 
+/**
+ * @brief List all task entries from the .tpbe file.
+ */
 int
 tpb_raf_entry_list_task(const char *workspace,
                           task_entry_t **entries,
@@ -320,7 +337,7 @@ tpb_raf_entry_list_task(const char *workspace,
     if (!workspace || !entries || !count) {
         return TPBE_NULLPTR_ARG;
     }
-    return entry_list_generic(workspace, TPB_RAF_DOM_TASK,
-                              (void **)entries, count,
-                              sizeof(task_entry_t));
+    return _sf_entry_list_generic(workspace, TPB_RAF_DOM_TASK,
+                                  (void **)entries, count,
+                                  sizeof(task_entry_t));
 }

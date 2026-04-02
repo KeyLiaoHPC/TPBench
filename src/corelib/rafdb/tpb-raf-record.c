@@ -25,48 +25,48 @@
 #define TPB_RAF_TASK_CAPSULE_HDR_NAME     "TPBLINK::TaskID"
 
 /* Local Function Prototypes */
-static void build_record_path(const char *workspace,
-                              uint8_t domain,
-                              const unsigned char id[20],
-                              char *out, size_t outlen);
-static int write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
-                         uint32_t n);
-static int read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
-                        uint32_t n);
-static int write_magic_and_data(FILE *fp, uint8_t domain,
-                                const void *data,
-                                uint64_t datasize);
-static int write_u64(FILE *fp, uint64_t v);
-static int write_u32(FILE *fp, uint32_t v);
-static int read_u64(FILE *fp, uint64_t *v);
-static int read_u32(FILE *fp, uint32_t *v);
+static void _sf_build_record_path(const char *workspace,
+                                  uint8_t domain,
+                                  const unsigned char id[20],
+                                  char *out, size_t outlen);
+static int _sf_read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
+                            uint32_t n);
+static int _sf_read_u32(FILE *fp, uint32_t *v);
+static int _sf_read_u64(FILE *fp, uint64_t *v);
+static int _sf_write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
+                             uint32_t n);
+static int _sf_write_magic_and_data(FILE *fp, uint8_t domain,
+                                    const void *data,
+                                    uint64_t datasize);
+static int _sf_write_u32(FILE *fp, uint32_t v);
+static int _sf_write_u64(FILE *fp, uint64_t v);
 
 static int
-write_u64(FILE *fp, uint64_t v)
+_sf_write_u64(FILE *fp, uint64_t v)
 {
     return (fwrite(&v, sizeof(v), 1, fp) == 1) ? 0 : -1;
 }
 
 static int
-write_u32(FILE *fp, uint32_t v)
+_sf_write_u32(FILE *fp, uint32_t v)
 {
     return (fwrite(&v, sizeof(v), 1, fp) == 1) ? 0 : -1;
 }
 
 static int
-read_u64(FILE *fp, uint64_t *v)
+_sf_read_u64(FILE *fp, uint64_t *v)
 {
     return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
 }
 
 static int
-read_u32(FILE *fp, uint32_t *v)
+_sf_read_u32(FILE *fp, uint32_t *v)
 {
     return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
 }
 
 static void
-build_record_path(const char *workspace, uint8_t domain,
+_sf_build_record_path(const char *workspace, uint8_t domain,
                   const unsigned char id[20],
                   char *out, size_t outlen)
 {
@@ -90,6 +90,9 @@ build_record_path(const char *workspace, uint8_t domain,
              workspace, dir, hex);
 }
 
+/**
+ * @brief Find which domain directory contains a .tpbr for the given ID.
+ */
 int
 tpb_raf_find_record(const char *workspace,
                       const unsigned char id[20],
@@ -109,7 +112,7 @@ tpb_raf_find_record(const char *workspace,
     doms[2] = TPB_RAF_DOM_TASK;
 
     for (d = 0; d < 3; d++) {
-        build_record_path(workspace, doms[d], id, path, sizeof(path));
+        _sf_build_record_path(workspace, doms[d], id, path, sizeof(path));
         if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {
             *domain_out = doms[d];
             return TPBE_SUCCESS;
@@ -125,7 +128,7 @@ tpb_raf_find_record(const char *workspace,
  *   dimsizes[ndim](8*ndim) + dimnames[ndim][64](64*ndim)
  */
 static int
-write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
+_sf_write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
               uint32_t n)
 {
     uint32_t i, j;
@@ -133,19 +136,19 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
     for (i = 0; i < n; i++) {
         uint32_t bs = TPB_RAF_HDR_FIXED_SIZE;
 
-        if (write_u32(fp, bs) != 0) return -1;
-        if (write_u32(fp, hdrs[i].ndim) != 0) return -1;
-        if (write_u64(fp, hdrs[i].data_size) != 0) return -1;
-        if (write_u32(fp, hdrs[i].type_bits) != 0) return -1;
-        if (write_u32(fp, hdrs[i]._reserve) != 0) return -1;
-        if (write_u64(fp, hdrs[i].uattr_bits) != 0) return -1;
+        if (_sf_write_u32(fp, bs) != 0) return -1;
+        if (_sf_write_u32(fp, hdrs[i].ndim) != 0) return -1;
+        if (_sf_write_u64(fp, hdrs[i].data_size) != 0) return -1;
+        if (_sf_write_u32(fp, hdrs[i].type_bits) != 0) return -1;
+        if (_sf_write_u32(fp, hdrs[i]._reserve) != 0) return -1;
+        if (_sf_write_u64(fp, hdrs[i].uattr_bits) != 0) return -1;
         if (fwrite(hdrs[i].name, 1, 256, fp) != 256) return -1;
         if (fwrite(hdrs[i].note, 1, 2048, fp) != 2048) {
             return -1;
         }
 
         for (j = 0; j < hdrs[i].ndim; j++) {
-            if (write_u64(fp, hdrs[i].dimsizes[j]) != 0) {
+            if (_sf_write_u64(fp, hdrs[i].dimsizes[j]) != 0) {
                 return -1;
             }
         }
@@ -162,7 +165,7 @@ write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
  * Read headers from file.
  */
 static int
-read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
+_sf_read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
              uint32_t n)
 {
     tpb_meta_header_t *hdrs;
@@ -177,17 +180,17 @@ read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
     if (!hdrs) return -1;
 
     for (i = 0; i < n; i++) {
-        if (read_u32(fp, &hdrs[i].block_size) != 0) goto fail;
-        if (read_u32(fp, &hdrs[i].ndim) != 0) goto fail;
-        if (read_u64(fp, &hdrs[i].data_size) != 0) goto fail;
-        if (read_u32(fp, &hdrs[i].type_bits) != 0) goto fail;
-        if (read_u32(fp, &hdrs[i]._reserve) != 0) goto fail;
-        if (read_u64(fp, &hdrs[i].uattr_bits) != 0) goto fail;
+        if (_sf_read_u32(fp, &hdrs[i].block_size) != 0) goto fail;
+        if (_sf_read_u32(fp, &hdrs[i].ndim) != 0) goto fail;
+        if (_sf_read_u64(fp, &hdrs[i].data_size) != 0) goto fail;
+        if (_sf_read_u32(fp, &hdrs[i].type_bits) != 0) goto fail;
+        if (_sf_read_u32(fp, &hdrs[i]._reserve) != 0) goto fail;
+        if (_sf_read_u64(fp, &hdrs[i].uattr_bits) != 0) goto fail;
         if (fread(hdrs[i].name, 1, 256, fp) != 256) goto fail;
         if (fread(hdrs[i].note, 1, 2048, fp) != 2048) goto fail;
 
         for (j = 0; j < hdrs[i].ndim; j++) {
-            if (read_u64(fp, &hdrs[i].dimsizes[j]) != 0) {
+            if (_sf_read_u64(fp, &hdrs[i].dimsizes[j]) != 0) {
                 goto fail;
             }
         }
@@ -210,7 +213,7 @@ fail:
  * Write the record_magic, data, and end_magic.
  */
 static int
-write_magic_and_data(FILE *fp, uint8_t domain,
+_sf_write_magic_and_data(FILE *fp, uint8_t domain,
                      const void *data, uint64_t datasize)
 {
     unsigned char magic[TPB_RAF_MAGIC_LEN];
@@ -239,6 +242,9 @@ write_magic_and_data(FILE *fp, uint8_t domain,
     return 0;
 }
 
+/**
+ * @brief Free header array allocated by record read functions.
+ */
 void
 tpb_raf_free_headers(tpb_meta_header_t *headers,
                        uint32_t nheader)
@@ -247,7 +253,9 @@ tpb_raf_free_headers(tpb_meta_header_t *headers,
     free(headers);
 }
 
-/* TBatch record write */
+/**
+ * @brief Write a tbatch .tpbr record file.
+ */
 int
 tpb_raf_record_write_tbatch(const char *workspace,
                               const tbatch_attr_t *attr,
@@ -263,7 +271,7 @@ tpb_raf_record_write_tbatch(const char *workspace,
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAF_DOM_TBATCH,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
                       attr->tbatch_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "wb");
@@ -284,24 +292,24 @@ tpb_raf_record_write_tbatch(const char *workspace,
     }
 
     /* metasize, datasize */
-    if (write_u64(fp, metasize) != 0) goto fail;
-    if (write_u64(fp, datasize) != 0) goto fail;
+    if (_sf_write_u64(fp, metasize) != 0) goto fail;
+    if (_sf_write_u64(fp, datasize) != 0) goto fail;
 
     /* Attributes */
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
-    if (write_u64(fp, attr->utc_bits) != 0) goto fail;
-    if (write_u64(fp, attr->btime) != 0) goto fail;
-    if (write_u64(fp, attr->duration) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->utc_bits) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->btime) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->duration) != 0) goto fail;
     if (fwrite(attr->hostname, 1, 64, fp) != 64) goto fail;
     if (fwrite(attr->username, 1, 64, fp) != 64) goto fail;
-    if (write_u32(fp, attr->front_pid) != 0) goto fail;
-    if (write_u32(fp, attr->nkernel) != 0) goto fail;
-    if (write_u32(fp, attr->ntask) != 0) goto fail;
-    if (write_u32(fp, attr->nscore) != 0) goto fail;
-    if (write_u32(fp, attr->batch_type) != 0) goto fail;
-    if (write_u32(fp, attr->nheader) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->front_pid) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nkernel) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->ntask) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nscore) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->batch_type) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nheader) != 0) goto fail;
 
     /* Reserve */
     memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
@@ -312,13 +320,13 @@ tpb_raf_record_write_tbatch(const char *workspace,
 
     /* Headers */
     if (attr->nheader > 0) {
-        if (write_headers(fp, attr->headers, attr->nheader) != 0) {
+        if (_sf_write_headers(fp, attr->headers, attr->nheader) != 0) {
             goto fail;
         }
     }
 
     /* Record data section */
-    if (write_magic_and_data(fp, TPB_RAF_DOM_TBATCH,
+    if (_sf_write_magic_and_data(fp, TPB_RAF_DOM_TBATCH,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -331,7 +339,9 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
-/* TBatch record read */
+/**
+ * @brief Read a tbatch .tpbr record file.
+ */
 int
 tpb_raf_record_read_tbatch(const char *workspace,
                              const unsigned char tbatch_id[20],
@@ -349,7 +359,7 @@ tpb_raf_record_read_tbatch(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAF_DOM_TBATCH,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
                       tbatch_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
@@ -366,24 +376,24 @@ tpb_raf_record_read_tbatch(const char *workspace,
         goto fail;
     }
 
-    if (read_u64(fp, &metasize) != 0) goto fail;
-    if (read_u64(fp, &ds) != 0) goto fail;
+    if (_sf_read_u64(fp, &metasize) != 0) goto fail;
+    if (_sf_read_u64(fp, &ds) != 0) goto fail;
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
     if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
-    if (read_u64(fp, &attr->utc_bits) != 0) goto fail;
-    if (read_u64(fp, &attr->btime) != 0) goto fail;
-    if (read_u64(fp, &attr->duration) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->utc_bits) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->btime) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->duration) != 0) goto fail;
     if (fread(attr->hostname, 1, 64, fp) != 64) goto fail;
     if (fread(attr->username, 1, 64, fp) != 64) goto fail;
-    if (read_u32(fp, &attr->front_pid) != 0) goto fail;
-    if (read_u32(fp, &attr->nkernel) != 0) goto fail;
-    if (read_u32(fp, &attr->ntask) != 0) goto fail;
-    if (read_u32(fp, &attr->nscore) != 0) goto fail;
-    if (read_u32(fp, &attr->batch_type) != 0) goto fail;
-    if (read_u32(fp, &attr->nheader) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->front_pid) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nkernel) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->ntask) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nscore) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->batch_type) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nheader) != 0) goto fail;
 
     if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
         != TPB_RAF_RESERVE_SIZE) {
@@ -391,7 +401,7 @@ tpb_raf_record_read_tbatch(const char *workspace,
     }
 
     if (attr->nheader > 0) {
-        if (read_headers(fp, &attr->headers,
+        if (_sf_read_headers(fp, &attr->headers,
                          attr->nheader) != 0) {
             goto fail;
         }
@@ -453,7 +463,9 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
-/* Kernel record write */
+/**
+ * @brief Write a kernel .tpbr record file.
+ */
 int
 tpb_raf_record_write_kernel(const char *workspace,
                               const kernel_attr_t *attr,
@@ -469,7 +481,7 @@ tpb_raf_record_write_kernel(const char *workspace,
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAF_DOM_KERNEL,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_KERNEL,
                       attr->kernel_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "wb");
@@ -487,8 +499,8 @@ tpb_raf_record_write_kernel(const char *workspace,
         goto fail;
     }
 
-    if (write_u64(fp, metasize) != 0) goto fail;
-    if (write_u64(fp, datasize) != 0) goto fail;
+    if (_sf_write_u64(fp, metasize) != 0) goto fail;
+    if (_sf_write_u64(fp, datasize) != 0) goto fail;
 
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
@@ -501,11 +513,11 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (fwrite(attr->description, 1, 2048, fp) != 2048) {
         goto fail;
     }
-    if (write_u32(fp, attr->nparm) != 0) goto fail;
-    if (write_u32(fp, attr->nmetric) != 0) goto fail;
-    if (write_u32(fp, attr->kctrl) != 0) goto fail;
-    if (write_u32(fp, attr->nheader) != 0) goto fail;
-    if (write_u32(fp, attr->reserve) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nparm) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nmetric) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->kctrl) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nheader) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->reserve) != 0) goto fail;
 
     memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
     if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
@@ -514,12 +526,12 @@ tpb_raf_record_write_kernel(const char *workspace,
     }
 
     if (attr->nheader > 0) {
-        if (write_headers(fp, attr->headers, attr->nheader) != 0) {
+        if (_sf_write_headers(fp, attr->headers, attr->nheader) != 0) {
             goto fail;
         }
     }
 
-    if (write_magic_and_data(fp, TPB_RAF_DOM_KERNEL,
+    if (_sf_write_magic_and_data(fp, TPB_RAF_DOM_KERNEL,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -531,7 +543,9 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
-/* Kernel record read */
+/**
+ * @brief Read a kernel .tpbr record file.
+ */
 int
 tpb_raf_record_read_kernel(const char *workspace,
                              const unsigned char kernel_id[20],
@@ -549,7 +563,7 @@ tpb_raf_record_read_kernel(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAF_DOM_KERNEL,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_KERNEL,
                       kernel_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
@@ -565,8 +579,8 @@ tpb_raf_record_read_kernel(const char *workspace,
         goto fail;
     }
 
-    if (read_u64(fp, &metasize) != 0) goto fail;
-    if (read_u64(fp, &ds) != 0) goto fail;
+    if (_sf_read_u64(fp, &metasize) != 0) goto fail;
+    if (_sf_read_u64(fp, &ds) != 0) goto fail;
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
@@ -578,11 +592,11 @@ tpb_raf_record_read_kernel(const char *workspace,
     if (fread(attr->kernel_name, 1, 256, fp) != 256) goto fail;
     if (fread(attr->version, 1, 64, fp) != 64) goto fail;
     if (fread(attr->description, 1, 2048, fp) != 2048) goto fail;
-    if (read_u32(fp, &attr->nparm) != 0) goto fail;
-    if (read_u32(fp, &attr->nmetric) != 0) goto fail;
-    if (read_u32(fp, &attr->kctrl) != 0) goto fail;
-    if (read_u32(fp, &attr->nheader) != 0) goto fail;
-    if (read_u32(fp, &attr->reserve) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nparm) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nmetric) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->kctrl) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nheader) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->reserve) != 0) goto fail;
 
     if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
         != TPB_RAF_RESERVE_SIZE) {
@@ -590,7 +604,7 @@ tpb_raf_record_read_kernel(const char *workspace,
     }
 
     if (attr->nheader > 0) {
-        if (read_headers(fp, &attr->headers,
+        if (_sf_read_headers(fp, &attr->headers,
                          attr->nheader) != 0) {
             goto fail;
         }
@@ -649,7 +663,9 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
-/* Task record write */
+/**
+ * @brief Write a task .tpbr record file.
+ */
 int
 tpb_raf_record_write_task(const char *workspace,
                             const task_attr_t *attr,
@@ -665,7 +681,7 @@ tpb_raf_record_write_task(const char *workspace,
 
     if (!workspace || !attr) return TPBE_NULLPTR_ARG;
 
-    build_record_path(workspace, TPB_RAF_DOM_TASK,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TASK,
                       attr->task_record_id, fpath,
                       sizeof(fpath));
 
@@ -684,25 +700,25 @@ tpb_raf_record_write_task(const char *workspace,
         goto fail;
     }
 
-    if (write_u64(fp, metasize) != 0) goto fail;
-    if (write_u64(fp, datasize) != 0) goto fail;
+    if (_sf_write_u64(fp, metasize) != 0) goto fail;
+    if (_sf_write_u64(fp, datasize) != 0) goto fail;
 
     if (fwrite(attr->task_record_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
-    if (write_u64(fp, attr->utc_bits) != 0) goto fail;
-    if (write_u64(fp, attr->btime) != 0) goto fail;
-    if (write_u64(fp, attr->duration) != 0) goto fail;
-    if (write_u32(fp, attr->exit_code) != 0) goto fail;
-    if (write_u32(fp, attr->handle_index) != 0) goto fail;
-    if (write_u32(fp, attr->pid) != 0) goto fail;
-    if (write_u32(fp, attr->tid) != 0) goto fail;
-    if (write_u32(fp, attr->ninput) != 0) goto fail;
-    if (write_u32(fp, attr->noutput) != 0) goto fail;
-    if (write_u32(fp, attr->nheader) != 0) goto fail;
-    if (write_u32(fp, attr->reserve) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->utc_bits) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->btime) != 0) goto fail;
+    if (_sf_write_u64(fp, attr->duration) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->exit_code) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->handle_index) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->pid) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->tid) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->ninput) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->noutput) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->nheader) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->reserve) != 0) goto fail;
 
     memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
     if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
@@ -711,12 +727,12 @@ tpb_raf_record_write_task(const char *workspace,
     }
 
     if (attr->nheader > 0) {
-        if (write_headers(fp, attr->headers, attr->nheader) != 0) {
+        if (_sf_write_headers(fp, attr->headers, attr->nheader) != 0) {
             goto fail;
         }
     }
 
-    if (write_magic_and_data(fp, TPB_RAF_DOM_TASK,
+    if (_sf_write_magic_and_data(fp, TPB_RAF_DOM_TASK,
                              data, datasize) != 0) {
         goto fail;
     }
@@ -728,6 +744,9 @@ fail:
     return TPBE_FILE_IO_FAIL;
 }
 
+/**
+ * @brief Write a new task capsule .tpbr (one header, first task ID in data).
+ */
 int
 tpb_raf_record_create_task_capsule(const char *workspace,
                                    const task_attr_t *attr,
@@ -742,6 +761,9 @@ tpb_raf_record_create_task_capsule(const char *workspace,
     return tpb_raf_record_write_task(workspace, attr, first_task_id, 20);
 }
 
+/**
+ * @brief Append a TaskRecordID to a task capsule .tpbr under file lock.
+ */
 int
 tpb_raf_record_append_task_capsule(const char *workspace,
                                    const unsigned char capsule_id[20],
@@ -765,7 +787,7 @@ tpb_raf_record_append_task_capsule(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAF_DOM_TASK,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TASK,
                       capsule_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "r+b");
@@ -799,13 +821,13 @@ tpb_raf_record_append_task_capsule(const char *workspace,
         goto fail_unlock;
     }
 
-    if (read_u64(fp, &metasize) != 0) goto fail_unlock;
-    if (read_u64(fp, &datasize) != 0) goto fail_unlock;
+    if (_sf_read_u64(fp, &metasize) != 0) goto fail_unlock;
+    if (_sf_read_u64(fp, &datasize) != 0) goto fail_unlock;
 
     if (fseek(fp, TPB_RAF_TASK_FILE_OFF_NHEADER, SEEK_SET) != 0) {
         goto fail_unlock;
     }
-    if (read_u32(fp, &nheader) != 0) goto fail_unlock;
+    if (_sf_read_u32(fp, &nheader) != 0) goto fail_unlock;
     if (nheader != 1) {
         goto fail_unlock;
     }
@@ -831,8 +853,9 @@ tpb_raf_record_append_task_capsule(const char *workspace,
 
     /*
      * SPLIT offset: after the last serialized header byte.  Stored metasize
-     * uses nheader * TPB_RAF_HDR_FIXED_SIZE (padded slots), but write_headers
-     * only writes 32 + 256 + 2048 + 72 * ndim per header — so 24 + metasize
+     * uses nheader * TPB_RAF_HDR_FIXED_SIZE (padded slots), but
+     * _sf_write_headers only writes 32 + 256 + 2048 + 72 * ndim per header —
+     * so 24 + metasize
      * would miss the real SPLIT position.  Capsule records use nheader == 1.
      */
     {
@@ -842,7 +865,7 @@ tpb_raf_record_append_task_capsule(const char *workspace,
                    SEEK_SET) != 0) {
             goto fail_unlock;
         }
-        if (read_u32(fp, &hdr0_ndim) != 0) {
+        if (_sf_read_u32(fp, &hdr0_ndim) != 0) {
             goto fail_unlock;
         }
         split_off = (long)TPB_RAF_TASK_FILE_HDR0_BASE + 32L + 256L + 2048L
@@ -878,17 +901,17 @@ tpb_raf_record_append_task_capsule(const char *workspace,
     if (fseek(fp, TPB_RAF_TASK_FILE_OFF_DATASIZE, SEEK_SET) != 0) {
         goto fail_unlock;
     }
-    if (write_u64(fp, new_ds) != 0) goto fail_unlock;
+    if (_sf_write_u64(fp, new_ds) != 0) goto fail_unlock;
 
     if (fseek(fp, TPB_RAF_TASK_FILE_HDR0_DATA_SIZE, SEEK_SET) != 0) {
         goto fail_unlock;
     }
-    if (write_u64(fp, new_hdr_ds) != 0) goto fail_unlock;
+    if (_sf_write_u64(fp, new_hdr_ds) != 0) goto fail_unlock;
 
     if (fseek(fp, TPB_RAF_TASK_FILE_HDR0_DIM0, SEEK_SET) != 0) {
         goto fail_unlock;
     }
-    if (write_u64(fp, new_dim0) != 0) goto fail_unlock;
+    if (_sf_write_u64(fp, new_dim0) != 0) goto fail_unlock;
 
     if (fflush(fp) != 0) {
         goto fail_unlock;
@@ -906,7 +929,9 @@ fail_unlock:
     return TPBE_FILE_IO_FAIL;
 }
 
-/* Task record read */
+/**
+ * @brief Read a task .tpbr record file.
+ */
 int
 tpb_raf_record_read_task(const char *workspace,
                            const unsigned char task_id[20],
@@ -924,7 +949,7 @@ tpb_raf_record_read_task(const char *workspace,
         return TPBE_NULLPTR_ARG;
     }
 
-    build_record_path(workspace, TPB_RAF_DOM_TASK,
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TASK,
                       task_id, fpath, sizeof(fpath));
 
     fp = fopen(fpath, "rb");
@@ -940,8 +965,8 @@ tpb_raf_record_read_task(const char *workspace,
         goto fail;
     }
 
-    if (read_u64(fp, &metasize) != 0) goto fail;
-    if (read_u64(fp, &ds) != 0) goto fail;
+    if (_sf_read_u64(fp, &metasize) != 0) goto fail;
+    if (_sf_read_u64(fp, &ds) != 0) goto fail;
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->task_record_id, 1, 20, fp) != 20) goto fail;
@@ -949,17 +974,17 @@ tpb_raf_record_read_task(const char *workspace,
     if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
-    if (read_u64(fp, &attr->utc_bits) != 0) goto fail;
-    if (read_u64(fp, &attr->btime) != 0) goto fail;
-    if (read_u64(fp, &attr->duration) != 0) goto fail;
-    if (read_u32(fp, &attr->exit_code) != 0) goto fail;
-    if (read_u32(fp, &attr->handle_index) != 0) goto fail;
-    if (read_u32(fp, &attr->pid) != 0) goto fail;
-    if (read_u32(fp, &attr->tid) != 0) goto fail;
-    if (read_u32(fp, &attr->ninput) != 0) goto fail;
-    if (read_u32(fp, &attr->noutput) != 0) goto fail;
-    if (read_u32(fp, &attr->nheader) != 0) goto fail;
-    if (read_u32(fp, &attr->reserve) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->utc_bits) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->btime) != 0) goto fail;
+    if (_sf_read_u64(fp, &attr->duration) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->exit_code) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->handle_index) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->pid) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->tid) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->ninput) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->noutput) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->nheader) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->reserve) != 0) goto fail;
 
     if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
         != TPB_RAF_RESERVE_SIZE) {
@@ -967,7 +992,7 @@ tpb_raf_record_read_task(const char *workspace,
     }
 
     if (attr->nheader > 0) {
-        if (read_headers(fp, &attr->headers,
+        if (_sf_read_headers(fp, &attr->headers,
                          attr->nheader) != 0) {
             goto fail;
         }
