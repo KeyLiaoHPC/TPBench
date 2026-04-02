@@ -14,7 +14,7 @@
 #include "tpb_corelib_state.h"
 
 /* Local Function Prototypes */
-static int resolve_workspace_root(const char *override, char *out, size_t outlen);
+static int _sf_resolve_workspace_root(const char *override, char *out, size_t outlen);
 
 static int _s_corelib_initialized;
 static int _s_caller;
@@ -58,7 +58,7 @@ _tpb_caller_get(void)
  * Resolve workspace directory: override, then $TPB_WORKSPACE, then $HOME/.tpbench.
  */
 static int
-resolve_workspace_root(const char *override, char *out, size_t outlen)
+_sf_resolve_workspace_root(const char *override, char *out, size_t outlen)
 {
     const char *env_ws;
     const char *home;
@@ -117,7 +117,7 @@ _tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
         unsetenv(TPB_LOG_FILE_ENV);
     }
 
-    err = resolve_workspace_root(tpb_workspace_path, resolved, sizeof(resolved));
+    err = _sf_resolve_workspace_root(tpb_workspace_path, resolved, sizeof(resolved));
     if (err != TPBE_SUCCESS) {
         return err;
     }

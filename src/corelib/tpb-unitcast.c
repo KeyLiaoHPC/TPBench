@@ -13,31 +13,16 @@
 
 /* Local Function Prototypes */
 
-/* Get element from array as double, based on dtype */
-static double get_as_double(void *arr, int idx, TPB_DTYPE dtype);
-
-/* Extract unit name from unit code */
-static inline TPB_UNIT_T extract_uname(TPB_UNIT_T unit);
-
-/* Extract unit kind from unit code */
-static inline TPB_UNIT_T extract_ukind(TPB_UNIT_T unit);
-
-/* Extract base type from unit code */
-static inline uint32_t extract_ubase(TPB_UNIT_T unit);
-
-/* Find target unit index in table based on minimum value (EXP-based units) */
-static int find_target_unit_exp(const TPB_UNIT_T *table, int len,
-                                double min_in_base, int sigbit);
-
-/* Find target unit index for MUL-based units */
-static int find_target_unit_mul(const TPB_UNIT_T *table, int len,
-                                double min_in_base, int sigbit);
-
-/* Check if unit belongs to a specific table */
-static int unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len);
-
-/* Select unit table based on unit value */
-static int select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len);
+static inline uint32_t _sf_extract_ubase(TPB_UNIT_T unit);
+static inline TPB_UNIT_T _sf_extract_ukind(TPB_UNIT_T unit);
+static inline TPB_UNIT_T _sf_extract_uname(TPB_UNIT_T unit);
+static int _sf_find_target_unit_exp(const TPB_UNIT_T *table, int len,
+                                    double min_in_base, int sigbit);
+static int _sf_find_target_unit_mul(const TPB_UNIT_T *table, int len,
+                                    double min_in_base, int sigbit);
+static double _sf_get_as_double(void *arr, int idx, TPB_DTYPE dtype);
+static int _sf_select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len);
+static int _sf_unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len);
 
 /* Unit Progression Tables */
 
@@ -159,7 +144,7 @@ static const int bitptick_bin_len = 10;
 
 /* Get element from array as double, based on dtype */
 static double
-get_as_double(void *arr, int idx, TPB_DTYPE dtype)
+_sf_get_as_double(void *arr, int idx, TPB_DTYPE dtype)
 {
     TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
 
@@ -191,19 +176,19 @@ get_as_double(void *arr, int idx, TPB_DTYPE dtype)
 }
 
 static inline TPB_UNIT_T
-extract_uname(TPB_UNIT_T unit)
+_sf_extract_uname(TPB_UNIT_T unit)
 {
     return (unit & TPB_UNAME_MASK) >> 36;
 }
 
 static inline TPB_UNIT_T
-extract_ukind(TPB_UNIT_T unit)
+_sf_extract_ukind(TPB_UNIT_T unit)
 {
     return (unit & TPB_UKIND_MASK) >> 44;
 }
 
 static inline uint32_t
-extract_ubase(TPB_UNIT_T unit)
+_sf_extract_ubase(TPB_UNIT_T unit)
 {
     return (uint32_t)((unit >> 32) & 0xF);
 }
@@ -214,7 +199,7 @@ double
 tpb_unit_get_scale(TPB_UNIT_T unit)
 {
     uint32_t value = (uint32_t)(unit & TPB_UNIT_MASK);
-    uint32_t base_type = extract_ubase(unit);
+    uint32_t base_type = _sf_extract_ubase(unit);
 
     switch (base_type) {
     case 0x1:  /* BASE - no conversion */
@@ -250,7 +235,7 @@ tpb_unit_get_scale(TPB_UNIT_T unit)
    For EXP-based units, find the unit where the scaled value is in [1, 1000) range.
    If no such unit exists, use the largest or smallest available. */
 static int
-find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
+_sf_find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
     if (min_in_base <= 0.0 || len == 0) {
         return 0;
@@ -278,7 +263,7 @@ find_target_unit_exp(const TPB_UNIT_T *table, int len, double min_in_base, int s
 /* Find target unit index for MUL-based units (DATETIME).
    Find the unit where scaled value is in [1, 1000) range. */
 static int
-find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
+_sf_find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int sigbit)
 {
     if (min_in_base <= 0.0 || len == 0) {
         return 0;
@@ -305,7 +290,7 @@ find_target_unit_mul(const TPB_UNIT_T *table, int len, double min_in_base, int s
 
 /* Check if unit belongs to a specific table by searching for it */
 static int
-unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len)
+_sf_unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len)
 {
     for (int i = 0; i < len; i++) {
         if (unit == table[i]) {
@@ -318,85 +303,85 @@ unit_in_table(TPB_UNIT_T unit, const TPB_UNIT_T *table, int len)
 /* Select unit table based on unit value.
    Check unit membership by searching each table directly. */
 static int
-select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len)
+_sf_select_table(TPB_UNIT_T unit, const TPB_UNIT_T **table, int *len)
 {
     /* Check each table for membership */
-    if (unit_in_table(unit, bitsize_bin, bitsize_bin_len)) {
+    if (_sf_unit_in_table(unit, bitsize_bin, bitsize_bin_len)) {
         *table = bitsize_bin;
         *len = bitsize_bin_len;
         return 1;
     }
-    if (unit_in_table(unit, datasize_dec, datasize_dec_len)) {
+    if (_sf_unit_in_table(unit, datasize_dec, datasize_dec_len)) {
         *table = datasize_dec;
         *len = datasize_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, walltime_dec, walltime_dec_len)) {
+    if (_sf_unit_in_table(unit, walltime_dec, walltime_dec_len)) {
         *table = walltime_dec;
         *len = walltime_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, phystime_dec, phystime_dec_len)) {
+    if (_sf_unit_in_table(unit, phystime_dec, phystime_dec_len)) {
         *table = phystime_dec;
         *len = phystime_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, datetime_mul, datetime_mul_len)) {
+    if (_sf_unit_in_table(unit, datetime_mul, datetime_mul_len)) {
         *table = datetime_mul;
         *len = datetime_mul_len;
         return 1;
     }
-    if (unit_in_table(unit, op_dec, op_dec_len)) {
+    if (_sf_unit_in_table(unit, op_dec, op_dec_len)) {
         *table = op_dec;
         *len = op_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, ops_dec, ops_dec_len)) {
+    if (_sf_unit_in_table(unit, ops_dec, ops_dec_len)) {
         *table = ops_dec;
         *len = ops_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, flops_dec, flops_dec_len)) {
+    if (_sf_unit_in_table(unit, flops_dec, flops_dec_len)) {
         *table = flops_dec;
         *len = flops_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, tokenps_dec, tokenps_dec_len)) {
+    if (_sf_unit_in_table(unit, tokenps_dec, tokenps_dec_len)) {
         *table = tokenps_dec;
         *len = tokenps_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, tps_dec, tps_dec_len)) {
+    if (_sf_unit_in_table(unit, tps_dec, tps_dec_len)) {
         *table = tps_dec;
         *len = tps_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, dataps_dec, dataps_dec_len)) {
+    if (_sf_unit_in_table(unit, dataps_dec, dataps_dec_len)) {
         *table = dataps_dec;
         *len = dataps_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, bitps_bin, bitps_bin_len)) {
+    if (_sf_unit_in_table(unit, bitps_bin, bitps_bin_len)) {
         *table = bitps_bin;
         *len = bitps_bin_len;
         return 1;
     }
-    if (unit_in_table(unit, datapcy_dec, datapcy_dec_len)) {
+    if (_sf_unit_in_table(unit, datapcy_dec, datapcy_dec_len)) {
         *table = datapcy_dec;
         *len = datapcy_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, bitpcy_bin, bitpcy_bin_len)) {
+    if (_sf_unit_in_table(unit, bitpcy_bin, bitpcy_bin_len)) {
         *table = bitpcy_bin;
         *len = bitpcy_bin_len;
         return 1;
     }
-    if (unit_in_table(unit, dataptick_dec, dataptick_dec_len)) {
+    if (_sf_unit_in_table(unit, dataptick_dec, dataptick_dec_len)) {
         *table = dataptick_dec;
         *len = dataptick_dec_len;
         return 1;
     }
-    if (unit_in_table(unit, bitptick_bin, bitptick_bin_len)) {
+    if (_sf_unit_in_table(unit, bitptick_bin, bitptick_bin_len)) {
         *table = bitptick_bin;
         *len = bitptick_bin_len;
         return 1;
@@ -427,7 +412,7 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
      */
     if (unit_current == TPB_UNIT_TIMER) {
         for (int i = 0; i < narr; i++) {
-            arr_cast[i] = get_as_double(arr, i, dtype);
+            arr_cast[i] = _sf_get_as_double(arr, i, dtype);
         }
         *unit_cast = unit_current;
         return TPBE_SUCCESS;
@@ -436,12 +421,12 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
     /* Select table based on unit name */
     const TPB_UNIT_T *table;
     int table_len;
-    int castable = select_table(unit_current, &table, &table_len);
+    int castable = _sf_select_table(unit_current, &table, &table_len);
 
     if (!castable || table == NULL || table_len == 0) {
         /* Not castable - copy values as-is */
         for (int i = 0; i < narr; i++) {
-            arr_cast[i] = get_as_double(arr, i, dtype);
+            arr_cast[i] = _sf_get_as_double(arr, i, dtype);
         }
         *unit_cast = unit_current;
         return TPBE_SUCCESS;
@@ -456,15 +441,15 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
     double min_in_base = fabs(min_val) * current_scale;
 
     /* Find target unit */
-    uint32_t base_type = extract_ubase(unit_current);
+    uint32_t base_type = _sf_extract_ubase(unit_current);
     int target_idx;
 
     if (base_type == 0x9) {
         /* DEC_MUL_P - use multiplier-based search */
-        target_idx = find_target_unit_mul(table, table_len, min_in_base, sigbit);
+        target_idx = _sf_find_target_unit_mul(table, table_len, min_in_base, sigbit);
     } else {
         /* EXP-based - use exponent-based search */
-        target_idx = find_target_unit_exp(table, table_len, min_in_base, sigbit);
+        target_idx = _sf_find_target_unit_exp(table, table_len, min_in_base, sigbit);
     }
 
     /* Scale all values */
@@ -472,7 +457,7 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
     double target_scale = tpb_unit_get_scale(target_unit);
 
     for (int i = 0; i < narr; i++) {
-        double val = get_as_double(arr, i, dtype);
+        double val = _sf_get_as_double(arr, i, dtype);
         double val_in_base = val * current_scale;
         arr_cast[i] = val_in_base / target_scale;
     }

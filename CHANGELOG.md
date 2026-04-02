@@ -17,6 +17,7 @@
 - `tpb_register_kernel()` is part of the public API (`tpb-public.h` / `tpbench.h`).
 - `tpb_list()` removed from `tpb-io`; table printing moved to the CLI.
 - `tpb_k_static_info_t` adds `kernel_record_ok`; `tpb_driver_set_kernel_record_ok()` added.
+- **At 20260402**: Refactor APIs according to the update `STYLE_GUIDE.md` 
 
 #### RAFDB
 

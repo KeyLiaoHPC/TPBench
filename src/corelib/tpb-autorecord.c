@@ -27,7 +27,7 @@
 #include "strftime.h"
 #include "rafdb/tpb-raf-types.h"
 
-/* ===== Batch-side module state (tpbcli parent process) ===== */
+/* Batch-side module state (tpbcli parent process) */
 
 static int s_batch_active = 0;
 static unsigned char s_tbatch_id[20];
@@ -40,10 +40,26 @@ static char s_batch_username[64];
 static uint32_t s_batch_pid;
 static uint32_t s_batch_type;
 
-/* ===== Internal helpers ===== */
+/* Local Function Prototypes */
+
+/* Build POSIX SHM name for kernel capsule metadata */
+static int _sf_capsule_shm_build_name(const unsigned char kernel_id[20],
+                                      uint32_t handle_index,
+                                      char *out, size_t outlen);
+/* Thread ID (Linux) or process ID */
+static uint32_t _sf_get_current_tid(void);
+/* Fill UTC bits and monotonic nanoseconds */
+static int _sf_get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns);
+/* Hostname and effective user for record metadata */
+static void _sf_get_host_and_user(char *hostname, size_t hlen, char *username,
+                                  size_t ulen);
+/* Parse 40-char hex into 20-byte id */
+static int _sf_hex_to_id(const char *hex, unsigned char id[20]);
+
+/* Internal helpers */
 
 static void
-get_host_and_user(char *hostname, size_t hlen, char *username, size_t ulen)
+_sf_get_host_and_user(char *hostname, size_t hlen, char *username, size_t ulen)
 {
     if (gethostname(hostname, hlen) != 0) {
         snprintf(hostname, hlen, "unknown");
@@ -59,7 +75,7 @@ get_host_and_user(char *hostname, size_t hlen, char *username, size_t ulen)
 }
 
 static int
-get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns)
+_sf_get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns)
 {
     tpb_datetime_t dt;
     tpb_btime_t bt;
@@ -79,7 +95,7 @@ get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns)
 }
 
 static uint32_t
-get_current_tid(void)
+_sf_get_current_tid(void)
 {
 #ifdef __linux__
     return (uint32_t)syscall(SYS_gettid);
@@ -90,13 +106,8 @@ get_current_tid(void)
 
 #define TPB_CAPSULE_SHM_SIZE 32
 
-/* Local Function Prototypes */
-static int capsule_shm_build_name(const unsigned char kernel_id[20],
-                                  uint32_t handle_index,
-                                  char *out, size_t outlen);
-
 static int
-hex_to_id(const char *hex, unsigned char id[20])
+_sf_hex_to_id(const char *hex, unsigned char id[20])
 {
     if (strlen(hex) != 40) return -1;
     for (int i = 0; i < 20; i++) {
@@ -108,7 +119,7 @@ hex_to_id(const char *hex, unsigned char id[20])
 }
 
 static int
-capsule_shm_build_name(const unsigned char kernel_id[20],
+_sf_capsule_shm_build_name(const unsigned char kernel_id[20],
                          uint32_t handle_index,
                          char *out, size_t outlen)
 {
@@ -127,7 +138,7 @@ capsule_shm_build_name(const unsigned char kernel_id[20],
     return n;
 }
 
-/* ===== Batch-side API ===== */
+/* Batch-side API */
 
 int
 tpb_record_begin_batch(uint32_t batch_type)
@@ -141,10 +152,10 @@ tpb_record_begin_batch(uint32_t batch_type)
         return err;
     }
 
-    err = get_current_timestamps(&s_batch_utc_bits, &s_batch_btime_ns);
+    err = _sf_get_current_timestamps(&s_batch_utc_bits, &s_batch_btime_ns);
     if (err) return err;
 
-    get_host_and_user(s_batch_hostname, sizeof(s_batch_hostname),
+    _sf_get_host_and_user(s_batch_hostname, sizeof(s_batch_hostname),
                       s_batch_username, sizeof(s_batch_username));
     s_batch_pid = (uint32_t)getpid();
     s_batch_type = batch_type;
@@ -183,7 +194,7 @@ tpb_record_end_batch(int ntask)
 
     if (!s_batch_active) return 0;
 
-    err = get_current_timestamps(&end_utc, &end_btime_ns);
+    err = _sf_get_current_timestamps(&end_utc, &end_btime_ns);
     if (err) return err;
 
     uint64_t duration = 0;
@@ -311,7 +322,7 @@ tpb_record_end_batch(int ntask)
     return err;
 }
 
-/* ===== Task-side API (kernel child process) ===== */
+/* Task-side API (kernel child process) */
 
 int
 tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
@@ -335,7 +346,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     const char *env_bid = getenv("TPB_TBATCH_ID");
     memset(tbatch_id, 0, 20);
     if (env_bid && strlen(env_bid) == 40) {
-        hex_to_id(env_bid, tbatch_id);
+        _sf_hex_to_id(env_bid, tbatch_id);
     }
 
     /* Read handle index from env */
@@ -352,7 +363,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
      * Keep compatibility fallback to zero ID when env is invalid.
      */
     if (env_kid != NULL && strlen(env_kid) == 40) {
-        if (hex_to_id(env_kid, kernel_id) != 0) {
+        if (_sf_hex_to_id(env_kid, kernel_id) != 0) {
             memset(kernel_id, 0, 20);
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                        "Auto-record: invalid TPB_KERNEL_ID, fallback to zero.\n");
@@ -366,12 +377,12 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
     if (err) return err;
 
-    err = get_current_timestamps(&utc_bits, &btime_ns);
+    err = _sf_get_current_timestamps(&utc_bits, &btime_ns);
     if (err) return err;
 
-    get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
+    _sf_get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
     pid = (uint32_t)getpid();
-    tid = get_current_tid();
+    tid = _sf_get_current_tid();
 
     err = tpb_raf_gen_task_id(utc_bits, btime_ns, hostname, username,
                                 tbatch_id, kernel_id, handle_index,
@@ -408,7 +419,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         headers = (tpb_meta_header_t *)calloc(nheader, sizeof(tpb_meta_header_t));
         if (!headers) return TPBE_MALLOC_FAIL;
 
-        /* --- Input headers --- */
+        /* Input headers */
         for (uint32_t i = 0; i < ninput; i++) {
             tpb_rt_parm_t *parm = &hdl->argpack.args[i];
             uint32_t type_code = (uint32_t)(parm->ctrlbits & TPB_PARM_TYPE_MASK);
@@ -426,7 +437,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             rec_datasize += elem_size;
         }
 
-        /* --- Output headers (1-D arrays) --- */
+        /* Output headers (1-D arrays) */
         for (uint32_t j = 0; j < noutput; j++) {
             uint32_t i = ninput + j;
             tpb_k_output_t *out = &hdl->respack.outputs[j];
@@ -519,7 +530,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     return err;
 }
 
-/* ===== Public wrapper for kernel callers ===== */
+/* Public wrapper for kernel callers */
 
 int
 tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
@@ -701,7 +712,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
         return err;
     }
 
-    get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
+    _sf_get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
 
     err = tpb_raf_gen_taskcapsule_id(src.utc_bits, src.btime, hostname,
                                        username, src.tbatch_id, src.kernel_id,
@@ -758,7 +769,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
         return err;
     }
 
-    if (capsule_shm_build_name(src.kernel_id, src.handle_index,
+    if (_sf_capsule_shm_build_name(src.kernel_id, src.handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
         return TPBE_CLI_FAIL;
     }
@@ -806,7 +817,7 @@ tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
         return TPBE_NULLPTR_ARG;
     }
 
-    if (capsule_shm_build_name(kernel_id, handle_index,
+    if (_sf_capsule_shm_build_name(kernel_id, handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
         return TPBE_CLI_FAIL;
     }
@@ -868,7 +879,7 @@ tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
     if (!kernel_id) {
         return TPBE_NULLPTR_ARG;
     }
-    if (capsule_shm_build_name(kernel_id, handle_index,
+    if (_sf_capsule_shm_build_name(kernel_id, handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
         return TPBE_CLI_FAIL;
     }

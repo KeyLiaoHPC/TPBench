@@ -10,19 +10,14 @@
 
 /* Local Function Prototypes */
 
-/* Comparison function for qsort (ascending order, double) */
-static int compare_ascend(const void *a, const void *b);
-
-/* Check if a TPB_DTYPE is a supported numeric type */
-static int check_dtype_support(TPB_DTYPE dtype);
-
-/* Get a single element from a generic array as double */
-static double get_element(void *arr, size_t idx, TPB_DTYPE dtype);
+static int _sf_check_dtype_support(TPB_DTYPE dtype);
+static int _sf_compare_ascend(const void *a, const void *b);
+static double _sf_get_element(void *arr, size_t idx, TPB_DTYPE dtype);
 
 /* Local Function Implementations */
 
 static int
-compare_ascend(const void *a, const void *b)
+_sf_compare_ascend(const void *a, const void *b)
 {
     if (*(double *)a < *(double *)b) {
         return -1;
@@ -31,7 +26,7 @@ compare_ascend(const void *a, const void *b)
 }
 
 static int
-check_dtype_support(TPB_DTYPE dtype)
+_sf_check_dtype_support(TPB_DTYPE dtype)
 {
     TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
     switch (type_only) {
@@ -53,7 +48,7 @@ check_dtype_support(TPB_DTYPE dtype)
 }
 
 static double
-get_element(void *arr, size_t idx, TPB_DTYPE dtype)
+_sf_get_element(void *arr, size_t idx, TPB_DTYPE dtype)
 {
     TPB_DTYPE type_only = dtype & TPB_PARM_TYPE_MASK;
     switch (type_only) {
@@ -94,7 +89,7 @@ tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!check_dtype_support(dtype)) {
+    if (!_sf_check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
@@ -106,11 +101,11 @@ tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
 
     /* Copy and cast elements to double */
     for (size_t i = 0; i < narr; i++) {
-        tmp[i] = get_element(arr, i, dtype);
+        tmp[i] = _sf_get_element(arr, i, dtype);
     }
 
     /* Sort the temporary array */
-    qsort(tmp, narr, sizeof(double), compare_ascend);
+    qsort(tmp, narr, sizeof(double), _sf_compare_ascend);
 
     /* Calculate quantile values */
     for (size_t i = 0; i < nq; i++) {
@@ -134,13 +129,13 @@ tpb_stat_mean(void *arr, size_t narr, TPB_DTYPE dtype, double *mean_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!check_dtype_support(dtype)) {
+    if (!_sf_check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
     double sum = 0.0;
     for (size_t i = 0; i < narr; i++) {
-        sum += get_element(arr, i, dtype);
+        sum += _sf_get_element(arr, i, dtype);
     }
 
     *mean_out = sum / (double)narr;
@@ -154,13 +149,13 @@ tpb_stat_max(void *arr, size_t narr, TPB_DTYPE dtype, double *max_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!check_dtype_support(dtype)) {
+    if (!_sf_check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
-    double max_val = get_element(arr, 0, dtype);
+    double max_val = _sf_get_element(arr, 0, dtype);
     for (size_t i = 1; i < narr; i++) {
-        double val = get_element(arr, i, dtype);
+        double val = _sf_get_element(arr, i, dtype);
         if (val > max_val) {
             max_val = val;
         }
@@ -177,13 +172,13 @@ tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out)
         return TPBE_NULLPTR_ARG;
     }
 
-    if (!check_dtype_support(dtype)) {
+    if (!_sf_check_dtype_support(dtype)) {
         return TPBE_DTYPE_NOT_SUPPORTED;
     }
 
-    double min_val = get_element(arr, 0, dtype);
+    double min_val = _sf_get_element(arr, 0, dtype);
     for (size_t i = 1; i < narr; i++) {
-        double val = get_element(arr, i, dtype);
+        double val = _sf_get_element(arr, i, dtype);
         if (val < min_val) {
             min_val = val;
         }
@@ -204,7 +199,7 @@ calc_quant(double *data, int nitem, __ovl_t *res)
     for (int i = 0; i < nitem; i++) {
         sum += data[i];
     }
-    qsort((void *)data, nitem, sizeof(double), compare_ascend);
+    qsort((void *)data, nitem, sizeof(double), _sf_compare_ascend);
 
     i05 = (int)(0.05 * nitem);
     i25 = (int)(0.25 * nitem);

@@ -35,9 +35,9 @@
 #define TPB_TS_YEAR_BIAS    1970          /* Year bias for encoding */
 #define TPB_TS_TZ_INCREMENT 15          /* Timezone bias stored in 15-min increments */
 
-/* Forward declarations */
-static int tpb_ts_from_timespec(tpb_datetime_t *dt, const struct timespec *ts);
-static int tpb_ts_from_tm(tpb_datetime_t *dt, const struct tm *tm);
+/* Local Function Prototypes */
+static int _sf_from_timespec(tpb_datetime_t *dt, const struct timespec *ts);
+static int _sf_from_tm(tpb_datetime_t *dt, const struct tm *tm);
 
 /**
  * @brief Acquire current datetime based on mode.
@@ -59,7 +59,7 @@ tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt)
         {
             struct timespec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
-            tpb_ts_from_timespec(dt, &ts);
+            _sf_from_timespec(dt, &ts);
         }
         break;
 
@@ -69,7 +69,7 @@ tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt)
             struct tm tm_buf;
             time(&now);
             localtime_r(&now, &tm_buf);
-            tpb_ts_from_tm(dt, &tm_buf);
+            _sf_from_tm(dt, &tm_buf);
         }
         break;
 
@@ -399,7 +399,7 @@ tpb_ts_isotz_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits,
  * @brief Helper: Convert timespec to datetime (UTC).
  */
 static int
-tpb_ts_from_timespec(tpb_datetime_t *dt, const struct timespec *ts)
+_sf_from_timespec(tpb_datetime_t *dt, const struct timespec *ts)
 {
     time_t sec = ts->tv_sec;
     struct tm tm_buf;
@@ -409,7 +409,7 @@ tpb_ts_from_timespec(tpb_datetime_t *dt, const struct timespec *ts)
     }
 
     gmtime_r(&sec, &tm_buf);
-    tpb_ts_from_tm(dt, &tm_buf);
+    _sf_from_tm(dt, &tm_buf);
 
     return 0;
 }
@@ -418,7 +418,7 @@ tpb_ts_from_timespec(tpb_datetime_t *dt, const struct timespec *ts)
  * @brief Helper: Convert tm to datetime.
  */
 static int
-tpb_ts_from_tm(tpb_datetime_t *dt, const struct tm *tm)
+_sf_from_tm(tpb_datetime_t *dt, const struct tm *tm)
 {
     if (dt == NULL || tm == NULL) {
         return TPBE_NULLPTR_ARG;

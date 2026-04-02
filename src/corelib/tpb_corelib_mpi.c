@@ -12,7 +12,7 @@
 #include "tpb_corelib_state.h"
 
 /* Local Function Prototypes */
-static int mpi_fail_if(int mpi_rc);
+static int _sf_mpi_fail_if(int mpi_rc);
 
 static MPI_Comm s_mpik_comm = MPI_COMM_NULL;
 
@@ -20,7 +20,7 @@ static MPI_Comm s_mpik_comm = MPI_COMM_NULL;
  * Map MPI error return to TPBench errno.
  */
 static int
-mpi_fail_if(int mpi_rc)
+_sf_mpi_fail_if(int mpi_rc)
 {
     if (mpi_rc != MPI_SUCCESS) {
         return TPBE_MPI_FAIL;
@@ -50,11 +50,11 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
     comm = (MPI_Comm)mpi_comm;
     s_mpik_comm = comm;
 
-    merr = mpi_fail_if(MPI_Comm_rank(comm, &rank));
+    merr = _sf_mpi_fail_if(MPI_Comm_rank(comm, &rank));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
-    merr = mpi_fail_if(MPI_Comm_size(comm, &nprocs));
+    merr = _sf_mpi_fail_if(MPI_Comm_size(comm, &nprocs));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -64,7 +64,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
             TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK);
     }
 
-    merr = mpi_fail_if(MPI_Bcast(&bcast_err, 1, MPI_INT, 0, comm));
+    merr = _sf_mpi_fail_if(MPI_Bcast(&bcast_err, 1, MPI_INT, 0, comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -86,7 +86,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
             TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK);
     }
 
-    merr = mpi_fail_if(MPI_Allreduce(&local_err, &max_err, 1, MPI_INT,
+    merr = _sf_mpi_fail_if(MPI_Allreduce(&local_err, &max_err, 1, MPI_INT,
         MPI_MAX, comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
@@ -100,7 +100,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
         allpids = calloc((size_t)nprocs, sizeof *allpids);
     }
     gather_alloc_fail = (rank == 0 && allpids == NULL) ? 1 : 0;
-    merr = mpi_fail_if(MPI_Allreduce(&gather_alloc_fail, &max_alloc_fail, 1,
+    merr = _sf_mpi_fail_if(MPI_Allreduce(&gather_alloc_fail, &max_alloc_fail, 1,
         MPI_INT, MPI_MAX, comm));
     if (merr != TPBE_SUCCESS) {
         free(allpids);
@@ -111,7 +111,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
     }
 
     local_pid = (int)getpid();
-    merr = mpi_fail_if(MPI_Gather(&local_pid, 1, MPI_INT, allpids, 1, MPI_INT,
+    merr = _sf_mpi_fail_if(MPI_Gather(&local_pid, 1, MPI_INT, allpids, 1, MPI_INT,
         0, comm));
     if (merr != TPBE_SUCCESS) {
         free(allpids);
@@ -129,7 +129,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
         free(allpids);
     }
 
-    merr = mpi_fail_if(MPI_Barrier(comm));
+    merr = _sf_mpi_fail_if(MPI_Barrier(comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -173,11 +173,11 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     }
     comm = s_mpik_comm;
 
-    merr = mpi_fail_if(MPI_Comm_rank(comm, &rank));
+    merr = _sf_mpi_fail_if(MPI_Comm_rank(comm, &rank));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
-    merr = mpi_fail_if(MPI_Comm_size(comm, &nprocs));
+    merr = _sf_mpi_fail_if(MPI_Comm_size(comm, &nprocs));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -187,7 +187,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     werr = tpb_k_write_task(hdl, exit_code, my_task_id);
 
-    merr = mpi_fail_if(MPI_Barrier(comm));
+    merr = _sf_mpi_fail_if(MPI_Barrier(comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -201,11 +201,11 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         }
     }
 
-    merr = mpi_fail_if(MPI_Bcast(capsule_id, 20, MPI_BYTE, 0, comm));
+    merr = _sf_mpi_fail_if(MPI_Bcast(capsule_id, 20, MPI_BYTE, 0, comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
-    merr = mpi_fail_if(MPI_Bcast(&cap_err, 1, MPI_INT, 0, comm));
+    merr = _sf_mpi_fail_if(MPI_Bcast(&cap_err, 1, MPI_INT, 0, comm));
     if (merr != TPBE_SUCCESS) {
         return merr;
     }
@@ -214,7 +214,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     if (cap_err == TPBE_SUCCESS) {
         dup_err = tpb_k_task_set_dup_to(my_task_id, capsule_id);
-        merr = mpi_fail_if(MPI_Allreduce(&dup_err, &max_dup_err, 1, MPI_INT,
+        merr = _sf_mpi_fail_if(MPI_Allreduce(&dup_err, &max_dup_err, 1, MPI_INT,
             MPI_MAX, comm));
         if (merr != TPBE_SUCCESS) {
             return merr;
@@ -233,7 +233,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                 rank0_alloc_ok = 0;
             }
         }
-        merr = mpi_fail_if(MPI_Allreduce(&rank0_alloc_ok, &min_alloc_ok, 1,
+        merr = _sf_mpi_fail_if(MPI_Allreduce(&rank0_alloc_ok, &min_alloc_ok, 1,
             MPI_INT, MPI_MIN, comm));
         if (merr != TPBE_SUCCESS) {
             free(all_ids);
@@ -250,7 +250,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             return TPBE_MALLOC_FAIL;
         }
 
-        merr = mpi_fail_if(MPI_Gather(my_task_id, 20, MPI_BYTE, all_ids, 20,
+        merr = _sf_mpi_fail_if(MPI_Gather(my_task_id, 20, MPI_BYTE, all_ids, 20,
             MPI_BYTE, 0, comm));
         if (merr != TPBE_SUCCESS) {
             free(all_ids);
@@ -269,7 +269,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             }
             free(all_ids);
         }
-        merr = mpi_fail_if(MPI_Bcast(&append_agg, 1, MPI_INT, 0, comm));
+        merr = _sf_mpi_fail_if(MPI_Bcast(&append_agg, 1, MPI_INT, 0, comm));
         if (merr != TPBE_SUCCESS) {
             return merr;
         }

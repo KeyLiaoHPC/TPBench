@@ -27,36 +27,30 @@
 
 /* Local Function Prototypes */
 
-/* Trim whitespace from both ends of a string */
-static char *trim_whitespace(char *str);
-
-/* Free token array */
-void free_tokens(char **tokens, int count);
-
-/* Append tokens from comma-separated argument string */
-int append_tokens(const char *argstr, char ***tokens, int *count, int *cap);
-
-/* Find parameter index by name */
-static int find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name);
-
 /* Apply kernel argument tokens to runtime parameters */
-static int apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
-                             int nparms, const char *kernel_name, int warn_unknown);
+static int _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
+                                 int nparms, const char *kernel_name, int warn_unknown);
 
 /* Build runtime parameters from kernel and common definitions */
-static int build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
-                          tpb_rt_parm_t **rt_parms_out, int *nparms_out);
-
-/* Check if value is within range */
-static int check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+static int _sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
+                              tpb_rt_parm_t **rt_parms_out, int *nparms_out);
 
 /* Check if value is in list */
-static int check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+static int _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+
+/* Check if value is within range */
+static int _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+
+/* Find parameter index by name */
+static int _sf_find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name);
+
+/* Trim whitespace from both ends of a string */
+static char *_sf_trim_whitespace(char *str);
 
 /* Local Function Implementations */
 
 static char *
-trim_whitespace(char *str)
+_sf_trim_whitespace(char *str)
 {
     char *end;
 
@@ -84,64 +78,8 @@ trim_whitespace(char *str)
     return str;
 }
 
-void
-free_tokens(char **tokens, int count)
-{
-    if (tokens == NULL) {
-        return;
-    }
-
-    for (int i = 0; i < count; i++) {
-        free(tokens[i]);
-    }
-    free(tokens);
-}
-
-int
-append_tokens(const char *argstr, char ***tokens, int *count, int *cap)
-{
-    char buf[TPBM_CLI_STR_MAX_LEN];
-    char *saveptr;
-    char *token;
-
-    if (argstr == NULL || tokens == NULL || count == NULL || cap == NULL) {
-        return TPBE_CLI_FAIL;
-    }
-
-    if (argstr[0] == '\0') {
-        return TPBE_CLI_FAIL;
-    }
-
-    snprintf(buf, sizeof(buf), "%s", argstr);
-    token = strtok_r(buf, ",", &saveptr);
-    while (token != NULL) {
-        char *trim = trim_whitespace(token);
-        if (trim == NULL || *trim == '\0') {
-            return TPBE_CLI_FAIL;
-        }
-        if (*count >= *cap) {
-            int new_cap = (*cap == 0) ? 8 : (*cap * 2);
-            char **new_tokens = (char **)realloc(*tokens,
-                                                 sizeof(char *) * new_cap);
-            if (new_tokens == NULL) {
-                return TPBE_MALLOC_FAIL;
-            }
-            *tokens = new_tokens;
-            *cap = new_cap;
-        }
-        (*tokens)[*count] = strdup(trim);
-        if ((*tokens)[*count] == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        (*count)++;
-        token = strtok_r(NULL, ",", &saveptr);
-    }
-
-    return 0;
-}
-
 static int
-find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name)
+_sf_find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name)
 {
     if (rt_parms == NULL || name == NULL) {
         return -1;
@@ -157,7 +95,7 @@ find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name)
 }
 
 static int
-apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
+_sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
                   int nparms, const char *kernel_name, int warn_unknown)
 {
     int err;
@@ -188,8 +126,8 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         }
 
         *eq = '\0';
-        key = trim_whitespace(token_buf);
-        value = trim_whitespace(eq + 1);
+        key = _sf_trim_whitespace(token_buf);
+        value = _sf_trim_whitespace(eq + 1);
 
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
             tpb_printf(TPBM_PRTN_M_DIRECT,
@@ -197,7 +135,7 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
             return TPBE_KERN_ARG_FAIL;
         }
 
-        parm_idx = find_parm_index(rt_parms, nparms, key);
+        parm_idx = _sf_find_parm_index(rt_parms, nparms, key);
         if (parm_idx < 0) {
             if (warn_unknown) {
                 tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
@@ -228,12 +166,12 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
 
         uint32_t check_mode = rt_parms[parm_idx].ctrlbits & TPB_PARM_CHECK_MASK;
         if (check_mode == TPB_PARM_RANGE) {
-            err = check_arg_range(&rt_parms[parm_idx], &parsed_value);
+            err = _sf_check_arg_range(&rt_parms[parm_idx], &parsed_value);
             if (err != 0) {
                 return err;
             }
         } else if (check_mode == TPB_PARM_LIST) {
-            err = check_arg_list(&rt_parms[parm_idx], &parsed_value);
+            err = _sf_check_arg_list(&rt_parms[parm_idx], &parsed_value);
             if (err != 0) {
                 return err;
             }
@@ -246,7 +184,7 @@ apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
 }
 
 static int
-build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
+_sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
                tpb_rt_parm_t **rt_parms_out, int *nparms_out)
 {
     tpb_rt_parm_t *rt_parms;
@@ -276,7 +214,7 @@ build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
 
     if (kernel_common != NULL) {
         for (int i = 0; i < kernel_common->info.nparms; i++) {
-            if (find_parm_index(rt_parms, nparms, kernel_common->info.parms[i].name) >= 0) {
+            if (_sf_find_parm_index(rt_parms, nparms, kernel_common->info.parms[i].name) >= 0) {
                 continue;
             }
             memcpy(&rt_parms[nparms], &kernel_common->info.parms[i], sizeof(tpb_rt_parm_t));
@@ -291,7 +229,7 @@ build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
 
 /* Check if value is within range [plims[0], plims[1]] */
 static int
-check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+_sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
         return TPBE_KERN_ARG_FAIL;
@@ -344,7 +282,7 @@ check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 
 /* Check if value is in the list plims[0..nlims-1] */
 static int
-check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+_sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
         return TPBE_KERN_ARG_FAIL;
@@ -420,14 +358,14 @@ tpb_check_kargs(char **common_tokens, int ncommon,
     tpb_query_kernel(-1, "_tpb_common", &kernel_common);
     /* kernel_common may be NULL if _tpb_common not found, that's OK */
 
-    err = build_rt_parms(kernel, kernel_common, &rt_parms, nparms_out);
+    err = _sf_build_rt_parms(kernel, kernel_common, &rt_parms, nparms_out);
     if (err != 0) {
         tpb_free_kernel(kernel_common);
         free(kernel_common);
         return err;
     }
 
-    err = apply_karg_tokens(common_tokens, ncommon,
+    err = _sf_apply_karg_tokens(common_tokens, ncommon,
                             rt_parms, *nparms_out,
                             kernel->info.name, 0);
     if (err != 0) {
@@ -437,7 +375,7 @@ tpb_check_kargs(char **common_tokens, int ncommon,
         return err;
     }
 
-    err = apply_karg_tokens(kernel_tokens, nkernel,
+    err = _sf_apply_karg_tokens(kernel_tokens, nkernel,
                             rt_parms, *nparms_out,
                             kernel->info.name, 1);
     if (err != 0) {
@@ -475,7 +413,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
     token = strtok_r(buf, ",", &saveptr);
 
     while (token != NULL) {
-        char *trimmed = trim_whitespace(token);
+        char *trimmed = _sf_trim_whitespace(token);
         if (trimmed == NULL || *trimmed == '\0') {
             return TPBE_CLI_FAIL;
         }
@@ -489,8 +427,8 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
         }
 
         *eq = '\0';
-        char *key = trim_whitespace(trimmed);
-        char *value = trim_whitespace(eq + 1);
+        char *key = _sf_trim_whitespace(trimmed);
+        char *value = _sf_trim_whitespace(eq + 1);
 
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
             tpb_printf(TPBM_PRTN_M_DIRECT,

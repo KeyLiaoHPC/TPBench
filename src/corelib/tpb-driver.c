@@ -25,6 +25,13 @@
 #include "tpb-argp.h"
 #include "tpb-autorecord.h"
 
+/* Local Function Prototypes */
+
+/* Deep copy kernel metadata for query_kernel isolation */
+static tpb_kernel_t *_sf_deep_copy_kernel(const tpb_kernel_t *src);
+static int _sf_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
+static int _sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out);
+
 /* Module-level state variables */
 static int nkern = 0, nhdl, ihdl;  // number of registered kernels，number of handles， handle id
 
@@ -40,7 +47,7 @@ static int timer_set = 0;                  // flag to track if timer is set
 static int s_pli_handle_index = 0;         // 0-based handle index for auto-record
 
 static int
-_tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
+_sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
 {
     if (name == NULL || kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
@@ -62,7 +69,7 @@ _tpb_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
 }
 
 static int
-_tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
+_sf_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
 {
     if (kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
@@ -87,7 +94,7 @@ _tpb_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
  * @return Allocated deep copy on success, NULL on failure
  */
 static tpb_kernel_t *
-_tpb_deep_copy_kernel(const tpb_kernel_t *src)
+_sf_deep_copy_kernel(const tpb_kernel_t *src)
 {
     if (src == NULL) {
         return NULL;
@@ -190,7 +197,7 @@ _tpb_deep_copy_kernel(const tpb_kernel_t *src)
     return dst;
 }
 
-/* ========== Public API functions ========== */
+/* Public API */
 
 int
 tpb_driver_set_timer(tpb_timer_t timer_in)
@@ -242,7 +249,7 @@ tpb_driver_set_kernel_id(const char *kernel_name,
         return TPBE_NULLPTR_ARG;
     }
 
-    err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+    err = _sf_get_kernel_by_name(kernel_name, &kernel);
     if (err != 0) {
         return err;
     }
@@ -262,7 +269,7 @@ tpb_driver_set_kernel_record_ok(const char *kernel_name, int ok)
         return TPBE_NULLPTR_ARG;
     }
 
-    err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+    err = _sf_get_kernel_by_name(kernel_name, &kernel);
     if (err != 0) {
         return err;
     }
@@ -482,14 +489,14 @@ tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out)
     /* Lookup source kernel */
     if (id >= 0) {
         /* Use index - ignore kernel_name */
-        err = _tpb_get_kernel_by_index(id, (tpb_kernel_t **)&src);
+        err = _sf_get_kernel_by_index(id, (tpb_kernel_t **)&src);
     } else {
         /* Use name */
         if (kernel_name == NULL) {
             /* Invalid lookup, return count with *kernel_out still NULL */
             return count;
         }
-        err = _tpb_get_kernel_by_name(kernel_name, (tpb_kernel_t **)&src);
+        err = _sf_get_kernel_by_name(kernel_name, (tpb_kernel_t **)&src);
     }
 
     if (err != 0) {
@@ -498,7 +505,7 @@ tpb_query_kernel(int id, const char *kernel_name, tpb_kernel_t **kernel_out)
     }
 
     /* Perform deep copy */
-    *kernel_out = _tpb_deep_copy_kernel(src);
+    *kernel_out = _sf_deep_copy_kernel(src);
     if (*kernel_out == NULL) {
         /* Allocation failed, *kernel_out stays NULL */
         return count;
@@ -979,7 +986,7 @@ tpb_driver_add_handle(const char *kernel_name)
     }
 
     /* Lookup kernel by name */
-    err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+    err = _sf_get_kernel_by_name(kernel_name, &kernel);
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Kernel \'%s\' not found.\n", kernel_name);
@@ -1093,7 +1100,7 @@ tpb_driver_get_kparm_ptr(const char *kernel_name, const char *parm_name,
     if (kernel_name != NULL) {
         /* Search in registered kernel */
         tpb_kernel_t *kernel = NULL;
-        int err = _tpb_get_kernel_by_name(kernel_name, &kernel);
+        int err = _sf_get_kernel_by_name(kernel_name, &kernel);
         if (err != 0) {
             return TPBE_KERNEL_NE_FAIL;
         }

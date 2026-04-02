@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include "../include/tpb-public.h"
 
-/* ===== Batch-side API (tpbcli parent process) ===== */
+/* Batch-side API (tpbcli parent process) */
 
 /**
  * @brief Begin a new task batch. Generates TBatchID and caches batch context.
@@ -50,7 +50,7 @@ const char *tpb_record_get_workspace(void);
  */
 int tpb_record_end_batch(int ntask);
 
-/* ===== Task-side API (kernel child process) ===== */
+/* Task-side API (kernel child process) */
 
 /**
  * @brief Write a task record after kernel execution.

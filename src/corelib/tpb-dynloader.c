@@ -46,42 +46,28 @@ static int num_dyn_kernels = 0;
 static int dynloader_initialized = 0;
 
 /* Local Function Prototypes */
-static int resolve_tpb_dir(void);
-static int extract_kernel_name(const char *filename, const char *prefix,
-                               const char *suffix, char *name, size_t name_len);
-static int check_tpbx_exists(const char *kernel_name);
-static int find_dyn_kernel(const char *kernel_name);
-/*
- * Compute SHA-1 hash for a file content.
- * Used to derive stable KernelID from .so/.tpbx binaries.
- */
-static int hash_file_sha1(const char *path, unsigned char out[20]);
-/* Return 1 when a 20-byte ID is all zeros, otherwise return 0. */
-static int is_zero_id(const unsigned char id[20]);
-/*
- * Follow dup_to chain in kernel records until terminal record.
- * If any record in chain is missing, keep current ID as terminal.
- */
-static int follow_kernel_dup_chain(const char *workspace,
-                                   const unsigned char start_id[20],
-                                   unsigned char final_id[20]);
-/*
- * Resolve final KernelID against current workspace:
- * - compute candidate KernelID
- * - follow dup_to chain when existing
- * - create kernel record/entry when missing
- */
-static int resolve_kernel_id_for_workspace(const char *workspace,
-                                           const char *kernel_name,
-                                           const unsigned char so_sha1[20],
-                                           const unsigned char bin_sha1[20],
-                                           unsigned char out_final_id[20],
-                                           int *is_new_kernel);
+
+static int _sf_check_tpbx_exists(const char *kernel_name);
+static int _sf_extract_kernel_name(const char *filename, const char *prefix,
+                                   const char *suffix, char *name, size_t name_len);
+static int _sf_find_dyn_kernel(const char *kernel_name);
+static int _sf_follow_kernel_dup_chain(const char *workspace,
+                                       const unsigned char start_id[20],
+                                       unsigned char final_id[20]);
+static int _sf_hash_file_sha1(const char *path, unsigned char out[20]);
+static int _sf_is_zero_id(const unsigned char id[20]);
+static int _sf_resolve_kernel_id_for_workspace(const char *workspace,
+                                               const char *kernel_name,
+                                               const unsigned char so_sha1[20],
+                                               const unsigned char bin_sha1[20],
+                                               unsigned char out_final_id[20],
+                                               int *is_new_kernel);
+static int _sf_resolve_tpb_dir(void);
 
 /* Local Function Implementations */
 
 static int
-resolve_tpb_dir(void)
+_sf_resolve_tpb_dir(void)
 {
     if (tpb_dir_resolved[0] != '\0') {
         return 0;  /* Already resolved */
@@ -126,7 +112,7 @@ resolve_tpb_dir(void)
 }
 
 static int
-extract_kernel_name(const char *filename, const char *prefix,
+_sf_extract_kernel_name(const char *filename, const char *prefix,
                     const char *suffix, char *name, size_t name_len)
 {
     size_t prefix_len = strlen(prefix);
@@ -156,7 +142,7 @@ extract_kernel_name(const char *filename, const char *prefix,
 }
 
 static int
-check_tpbx_exists(const char *kernel_name)
+_sf_check_tpbx_exists(const char *kernel_name)
 {
     char tpbx_path[PATH_MAX];
     snprintf(tpbx_path, PATH_MAX, "%s/bin/tpbk_%s.tpbx",
@@ -166,7 +152,7 @@ check_tpbx_exists(const char *kernel_name)
 }
 
 static int
-find_dyn_kernel(const char *kernel_name)
+_sf_find_dyn_kernel(const char *kernel_name)
 {
     for (int i = 0; i < num_dyn_kernels; i++) {
         if (strcmp(dyn_kernels[i].name, kernel_name) == 0) {
@@ -177,7 +163,7 @@ find_dyn_kernel(const char *kernel_name)
 }
 
 static int
-hash_file_sha1(const char *path, unsigned char out[20])
+_sf_hash_file_sha1(const char *path, unsigned char out[20])
 {
     FILE *fp;
     size_t nread;
@@ -203,7 +189,7 @@ hash_file_sha1(const char *path, unsigned char out[20])
 }
 
 static int
-is_zero_id(const unsigned char id[20])
+_sf_is_zero_id(const unsigned char id[20])
 {
     unsigned char zero[20] = {0};
 
@@ -215,7 +201,7 @@ is_zero_id(const unsigned char id[20])
 }
 
 static int
-follow_kernel_dup_chain(const char *workspace,
+_sf_follow_kernel_dup_chain(const char *workspace,
                         const unsigned char start_id[20],
                         unsigned char final_id[20])
 {
@@ -247,7 +233,7 @@ follow_kernel_dup_chain(const char *workspace,
             return TPBE_SUCCESS;
         }
 
-        if (is_zero_id(attr.dup_to) || memcmp(attr.dup_to, cur_id, 20) == 0) {
+        if (_sf_is_zero_id(attr.dup_to) || memcmp(attr.dup_to, cur_id, 20) == 0) {
             memcpy(final_id, cur_id, 20);
             return TPBE_SUCCESS;
         }
@@ -260,7 +246,7 @@ follow_kernel_dup_chain(const char *workspace,
 }
 
 static int
-resolve_kernel_id_for_workspace(const char *workspace,
+_sf_resolve_kernel_id_for_workspace(const char *workspace,
                                 const char *kernel_name,
                                 const unsigned char so_sha1[20],
                                 const unsigned char bin_sha1[20],
@@ -298,7 +284,7 @@ resolve_kernel_id_for_workspace(const char *workspace,
     }
 
     if (found) {
-        err = follow_kernel_dup_chain(workspace, computed_id, out_final_id);
+        err = _sf_follow_kernel_dup_chain(workspace, computed_id, out_final_id);
         free(entries);
         return err;
     }
@@ -353,7 +339,7 @@ const char *
 tpb_dl_get_tpb_dir(void)
 {
     if (tpb_dir_resolved[0] == '\0') {
-        resolve_tpb_dir();
+        _sf_resolve_tpb_dir();
     }
     return tpb_dir_resolved;
 }
@@ -375,7 +361,7 @@ tpb_dl_scan(void)
         return 0;  /* Already scanned */
     }
 
-    err = resolve_tpb_dir();
+    err = _sf_resolve_tpb_dir();
     if (err != 0) {
         return err;
     }
@@ -400,7 +386,7 @@ tpb_dl_scan(void)
         int record_ok = 0;
 
         /* Look for libtpbk_*.so files */
-        if (extract_kernel_name(entry->d_name, "libtpbk_", ".so",
+        if (_sf_extract_kernel_name(entry->d_name, "libtpbk_", ".so",
                                 kernel_name, sizeof(kernel_name)) != 0) {
             continue;
         }
@@ -450,9 +436,9 @@ tpb_dl_scan(void)
         }
 
         /* Build KernelID and resolve workspace duplicate chain. */
-        err = hash_file_sha1(so_path, so_sha1);
+        err = _sf_hash_file_sha1(so_path, so_sha1);
         if (err == TPBE_SUCCESS) {
-            err = hash_file_sha1(tpbx_path, bin_sha1);
+            err = _sf_hash_file_sha1(tpbx_path, bin_sha1);
         }
         if (err == TPBE_SUCCESS) {
             err = tpb_raf_gen_kernel_id(kernel_name, so_sha1, bin_sha1,
@@ -461,7 +447,7 @@ tpb_dl_scan(void)
         if (err == TPBE_SUCCESS) {
             ws_err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
             if (ws_err == TPBE_SUCCESS) {
-                ws_err = resolve_kernel_id_for_workspace(workspace, kernel_name,
+                ws_err = _sf_resolve_kernel_id_for_workspace(workspace, kernel_name,
                                                          so_sha1, bin_sha1,
                                                          kernel_id,
                                                          &is_new_kernel);
@@ -488,7 +474,7 @@ tpb_dl_scan(void)
         snprintf(k->exec_path, PATH_MAX, "%s/bin/tpbk_%s.tpbx",
                  tpb_dir_resolved, kernel_name);
         k->dl_handle = handle;
-        k->complete = check_tpbx_exists(kernel_name);
+        k->complete = _sf_check_tpbx_exists(kernel_name);
         k->ktype = TPB_KTYPE_PLI;
 
         if (!k->complete) {
@@ -513,7 +499,7 @@ tpb_dl_get_exec_path(const char *kernel_name)
         return NULL;
     }
 
-    int idx = find_dyn_kernel(kernel_name);
+    int idx = _sf_find_dyn_kernel(kernel_name);
     if (idx < 0) {
         return NULL;
     }
@@ -532,7 +518,7 @@ tpb_dl_is_complete(const char *kernel_name)
         return 0;
     }
 
-    int idx = find_dyn_kernel(kernel_name);
+    int idx = _sf_find_dyn_kernel(kernel_name);
     if (idx < 0) {
         return 0;
     }
@@ -547,7 +533,7 @@ tpb_dl_get_ktype(const char *kernel_name)
         return 0;
     }
 
-    int idx = find_dyn_kernel(kernel_name);
+    int idx = _sf_find_dyn_kernel(kernel_name);
     if (idx < 0) {
         return 0;
     }

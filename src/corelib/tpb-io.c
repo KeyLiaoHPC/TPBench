@@ -26,23 +26,26 @@
 
 /* Local Function Prototypes */
 
-/* Initialize CLI output format controller, gets terminal width via ioctl */
-static void init_cliout(void);
-
-/* Extract UNAME+UKIND from a unit for grouping purposes */
-static inline TPB_UNIT_T get_uname(TPB_UNIT_T unit);
+/* Format and print a parameter value based on its dtype */
+static int _sf_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize);
 
 /* Format a value with exactly sigbit significant figures */
-static int format_sigfig(double value, char *buf, size_t bufsize, int sigbit);
+static int _sf_format_sigfig(double value, char *buf, size_t bufsize, int sigbit);
+
+/* Extract UNAME+UKIND from a unit for grouping purposes */
+static inline TPB_UNIT_T _sf_get_uname(TPB_UNIT_T unit);
+
+/* Initialize CLI output format controller, gets terminal width via ioctl */
+static void _sf_init_cliout(void);
+
+/* Append message to the active run log file */
+static void _sf_log_write(const char *msg);
 
 /* Print a dynamic-width double horizontal line */
-static void print_dhline(int width);
-
-/* Format and print a parameter value based on its dtype */
-static int format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize);
+static void _sf_print_dhline(int width);
 
 /* Transpose a 2D array */
-static void transpose(uint64_t *out, uint64_t **in, int m, int n);
+static void _sf_transpose(uint64_t *out, uint64_t **in, int m, int n);
 
 /* Module-level state */
 static double default_qtiles[] = {0.05, 0.25, 0.50, 0.75, 0.95};
@@ -64,7 +67,7 @@ static char log_filepath[PATH_MAX] = {0};
 /* Local Function Implementations */
 
 static void
-init_cliout(void)
+_sf_init_cliout(void)
 {
     if (cliout_fmt.initialized) {
         return;
@@ -108,13 +111,13 @@ tpb_set_outargs(int unit_cast, int sigbit_trim)
 }
 
 static inline TPB_UNIT_T
-get_uname(TPB_UNIT_T unit)
+_sf_get_uname(TPB_UNIT_T unit)
 {
     return unit & TPB_UNAME_MASK;
 }
 
 static int
-format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
+_sf_format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
 {
     if (bufsize == 0) {
         return 0;
@@ -135,7 +138,7 @@ format_sigfig(double value, char *buf, size_t bufsize, int sigbit)
 }
 
 static void
-print_dhline(int width)
+_sf_print_dhline(int width)
 {
     for (int i = 0; i < width; i++) {
         putchar('=');
@@ -144,7 +147,7 @@ print_dhline(int width)
 }
 
 static int
-format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
+_sf_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
 {
     TPB_DTYPE type_only = parm->ctrlbits & TPB_PARM_TYPE_MASK;
 
@@ -171,7 +174,7 @@ format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
 }
 
 static void
-transpose(uint64_t *out, uint64_t **in, int m, int n)
+_sf_transpose(uint64_t *out, uint64_t **in, int m, int n)
 {
     for (int j = 0; j < n; j++) {
         for (int i = 0; i < m; i++) {
@@ -273,7 +276,7 @@ tpb_log_cleanup(void)
 }
 
 static void
-tpb_log_write(const char *msg)
+_sf_log_write(const char *msg)
 {
     if (log_file != NULL && msg != NULL) {
         fputs(msg, log_file);
@@ -397,7 +400,7 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
         vprintf(fmt, args);
         va_end(args);
         
-        tpb_log_write(msg_buf);
+        _sf_log_write(msg_buf);
         return;
     }
     
@@ -431,9 +434,9 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
     
     /* Write to log file */
     if (header_len > 0) {
-        tpb_log_write(header_buf);
+        _sf_log_write(header_buf);
     }
-    tpb_log_write(msg_buf);
+    _sf_log_write(msg_buf);
     fflush(stdout);
     fflush(stderr);
 }
@@ -452,7 +455,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     }
 
     /* Initialize format controller on first call */
-    init_cliout();
+    _sf_init_cliout();
 
     int max_col = cliout_fmt.max_col;
 
@@ -471,7 +474,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
 
         for (int i = 0; i < handle->argpack.n; i++) {
             char parm_buf[256];
-            int parm_len = format_parm_value(&handle->argpack.args[i],
+            int parm_len = _sf_format_parm_value(&handle->argpack.args[i],
                                              parm_buf, sizeof(parm_buf));
 
             /* Add separator */
@@ -504,7 +507,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     }
 
     /* Initialize format controller on first call */
-    init_cliout();
+    _sf_init_cliout();
 
     double *qtiles = cliout_fmt.qtiles;
     size_t nq = cliout_fmt.nq;
@@ -541,7 +544,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             continue;
         }
 
-        TPB_UNIT_T uname = get_uname(out->unit);
+        TPB_UNIT_T uname = _sf_get_uname(out->unit);
 
         /* Find or create group for this UNAME */
         int gidx = -1;
@@ -607,7 +610,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         /* Determine display unit */
         TPB_UNIT_T display_unit = base_unit;
         if (cast_enabled && unit_cast) {
-            TPB_UNIT_T uname = get_uname(out->unit);
+            TPB_UNIT_T uname = _sf_get_uname(out->unit);
             for (int g = 0; g < ngroups; g++) {
                 if (group_unames[g] == uname) {
                     display_unit = group_targets[g];
