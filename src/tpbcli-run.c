@@ -1071,7 +1071,7 @@ tpbcli_run(int argc, char **argv)
     int rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
     if (rec_err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "Auto-record: begin_batch failed (%d), continuing without recording.\n", rec_err);
+                   "tpbcli_run: begin_batch failed (%d), continuing without recording.\n", rec_err);
     }
 
     err = tpb_driver_run_all();
@@ -1083,7 +1083,7 @@ tpbcli_run(int argc, char **argv)
         rec_err = tpb_record_end_batch(ntask);
         if (rec_err) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "Auto-record: end_batch failed (%d)\n", rec_err);
+                       "tpbcli_run: end_batch failed (%d)\n", rec_err);
         }
     }
 
