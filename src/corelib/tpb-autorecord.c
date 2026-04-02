@@ -55,6 +55,8 @@ static void _sf_get_host_and_user(char *hostname, size_t hlen, char *username,
                                   size_t ulen);
 /* Parse 40-char hex into 20-byte id */
 static int _sf_hex_to_id(const char *hex, unsigned char id[20]);
+/* True if 20-byte id is all zero */
+static int _sf_is_zero_id20(const unsigned char id[20]);
 
 /* Internal helpers */
 
@@ -116,6 +118,14 @@ _sf_hex_to_id(const char *hex, unsigned char id[20])
         id[i] = (unsigned char)byte;
     }
     return 0;
+}
+
+static int
+_sf_is_zero_id20(const unsigned char id[20])
+{
+    static const unsigned char z[20] = {0};
+
+    return memcmp(id, z, 20) == 0;
 }
 
 static int
@@ -214,15 +224,21 @@ tpb_record_end_batch(int ntask)
         task_id_list = (unsigned char *)malloc(20 * task_count);
         if (task_id_list) {
             for (int i = 0; i < task_count; i++) {
-                if (memcmp(task_entries[i].tbatch_id, s_tbatch_id, 20) == 0) {
+                if (memcmp(task_entries[i].tbatch_id, s_tbatch_id, 20) == 0 &&
+                    _sf_is_zero_id20(task_entries[i].derive_to)) {
                     int seen = 0;
 
                     memcpy(task_id_list + matched * 20,
                            task_entries[i].task_record_id, 20);
                     for (int j = 0; j < i; j++) {
                         if (memcmp(task_entries[j].tbatch_id, s_tbatch_id,
-                                   20) == 0 &&
-                            memcmp(task_entries[j].kernel_id,
+                                   20) != 0) {
+                            continue;
+                        }
+                        if (!_sf_is_zero_id20(task_entries[j].derive_to)) {
+                            continue;
+                        }
+                        if (memcmp(task_entries[j].kernel_id,
                                    task_entries[i].kernel_id, 20) == 0) {
                             seen = 1;
                             break;
@@ -242,7 +258,7 @@ tpb_record_end_batch(int ntask)
     tbatch_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memcpy(attr.tbatch_id, s_tbatch_id, 20);
-    /* dup_to and dup_from stay zero */
+    /* derive_to and inherit_from stay zero */
     attr.utc_bits = s_batch_utc_bits;
     attr.btime = s_batch_btime_ns;
     attr.duration = duration;
@@ -548,14 +564,14 @@ tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 }
 
 /* meta_magic(8) + metasize(8) + datasize(8) + task_record_id(20) */
-#define TPB_TASK_TPBR_DUP_TO_OFF 44L
+#define TPB_TASK_TPBR_DERIVE_TO_OFF 44L
 
 #define TPB_TASK_TPBE_ENTRY_STRIDE 232L
-#define TPB_TASK_TPBE_DUP_TO_OFF 104L
+#define TPB_TASK_TPBE_DERIVE_TO_OFF 104L
 
 int
-tpb_k_task_set_dup_to(const unsigned char task_id[20],
-                      const unsigned char dup_to_id[20])
+tpb_k_task_set_derive_to(const unsigned char task_id[20],
+                         const unsigned char derive_to_id[20])
 {
     char workspace[PATH_MAX];
     char fpath[TPB_RAF_PATH_MAX];
@@ -571,7 +587,7 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
     int fd;
     long offset;
 
-    if (task_id == NULL || dup_to_id == NULL) {
+    if (task_id == NULL || derive_to_id == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
@@ -612,11 +628,11 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fseek(fp, TPB_TASK_TPBR_DUP_TO_OFF, SEEK_SET) != 0) {
+    if (fseek(fp, TPB_TASK_TPBR_DERIVE_TO_OFF, SEEK_SET) != 0) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+    if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
@@ -665,13 +681,13 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
     }
 
     offset = (long)TPB_RAF_MAGIC_LEN + (long)row * TPB_TASK_TPBE_ENTRY_STRIDE
-        + TPB_TASK_TPBE_DUP_TO_OFF;
+        + TPB_TASK_TPBE_DERIVE_TO_OFF;
     if (fseek(fp, offset, SEEK_SET) != 0) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+    if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
@@ -741,7 +757,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     memset(&cap, 0, sizeof(cap));
     memcpy(cap.task_record_id, capsule_id_out, 20);
-    memset(cap.dup_from, 0xFF, 20);
+    memset(cap.inherit_from, 0xFF, 20);
     memcpy(cap.tbatch_id, src.tbatch_id, 20);
     memcpy(cap.kernel_id, src.kernel_id, 20);
     cap.utc_bits = src.utc_bits;
@@ -764,7 +780,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     memset(&entry, 0, sizeof(entry));
     memcpy(entry.task_record_id, capsule_id_out, 20);
-    memset(entry.dup_from, 0xFF, 20);
+    memset(entry.inherit_from, 0xFF, 20);
     memcpy(entry.tbatch_id, src.tbatch_id, 20);
     memcpy(entry.kernel_id, src.kernel_id, 20);
     entry.utc_bits = src.utc_bits;

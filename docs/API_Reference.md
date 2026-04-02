@@ -1567,12 +1567,12 @@ typedef struct tpb_meta_header {
 ```c
 typedef struct tbatch_entry {
     unsigned char tbatch_id[20];    // TBatchID
-    unsigned char dup_from[20];     // Lineage: source TBatchID or zero
+    unsigned char inherit_from[20];     // Lineage: source TBatchID or zero
     tpb_dtbits_t start_utc_bits;    // Start datetime
     uint64_t duration;              // Duration in nanoseconds
     char hostname[64];              // Hostname
     uint32_t nkernel;               // Number of kernels
-    uint32_t ntask;                 // Number of tasks
+    uint32_t ntask;                 // Task entry points (derive_to==0)
     uint32_t nscore;                // Number of scores (always 0 for now)
     uint32_t batch_type;            // 0=run, 1=benchmark
     unsigned char reserve[TPB_RAF_RESERVE_SIZE]; // Reserved (128)
@@ -1584,7 +1584,7 @@ typedef struct tbatch_entry {
 ```c
 typedef struct kernel_entry {
     unsigned char kernel_id[20];    // KernelID
-    unsigned char dup_from[20];     // Lineage: source KernelID or zero
+    unsigned char inherit_from[20];     // Lineage: source KernelID or zero
     char kernel_name[64];           // Kernel name
     unsigned char so_sha1[20];    // Shared library SHA1
     uint32_t kctrl;                 // Kernel control bits
@@ -1599,14 +1599,15 @@ typedef struct kernel_entry {
 ```c
 typedef struct task_entry {
     unsigned char task_record_id[20];   // TaskRecordID
-    unsigned char dup_from[20];         // Lineage: source TaskRecordID or zero
+    unsigned char inherit_from[20];     // Lineage: source TaskRecordID or zero
     unsigned char tbatch_id[20];        // TBatchID
     unsigned char kernel_id[20];        // KernelID
     tpb_dtbits_t utc_bits;              // Invocation datetime
     uint64_t duration;                  // Duration (ns)
     uint32_t exit_code;                 // Exit code
     uint32_t handle_index;              // Handle index
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; // Reserved (128)
+    unsigned char derive_to[20];        // Merge/capsule target, or zero
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20]; // Reserved (108)
 } task_entry_t;
 ```
 
@@ -1619,8 +1620,8 @@ typedef struct task_entry {
 ```c
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];    // Primary Link ID
-    unsigned char dup_to[20];       // Duplicate tracking
-    unsigned char dup_from[20];     // Lineage / provenance
+    unsigned char derive_to[20];       // Derivation target, or zero
+    unsigned char inherit_from[20];     // Lineage / provenance
     tpb_dtbits_t utc_bits;          // Start datetime
     uint64_t btime;                 // Boot time (ns)
     uint64_t duration;              // Duration (ns)
@@ -1628,7 +1629,7 @@ typedef struct tbatch_attr {
     char username[64];              // Username
     uint32_t front_pid;             // Front-end PID
     uint32_t nkernel;               // Kernel count
-    uint32_t ntask;                 // Task count
+    uint32_t ntask;                 // Task entry points (derive_to==0)
     uint32_t nscore;                // Score count
     uint32_t batch_type;            // 0=run, 1=benchmark
     uint32_t nheader;               // Number of headers
@@ -1641,8 +1642,8 @@ typedef struct tbatch_attr {
 ```c
 typedef struct kernel_attr {
     unsigned char kernel_id[20];    // KernelID
-    unsigned char dup_to[20];       // Duplicate tracking
-    unsigned char dup_from[20];     // Lineage / provenance
+    unsigned char derive_to[20];       // Derivation target, or zero
+    unsigned char inherit_from[20];     // Lineage / provenance
     unsigned char src_sha1[20];     // Source SHA1
     unsigned char so_sha1[20];     // Shared library SHA1
     unsigned char bin_sha1[20];    // Executable SHA1
@@ -1663,8 +1664,8 @@ typedef struct kernel_attr {
 ```c
 typedef struct task_attr {
     unsigned char task_record_id[20];   // TaskRecordID
-    unsigned char dup_to[20];           // Duplicate tracking
-    unsigned char dup_from[20];         // Lineage / provenance
+    unsigned char derive_to[20];           // Derivation target, or zero
+    unsigned char inherit_from[20];         // Lineage / provenance
     unsigned char tbatch_id[20];        // Foreign key: TBatchID
     unsigned char kernel_id[20];        // Foreign key: KernelID
     tpb_dtbits_t utc_bits;              // Invocation datetime

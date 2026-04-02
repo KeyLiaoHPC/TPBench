@@ -976,8 +976,8 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
-    dump_print_kv_hex20("dup_to", attr.dup_to);
-    dump_print_kv_hex20("dup_from", attr.dup_from);
+    dump_print_kv_hex20("derive_to", attr.derive_to);
+    dump_print_kv_hex20("inherit_from", attr.inherit_from);
     if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
         dump_print_kv_str("start_utc", ts.str);
     } else {
@@ -1019,8 +1019,8 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
-    dump_print_kv_hex20("dup_to", attr.dup_to);
-    dump_print_kv_hex20("dup_from", attr.dup_from);
+    dump_print_kv_hex20("derive_to", attr.derive_to);
+    dump_print_kv_hex20("inherit_from", attr.inherit_from);
     dump_print_kv_hex20("src_sha1", attr.src_sha1);
     dump_print_kv_hex20("so_sha1", attr.so_sha1);
     dump_print_kv_hex20("bin_sha1", attr.bin_sha1);
@@ -1059,8 +1059,8 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
     dump_print_kv_hex20("task_record_id", attr.task_record_id);
-    dump_print_kv_hex20("dup_to", attr.dup_to);
-    dump_print_kv_hex20("dup_from", attr.dup_from);
+    dump_print_kv_hex20("derive_to", attr.derive_to);
+    dump_print_kv_hex20("inherit_from", attr.inherit_from);
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
@@ -1116,8 +1116,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             tpb_datetime_str_t ts;
             snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
             dump_print_kv_hex20(p, e[i].tbatch_id);
-            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
-            dump_print_kv_hex20(p, e[i].dup_from);
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", i);
+            dump_print_kv_hex20(p, e[i].inherit_from);
             snprintf(p, sizeof(p), "entry[%d].start_utc", i);
             if (tpb_ts_bits_to_isoutc(e[i].start_utc_bits, &ts) == 0) {
                 dump_print_kv_str(p, ts.str);
@@ -1153,8 +1153,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             char p[80];
             snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
             dump_print_kv_hex20(p, e[i].kernel_id);
-            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
-            dump_print_kv_hex20(p, e[i].dup_from);
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", i);
+            dump_print_kv_hex20(p, e[i].inherit_from);
             snprintf(p, sizeof(p), "entry[%d].kernel_name", i);
             dump_print_kv_str(p, e[i].kernel_name);
             snprintf(p, sizeof(p), "entry[%d].so_sha1", i);
@@ -1172,37 +1172,54 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 
     {
         task_entry_t *e = NULL;
+        unsigned char z20[20] = {0};
+        int k;
+        int nvis;
+
         err = tpb_raf_entry_list_task(workspace, &e, &n);
         if (err != TPBE_SUCCESS) {
             return err;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "(%d entries)\n", n);
+        nvis = 0;
+        for (i = 0; i < n; i++) {
+            if (memcmp(e[i].derive_to, z20, 20) == 0) {
+                nvis++;
+            }
+        }
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+            "(%d task entry points / %d total rows)\n", nvis, n);
+        k = 0;
         for (i = 0; i < n; i++) {
             char p[96];
             tpb_datetime_str_t ts;
-            snprintf(p, sizeof(p), "entry[%d].task_record_id", i);
+
+            if (memcmp(e[i].derive_to, z20, 20) != 0) {
+                continue;
+            }
+            snprintf(p, sizeof(p), "entry[%d].task_record_id", k);
             dump_print_kv_hex20(p, e[i].task_record_id);
-            snprintf(p, sizeof(p), "entry[%d].dup_from", i);
-            dump_print_kv_hex20(p, e[i].dup_from);
-            snprintf(p, sizeof(p), "entry[%d].dup_to", i);
-            dump_print_kv_hex20(p, e[i].dup_to);
-            snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", k);
+            dump_print_kv_hex20(p, e[i].inherit_from);
+            snprintf(p, sizeof(p), "entry[%d].derive_to", k);
+            dump_print_kv_hex20(p, e[i].derive_to);
+            snprintf(p, sizeof(p), "entry[%d].tbatch_id", k);
             dump_print_kv_hex20(p, e[i].tbatch_id);
-            snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
+            snprintf(p, sizeof(p), "entry[%d].kernel_id", k);
             dump_print_kv_hex20(p, e[i].kernel_id);
-            snprintf(p, sizeof(p), "entry[%d].start_utc", i);
+            snprintf(p, sizeof(p), "entry[%d].start_utc", k);
             if (tpb_ts_bits_to_isoutc(e[i].utc_bits, &ts) == 0) {
                 dump_print_kv_str(p, ts.str);
             } else {
-                snprintf(p, sizeof(p), "entry[%d].utc_bits", i);
+                snprintf(p, sizeof(p), "entry[%d].utc_bits", k);
                 dump_print_kv_u64(p, e[i].utc_bits);
             }
-            snprintf(p, sizeof(p), "entry[%d].duration", i);
+            snprintf(p, sizeof(p), "entry[%d].duration", k);
             dump_print_kv_u64(p, e[i].duration);
-            snprintf(p, sizeof(p), "entry[%d].exit_code", i);
+            snprintf(p, sizeof(p), "entry[%d].exit_code", k);
             dump_print_kv_u32(p, e[i].exit_code);
-            snprintf(p, sizeof(p), "entry[%d].handle_index", i);
+            snprintf(p, sizeof(p), "entry[%d].handle_index", k);
             dump_print_kv_u32(p, e[i].handle_index);
+            k++;
         }
         free(e);
     }

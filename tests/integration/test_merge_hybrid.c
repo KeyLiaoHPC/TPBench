@@ -445,9 +445,9 @@ test_merge_hybrid(void)
         CHECK("read final record", err == 0);
 
         if (err == 0) {
-            /* 8a: dup_from is all 0xFF */
-            CHECK("dup_from all 0xFF",
-                  is_all_ff(final_attr.dup_from));
+            /* 8a: inherit_from is all 0xFF */
+            CHECK("inherit_from all 0xFF",
+                  is_all_ff(final_attr.inherit_from));
 
             /* 8b: SourceTaskIDs dimsizes[0] = 2 */
             tpb_meta_header_t hdr;
@@ -547,7 +547,7 @@ test_merge_hybrid(void)
         CHECK_INT("total task entries", 7, entry_count);
 
         /* 8h: Source (per-process merged) entries
-         *     should have dup_to = final_merged_id */
+         *     should have derive_to = final_merged_id */
         if (err == 0 && all_entries) {
             for (i = 0; i < N_PROCS; i++) {
                 int j, found_src = 0;
@@ -559,10 +559,10 @@ test_merge_hybrid(void)
                         found_src = 1;
                         char msg[64];
                         snprintf(msg, sizeof(msg),
-                                 "src %d dup_to", i);
+                                 "src %d derive_to", i);
                         CHECK(msg,
                               memcmp(
-                                  all_entries[j].dup_to,
+                                  all_entries[j].derive_to,
                                   final_merged_id,
                                   20) == 0);
                         break;

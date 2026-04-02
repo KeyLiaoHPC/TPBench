@@ -230,8 +230,8 @@ A task batch (tbatch) is the execution context that invokes one or more kernels.
 ```c
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];        /**< TBatchID - Primary Link ID (20-byte SHA-1) */
-    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TBatchID */
-    unsigned char dup_from[20];         /**< Lineage: source TBatchID if copied/forked, else zero */
+    unsigned char derive_to[20];           /**< Derivation target: 0=none, else other TBatchID */
+    unsigned char inherit_from[20];         /**< Lineage: source TBatchID if copied/forked, else zero */
     tpb_dtbits_t utc_bits;              /**< Batch start datetime (64-bit compact encoding) */
     uint64_t btime;                     /**< Boot time at batch start (nanoseconds since boot) */
     uint64_t duration;                  /**< Total batch duration in nanoseconds */
@@ -239,7 +239,7 @@ typedef struct tbatch_attr {
     char username[64];                  /**< Username who initiated batch, ASCII */
     uint32_t front_pid;                 /**< Front-end process ID */
     uint32_t nkernel;                   /**< Number of non-repeat kernels executed in this batch */
-    uint32_t ntask;                     /**< Number of task records in this batch */
+    uint32_t ntask;                     /**< Task entry points (derive_to==0) in this batch */
     uint32_t nscore;                    /**< Number of score records in this batch */
     uint32_t batch_type;                /**< 0=run, 1=benchmark */
     uint32_t nheader;                   /**< # of headers. */
@@ -254,7 +254,7 @@ The implementation program takes responsibility to add and manage fixed headers 
     - ndim = 1, length = nkernel
 - header[1]: TaskRecordIDs
     - 20-byte unsigned char
-    - A non-repeated list of TaskRecordIDs of ended tasks in the tbatch.
+    - A non-repeated list of TaskRecordIDs for **task entry points** in the tbatch (rows with `derive_to` all-zero: standalone tasks and capsules, not per-rank rows that derive to a capsule).
     - ndim = 1, length = ntask
 - header[2]: ScoreRecordIDs
     - 20-byte unsigned char
@@ -271,10 +271,10 @@ SHA1("tbatch" + <UTC_timestamp> + <machine_start_nanoseconds> + <hostname> + <us
 
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
-**2) `dup_to` and `dup_from`**
+**2) `derive_to` and `inherit_from`**
 
-- `dup_to`: non-zero means this record aliases another TBatchID (deduplication target).
-- `dup_from`: non-zero records the source TBatchID when this record was copied or derived for lineage; independent of `dup_to`.
+- `derive_to`: non-zero means this record aliases another TBatchID (deduplication target).
+- `inherit_from`: non-zero records the source TBatchID when this record was copied or derived for lineage; independent of `derive_to`.
 
 #### 2.2.2. Entry Structure (.tpbe)
 
@@ -295,7 +295,7 @@ Entry member:
 |name|size|
 |---|---|
 |tbatch_id | 20 |
-|dup_from | 20 |
+|inherit_from | 20 |
 |start_utc_bits | 8 |
 |duration | 8 |
 |hostname | 64 |
@@ -330,9 +330,9 @@ File structure:
 +-------------------24-+
 | tbatch_id            |  <- 20B
 +-------------------44-+
-| dup_to               |  <- 20B
+| derive_to               |  <- 20B
 +-------------------64-+
-| dup_from             |  <- 20B
+| inherit_from             |  <- 20B
 +-------------------84-+
 | utc_bits             |  <- 8B
 +-------------------92-+
@@ -388,8 +388,8 @@ The Kernel domain stores metadata about a kernel being evaluated, including desc
 ```c
 typedef struct kernel_attr {
     unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1), ASCII */
-    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other KernelID, ASCII */
-    unsigned char dup_from[20];         /**< Lineage: source KernelID if copied/forked, else zero */
+    unsigned char derive_to[20];           /**< Derivation target: 0=none, else other KernelID, ASCII */
+    unsigned char inherit_from[20];         /**< Lineage: source KernelID if copied/forked, else zero */
     unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files, ASCII */
     unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file, ASCII */
     unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, ASCII */
@@ -423,8 +423,8 @@ SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
 
 Notes:
 - `kctrl` stores the kernel integration type from `tpb-public.h`. Always set to `TPB_KTYPE_PLI`.
-- `dup_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
-- `dup_from` is all-zero unless this record was derived from another kernel record (provenance).
+- `derive_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
+- `inherit_from` is all-zero unless this record was derived from another kernel record (provenance).
 
 #### 2.3.2. Entry Structure (.tpbe)
 
@@ -444,7 +444,7 @@ Entry member (slim subset of `kernel_attr_t`):
 | name | size |
 |---|---|
 | kernel_id | 20 |
-| dup_from | 20 |
+| inherit_from | 20 |
 | kernel_name | 64 |
 | so_sha1 | 20 |
 | kctrl | 4 |
@@ -475,9 +475,9 @@ File structure:
 +-------------------24-+
 | kernel_id            |  <- 20B
 +-------------------44-+
-| dup_to               |  <- 20B
+| derive_to               |  <- 20B
 +-------------------64-+
-| dup_from             |  <- 20B
+| inherit_from             |  <- 20B
 +-------------------84-+
 | src_sha1             |  <- 20B
 +------------------104-+
@@ -535,8 +535,8 @@ The TaskRecord domain stores the input arguments and output metrics from a singl
 ```c
 typedef struct task_attr {
     unsigned char task_record_id[20];   /**< TaskRecordID - Primary Link ID (20-byte SHA-1) */
-    unsigned char dup_to[20];           /**< Duplicate tracking: 0=none, else points to other TaskRecordID */
-    unsigned char dup_from[20];         /**< Lineage: source TaskRecordID if copied/forked, else zero */
+    unsigned char derive_to[20];           /**< Derivation target: 0=none, else other TaskRecordID */
+    unsigned char inherit_from[20];         /**< Lineage: source TaskRecordID if copied/forked, else zero */
     unsigned char tbatch_id[20];        /**< Foreign key: links to task batch that produced this record */
     unsigned char kernel_id[20];        /**< Foreign key: links to kernel definition record */
 
@@ -572,9 +572,11 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 
 Notes:
 - `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
-- `dup_to` points to the canonical task record when deduplication is enabled.
-- For an MPI kernel that records via `tpb_mpik_write_task`, each rank's normal task record has `dup_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
-- `dup_from` is all-zero unless this record was derived from another task record (provenance).
+- `derive_to` points to the canonical task record when deduplication is enabled.
+- For an MPI kernel that records via `tpb_mpik_write_task`, each rank's normal task record has `derive_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
+- `inherit_from` is all-zero unless this record was derived from another task record (provenance).
+
+**Task entry point (`ntask`, CLI):** Physically, `task.tpbe` contains every appended task row. For batch metadata and `tpbcli database ls`, `ntask` counts only rows with `derive_to` all-zero (one logical invocation: a normal single-rank task or a task capsule after MPI finalize). Per-rank rows that point `derive_to` at a capsule ID are not counted. `tpbcli database dump --entry task` lists only entry-point rows and prints `(N task entry points / M total rows)`.
 
 #### 2.4.2. Entry Structure (.tpbe)
 
@@ -594,14 +596,14 @@ Entry member (slim subset of `task_attr_t`):
 | name | size |
 |---|---|
 | task_record_id | 20 |
-| dup_from | 20 |
+| inherit_from | 20 |
 | tbatch_id | 20 |
 | kernel_id | 20 |
 | utc_bits | 8 |
 | duration | 8 |
 | exit_code | 4 |
 | handle_index | 4 |
-| dup_to | 20 |
+| derive_to | 20 |
 | reserve | 108 |
 | **Total** | **232** |
 
@@ -627,9 +629,9 @@ File structure:
 +-------------------24-+
 | task_record_id       |  <- 20B
 +-------------------44-+
-| dup_to               |  <- 20B
+| derive_to               |  <- 20B
 +-------------------64-+
-| dup_from             |  <- 20B
+| inherit_from             |  <- 20B
 +-------------------84-+
 | tbatch_id            |  <- 20B
 +------------------104-+
@@ -712,8 +714,8 @@ The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbat
 
 **Attributes (`task_attr_t`):**
 
-- `dup_from`: all bytes `0xFF` (multi-source sentinel; same convention as merged task records).
-- `dup_to`: all zero.
+- `inherit_from`: all bytes `0xFF` (multi-source sentinel; same convention as merged task records).
+- `derive_to`: all zero.
 - `ninput` = 0, `noutput` = 0, `nheader` = 1.
 - `exit_code`, `duration`: typically 0 for the capsule itself.
 
@@ -724,11 +726,11 @@ The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbat
 
 **Entry (`.tpbe`):** Same `task.tpbe` row layout as a normal task entry; the capsule appears as another task row distinguished by its TaskCapsuleRecordID.
 
-**Per-rank task linkage:** After a successful MPI capsule finalize, each participating rank's normal task `.tpbr` and matching `task.tpbe` row have `dup_to` set to the capsule's TaskCapsuleRecordID (`tpb_k_task_set_dup_to`).
+**Per-rank task linkage:** After a successful MPI capsule finalize, each participating rank's normal task `.tpbr` and matching `task.tpbe` row have `derive_to` set to the capsule's TaskCapsuleRecordID (`tpb_k_task_set_derive_to`).
 
 **Lifecycle (kernel responsibility):**
 
-**MPI (recommended):** After `tpb_mpik_corelib_init` on the execution communicator, call `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` once at the end of the collective kernel. It coordinates: each rank `tpb_k_write_task`; barrier; rank 0 `tpb_k_create_capsule_task`; `MPI_Bcast` of capsule ID and status; each rank patches its own task `dup_to` to the capsule; `MPI_Gather` of all TaskRecordIDs to rank 0; rank 0 alone calls `tpb_k_append_capsule_task` for ranks 1..n-1 in MPI rank order (sub ranks do not touch the capsule file).
+**MPI (recommended):** After `tpb_mpik_corelib_init` on the execution communicator, call `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` once at the end of the collective kernel. It coordinates: each rank `tpb_k_write_task`; barrier; rank 0 `tpb_k_create_capsule_task`; `MPI_Bcast` of capsule ID and status; each rank patches its own task `derive_to` to the capsule; `MPI_Gather` of all TaskRecordIDs to rank 0; rank 0 alone calls `tpb_k_append_capsule_task` for ranks 1..n-1 in MPI rank order (sub ranks do not touch the capsule file).
 
 **Ad-hoc / non-MPI multi-unit:**
 
@@ -1021,7 +1023,7 @@ Column details:
 
 When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently.
 
-**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. **MPI kernels** should use `tpb_mpik_write_task` so corelib performs the collectives: rank 0 creates the capsule and appends other ranks' IDs after `MPI_Gather`; each rank's task record `dup_to` (`.tpbr` and `task.tpbe` row) points at the capsule ID. **Non-MPI or ad-hoc MPI:** the leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or `MPI_Bcast` can distribute the capsule ID when not using `tpb_mpik_write_task`.
+**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. **MPI kernels** should use `tpb_mpik_write_task` so corelib performs the collectives: rank 0 creates the capsule and appends other ranks' IDs after `MPI_Gather`; each rank's task record `derive_to` (`.tpbr` and `task.tpbe` row) points at the capsule ID. **Non-MPI or ad-hoc MPI:** the leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or `MPI_Bcast` can distribute the capsule ID when not using `tpb_mpik_write_task`.
 
 **Legacy merge API:** The caller may still merge per-unit task records into a single **merged task record** via `tpb_k_merge_record_thread` / `tpb_k_merge_record_process` (section 5.2). That path synthesizes combined headers and payload; it remains available for older workflows.
 
@@ -1053,15 +1055,15 @@ merged.utc_bits = utc_bits of whichever source has min(btime)
 
 Assumption: all participating threads/processes share the same boot-time reference (same node for threads; same node or NTP-synced for processes).
 
-#### 5.2.4. dup_from / dup_to Semantics
+#### 5.2.4. inherit_from / derive_to Semantics
 
 Merged record:
-- `dup_from` = `0xFF` repeated 20 bytes (multi-source sentinel)
-- `dup_to` = all zero
+- `inherit_from` = `0xFF` repeated 20 bytes (multi-source sentinel)
+- `derive_to` = all zero
 
 Source records (updated after merge):
-- `dup_to` = merged task record ID (updated in both `.tpbr` and `.tpbe`)
-- `dup_from` = unchanged (all zero)
+- `derive_to` = merged task record ID (updated in both `.tpbr` and `.tpbe`)
+- `inherit_from` = unchanged (all zero)
 
 #### 5.2.5. Merge Metadata Headers
 

@@ -297,8 +297,8 @@ tpb_raf_record_write_tbatch(const char *workspace,
 
     /* Attributes */
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (_sf_write_u64(fp, attr->utc_bits) != 0) goto fail;
     if (_sf_write_u64(fp, attr->btime) != 0) goto fail;
     if (_sf_write_u64(fp, attr->duration) != 0) goto fail;
@@ -381,8 +381,8 @@ tpb_raf_record_read_tbatch(const char *workspace,
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (_sf_read_u64(fp, &attr->utc_bits) != 0) goto fail;
     if (_sf_read_u64(fp, &attr->btime) != 0) goto fail;
     if (_sf_read_u64(fp, &attr->duration) != 0) goto fail;
@@ -503,8 +503,8 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (_sf_write_u64(fp, datasize) != 0) goto fail;
 
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->src_sha1, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->so_sha1, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
@@ -584,8 +584,8 @@ tpb_raf_record_read_kernel(const char *workspace,
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (fread(attr->src_sha1, 1, 20, fp) != 20) goto fail;
     if (fread(attr->so_sha1, 1, 20, fp) != 20) goto fail;
     if (fread(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
@@ -704,8 +704,8 @@ tpb_raf_record_write_task(const char *workspace,
     if (_sf_write_u64(fp, datasize) != 0) goto fail;
 
     if (fwrite(attr->task_record_id, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fwrite(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (_sf_write_u64(fp, attr->utc_bits) != 0) goto fail;
@@ -970,8 +970,8 @@ tpb_raf_record_read_task(const char *workspace,
 
     memset(attr, 0, sizeof(*attr));
     if (fread(attr->task_record_id, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_to, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->dup_from, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->derive_to, 1, 20, fp) != 20) goto fail;
+    if (fread(attr->inherit_from, 1, 20, fp) != 20) goto fail;
     if (fread(attr->tbatch_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (_sf_read_u64(fp, &attr->utc_bits) != 0) goto fail;
