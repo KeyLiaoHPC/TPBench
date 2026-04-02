@@ -518,11 +518,6 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     if (err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                    "Auto-record: failed to append task entry (%d)\n", err);
-    } else {
-        char task_hex[41];
-        tpb_raf_id_to_hex(task_id, task_hex);
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-                   "Auto-record: task recorded, TaskID=%s\n", task_hex);
     }
 
     free(headers);
@@ -536,7 +531,20 @@ int
 tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                  unsigned char *task_id_out)
 {
-    return tpb_record_write_task(hdl, exit_code, task_id_out);
+    int err;
+    unsigned char id_storage[20];
+    unsigned char *id_ptr;
+
+    id_ptr = (task_id_out != NULL) ? task_id_out : id_storage;
+    err = tpb_record_write_task(hdl, exit_code, id_ptr);
+    if (err == TPBE_SUCCESS) {
+        char task_hex[41];
+
+        tpb_raf_id_to_hex(id_ptr, task_hex);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "Task recorded. Task ID = %s\n", task_hex);
+    }
+    return err;
 }
 
 /* meta_magic(8) + metasize(8) + datasize(8) + task_record_id(20) */

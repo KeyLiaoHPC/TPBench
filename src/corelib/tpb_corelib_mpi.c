@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "tpb-public.h"
+#include "tpb-autorecord.h"
 #include "tpb_corelib_state.h"
 
 /* Local Function Prototypes */
@@ -185,7 +186,7 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     memset(my_task_id, 0, sizeof(my_task_id));
     memset(capsule_id, 0, sizeof(capsule_id));
 
-    werr = tpb_k_write_task(hdl, exit_code, my_task_id);
+    werr = tpb_record_write_task(hdl, exit_code, my_task_id);
 
     merr = _sf_mpi_fail_if(MPI_Barrier(comm));
     if (merr != TPBE_SUCCESS) {
@@ -283,6 +284,16 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     }
     if (tcap_id_out != NULL) {
         memcpy(tcap_id_out, capsule_id, (size_t)20);
+    }
+
+    if (final_err == TPBE_SUCCESS && rank == 0) {
+        char cap_hex[41];
+
+        tpb_raf_id_to_hex(capsule_id, cap_hex);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "MPI Task recorded. Task capsule ID = %s, included %d "
+                   "tasks\n",
+                   cap_hex, nprocs);
     }
 
     return final_err;
