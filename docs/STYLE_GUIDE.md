@@ -5,19 +5,31 @@ Follow these guidelines for consistency across all `tpb-*` source files.
 
 ## 1. Function Naming Conventions
 
-### Public Functions
-- Use the `tpb_` prefix for all public functions exposed in header files.
-- Example: `tpb_parse_args()`, `tpb_register_kernel()`
+### 1.1. Public Functions
+**Public APIs for TPBench core functionality**
+- Functions in `src/include/*` headers and implemented in `src/corelib/*`: use `tpb_` prefix. E.g., `tpb_printf()`, `tpb_register_kernel()`
+- Functions in `src/corelib/<module>/`: use `tpb_<module>_<verb>_<noun>` pattern. Omit the filename; use module name. E.g., `tpb_raf_read_record()` in `src/corelib/rafdb/tpb-raf-record.c`, not `tpb_record_read_record()`.
 
-### Static (Local) Functions
-- Use `<verb>_<noun>` naming pattern without the `tpb_` prefix.
-- Example: `init_cliout()`, `format_sigfig()`, `check_dtype_support()`
+**Public APIs for the kernel-specific behaviors**
+- For normal single kernel: `tpb_k_<do>_<something>`. E.g. `tpb_k_write_task()`.
+- Kernels with special backends (e.g., MPI, OpenMP) require special wrappers beyond single-core APIs. Use `tpb_<prefix>k_<do>_<something>` where `<prefix>` identifies the backend. For example: `tpb_mpik_write_task()` handles MPI-based multi-core task and capsule record writing.
 
-## 2. Function Declarations
+### 1.2. Module Internal Functions
+- Single-file static functions: prefix with `_sf_`. Use minimal names for simple ops, descriptive names otherwise. E.g., `_sf_min()`, `_sf_hex_to_bin()`, `_sf_search_headers()`.
+- Cross-file module functions: prefix with `_tpb_`. Use verb-first pattern `_tpb_<verb>_<noun>[_<detail>]`. E.g., `_tpb_get_workspace_path()`, `_tpb_init_corelib()`.
 
-### Implementation Files (*.c)
-- Declare prototypes of all local static functions at the beginning of the file.
-- Group them under a "Local Function Prototypes" section comment.
+### 1.3. Polymorphism
+- `<function>_<impl_tag>` for polymorphsm. E.g. `tpb_write_u64`, `tpb_write_i64`.
+
+## 2. Function
+
+### 2.1. Declaration
+- Declare intra-file interfaces in header Files (*.h)
+- Declare prototypes of all local static functions at the beginning of the file, in the alphabet ascending order.
+- If exceeds the line limit, use one-line-per-parameter style and align to the first parameter.
+- No space after the function's name.
+
+**Examples**
 
 ```c
 /* Local Function Prototypes */
@@ -25,84 +37,108 @@ static void init_cliout(void);
 static int format_sigfig(double val, int sigfig, char *buf, size_t len);
 ```
 
-### Header Files (*.h)
-- Declare all public function prototypes with Doxygen documentation.
-- Use `/** @brief */` style for public API documentation.
+### 2.2. Function Implementation
+- Put the function name on its own line, after the return type.
+- If parameters exceed line limit, wrap with one parameter per line, aligned to the first.
 
 ```c
+<return_type>
+<function_name>(<parameters>)
+{
+    <body>
+}
+```
+
+### 2.3. Function Documentation
+**General Rules**
+- All public functions require Doxygen documentation.
+- Document structure: 1) What it does; 2) Inputs; 3) Outputs/Effects; 4) Edge cases (if applicable).
+
+**Public APIs (in headers)**
+- Place Doxygen comments before the prototype.
+- Include `@brief`, `@param`, `@return` (if applicable).
+- Before implementation in .c files, repeat the `@brief` line only.
+
+Example in header:
+```c
 /**
- * @brief Parse command line arguments.
+ * @brief Parse command-line arguments into internal structures.
  * @param argc Argument count
  * @param argv Argument vector
- * @return 0 on success, error code on failure
+ * @return 0 on success, negative error code on failure
  */
 int tpb_parse_args(int argc, char **argv);
 ```
 
-## 3. Function Documentation
+Example in .c file:
+```c
+/**
+ * @brief Parse command-line arguments into internal structures.
+ */
+int
+tpb_parse_args(int argc, char **argv)
+{
+    if (!argc || !argv) {
+        return -TPB_EINVAL;
+    }
+    /* ... */
+}
+```
 
-### Location
-- Place detailed comments **before** the function prototype declaration.
-- Keep implementation files clean with minimal inline documentation.
-
-### Format for Static Functions
-Use plain `/* */` block comments (not Doxygen):
+**Static Functions**
+- Use plain `/* */` block comments before the prototype.
+- No repetition needed before implementation.
 
 ```c
 /*
  * Initialize the CLI output formatter.
- * Sets up default formatting options for console output.
+ * Sets up default formatting options from CLI and environment.
  */
 static void init_cliout(void);
 ```
 
-### Format for Public Functions (in headers)
-
-Per-item execute following rules:
-
-1. Use Doxygen-compatible comments, param lists and return 
-2. clearly describe the behavior of the function: Run/Register/Set/Convert/Parse/Format/Clean ... on what kinds/names/types/... of structures/files/objects/... for what reasons. Input what, output what a return what.
-
+### 2.4. Function Calls
+**Basic format:**
 ```c
-/**
- * @brief Register a new benchmark kernel and set its name/note/function pointers, appending to the global kernel_all lists. Input the char* name and functions, return the error code.
- * @param name Kernel name (max 32 characters)
- * @param funcs Pointer to kernel function table
- * @return 0 on success, negative error code on failure
- */
-int tpb_register_kernel(const char *name, tpb_k_func *funcs);
+result = function_name(arg1, arg2, arg3);
 ```
 
-## 4. Struct Member Documentation
+**Wrapped format** (exceeds 85 columns):
+```c
+result = long_function_name(first_argument,
+                            second_argument,
+                            third_argument,
+                            fourth_argument);
+```
+
+## 3. Struct Member Documentation
 
 ### Format
-For struct members, use Doxygen's inline member documentation style with `/**<` placed after the member:
+Use Doxygen's `/**<` inline style after each member:
 
 ```c
 struct tpb_timer {
-    uint64_t start;     /**< Start time value */
-    uint64_t end;       /**< End time value */
-    double resolution;  /**< Timer resolution in seconds */
-    int type;           /**< Timer type identifier */
+    uint64_t start;     /**< Start timestamp */
+    uint64_t end;       /**< End timestamp */
+    double resolution;  /**< Resolution in seconds */
+    int type;           /**< Timer type ID */
 };
 ```
 
 ### Guidelines
-- Place the `/**<` comment immediately after the member declaration
-- Use a single space between the member and the comment
-- Provide a brief but descriptive explanation of the member's purpose
-- Align comments when documenting multiple members in a struct
+- Place `/**<` comment immediately after the member
+- Provide brief, descriptive explanations
+- Align comments across members
 
 ```c
-/* Correct - aligned comments */
 struct example {
-    int count;      /**< Number of items */
-    char *name;     /**< Item name string */
-    double value;   /**< Numeric value */
+    int count;  /**< Item count */
+    char *name; /**< Item name */
+    double value;  /**< Numeric value */
 };
 ```
 
-## 5. Comment Styles
+## 4. Comment Styles
 
 ### Block Comments
 Use `/* */` for code block comments, even for single-line comments:
@@ -144,7 +180,7 @@ double cumulative_error;
 /* Section Header */
 ```
 
-## 6. Line Length
+## 5. Line Length
 
 ### General Rule
 Keep lines within 85 columns.
@@ -161,7 +197,7 @@ The following may exceed 85 columns:
 #define TPB_UNAME_FLOPS (((TPB_UNIT_T)0x0000002000000000) | TPB_UKIND_VOLPTIME)
 ```
 
-## 7. Alignment of Block Macros and Multi-line Comments
+## 6. Alignment of Block Macros and Multi-line Comments
 
 ### Rule
 Always align the start of key definitions of block macros and multi-line consecutive comments to the next tab stop after the longest column of the line block.
@@ -187,7 +223,7 @@ For consecutive multi-line comments, align the comment text to the next tab stop
 /* Configure callback handlers */
 ```
 
-## 8. File Headers
+## 7. File Headers
 
 ### Format
 Each file should have a minimal header with filename and description:
@@ -220,66 +256,10 @@ For header files (*.h) - include Doxygen tags:
 - Do NOT include author/date information
 - Do NOT include old comment history
 
-## 9. Function Implementations
 
-### Format
-```c
-<return_type>
-<function_name>(<parameters>)
-{
-    <body>
-}
-```
 
-### Example
-```c
-int
-tpb_register_kernel(const char *name, tpb_k_func *funcs)
-{
-    if (!name || !funcs) {
-        return -TPB_EINVAL;
-    }
-    /* ... */
-}
-```
 
-## 10. Function Calls
-
-### Basic Format
-```c
-result = function_name(arg1, arg2, arg3);
-```
-
-### Argument Wrapping
-When a function call exceeds column 85, wrap arguments and align to the first argument:
-
-```c
-result = long_function_name(first_argument, second_argument,
-                            third_argument, fourth_argument);
-```
-
-### Long Argument Names
-Only use one argument per line when each argument has a long name:
-
-```c
-result = configure_kernel(kernel_configuration_struct,
-                          memory_allocation_params,
-                          performance_measurement_options);
-```
-
-### Prohibited
-Do NOT use single-line braces without arguments:
-
-```c
-/* Wrong */
-function_name(
-);
-
-/* Correct */
-function_name();
-```
-
-## 11. Control Structures
+## 8. Control Structures
 
 ### Format
 Use space between keyword and parenthesis, space before opening brace:
@@ -305,7 +285,7 @@ while (condition) {
 - Closing brace on its own line
 - `else` on the same line as the closing brace
 
-## 12. Include Guards
+## 9. Include Guards
 
 All header files must have include guards:
 
@@ -318,13 +298,13 @@ All header files must have include guards:
 #endif /* TPB_FILENAME_H */
 ```
 
-## 13. Indentation
+## 10. Indentation
 
 - Use 4 spaces for indentation
 - Do NOT use tabs
 - Align continuation lines appropriately
 
-## 14. Section Comments
+## 11. Section Comments
 
 Use simple `/* Section Name */` comments to delineate code sections:
 
