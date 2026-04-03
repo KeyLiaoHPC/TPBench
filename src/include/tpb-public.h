@@ -836,6 +836,32 @@ int tpb_raf_record_write_tbatch(const char *workspace,
                                   uint64_t datasize);
 
 /**
+ * @brief Append a TaskRecordID to tbatch .tpbr header[0] (TPBLINK::TaskID).
+ * @param workspace   Workspace root
+ * @param tbatch_id   20-byte TBatchID
+ * @param task_id     TaskRecordID to append (20 bytes)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_append_tbatch(const char *workspace,
+                                 const unsigned char tbatch_id[20],
+                                 const unsigned char task_id[20]);
+
+/**
+ * @brief Patch duration, nkernel, and ntask in an existing tbatch .tpbr.
+ * @param workspace   Workspace root
+ * @param tbatch_id   20-byte TBatchID
+ * @param duration    Batch duration (ns)
+ * @param nkernel     Unique kernel count
+ * @param ntask       Task entry-point count
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_patch_tbatch_counters(const char *workspace,
+                                         const unsigned char tbatch_id[20],
+                                         uint64_t duration,
+                                         uint32_t nkernel,
+                                         uint32_t ntask);
+
+/**
  * @brief Read a tbatch .tpbr record file.
  * @param workspace Workspace root path
  * @param tbatch_id 20-byte TBatchID

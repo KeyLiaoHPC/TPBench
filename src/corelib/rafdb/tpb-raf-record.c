@@ -24,6 +24,19 @@
 #define TPB_RAF_TASK_FILE_HDR0_DIM0       2644
 #define TPB_RAF_TASK_CAPSULE_HDR_NAME     "TPBLINK::TaskID"
 
+/* TBatch .tpbr: fixed layout offsets from file start */
+#define TPB_RAF_TBATCH_FILE_OFF_DATASIZE   16
+#define TPB_RAF_TBATCH_FILE_OFF_DURATION   100
+#define TPB_RAF_TBATCH_FILE_OFF_NKERNEL    240
+#define TPB_RAF_TBATCH_FILE_OFF_NTASK      244
+#define TPB_RAF_TBATCH_FILE_OFF_NHEADER    256
+#define TPB_RAF_TBATCH_FILE_HDR0_BASE      388
+#define TPB_RAF_TBATCH_HDR_DATA_SIZE_OFF   8
+#define TPB_RAF_TBATCH_HDR_NAME_OFF        32
+#define TPB_RAF_TBATCH_HDR_DIM0_OFF        2336
+#define TPB_RAF_TBATCH_HDR_TASK_NAME      "TPBLINK::TaskID"
+#define TPB_RAF_TBATCH_HDR_KERNEL_NAME    "TPBLINK::KernelID"
+
 /* Local Function Prototypes */
 static void _sf_build_record_path(const char *workspace,
                                   uint8_t domain,
@@ -40,6 +53,7 @@ static int _sf_write_magic_and_data(FILE *fp, uint8_t domain,
                                     uint64_t datasize);
 static int _sf_write_u32(FILE *fp, uint32_t v);
 static int _sf_write_u64(FILE *fp, uint64_t v);
+static long _sf_hdr_serialized_len_at(FILE *fp, long hdr_base);
 
 static int
 _sf_write_u64(FILE *fp, uint64_t v)
@@ -63,6 +77,24 @@ static int
 _sf_read_u32(FILE *fp, uint32_t *v)
 {
     return (fread(v, sizeof(*v), 1, fp) == 1) ? 0 : -1;
+}
+
+/*
+ * Serialized header size on disk: block_size..uattr (32) + name + note +
+ * dimsizes + dimnames (72 bytes per ndim).
+ */
+static long
+_sf_hdr_serialized_len_at(FILE *fp, long hdr_base)
+{
+    uint32_t ndim;
+
+    if (fseek(fp, hdr_base + 4L, SEEK_SET) != 0) {
+        return -1;
+    }
+    if (_sf_read_u32(fp, &ndim) != 0) {
+        return -1;
+    }
+    return 32L + 256L + 2048L + (long)ndim * 8L + (long)ndim * 64L;
 }
 
 static void
@@ -335,6 +367,337 @@ tpb_raf_record_write_tbatch(const char *workspace,
     return TPBE_SUCCESS;
 
 fail:
+    fclose(fp);
+    return TPBE_FILE_IO_FAIL;
+}
+
+/**
+ * @brief Patch duration, nkernel, and ntask in an existing tbatch .tpbr.
+ */
+int
+tpb_raf_record_patch_tbatch_counters(const char *workspace,
+                                     const unsigned char tbatch_id[20],
+                                     uint64_t duration,
+                                     uint32_t nkernel,
+                                     uint32_t ntask)
+{
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    FILE *fp;
+    struct flock fl;
+    int fd;
+
+    if (!workspace || !tbatch_id) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
+                      tbatch_id, fpath, sizeof(fpath));
+
+    fp = fopen(fpath, "r+b");
+    if (!fp) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    (void)setvbuf(fp, NULL, _IONBF, 0);
+    fd = fileno(fp);
+    if (fd < 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type = F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 0;
+    if (fcntl(fd, F_SETLKW, &fl) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
+        goto fail_unlock;
+    }
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_START)) {
+        goto fail_unlock;
+    }
+
+    if (fseek(fp, TPB_RAF_TBATCH_FILE_OFF_DURATION, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u64(fp, duration) != 0) {
+        goto fail_unlock;
+    }
+    if (fseek(fp, TPB_RAF_TBATCH_FILE_OFF_NKERNEL, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u32(fp, nkernel) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u32(fp, ntask) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fflush(fp) != 0) {
+        goto fail_unlock;
+    }
+
+    fl.l_type = F_UNLCK;
+    (void)fcntl(fd, F_SETLK, &fl);
+    fclose(fp);
+    return TPBE_SUCCESS;
+
+fail_unlock:
+    fl.l_type = F_UNLCK;
+    (void)fcntl(fd, F_SETLK, &fl);
+    fclose(fp);
+    return TPBE_FILE_IO_FAIL;
+}
+
+/**
+ * @brief Append a TaskRecordID to tbatch .tpbr header[0] (TPBLINK::TaskID).
+ */
+int
+tpb_raf_record_append_tbatch(const char *workspace,
+                             const unsigned char tbatch_id[20],
+                             const unsigned char task_id[20])
+{
+    char fpath[TPB_RAF_PATH_MAX];
+    unsigned char magic[TPB_RAF_MAGIC_LEN];
+    unsigned char namechk[256];
+    FILE *fp;
+    uint64_t metasize, datasize;
+    uint32_t nheader;
+    uint64_t hdr0_ds;
+    uint64_t hdr1_ds;
+    struct flock fl;
+    int fd;
+    long split_off;
+    long hdr0_base;
+    long hdr1_base;
+    long len0;
+    long len1;
+    long end_magic_off;
+    uint64_t new_total_ds;
+    uint64_t new_hdr0_ds;
+    uint64_t new_dim0;
+
+    if (!workspace || !tbatch_id || !task_id) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    _sf_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
+                      tbatch_id, fpath, sizeof(fpath));
+
+    fp = fopen(fpath, "r+b");
+    if (!fp) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    (void)setvbuf(fp, NULL, _IONBF, 0);
+    fd = fileno(fp);
+    if (fd < 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    memset(&fl, 0, sizeof(fl));
+    fl.l_type = F_WRLCK;
+    fl.l_whence = SEEK_SET;
+    fl.l_start = 0;
+    fl.l_len = 0;
+    if (fcntl(fd, F_SETLKW, &fl) != 0) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
+        != TPB_RAF_MAGIC_LEN) {
+        goto fail_unlock;
+    }
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_START)) {
+        goto fail_unlock;
+    }
+
+    if (_sf_read_u64(fp, &metasize) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_read_u64(fp, &datasize) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fseek(fp, TPB_RAF_TBATCH_FILE_OFF_NHEADER, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_read_u32(fp, &nheader) != 0) {
+        goto fail_unlock;
+    }
+    if (nheader != 2) {
+        goto fail_unlock;
+    }
+
+    hdr0_base = (long)TPB_RAF_TBATCH_FILE_HDR0_BASE;
+    if (fseek(fp, hdr0_base + TPB_RAF_TBATCH_HDR_NAME_OFF, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (fread(namechk, 1, sizeof(namechk), fp) != sizeof(namechk)) {
+        goto fail_unlock;
+    }
+    {
+        size_t hn = strlen(TPB_RAF_TBATCH_HDR_TASK_NAME);
+
+        if (strncmp((char *)namechk, TPB_RAF_TBATCH_HDR_TASK_NAME, hn) != 0
+            || (hn < sizeof(namechk) && namechk[hn] != '\0')) {
+            goto fail_unlock;
+        }
+    }
+
+    len0 = _sf_hdr_serialized_len_at(fp, hdr0_base);
+    if (len0 < 0) {
+        goto fail_unlock;
+    }
+
+    hdr1_base = hdr0_base + len0;
+    if (fseek(fp, hdr1_base + TPB_RAF_TBATCH_HDR_NAME_OFF, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (fread(namechk, 1, sizeof(namechk), fp) != sizeof(namechk)) {
+        goto fail_unlock;
+    }
+    {
+        size_t hn = strlen(TPB_RAF_TBATCH_HDR_KERNEL_NAME);
+
+        if (strncmp((char *)namechk, TPB_RAF_TBATCH_HDR_KERNEL_NAME, hn) != 0
+            || (hn < sizeof(namechk) && namechk[hn] != '\0')) {
+            goto fail_unlock;
+        }
+    }
+
+    len1 = _sf_hdr_serialized_len_at(fp, hdr1_base);
+    if (len1 < 0) {
+        goto fail_unlock;
+    }
+
+    split_off = hdr1_base + len1;
+    (void)metasize;
+
+    if (fseek(fp, hdr0_base + TPB_RAF_TBATCH_HDR_DATA_SIZE_OFF, SEEK_SET)
+        != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_read_u64(fp, &hdr0_ds) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fseek(fp, hdr1_base + TPB_RAF_TBATCH_HDR_DATA_SIZE_OFF, SEEK_SET)
+        != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_read_u64(fp, &hdr1_ds) != 0) {
+        goto fail_unlock;
+    }
+
+    if (hdr0_ds % 20U != 0U) {
+        goto fail_unlock;
+    }
+    if (hdr0_ds + hdr1_ds != datasize) {
+        goto fail_unlock;
+    }
+
+    end_magic_off = split_off + 8L + (long)datasize;
+
+    if (fseek(fp, end_magic_off, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
+        goto fail_unlock;
+    }
+    if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
+                                  TPB_RAF_DOM_TBATCH,
+                                  TPB_RAF_POS_END)) {
+        goto fail_unlock;
+    }
+
+    new_total_ds = datasize + 20U;
+    new_hdr0_ds = hdr0_ds + 20U;
+    new_dim0 = new_hdr0_ds / 20U;
+
+    /*
+     * Insert 20 bytes after header[0] data and before header[1] data.
+     * When hdr1_ds == 0, insert_off equals end_magic_off (capsule-style).
+     */
+    {
+        long insert_off;
+        size_t tail_len;
+        unsigned char *tail;
+
+        insert_off = split_off + 8L + (long)hdr0_ds;
+        tail_len = (size_t)hdr1_ds + (size_t)TPB_RAF_MAGIC_LEN;
+        tail = (unsigned char *)malloc(tail_len);
+        if (tail == NULL) {
+            goto fail_unlock;
+        }
+        if (fseek(fp, insert_off, SEEK_SET) != 0) {
+            free(tail);
+            goto fail_unlock;
+        }
+        if (fread(tail, 1, tail_len, fp) != tail_len) {
+            free(tail);
+            goto fail_unlock;
+        }
+        if (fseek(fp, insert_off, SEEK_SET) != 0) {
+            free(tail);
+            goto fail_unlock;
+        }
+        if (fwrite(task_id, 1, 20, fp) != 20) {
+            free(tail);
+            goto fail_unlock;
+        }
+        if (fwrite(tail, 1, tail_len, fp) != tail_len) {
+            free(tail);
+            goto fail_unlock;
+        }
+        free(tail);
+    }
+
+    if (fseek(fp, TPB_RAF_TBATCH_FILE_OFF_DATASIZE, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u64(fp, new_total_ds) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fseek(fp, hdr0_base + TPB_RAF_TBATCH_HDR_DATA_SIZE_OFF, SEEK_SET)
+        != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u64(fp, new_hdr0_ds) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fseek(fp, hdr0_base + TPB_RAF_TBATCH_HDR_DIM0_OFF, SEEK_SET) != 0) {
+        goto fail_unlock;
+    }
+    if (_sf_write_u64(fp, new_dim0) != 0) {
+        goto fail_unlock;
+    }
+
+    if (fflush(fp) != 0) {
+        goto fail_unlock;
+    }
+
+    fl.l_type = F_UNLCK;
+    (void)fcntl(fd, F_SETLK, &fl);
+    fclose(fp);
+    return TPBE_SUCCESS;
+
+fail_unlock:
+    fl.l_type = F_UNLCK;
+    (void)fcntl(fd, F_SETLK, &fl);
     fclose(fp);
     return TPBE_FILE_IO_FAIL;
 }

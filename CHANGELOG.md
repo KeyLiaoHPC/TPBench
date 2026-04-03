@@ -12,8 +12,9 @@
 
 ### Corelib
 
+- **Breaking:** TBatch `.tpbr` auto-record layout: two headers `TPBLINK::TaskID` (append 20-byte TaskRecordIDs) and `TPBLINK::KernelID` (empty data for now), replacing `KernelRecordIDs` / `TaskRecordIDs` / `ScoreRecordIDs`. Skeleton `.tpbr` is written at `tpb_record_begin_batch`; `tpb_record_end_batch` runs an internal scan of `task.tpbe` (rows with `utc_bits` not before batch start, matching `tbatch_id`, `derive_to` all-zero) and appends each via `tpb_raf_record_append_tbatch`, then patches `duration` / `ntask` / `nkernel` with `tpb_raf_record_patch_tbatch_counters`.
 - **Breaking:** RAFDB lineage fields renamed: `dup_from` → `inherit_from`, `dup_to` → `derive_to` in `tbatch_attr_t` / `tbatch_entry_t` / `kernel_attr_t` / `kernel_entry_t` / `task_attr_t` / `task_entry_t` and in CLI dump key names. `tpb_k_task_set_derive_to(task_id, derive_to_id)` replaces `tpb_k_task_set_dup_to`. On-disk layout byte positions unchanged; existing workspaces are not read as compatible.
-- **Breaking:** Auto-record tbatch finalization sets `ntask` and tbatch `TaskRecordIDs` header from task `.tpbe` rows that match the batch **and** have `derive_to` all-zero (one logical task per MPI invocation when a capsule is used). Unique-kernel counting (`nkernel`) for the batch uses the same entry-point filter so the capsule row is not skipped as a duplicate of per-rank rows.
+- Auto-record tbatch finalization sets `ntask` and fills `TPBLINK::TaskID` from task `.tpbe` rows that match the batch (including `utc_bits` not before batch start), with `derive_to` all-zero (one logical task per MPI invocation when a capsule is used). Unique-kernel counting (`nkernel`) uses the same entry-point filter so the capsule row is not skipped as a duplicate of per-rank rows.
 - `tpb_mpik_corelib_init(void *mpi_comm, const char *)` is always declared in `tpb-public.h` (opaque communicator, e.g. `(void *)MPI_COMM_WORLD`). With MPI: coordinated init after `MPI_Init` as before; stores the communicator for `tpb_mpik_write_task`. Without MPI: `tpb_corelib_mpi_stub.c` returns `TPBE_ILLEGAL_CALL`. New caller types `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK` / `TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK`. `tpb_corelib_init` / `tpb_k_corelib_init` print `TPBench is called by tpbcli|kernel|MPI kernel` after version and workspace lines. When the real MPI object is used, `libtpbench` links `MPI::MPI_C` privately.
 - `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` — MPI-coordinated `tpb_k_write_task` + capsule: rank 0 creates capsule and `MPI_Bcast`s ID; each rank patches `derive_to` via `tpb_k_task_set_derive_to`; `MPI_Gather` + rank-0-only `tpb_k_append_capsule_task` for ranks 1..n-1. Stub returns `TPBE_ILLEGAL_CALL` without MPI.
 - `tpb_k_task_set_derive_to(task_id, derive_to_id)` — seek-and-patch `derive_to` in task `.tpbr` (validated magic + task ID) and matching `task.tpbe` row (`flock` on entry file).
@@ -23,6 +24,8 @@
 - **At 20260402**: Refactor APIs according to the update `STYLE_GUIDE.md` 
 
 #### RAFDB
+
+- **Public API:** `tpb_raf_record_append_tbatch`, `tpb_raf_record_patch_tbatch_counters` — append TaskRecordID to tbatch `.tpbr` under lock; patch duration and counts after scan.
 
 Design and implement task capsule record to enclose mp/mt task records instead of unstable/dangerous merging. Task capsule record (multi-rank / multi-process grouping)
 
