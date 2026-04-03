@@ -156,8 +156,8 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     int werr;
     int cap_err;
     int merr;
-    int dup_err;
-    int max_dup_err;
+    int derive_err;
+    int max_derive_err;
     unsigned char *all_ids;
     int rank0_alloc_ok;
     int min_alloc_ok;
@@ -214,14 +214,15 @@ tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     final_err = cap_err;
 
     if (cap_err == TPBE_SUCCESS) {
-        dup_err = tpb_k_task_set_dup_to(my_task_id, capsule_id);
-        merr = _sf_mpi_fail_if(MPI_Allreduce(&dup_err, &max_dup_err, 1, MPI_INT,
+        derive_err = tpb_k_task_set_derive_to(my_task_id, capsule_id);
+        merr = _sf_mpi_fail_if(MPI_Allreduce(&derive_err, &max_derive_err, 1,
+            MPI_INT,
             MPI_MAX, comm));
         if (merr != TPBE_SUCCESS) {
             return merr;
         }
-        if (max_dup_err != TPBE_SUCCESS) {
-            final_err = max_dup_err;
+        if (max_derive_err != TPBE_SUCCESS) {
+            final_err = max_derive_err;
         }
     }
 

@@ -233,12 +233,13 @@ _sf_follow_kernel_dup_chain(const char *workspace,
             return TPBE_SUCCESS;
         }
 
-        if (_sf_is_zero_id(attr.dup_to) || memcmp(attr.dup_to, cur_id, 20) == 0) {
+        if (_sf_is_zero_id(attr.derive_to) ||
+            memcmp(attr.derive_to, cur_id, 20) == 0) {
             memcpy(final_id, cur_id, 20);
             return TPBE_SUCCESS;
         }
 
-        memcpy(cur_id, attr.dup_to, 20);
+        memcpy(cur_id, attr.derive_to, 20);
     }
 
     memcpy(final_id, cur_id, 20);

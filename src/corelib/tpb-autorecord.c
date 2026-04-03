@@ -55,6 +55,14 @@ static void _sf_get_host_and_user(char *hostname, size_t hlen, char *username,
                                   size_t ulen);
 /* Parse 40-char hex into 20-byte id */
 static int _sf_hex_to_id(const char *hex, unsigned char id[20]);
+/* True if 20-byte id is all zero */
+static int _sf_is_zero_id20(const unsigned char id[20]);
+/* Scan task.tpbe and append entry-point TaskRecordIDs to tbatch .tpbr */
+static int _sf_scan_batch(const char *workspace,
+                          const unsigned char tbatch_id[20],
+                          tpb_dtbits_t batch_utc_bits,
+                          int *ntask_out,
+                          int *nkernel_out);
 
 /* Internal helpers */
 
@@ -119,6 +127,87 @@ _sf_hex_to_id(const char *hex, unsigned char id[20])
 }
 
 static int
+_sf_is_zero_id20(const unsigned char id[20])
+{
+    static const unsigned char z[20] = {0};
+
+    return memcmp(id, z, 20) == 0;
+}
+
+static int
+_sf_scan_batch(const char *workspace,
+               const unsigned char tbatch_id[20],
+               tpb_dtbits_t batch_utc_bits,
+               int *ntask_out,
+               int *nkernel_out)
+{
+    task_entry_t *task_entries;
+    int task_count;
+    int err;
+    int matched;
+    int nkernel;
+    int i;
+    int j;
+
+    if (!workspace || !tbatch_id || !ntask_out || !nkernel_out) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    *ntask_out = 0;
+    *nkernel_out = 0;
+    task_entries = NULL;
+    task_count = 0;
+    err = tpb_raf_entry_list_task(workspace, &task_entries, &task_count);
+    if (err != 0) {
+        return err;
+    }
+
+    matched = 0;
+    nkernel = 0;
+    for (i = 0; i < task_count; i++) {
+        if (task_entries[i].utc_bits < batch_utc_bits) {
+            continue;
+        }
+        if (memcmp(task_entries[i].tbatch_id, tbatch_id, 20) != 0) {
+            continue;
+        }
+        if (!_sf_is_zero_id20(task_entries[i].derive_to)) {
+            continue;
+        }
+        err = tpb_raf_record_append_tbatch(workspace, tbatch_id,
+                                           task_entries[i].task_record_id);
+        if (err != 0) {
+            free(task_entries);
+            return err;
+        }
+        matched++;
+        for (j = 0; j < i; j++) {
+            if (task_entries[j].utc_bits < batch_utc_bits) {
+                continue;
+            }
+            if (memcmp(task_entries[j].tbatch_id, tbatch_id, 20) != 0) {
+                continue;
+            }
+            if (!_sf_is_zero_id20(task_entries[j].derive_to)) {
+                continue;
+            }
+            if (memcmp(task_entries[j].kernel_id,
+                       task_entries[i].kernel_id, 20) == 0) {
+                break;
+            }
+        }
+        if (j == i) {
+            nkernel++;
+        }
+    }
+
+    free(task_entries);
+    *ntask_out = matched;
+    *nkernel_out = nkernel;
+    return 0;
+}
+
+static int
 _sf_capsule_shm_build_name(const unsigned char kernel_id[20],
                          uint32_t handle_index,
                          char *out, size_t outlen)
@@ -166,6 +255,50 @@ tpb_record_begin_batch(uint32_t batch_type)
     if (err) return err;
 
     tpb_raf_id_to_hex(s_tbatch_id, s_tbatch_id_hex);
+
+    {
+        tbatch_attr_t skel;
+        tpb_meta_header_t h2[2];
+
+        memset(&skel, 0, sizeof(skel));
+        memcpy(skel.tbatch_id, s_tbatch_id, 20);
+        skel.utc_bits = s_batch_utc_bits;
+        skel.btime = s_batch_btime_ns;
+        skel.duration = 0;
+        snprintf(skel.hostname, sizeof(skel.hostname), "%s", s_batch_hostname);
+        snprintf(skel.username, sizeof(skel.username), "%s", s_batch_username);
+        skel.front_pid = s_batch_pid;
+        skel.nkernel = 0;
+        skel.ntask = 0;
+        skel.nscore = 0;
+        skel.batch_type = batch_type;
+        skel.nheader = 2;
+        memset(h2, 0, sizeof(h2));
+        h2[0].block_size = TPB_RAF_HDR_FIXED_SIZE;
+        h2[0].ndim = 1;
+        h2[0].dimsizes[0] = 0;
+        h2[0].data_size = 0;
+        h2[0].type_bits =
+            (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
+        snprintf(h2[0].name, sizeof(h2[0].name), "%s", "TPBLINK::TaskID");
+        h2[1].block_size = TPB_RAF_HDR_FIXED_SIZE;
+        h2[1].ndim = 1;
+        h2[1].dimsizes[0] = 0;
+        h2[1].data_size = 0;
+        h2[1].type_bits =
+            (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
+        snprintf(h2[1].name, sizeof(h2[1].name), "%s", "TPBLINK::KernelID");
+        skel.headers = h2;
+        err = tpb_raf_record_write_tbatch(s_workspace, &skel, NULL, 0);
+        if (err) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Auto-record: failed to write skeleton tbatch record "
+                       "(%d)\n",
+                       err);
+            return err;
+        }
+    }
+
     s_batch_active = 1;
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
@@ -191,133 +324,65 @@ tpb_record_end_batch(int ntask)
     int err;
     tpb_dtbits_t end_utc;
     uint64_t end_btime_ns;
+    uint64_t duration;
+    int matched;
+    int nkernel;
+
+    (void)ntask;
 
     if (!s_batch_active) return 0;
 
     err = _sf_get_current_timestamps(&end_utc, &end_btime_ns);
     if (err) return err;
+    (void)end_utc;
 
-    uint64_t duration = 0;
-    if (end_btime_ns > s_batch_btime_ns)
+    duration = 0;
+    if (end_btime_ns > s_batch_btime_ns) {
         duration = end_btime_ns - s_batch_btime_ns;
-
-    /* Read task entries to collect TaskRecordIDs belonging to this batch */
-    task_entry_t *task_entries = NULL;
-    int task_count = 0;
-    err = tpb_raf_entry_list_task(s_workspace, &task_entries, &task_count);
-
-    int matched = 0;
-    int nkernel = 0;
-    unsigned char *task_id_list = NULL;
-
-    if (err == 0 && task_count > 0 && task_entries != NULL) {
-        task_id_list = (unsigned char *)malloc(20 * task_count);
-        if (task_id_list) {
-            for (int i = 0; i < task_count; i++) {
-                if (memcmp(task_entries[i].tbatch_id, s_tbatch_id, 20) == 0) {
-                    int seen = 0;
-
-                    memcpy(task_id_list + matched * 20,
-                           task_entries[i].task_record_id, 20);
-                    for (int j = 0; j < i; j++) {
-                        if (memcmp(task_entries[j].tbatch_id, s_tbatch_id,
-                                   20) == 0 &&
-                            memcmp(task_entries[j].kernel_id,
-                                   task_entries[i].kernel_id, 20) == 0) {
-                            seen = 1;
-                            break;
-                        }
-                    }
-                    if (!seen) {
-                        nkernel++;
-                    }
-                    matched++;
-                }
-            }
-        }
-        free(task_entries);
     }
 
-    /* Build tbatch attributes */
-    tbatch_attr_t attr;
-    memset(&attr, 0, sizeof(attr));
-    memcpy(attr.tbatch_id, s_tbatch_id, 20);
-    /* dup_to and dup_from stay zero */
-    attr.utc_bits = s_batch_utc_bits;
-    attr.btime = s_batch_btime_ns;
-    attr.duration = duration;
-    snprintf(attr.hostname, sizeof(attr.hostname), "%s", s_batch_hostname);
-    snprintf(attr.username, sizeof(attr.username), "%s", s_batch_username);
-    attr.front_pid = s_batch_pid;
-    attr.nkernel = (uint32_t)nkernel;
-    attr.ntask = (uint32_t)matched;
-    attr.nscore = 0;
-    attr.batch_type = s_batch_type;
-
-    /* Build 3 fixed headers */
-    attr.nheader = 3;
-    tpb_meta_header_t headers[3];
-    memset(headers, 0, sizeof(headers));
-
-    /* header[0]: KernelRecordIDs (empty) */
-    headers[0].block_size = TPB_RAF_HDR_FIXED_SIZE;
-    headers[0].ndim = 1;
-    headers[0].dimsizes[0] = 0;
-    headers[0].data_size = 0;
-    headers[0].type_bits = (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-    snprintf(headers[0].name, sizeof(headers[0].name), "KernelRecordIDs");
-
-    /* header[1]: TaskRecordIDs */
-    headers[1].block_size = TPB_RAF_HDR_FIXED_SIZE;
-    headers[1].ndim = 1;
-    headers[1].dimsizes[0] = (uint64_t)matched;
-    headers[1].data_size = (uint64_t)(matched * 20);
-    headers[1].type_bits = (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-    snprintf(headers[1].name, sizeof(headers[1].name), "TaskRecordIDs");
-
-    /* header[2]: ScoreRecordIDs (empty) */
-    headers[2].block_size = TPB_RAF_HDR_FIXED_SIZE;
-    headers[2].ndim = 1;
-    headers[2].dimsizes[0] = 0;
-    headers[2].data_size = 0;
-    headers[2].type_bits = (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-    snprintf(headers[2].name, sizeof(headers[2].name), "ScoreRecordIDs");
-
-    attr.headers = headers;
-
-    uint64_t datasize = (uint64_t)(matched * 20);
-    err = tpb_raf_record_write_tbatch(s_workspace, &attr,
-                                         task_id_list, datasize);
-    if (err) {
+    err = _sf_scan_batch(s_workspace, s_tbatch_id, s_batch_utc_bits,
+                         &matched, &nkernel);
+    if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "Auto-record: failed to write tbatch record (%d)\n", err);
-        free(task_id_list);
+                   "Auto-record: tbatch scan failed (%d)\n", err);
+        s_batch_active = 0;
+        return err;
+    }
+
+    err = tpb_raf_record_patch_tbatch_counters(s_workspace, s_tbatch_id,
+            duration, (uint32_t)nkernel, (uint32_t)matched);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Auto-record: failed to patch tbatch record (%d)\n", err);
         s_batch_active = 0;
         return err;
     }
 
     /* Write tbatch entry */
-    tbatch_entry_t entry;
-    memset(&entry, 0, sizeof(entry));
-    memcpy(entry.tbatch_id, s_tbatch_id, 20);
-    entry.start_utc_bits = s_batch_utc_bits;
-    entry.duration = duration;
-    snprintf(entry.hostname, sizeof(entry.hostname), "%s", s_batch_hostname);
-    entry.nkernel = (uint32_t)nkernel;
-    entry.ntask = (uint32_t)matched;
-    entry.nscore = 0;
-    entry.batch_type = s_batch_type;
+    {
+        tbatch_entry_t entry;
 
-    err = tpb_raf_entry_append_tbatch(s_workspace, &entry);
-    if (err) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "Auto-record: failed to append tbatch entry (%d)\n", err);
+        memset(&entry, 0, sizeof(entry));
+        memcpy(entry.tbatch_id, s_tbatch_id, 20);
+        entry.start_utc_bits = s_batch_utc_bits;
+        entry.duration = duration;
+        snprintf(entry.hostname, sizeof(entry.hostname), "%s", s_batch_hostname);
+        entry.nkernel = (uint32_t)nkernel;
+        entry.ntask = (uint32_t)matched;
+        entry.nscore = 0;
+        entry.batch_type = s_batch_type;
+
+        err = tpb_raf_entry_append_tbatch(s_workspace, &entry);
+        if (err) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Auto-record: failed to append tbatch entry (%d)\n", err);
+        }
     }
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                "Auto-record: batch ended, %d tasks recorded.\n", matched);
 
-    free(task_id_list);
     s_batch_active = 0;
     return err;
 }
@@ -548,14 +613,14 @@ tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 }
 
 /* meta_magic(8) + metasize(8) + datasize(8) + task_record_id(20) */
-#define TPB_TASK_TPBR_DUP_TO_OFF 44L
+#define TPB_TASK_TPBR_DERIVE_TO_OFF 44L
 
 #define TPB_TASK_TPBE_ENTRY_STRIDE 232L
-#define TPB_TASK_TPBE_DUP_TO_OFF 104L
+#define TPB_TASK_TPBE_DERIVE_TO_OFF 104L
 
 int
-tpb_k_task_set_dup_to(const unsigned char task_id[20],
-                      const unsigned char dup_to_id[20])
+tpb_k_task_set_derive_to(const unsigned char task_id[20],
+                         const unsigned char derive_to_id[20])
 {
     char workspace[PATH_MAX];
     char fpath[TPB_RAF_PATH_MAX];
@@ -571,7 +636,7 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
     int fd;
     long offset;
 
-    if (task_id == NULL || dup_to_id == NULL) {
+    if (task_id == NULL || derive_to_id == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
@@ -612,11 +677,11 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fseek(fp, TPB_TASK_TPBR_DUP_TO_OFF, SEEK_SET) != 0) {
+    if (fseek(fp, TPB_TASK_TPBR_DERIVE_TO_OFF, SEEK_SET) != 0) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+    if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
@@ -665,13 +730,13 @@ tpb_k_task_set_dup_to(const unsigned char task_id[20],
     }
 
     offset = (long)TPB_RAF_MAGIC_LEN + (long)row * TPB_TASK_TPBE_ENTRY_STRIDE
-        + TPB_TASK_TPBE_DUP_TO_OFF;
+        + TPB_TASK_TPBE_DERIVE_TO_OFF;
     if (fseek(fp, offset, SEEK_SET) != 0) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
     }
-    if (fwrite(dup_to_id, 1, 20, fp) != 20) {
+    if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
         return TPBE_FILE_IO_FAIL;
@@ -741,7 +806,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     memset(&cap, 0, sizeof(cap));
     memcpy(cap.task_record_id, capsule_id_out, 20);
-    memset(cap.dup_from, 0xFF, 20);
+    memset(cap.inherit_from, 0xFF, 20);
     memcpy(cap.tbatch_id, src.tbatch_id, 20);
     memcpy(cap.kernel_id, src.kernel_id, 20);
     cap.utc_bits = src.utc_bits;
@@ -764,7 +829,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     memset(&entry, 0, sizeof(entry));
     memcpy(entry.task_record_id, capsule_id_out, 20);
-    memset(entry.dup_from, 0xFF, 20);
+    memset(entry.inherit_from, 0xFF, 20);
     memcpy(entry.tbatch_id, src.tbatch_id, 20);
     memcpy(entry.kernel_id, src.kernel_id, 20);
     entry.utc_bits = src.utc_bits;

@@ -273,7 +273,7 @@ typedef struct tpb_k_rthdl {
 /**
  * @brief MPI-coordinated task write and task capsule finalize for MPI kernels.
  *        Each rank writes its task via tpb_k_write_task; rank 0 creates the
- *        capsule and broadcasts its ID; each rank patches dup_to on its task
+ *        capsule and broadcasts its ID; each rank patches derive_to on its task
  *        record to the capsule; rank 0 gathers all TaskRecordIDs and appends
  *        ranks 1..n-1 to the capsule. Uses the communicator stored by
  *        tpb_mpik_corelib_init. Without MPI, returns TPBE_ILLEGAL_CALL.
@@ -281,7 +281,7 @@ typedef struct tpb_k_rthdl {
  * @param exit_code     Kernel exit code passed to tpb_k_write_task.
  * @param task_id_out   Optional 20-byte TaskRecordID output (same rank).
  * @param tcap_id_out   Optional 20-byte TaskCapsuleRecordID output.
- * @return TPBE_SUCCESS or TPBE_* from write/create/append/dup_to/MPI.
+ * @return TPBE_SUCCESS or TPBE_* from write/create/append/derive_to/MPI.
  */
 int tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                         unsigned char *task_id_out,
@@ -378,15 +378,15 @@ int tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                      unsigned char *task_id_out);
 
 /**
- * @brief Patch task record dup_to in task .tpbr and matching row in task.tpbe.
+ * @brief Patch task record derive_to in task .tpbr and matching row in task.tpbe.
  *        Seeks fixed offsets for current on-disk layout; does not rewrite full
  *        records. Uses flock on task.tpbe.
- * @param task_id    20-byte TaskRecordID whose files to update.
- * @param dup_to_id  20-byte target ID (e.g. TaskCapsuleRecordID).
+ * @param task_id       20-byte TaskRecordID whose files to update.
+ * @param derive_to_id  20-byte target ID (e.g. TaskCapsuleRecordID).
  * @return TPBE_SUCCESS, TPBE_NULLPTR_ARG, or TPBE_FILE_IO_FAIL.
  */
-int tpb_k_task_set_dup_to(const unsigned char task_id[20],
-                          const unsigned char dup_to_id[20]);
+int tpb_k_task_set_derive_to(const unsigned char task_id[20],
+                             const unsigned char derive_to_id[20]);
 
 /**
  * @brief Create a task capsule record (leader rank / primary thread).
@@ -577,8 +577,8 @@ typedef struct tpb_meta_header {
 /** @brief TBatch full attributes (.tpbr meta section) */
 typedef struct tbatch_attr {
     unsigned char tbatch_id[20];  /**< Primary Link ID (SHA-1) */
-    unsigned char dup_to[20];     /**< Duplicate tracking */
-    unsigned char dup_from[20];   /**< Lineage: source record ID, or zero */
+    unsigned char derive_to[20];     /**< Derivation target (alias/group ID), or zero */
+    unsigned char inherit_from[20];  /**< Lineage: source record ID, or zero */
     tpb_dtbits_t utc_bits;        /**< Batch start datetime */
     uint64_t btime;               /**< Boot time at batch start (ns) */
     uint64_t duration;            /**< Total batch duration (ns) */
@@ -596,7 +596,7 @@ typedef struct tbatch_attr {
 /** @brief TBatch entry (slim record in .tpbe) */
 typedef struct tbatch_entry {
     unsigned char tbatch_id[20];  /**< TBatchID */
-    unsigned char dup_from[20];   /**< Lineage: source TBatchID, or zero */
+    unsigned char inherit_from[20];   /**< Lineage: source TBatchID, or zero */
     tpb_dtbits_t start_utc_bits;  /**< Batch start datetime */
     uint64_t duration;            /**< Duration in nanoseconds */
     char hostname[64];            /**< Hostname */
@@ -610,8 +610,8 @@ typedef struct tbatch_entry {
 /** @brief Kernel full attributes (.tpbr meta section) */
 typedef struct kernel_attr {
     unsigned char kernel_id[20];  /**< KernelID (SHA-1) */
-    unsigned char dup_to[20];     /**< Duplicate tracking */
-    unsigned char dup_from[20];   /**< Lineage: source KernelID, or zero */
+    unsigned char derive_to[20];     /**< Derivation target, or zero */
+    unsigned char inherit_from[20];   /**< Lineage: source KernelID, or zero */
     unsigned char src_sha1[20];   /**< Source files SHA-1 */
     unsigned char so_sha1[20];    /**< Shared library SHA-1 */
     unsigned char bin_sha1[20];   /**< Executable SHA-1 */
@@ -629,7 +629,7 @@ typedef struct kernel_attr {
 /** @brief Kernel entry (slim record in .tpbe) */
 typedef struct kernel_entry {
     unsigned char kernel_id[20];  /**< KernelID */
-    unsigned char dup_from[20];   /**< Lineage: source KernelID, or zero */
+    unsigned char inherit_from[20];   /**< Lineage: source KernelID, or zero */
     char kernel_name[64];         /**< Kernel name */
     unsigned char so_sha1[20];    /**< Shared library SHA-1 */
     uint32_t kctrl;               /**< Kernel control bits */
@@ -641,8 +641,8 @@ typedef struct kernel_entry {
 /** @brief Task full attributes (.tpbr meta section) */
 typedef struct task_attr {
     unsigned char task_record_id[20]; /**< TaskRecordID (SHA-1) */
-    unsigned char dup_to[20];         /**< Duplicate tracking */
-    unsigned char dup_from[20];       /**< Lineage: source TaskRecordID, or zero */
+    unsigned char derive_to[20];         /**< Derivation target, or zero */
+    unsigned char inherit_from[20];       /**< Lineage: source TaskRecordID, or zero */
     unsigned char tbatch_id[20];      /**< Foreign key: TBatchID */
     unsigned char kernel_id[20];      /**< Foreign key: KernelID */
     tpb_dtbits_t utc_bits;            /**< Invocation datetime */
@@ -662,14 +662,14 @@ typedef struct task_attr {
 /** @brief Task entry (slim record in .tpbe) */
 typedef struct task_entry {
     unsigned char task_record_id[20]; /**< TaskRecordID */
-    unsigned char dup_from[20];       /**< Lineage: source TaskRecordID, or zero */
+    unsigned char inherit_from[20];       /**< Lineage: source TaskRecordID, or zero */
     unsigned char tbatch_id[20];      /**< TBatchID */
     unsigned char kernel_id[20];      /**< KernelID */
     tpb_dtbits_t utc_bits;            /**< Invocation datetime */
     uint64_t duration;                /**< Duration (ns) */
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
-    unsigned char dup_to[20];         /**< Merge target: merged TaskRecordID, or zero */
+    unsigned char derive_to[20];         /**< Merge target: merged TaskRecordID, or zero */
     unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20]; /**< Reserved */
 } task_entry_t;
 
@@ -836,6 +836,32 @@ int tpb_raf_record_write_tbatch(const char *workspace,
                                   uint64_t datasize);
 
 /**
+ * @brief Append a TaskRecordID to tbatch .tpbr header[0] (TPBLINK::TaskID).
+ * @param workspace   Workspace root
+ * @param tbatch_id   20-byte TBatchID
+ * @param task_id     TaskRecordID to append (20 bytes)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_append_tbatch(const char *workspace,
+                                 const unsigned char tbatch_id[20],
+                                 const unsigned char task_id[20]);
+
+/**
+ * @brief Patch duration, nkernel, and ntask in an existing tbatch .tpbr.
+ * @param workspace   Workspace root
+ * @param tbatch_id   20-byte TBatchID
+ * @param duration    Batch duration (ns)
+ * @param nkernel     Unique kernel count
+ * @param ntask       Task entry-point count
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_patch_tbatch_counters(const char *workspace,
+                                         const unsigned char tbatch_id[20],
+                                         uint64_t duration,
+                                         uint32_t nkernel,
+                                         uint32_t ntask);
+
+/**
  * @brief Read a tbatch .tpbr record file.
  * @param workspace Workspace root path
  * @param tbatch_id 20-byte TBatchID
@@ -894,7 +920,7 @@ int tpb_raf_record_write_task(const char *workspace,
 /**
  * @brief Write a new task capsule .tpbr (one header, first task ID in data).
  *
- * Expects attr->nheader==1, ninput==noutput==0, dup_from all 0xFF, and
+ * Expects attr->nheader==1, ninput==noutput==0, inherit_from all 0xFF, and
  * attr->task_record_id set to the capsule ID.
  *
  * @param workspace      Workspace root

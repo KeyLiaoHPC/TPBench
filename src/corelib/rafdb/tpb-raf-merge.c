@@ -46,10 +46,10 @@ static void _sf_fill_special_hdr(tpb_meta_header_t *h, const char *name,
                                  int n, uint32_t type_bits,
                                  uint64_t elem_sz);
 static uint32_t _sf_get_cur_tid(void);
-static int _sf_update_source_dup_to(const char *workspace,
-                                    const unsigned char task_ids[][20],
-                                    int n,
-                                    const unsigned char merged_id[20]);
+static int _sf_update_source_derive_to(const char *workspace,
+                                       const unsigned char task_ids[][20],
+                                       int n,
+                                       const unsigned char merged_id[20]);
 static int _sf_validate_batch_kernel(task_attr_t *tasks, int n);
 
 static uint32_t
@@ -356,10 +356,10 @@ _sf_build_merge_headers(task_attr_t *tasks,
 }
 
 static int
-_sf_update_source_dup_to(const char *workspace,
-                     const unsigned char task_ids[][20],
-                     int n,
-                     const unsigned char merged_id[20])
+_sf_update_source_derive_to(const char *workspace,
+                            const unsigned char task_ids[][20],
+                            int n,
+                            const unsigned char merged_id[20])
 {
     int i, err;
     task_attr_t attr;
@@ -372,7 +372,7 @@ _sf_update_source_dup_to(const char *workspace,
     FILE *fp;
 
     for (i = 0; i < n; i++) {
-        /* Read and rewrite .tpbr with updated dup_to */
+        /* Read and rewrite .tpbr with updated derive_to */
         data = NULL;
         memset(&attr, 0, sizeof(attr));
         err = tpb_raf_record_read_task(workspace,
@@ -386,7 +386,7 @@ _sf_update_source_dup_to(const char *workspace,
             return err;
         }
 
-        memcpy(attr.dup_to, merged_id, 20);
+        memcpy(attr.derive_to, merged_id, 20);
 
         err = tpb_raf_record_write_task(workspace,
                                           &attr,
@@ -395,7 +395,7 @@ _sf_update_source_dup_to(const char *workspace,
         tpb_raf_free_headers(attr.headers, attr.nheader);
         if (err) return err;
 
-        /* Update dup_to in .tpbe via direct seek */
+        /* Update derive_to in .tpbe via direct seek */
         entries = NULL;
         count = 0;
         err = tpb_raf_entry_list_task(workspace,
@@ -418,7 +418,7 @@ _sf_update_source_dup_to(const char *workspace,
                  workspace, TPB_RAF_TASK_DIR,
                  TPB_RAF_TASK_ENTRY);
 
-        /* dup_to offset in task_entry_t = 104 */
+        /* derive_to offset in task_entry_t = 104 */
         offset = 8L + (long)row * 232L + 104L;
 
         fp = fopen(fpath, "r+b");
@@ -569,8 +569,8 @@ tpb_raf_merge_par(const char *workspace,
     /* Build merged task_attr_t */
     memset(&merged_attr, 0, sizeof(merged_attr));
     memcpy(merged_attr.task_record_id, merged_id, 20);
-    memset(merged_attr.dup_from, 0xFF, 20);
-    memset(merged_attr.dup_to, 0, 20);
+    memset(merged_attr.inherit_from, 0xFF, 20);
+    memset(merged_attr.derive_to, 0, 20);
     memcpy(merged_attr.tbatch_id,
            tasks[0].tbatch_id, 20);
     memcpy(merged_attr.kernel_id,
@@ -597,8 +597,8 @@ tpb_raf_merge_par(const char *workspace,
     /* Write merged .tpbe entry */
     memset(&merged_entry, 0, sizeof(merged_entry));
     memcpy(merged_entry.task_record_id, merged_id, 20);
-    memset(merged_entry.dup_from, 0xFF, 20);
-    memset(merged_entry.dup_to, 0, 20);
+    memset(merged_entry.inherit_from, 0xFF, 20);
+    memset(merged_entry.derive_to, 0, 20);
     memcpy(merged_entry.tbatch_id,
            tasks[0].tbatch_id, 20);
     memcpy(merged_entry.kernel_id,
@@ -613,9 +613,9 @@ tpb_raf_merge_par(const char *workspace,
                                       &merged_entry);
     if (err) goto cleanup;
 
-    /* Update source records' dup_to */
-    err = _sf_update_source_dup_to(workspace, task_ids,
-                               n_tasks, merged_id);
+    /* Update source records' derive_to */
+    err = _sf_update_source_derive_to(workspace, task_ids,
+                                      n_tasks, merged_id);
     if (err) goto cleanup;
 
     memcpy(merged_id_out, merged_id, 20);

@@ -327,8 +327,8 @@ test_merge_fork(void)
         CHECK("read merged record", err == 0);
 
         if (err == 0) {
-            CHECK("dup_from is 0xFF",
-                  is_all_ff(merged.dup_from));
+            CHECK("inherit_from is 0xFF",
+                  is_all_ff(merged.inherit_from));
             CHECK("tbatch_id matches",
                   memcmp(merged.tbatch_id,
                          tbatch_id, 20) == 0);
@@ -371,7 +371,7 @@ test_merge_fork(void)
             CHECK("duration > 0", merged.duration > 0);
         }
 
-        /* Verify source entries have dup_to = merged_id */
+        /* Verify source entries have derive_to = merged_id */
         {
             task_entry_t *entries = NULL;
             int ecount = 0;
@@ -392,7 +392,7 @@ test_merge_fork(void)
                                    task_ids[i],
                                    20) == 0) {
                             found = 1;
-                            if (memcmp(entries[j].dup_to,
+                            if (memcmp(entries[j].derive_to,
                                        merged_id,
                                        20) != 0)
                                 dup_ok = 0;
@@ -401,7 +401,7 @@ test_merge_fork(void)
                     }
                     if (!found) dup_ok = 0;
                 }
-                CHECK("source dup_to = merged_id",
+                CHECK("source derive_to = merged_id",
                       dup_ok);
                 free(entries);
             }

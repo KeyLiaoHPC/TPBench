@@ -14,7 +14,7 @@
  * Reads source task records, validates they share tbatch_id and
  * kernel_id, sorts by tid, builds merged headers (with interleaving
  * and placeholders), computes merged duration from btime, writes the
- * merged .tpbr and .tpbe, and updates source records' dup_to to point
+ * merged .tpbr and .tpbe, and updates source records' derive_to to point
  * to the merged ID.
  *
  * @param workspace       Workspace root path

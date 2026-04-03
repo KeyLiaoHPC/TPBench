@@ -40,12 +40,11 @@ const char *tpb_record_get_tbatch_id_hex(void);
 const char *tpb_record_get_workspace(void);
 
 /**
- * @brief End the current task batch. Writes tbatch entry and record.
+ * @brief End the current task batch. Scans task.tpbe, appends entry-point
+ *        TaskRecordIDs to the skeleton tbatch .tpbr, patches duration/ntask/nkernel,
+ *        and appends the tbatch .tpbe row.
  *
- * Reads task entries from the workspace, filters by TBatchID, and
- * builds the tbatch record with TaskRecordID list in header[1].
- *
- * @param ntask Number of tasks executed in this batch
+ * @param ntask Number of tasks executed in this batch (reserved; unused)
  * @return 0 on success, error code otherwise
  */
 int tpb_record_end_batch(int ntask);

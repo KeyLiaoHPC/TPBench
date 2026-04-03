@@ -180,8 +180,8 @@ thread_worker(void *arg)
     task_attr_t attr;
     memset(&attr, 0, sizeof(attr));
     memcpy(attr.task_record_id, task_id, 20);
-    memset(attr.dup_to, 0, 20);
-    memset(attr.dup_from, 0, 20);
+    memset(attr.derive_to, 0, 20);
+    memset(attr.inherit_from, 0, 20);
     memcpy(attr.tbatch_id, ta->tbatch_id, 20);
     memcpy(attr.kernel_id, ta->kernel_id, 20);
     attr.utc_bits     = utc_bits;
@@ -362,11 +362,11 @@ test_merge_pthread(void)
         return 1;
     }
 
-    /* Verify merged.dup_from is 0xFF (merge sentinel) */
-    CHECK("merged.dup_from=0xFF", is_ff_id(merged.dup_from));
+    /* Verify merged.inherit_from is 0xFF (merge sentinel) */
+    CHECK("merged.inherit_from=0xFF", is_ff_id(merged.inherit_from));
 
-    /* Verify merged.dup_to is all 0x00 */
-    CHECK("merged.dup_to=0x00", is_zero_id(merged.dup_to));
+    /* Verify merged.derive_to is all 0x00 */
+    CHECK("merged.derive_to=0x00", is_zero_id(merged.derive_to));
 
     /* Verify tbatch_id and kernel_id */
     CHECK("merged.tbatch_id",
@@ -408,7 +408,7 @@ test_merge_pthread(void)
     tpb_raf_free_headers(merged.headers,
                            merged.nheader);
 
-    /* Read source task entries, verify dup_to = merged_id */
+    /* Read source task entries, verify derive_to = merged_id */
     task_entry_t *entries = NULL;
     int entry_count = 0;
     err = tpb_raf_entry_list_task(g_test_dir,
@@ -422,14 +422,14 @@ test_merge_pthread(void)
                                     merged_id, 20) == 0);
             if (is_merged) continue;
 
-            /* Source entry: dup_to must be merged_id */
+            /* Source entry: derive_to must be merged_id */
             char tag[64];
             tpb_raf_id_to_hex(
                 entries[i].task_record_id, hex);
             snprintf(tag, sizeof(tag),
-                     "src dup_to %.8s", hex);
+                     "src derive_to %.8s", hex);
             CHECK(tag,
-                  memcmp(entries[i].dup_to,
+                  memcmp(entries[i].derive_to,
                          merged_id, 20) == 0);
         }
     }
