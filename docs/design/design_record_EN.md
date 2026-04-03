@@ -1146,3 +1146,53 @@ The final merged record contains:
 - ProcessIDs: `[pid0, pid1]`
 - Hosts: `[host0, host1]`
 - SourceTaskIDs: `[merged_0, merged_1]`
+
+## 6. Naming Format of Headers
+
+### 6.1. Role
+
+`tpb_meta_header_t.name` and related names are human-readable labels for dumps, tools, and cross-kernel comparison. A full name includes two parts: optional **tags** and non-empty **local_name**.
+
+### 6.2. Canonical Layout
+
+```
+Tag1,Tag2,...::local_name
+```
+
+Optional **tag prefix**: comma-separated uppercase tags from 6.4 (`Time::Triad`; `BANDWIDTH,FOM::Triad`). **`::`** separates prefix from **`local_name`** only—no extra `::` or lone `:` in `local_name`. Keep `local_name` stable across releases.
+
+### 6.3. Lexical Rules
+
+Prefer letters, digits, underscores in `local_name`. **Comma** separates tags only. Avoid raw `"` in names if CSV consumers quote fields (escape per consumer). For matching behavior, see 6.5.
+
+### 6.4. Reserved Tag Vocabulary
+
+| Tag | Meaning |
+| --- | --- |
+| **TPBLINK** | Internal linkage (e.g. `TPBLINK::TaskID`). |
+| **FOM** | Figure of merit; primary outcome metrics. |
+| **INPARM** | Input snapshot recorded as data. |
+| **EVENT** | In-run samples (counters, markers). |
+| **PERF** | Performance-related metrics, figures, indicators, and counters. |
+| **POWER** | Energy / power. |
+| **PRECISION** | Precision / error metrics. |
+| **TIME** | Time, tick, duration, and intervals. |
+| **BANDWIDTH** | Volume per time (e.g. MB/s). |
+| **RATE** | Volume per counter tick (e.g. MB/s, physical_day/ns, token/s). |
+| **COUNT** | Counts. |
+| **PERCENT** | Percent / normalized fraction as %. |
+
+Reuse these before adding new tags; extend the table in this document when needed.
+
+### 6.5. Lookup and Search Behavior
+
+Letter matching is **case-insensitive**.
+
+- **Fuzzy (default).** No `::` in the query: match only the stored **local name** (suffix after `::`); tag prefix ignored; fuzzy metric is tool-defined (e.g. `triad` → `FOM::tirad`, `BANDWIDTH,FOM::Triad`). With `::`: fuzzy match on **local name**; each tag token in the query prefix must appear in the stored tag prefix (e.g. `FoM::TrIAd` vs `BANDWIDTH,FOM::Triad`).
+- **Accurate (opt-in).** No fuzzy edits: after case-fold, compared spans must match exactly (full `tpb_meta_header_t.name` vs query, or exact tag + local parts—tool documents which).
+
+Tools should document default mode, split rules, and fuzzy metric if results must reproduce.
+
+### 6.6. Example (STREAM-style Names)
+
+Examples: `Time::Copy`, `Time::Triad`, `Bandwidth::Triad`. Layout and units use `ndim`, `dimnames`, `dimsizes`, and kernel metadata; `tpbcli database dump` prints names as stored.
