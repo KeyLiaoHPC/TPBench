@@ -51,6 +51,6 @@ Design and implement task capsule record to enclose mp/mt task records instead o
 - STAXPY: Migrate to the new PLI kernel format.
 - STRIAD: Migrate to the new PLI kernel format.
 - stream_mpi: Success path calls `tpb_mpik_write_task` (corelib MPI collectives + `derive_to` patch + rank-0 capsule appends); rank 0 `tpb_k_unlink_capsule_sync_shm` after barrier. Error path still uses `tpb_k_write_task` only.
-- stream_mpi: Static PLI registration (`tpb_k_pli_register_stream_mpi`) — `INPARM::Allocated memory size`, `INPARM::STREAM array size`; per-iteration `EVENT,TIME::Copy/Scale/Add/Triad`. Sixteen aggregate summary metrics (`FOM,BANDWIDTH::…` best MB/s, `FOM,TIME::…` avg/min/max seconds) are registered only on **MPI rank 0** at run time (`tpb_k_add_output` + `tpb_k_alloc_output` after the wall-time timer check) so non-rank-0 handles omit them from `respack` and task `.tpbr` records. Together with corelib omitting unallocated outputs, per-rank records stay free of empty FOM headers.
+- stream_mpi: Static PLI registration (`tpb_k_pli_register_stream_mpi`) registers all outputs on every rank (kernel `.so` scan / handle build): `INPARM::*`, per-iteration `EVENT,TIME::Copy/Scale/Add/Triad`, and sixteen aggregate `FOM,BANDWIDTH::…` / `FOM,TIME::…` summaries. Only MPI rank 0 calls `tpb_k_alloc_output` for the FOM slots; other ranks leave them unallocated so task `.tpbr` records omit FOM payload (corelib skips unallocated outputs).
 - Other CPU PLI kernels: call `tpb_k_write_task(..., NULL)` for the optional TaskID argument (backward compatible).
 
