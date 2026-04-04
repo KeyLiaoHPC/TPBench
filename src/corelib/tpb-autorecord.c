@@ -456,8 +456,17 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     /* Build task_attr_t */
     uint32_t ninput = (uint32_t)hdl->argpack.n;
-    uint32_t noutput = (uint32_t)hdl->respack.n;
-    uint32_t nheader = ninput + noutput;
+    uint32_t noutput_total = (uint32_t)hdl->respack.n;
+    uint32_t noutput_written = 0;
+    uint32_t oi;
+
+    for (oi = 0; oi < noutput_total; oi++) {
+        if (hdl->respack.outputs[oi].n > 0 &&
+            hdl->respack.outputs[oi].p != NULL) {
+            noutput_written++;
+        }
+    }
+    uint32_t nheader = ninput + noutput_written;
 
     task_attr_t attr;
     memset(&attr, 0, sizeof(attr));
@@ -472,7 +481,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     attr.pid = pid;
     attr.tid = tid;
     attr.ninput = ninput;
-    attr.noutput = noutput;
+    attr.noutput = noutput_written;
     attr.nheader = nheader;
 
     /* Build input + output headers and record data */
@@ -502,29 +511,40 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             rec_datasize += elem_size;
         }
 
-        /* Output headers (1-D arrays) */
-        for (uint32_t j = 0; j < noutput; j++) {
-            uint32_t i = ninput + j;
-            tpb_k_output_t *out = &hdl->respack.outputs[j];
-            size_t esz = 0;
+        /* Output headers (1-D arrays); skip unallocated outputs */
+        {
+            uint32_t header_idx = ninput;
 
-            if (tpb_dtype_elem_size(out->dtype, &esz) != 0) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                           "Auto-record: unsupported dtype 0x%08llx for output '%s', skipping data.\n",
-                           (unsigned long long)out->dtype, out->name);
-                esz = 0;
+            for (uint32_t j = 0; j < noutput_total; j++) {
+                tpb_k_output_t *out = &hdl->respack.outputs[j];
+                size_t esz = 0;
+
+                if (out->n == 0 || out->p == NULL) {
+                    continue;
+                }
+
+                if (tpb_dtype_elem_size(out->dtype, &esz) != 0) {
+                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                               "Auto-record: unsupported dtype 0x%08llx for output '%s', skipping data.\n",
+                               (unsigned long long)out->dtype, out->name);
+                    esz = 0;
+                }
+
+                headers[header_idx].block_size  = TPB_RAF_HDR_FIXED_SIZE;
+                headers[header_idx].ndim        = 1;
+                headers[header_idx].dimsizes[0] = (uint64_t)out->n;
+                headers[header_idx].data_size   = (uint64_t)(out->n * esz);
+                headers[header_idx].type_bits   =
+                    (uint32_t)(out->dtype & TPB_PARM_TYPE_MASK);
+                headers[header_idx].uattr_bits  = (uint64_t)out->unit;
+                snprintf(headers[header_idx].name,
+                         sizeof(headers[header_idx].name), "%s", out->name);
+                snprintf(headers[header_idx].note,
+                         sizeof(headers[header_idx].note), "%s", out->note);
+
+                rec_datasize += (uint64_t)(out->n * esz);
+                header_idx++;
             }
-
-            headers[i].block_size  = TPB_RAF_HDR_FIXED_SIZE;
-            headers[i].ndim        = 1;
-            headers[i].dimsizes[0] = (uint64_t)out->n;
-            headers[i].data_size   = (uint64_t)(out->n * esz);
-            headers[i].type_bits   = (uint32_t)(out->dtype & TPB_PARM_TYPE_MASK);
-            headers[i].uattr_bits  = (uint64_t)out->unit;
-            snprintf(headers[i].name, sizeof(headers[i].name), "%s", out->name);
-            snprintf(headers[i].note, sizeof(headers[i].note), "%s", out->note);
-
-            rec_datasize += (uint64_t)(out->n * esz);
         }
 
         /* Serialize data: inputs then outputs */
@@ -541,14 +561,24 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             ptr += elem_size;
         }
 
-        /* Output arrays */
-        for (uint32_t j = 0; j < noutput; j++) {
-            tpb_k_output_t *out = &hdl->respack.outputs[j];
-            uint64_t blksz = headers[ninput + j].data_size;
-            if (blksz > 0 && out->p != NULL) {
-                memcpy(ptr, out->p, (size_t)blksz);
+        /* Output arrays (same skip order as headers) */
+        {
+            uint32_t ser_idx = 0;
+
+            for (uint32_t j = 0; j < noutput_total; j++) {
+                tpb_k_output_t *out = &hdl->respack.outputs[j];
+                uint64_t blksz;
+
+                if (out->n == 0 || out->p == NULL) {
+                    continue;
+                }
+                blksz = headers[ninput + ser_idx].data_size;
+                if (blksz > 0 && out->p != NULL) {
+                    memcpy(ptr, out->p, (size_t)blksz);
+                }
+                ptr += blksz;
+                ser_idx++;
             }
-            ptr += blksz;
         }
     }
 

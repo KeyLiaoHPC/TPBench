@@ -34,6 +34,7 @@ Design and implement task capsule record to enclose mp/mt task records instead o
 - **rafdb / `.tpbe`:** `entry_append_generic` uses `open(2)` + exclusive `flock(2)` + `fdopen` around read-modify-write so multiple MPI ranks can append entry rows safely; empty-file path writes start/end magic without the old `stat` + `strerror` printf.
 - **Workspace:** `tpb_raf_resolve_workspace` may use `TPB_WORKSPACE` when the directory exists and corelib is not initialized (e.g. tests).
 - **Autorecord:** `tpb_k_create_capsule_task` sets the workspace `.tpbe` row `inherit_from` to all `0xFF` (matches capsule record layout).
+- **Autorecord / task `.tpbr`:** `tpb_record_write_task` writes output headers and payload only for outputs that were allocated (`out->n > 0` and `out->p != NULL`). Skipped slots remain registered via `tpb_k_add_output` for CLI/schema but are omitted from the on-disk task record; `attr.noutput` and `attr.nheader` reflect the serialized subset. **Tests:** `tests/corelib/test_1d_array_write.c` pack A5.7 (`skip_unalloc_output`).
 - **Linking:** `tpbench` links `librt` (POSIX shm for capsule sync).
 - **Tests:** `tests/corelib/test_capsule.c` (pack A6.1–A6.8), CMake target `test-capsule`.
 - **Build:** `stream_mpi` kernel sources taken from `src/kernels/streaming_memory_access_mpi/` (registry name `stream_mpi` no longer assumes `simple/tpbk_stream_mpi.c`).
@@ -50,6 +51,6 @@ Design and implement task capsule record to enclose mp/mt task records instead o
 - STAXPY: Migrate to the new PLI kernel format.
 - STRIAD: Migrate to the new PLI kernel format.
 - stream_mpi: Success path calls `tpb_mpik_write_task` (corelib MPI collectives + `derive_to` patch + rank-0 capsule appends); rank 0 `tpb_k_unlink_capsule_sync_shm` after barrier. Error path still uses `tpb_k_write_task` only.
-- stream_mpi: Recorded outputs follow `design_record_EN.md` §6 naming — `INPARM::Allocated memory size`, `INPARM::STREAM array size`; `EVENT,TIME::Copy/Scale/Add/Triad` (per-iteration timer samples); sixteen STREAM summary scalars as `FOM,BANDWIDTH::…` (best MB/s) and `FOM,TIME::…` (avg/min/max seconds). Per-iteration `Bandwidth::*` outputs removed (derivable from EVENT times). FOM outputs are registered only on MPI rank 0 via runtime `tpb_k_add_output` after `tpb_k_pli_build_handle` so `tpbk_pli_register_stream_mpi` stays callable without MPI (e.g. `tpbcli` `.so` scan). Non-rank-0 task records omit FOM headers entirely.
+- stream_mpi: Static PLI registration (`tpb_k_pli_register_stream_mpi`) — `INPARM::Allocated memory size`, `INPARM::STREAM array size`; per-iteration `EVENT,TIME::Copy/Scale/Add/Triad`. Sixteen aggregate summary metrics (`FOM,BANDWIDTH::…` best MB/s, `FOM,TIME::…` avg/min/max seconds) are registered only on **MPI rank 0** at run time (`tpb_k_add_output` + `tpb_k_alloc_output` after the wall-time timer check) so non-rank-0 handles omit them from `respack` and task `.tpbr` records. Together with corelib omitting unallocated outputs, per-rank records stay free of empty FOM headers.
 - Other CPU PLI kernels: call `tpb_k_write_task(..., NULL)` for the optional TaskID argument (backward compatible).
 

@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <stdint.h>
 #include "include/tpb-public.h"
 #include "corelib/rafdb/tpb-raf-types.h"
 #include "mock_kernel.h"
@@ -306,6 +307,224 @@ test_write_read_multi(void)
     return do_write_read_test(nout, dtypes, counts, names, "multi");
 }
 
+/*
+ * A5.7: three registered outputs; middle one never allocated (n=0, p=NULL).
+ * Record must list only the two allocated outputs.
+ */
+static int
+test_write_read_skip_unalloc_output(void)
+{
+    int err, ret = 0;
+    tpb_k_rthdl_t hdl;
+    const int nout_reg = 3;
+    const int written_logical[2] = { 0, 2 };
+    const char *names[3] = {
+        "out0", "out1_unalloc", "out2"
+    };
+    TPB_DTYPE dtypes[3] = {
+        TPB_DOUBLE_T, TPB_INT64_T, TPB_INT32_T
+    };
+    int counts[3] = { 3, 0, 2 };
+    void *orig_data[3];
+    size_t data_sizes[3];
+    int wi;
+
+    setup_test_dir("skipu");
+    err = tpb_raf_init_workspace(g_test_dir);
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = mock_setup_driver();
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+    err = mock_build_handle("mock_pli_test", &hdl);
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    hdl.respack.n = nout_reg;
+    hdl.respack.outputs = (tpb_k_output_t *)calloc(nout_reg,
+        sizeof(tpb_k_output_t));
+    if (hdl.respack.outputs == NULL) {
+        tpb_driver_clean_handle(&hdl);
+        cleanup_test_dir();
+        return 1;
+    }
+
+    memset(orig_data, 0, sizeof(orig_data));
+    memset(data_sizes, 0, sizeof(data_sizes));
+
+    for (wi = 0; wi < nout_reg; wi++) {
+        size_t esz = elem_size_for_dtype(dtypes[wi]);
+        size_t total = (size_t)counts[wi] * esz;
+
+        snprintf(hdl.respack.outputs[wi].name,
+            sizeof(hdl.respack.outputs[wi].name), "%s", names[wi]);
+        snprintf(hdl.respack.outputs[wi].note,
+            sizeof(hdl.respack.outputs[wi].note), "slot %d", wi);
+        hdl.respack.outputs[wi].dtype = dtypes[wi];
+        hdl.respack.outputs[wi].unit  = TPB_UNIT_B;
+        hdl.respack.outputs[wi].n     = counts[wi];
+
+        if (counts[wi] > 0) {
+            hdl.respack.outputs[wi].p = malloc(total);
+            orig_data[wi] = malloc(total);
+            data_sizes[wi] = total;
+            if (hdl.respack.outputs[wi].p == NULL || orig_data[wi] == NULL) {
+                ret = 1;
+                goto done;
+            }
+            {
+                unsigned int seed = (unsigned int)(700 + wi);
+                uint8_t *p = (uint8_t *)hdl.respack.outputs[wi].p;
+
+                for (size_t b = 0; b < total; b++) {
+                    p[b] = (uint8_t)(rand_r(&seed) & 0xFF);
+                }
+            }
+            memcpy(orig_data[wi], hdl.respack.outputs[wi].p, total);
+        } else {
+            hdl.respack.outputs[wi].p = NULL;
+        }
+    }
+
+    {
+        task_entry_t *entries_before = NULL;
+        int count_before = 0;
+
+        tpb_raf_entry_list_task(g_test_dir, &entries_before, &count_before);
+        free(entries_before);
+
+        err = tpb_k_write_task(&hdl, 0, NULL);
+        if (err) {
+            fprintf(stderr, "  FAIL: tpb_k_write_task returned %d\n", err);
+            ret = 1;
+            goto done;
+        }
+
+        {
+            task_entry_t *entries_after = NULL;
+            int count_after = 0;
+            unsigned char new_task_id[20];
+            task_attr_t rattr;
+            void *rdata = NULL;
+            uint64_t rdatasize = 0;
+            uint64_t offset;
+
+            err = tpb_raf_entry_list_task(g_test_dir, &entries_after,
+                &count_after);
+            if (err || count_after != count_before + 1) {
+                fprintf(stderr,
+                    "  FAIL: expected %d task entries, got %d (err=%d)\n",
+                    count_before + 1, count_after, err);
+                free(entries_after);
+                ret = 1;
+                goto done;
+            }
+            memcpy(new_task_id,
+                entries_after[count_after - 1].task_record_id, 20);
+            free(entries_after);
+
+            err = tpb_raf_record_read_task(g_test_dir, new_task_id,
+                &rattr, &rdata, &rdatasize);
+            if (err) {
+                fprintf(stderr,
+                    "  FAIL: tpb_raf_record_read_task returned %d\n", err);
+                ret = 1;
+                goto done;
+            }
+
+            if (rattr.ninput != (uint32_t)hdl.argpack.n) {
+                fprintf(stderr, "  FAIL: ninput expected %d, got %u\n",
+                    hdl.argpack.n, rattr.ninput);
+                ret = 1;
+            }
+            if (rattr.noutput != 2U) {
+                fprintf(stderr, "  FAIL: noutput expected 2, got %u\n",
+                    rattr.noutput);
+                ret = 1;
+            }
+            if (rattr.nheader != rattr.ninput + rattr.noutput) {
+                fprintf(stderr, "  FAIL: nheader expected %u, got %u\n",
+                    rattr.ninput + rattr.noutput, rattr.nheader);
+                ret = 1;
+            }
+
+            for (wi = 0; wi < 2 && ret == 0; wi++) {
+                int lj = written_logical[wi];
+                uint32_t hi = rattr.ninput + (uint32_t)wi;
+                tpb_meta_header_t *hdr = &rattr.headers[hi];
+                size_t expected_dsz;
+
+                if (hdr->dimsizes[0] != (uint64_t)counts[lj]) {
+                    fprintf(stderr,
+                        "  FAIL: written[%d] dimsizes[0]=%lu, expected %d\n",
+                        wi, (unsigned long)hdr->dimsizes[0], counts[lj]);
+                    ret = 1;
+                }
+                expected_dsz = (size_t)counts[lj]
+                    * elem_size_for_dtype(dtypes[lj]);
+                if (hdr->data_size != (uint64_t)expected_dsz) {
+                    fprintf(stderr,
+                        "  FAIL: written[%d] data_size mismatch\n", wi);
+                    ret = 1;
+                }
+                if (strcmp(hdr->name, names[lj]) != 0) {
+                    fprintf(stderr,
+                        "  FAIL: written[%d] name='%s', expected '%s'\n",
+                        wi, hdr->name, names[lj]);
+                    ret = 1;
+                }
+            }
+
+            if (ret == 0 && rdata != NULL && rdatasize > 0) {
+                offset = 0;
+                for (uint32_t i = 0; i < rattr.ninput; i++) {
+                    offset += rattr.headers[i].data_size;
+                }
+                for (wi = 0; wi < 2 && ret == 0; wi++) {
+                    int lj = written_logical[wi];
+                    size_t blksz = data_sizes[lj];
+
+                    if (offset + blksz > rdatasize) {
+                        fprintf(stderr,
+                            "  FAIL: data too short for written[%d]\n", wi);
+                        ret = 1;
+                        break;
+                    }
+                    if (memcmp((uint8_t *)rdata + offset, orig_data[lj],
+                            blksz) != 0) {
+                        fprintf(stderr,
+                            "  FAIL: written[%d] payload mismatch\n", wi);
+                        ret = 1;
+                    }
+                    offset += blksz;
+                }
+            }
+
+            tpb_raf_free_headers(rattr.headers, rattr.nheader);
+            free(rdata);
+        }
+    }
+
+done:
+    for (wi = 0; wi < nout_reg; wi++) {
+        free(hdl.respack.outputs[wi].p);
+        free(orig_data[wi]);
+    }
+    free(hdl.respack.outputs);
+    hdl.respack.outputs = NULL;
+    hdl.respack.n = 0;
+    tpb_driver_clean_handle(&hdl);
+    cleanup_test_dir();
+    return ret;
+}
+
 /* ---- main ---- */
 int
 main(int argc, char **argv)
@@ -319,6 +538,8 @@ main(int argc, char **argv)
         { "A5.4", "write_read_int32",      test_write_read_int32 },
         { "A5.5", "write_read_random_len", test_write_read_random_len },
         { "A5.6", "write_read_multi",      test_write_read_multi },
+        { "A5.7", "skip_unalloc_output",
+            test_write_read_skip_unalloc_output },
     };
     int ncases = sizeof(cases) / sizeof(cases[0]);
 

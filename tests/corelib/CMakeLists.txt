@@ -108,6 +108,7 @@ tpb_add_subcase(A5 A5.3  write_read_int64      test-1d-array corelib)
 tpb_add_subcase(A5 A5.4  write_read_int32      test-1d-array corelib)
 tpb_add_subcase(A5 A5.5  write_read_random_len test-1d-array corelib)
 tpb_add_subcase(A5 A5.6  write_read_multi      test-1d-array corelib)
+tpb_add_subcase(A5 A5.7  skip_unalloc_output   test-1d-array corelib)
 
 # --- Task capsule tests (Pack A6) ---
 add_executable(test-capsule EXCLUDE_FROM_ALL
