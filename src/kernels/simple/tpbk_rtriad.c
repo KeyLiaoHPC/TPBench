@@ -73,26 +73,26 @@ tpbk_pli_register_rtriad(void)
     if (err != 0) return err;
 
     /* Kernel outputs */
-    err = tpb_k_add_output("Allocated memory size", "Actual memory footprint of three rtriad arrays.",
+    err = tpb_k_add_output("INPARM::Allocated memory size", "Actual memory footprint of three rtriad arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("RTriad array size", "Actual number of elements per array.",
+    err = tpb_k_add_output("INPARM::RTriad array size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Repeat factor", "Actual repeat factor used.",
+    err = tpb_k_add_output("INPARM::Repeat factor", "Actual repeat factor used.",
                            TPB_INT64_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Total", "Measured runtime of the outer loop (all steps).",
+    err = tpb_k_add_output("EVENT,TIME::Total", "Measured runtime of the outer loop (all steps).",
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Step", "Measured runtime of per loop step.",
+    err = tpb_k_add_output("EVENT,TIME::Step", "Measured runtime of per loop step.",
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Walltime",
+    err = tpb_k_add_output("FOM,BANDWIDTH::Walltime",
                            "Measured sustainable memory bandwidth in decimal based MB/s.",
                            TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Phystime",
+    err = tpb_k_add_output("FOM,BANDWIDTH::Phystime",
                            "Measured sustainable memory bandwidth in binary based Byte/cy.",
                            TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
@@ -142,25 +142,25 @@ run_rtriad(void)
     tpberr = tpb_k_get_arg("repeat", TPB_INT64_T, (void *)&repeat);
     if (tpberr) return tpberr;
 
-    tpberr = tpb_k_alloc_output("Time::Total", 1, &tot_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Total", 1, &tot_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Time::Step", ntest, &step_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Step", ntest, &step_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Allocated memory size", 1, &real_total_memsize);
+    tpberr = tpb_k_alloc_output("INPARM::Allocated memory size", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("RTriad array size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("INPARM::RTriad array size", 1, &array_size_out);
     if (tpberr) return tpberr;
     int64_t *repeat_out = NULL;
-    tpberr = tpb_k_alloc_output("Repeat factor", 1, &repeat_out);
+    tpberr = tpb_k_alloc_output("INPARM::Repeat factor", 1, &repeat_out);
     if (tpberr) return tpberr;
 
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpberr = tpb_k_alloc_output("Bandwidth::Walltime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Walltime", ntest, &bw);
         if (tpberr) return tpberr;
     } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpberr = tpb_k_alloc_output("Bandwidth::Phystime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
         tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel rtriad: unknown timer unit name %llx", tpb_uname);
