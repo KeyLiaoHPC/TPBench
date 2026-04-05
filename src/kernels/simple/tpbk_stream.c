@@ -222,7 +222,7 @@ d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
     printf(TPBM_PRTN_M_DIRECT, "This system uses %d bytes per array element.\n", BytesPerWord);
 
     err = 0;
-    /* Use array_size if specified (non-zero), otherwise use total_memsize */
+    /* Use array_size (stream_array_size) if specified (non-zero) */
     if (array_size <= 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT, "Illegal arguments stream_array_size must > 0, currently %u", array_size);
         return TPBE_KERN_ARG_FAIL;

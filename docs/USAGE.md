@@ -238,10 +238,10 @@ The `--kmpiargs` option accepts a string that is passed as-is to `mpirun`. The s
 
 Syntax: `--kmpiargs '<mpi_args_string>'`
 
-Example: Run stream_mpi kernel with 100 test iterations, memory size 1024KiB per rank, using 2 MPI processes, and allow running as root.
+Example: Run stream_mpi kernel with 100 test iterations, aggregate array size of 43690 elements per array across all ranks, using 2 MPI processes.
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 --kmpiargs '-np 2'
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs '-np 2'
 ```
 
 You can specify `--kmpiargs` multiple times; they will be concatenated with a space. If `--kmpiargs` is specified after `--kernel`, the kernel-specific MPI arguments replace the common MPI arguments.
@@ -255,7 +255,7 @@ Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
 Example 1: Run stream_mpi kernel, scanning MPI process counts from 1 to 4.
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
 ```
@@ -263,7 +263,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
 Example 2: Use nested lists to scan process counts and binding policies.
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
 ```

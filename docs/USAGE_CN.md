@@ -186,10 +186,10 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THRE
 
 语法：`--kmpiargs '<mpi_args_string>'`
 
-示例：运行 stream_mpi 内核，测试 100 次迭代，每个 rank 的内存大小为 1024KiB，使用 2 个 MPI 进程，并允许以 root 身份运行。
+示例：运行 stream_mpi 内核，测试 100 次迭代，所有 rank 的聚合数组大小为 43690 个元素，使用 2 个 MPI 进程。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 --kmpiargs ' -np 2'
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs ' -np 2'
 ```
 
 可以多次指定 `--kmpiargs`，它们将用空格连接。如果在 `--kernel` 之后指定 `--kmpiargs`，则该内核特定的 MPI 参数将替换通用 MPI 参数。
@@ -203,7 +203,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 --kmpiargs
 示例1：运行 stream_mpi 内核，扫描 MPI 进程数从 1 到 4。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
 ```
@@ -211,7 +211,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
 示例2：使用嵌套列表扫描进程数和绑定策略。
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,total_memsize=1024 \
+$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs '--bind-to core' \
     --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
 ```
