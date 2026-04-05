@@ -28,39 +28,98 @@
 
 /* Local Function Prototypes */
 
-/* Pre-parse integration mode (-P/-F) before kernel registration */
-static void parse_integ_mode(int argc, char **argv);
-
-/* Parse run-specific arguments */
-static int parse_run(int argc, char **argv);
-
-/* Parse outargs string and set output formatting options */
-static int parse_outargs_string(const char *outargs_str);
-
-/* Expand handles based on dimension configurations */
-static int expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
-
-/* Apply dimension value to current handle */
+/*
+ * Apply a dimension value to the current handle.
+ */
 static int apply_dim_value(tpb_dim_values_t *dim_val, int index);
 
-/* Recursive helper for expanding nested dimensions */
+/*
+ * Apply environment dimension value to the current handle.
+ */
+static int apply_env_dim_value(tpb_dim_values_t *dim_val, int index);
+
+/*
+ * Count nesting depth of dimension values.
+ */
+static int count_dim_depth(tpb_dim_values_t *vals);
+
+/*
+ * Expand handles based on dimension configurations.
+ */
+static int expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
+
+/*
+ * Expand handles for env dimensions.
+ */
+static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
+
+/*
+ * Recursive helper for env dimension Cartesian expansion.
+ */
+static int expand_env_nested_dims_impl(tpb_dim_values_t *vals, int *indices,
+                                       int depth, int max_depth,
+                                       const char *kernel_name,
+                                       int *is_first, int orig_hdl_idx);
+
+/*
+ * Expand handles for --kmpiargs-dim explicit list syntax.
+ */
+static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
+
+/*
+ * Recursive wrapper; first combination uses the current handle.
+ */
 static int expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
                               int max_depth, const char *kernel_name);
 
-/* Parse comma-separated env key=value string and set environment variables */
+/*
+ * Recursive implementation for expand_nested_dims.
+ */
+static int expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices,
+                                   int depth, int max_depth,
+                                   const char *kernel_name, int *is_first);
+
+/*
+ * Return the nested dimension level at depth.
+ */
+static tpb_dim_values_t *get_dim_at_depth(tpb_dim_values_t *vals, int depth);
+
+/*
+ * Parse comma-separated env key=value pairs for the current handle.
+ */
 static int parse_kenvs_tokstr(const char *tokstr);
 
-/* Apply environment dimension value to current handle */
-static int apply_env_dim_value(tpb_dim_values_t *dim_val, int index);
+/*
+ * Parse ['a','b',...] list for --kmpiargs-dim.
+ */
+static int parse_kmpiargs_list(const char *str, const char **pos,
+                               char ***out_items, int *out_count);
 
-/* Expand handles for env dimensions */
-static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
+/*
+ * Parse one quoted item from a --kmpiargs-dim list.
+ */
+static char *parse_kmpiargs_list_item(const char *str, const char **pos);
 
-/* Parse quoted MPI args string and set/append to current handle */
-static int parse_kmpiargs_quoted(const char *arg, int is_kernel_specific);
+/*
+ * Parse quoted MPI args string and append to the current handle.
+ */
+static int parse_kmpiargs_quoted(const char *arg);
 
-/* Expand handles for --kmpiargs-dim explicit list */
-static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
+/*
+ * Parse outargs string (unit_cast, sigbit_trim).
+ */
+static int parse_outargs_string(const char *outargs_str);
+
+/*
+ * Parse run-specific arguments after kernel registration.
+ */
+static int parse_run(int argc, char **argv);
+
+/*
+ * Enforce that --kargs/--kenvs/--kmpiargs (and dim) follow --kernel.
+ */
+static int parse_run_require_kernel(const char *opt_name,
+                                    const char *pending_kernel_name);
 
 /* Local Function Implementations */
 
@@ -124,6 +183,19 @@ parse_outargs_string(const char *outargs_str)
 }
 
 static int
+parse_run_require_kernel(const char *opt_name, const char *pending_kernel_name)
+{
+    if (pending_kernel_name == NULL || pending_kernel_name[0] == '\0') {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Option %s requires a preceding --kernel. "
+                   "Usage: tpbcli run --kernel <name> %s <args>\n",
+                   opt_name, opt_name);
+        return TPBE_CLI_FAIL;
+    }
+    return 0;
+}
+
+static int
 parse_run(int argc, char **argv)
 {
     int err = 0;
@@ -176,6 +248,10 @@ parse_run(int argc, char **argv)
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
             }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
+            }
             i++;  /* Move to the argument string */
 
             /* Parse and set the kargs for current handle */
@@ -189,6 +265,10 @@ parse_run(int argc, char **argv)
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
+            }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
             }
             i++;  /* Move to the dimension argument string */
 
@@ -219,6 +299,10 @@ parse_run(int argc, char **argv)
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
             }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
+            }
             i++;  /* Move to the env argument string */
 
             /* Parse and set the environment variables for current handle */
@@ -233,6 +317,10 @@ parse_run(int argc, char **argv)
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
             }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
+            }
             i++;  /* Move to the dimension argument string */
 
             /* Parse dimension configuration for env vars */
@@ -244,13 +332,10 @@ parse_run(int argc, char **argv)
                 return err;
             }
 
-            /* Expand env dimensions for current kernel */
-            if (pending_kernel_name[0] != '\0') {
-                err = expand_env_dim_handles(env_dim_cfg, pending_kernel_name);
-                if (err != 0) {
-                    tpb_dim_config_free(env_dim_cfg);
-                    return err;
-                }
+            err = expand_env_dim_handles(env_dim_cfg, pending_kernel_name);
+            if (err != 0) {
+                tpb_dim_config_free(env_dim_cfg);
+                return err;
             }
             tpb_dim_config_free(env_dim_cfg);
 
@@ -260,11 +345,12 @@ parse_run(int argc, char **argv)
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
             }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
+            }
             i++;
-            /* Parse quoted MPI args string
-             * is_kernel_specific = 1 if we're after a --kernel, 0 otherwise */
-            int is_kernel_specific = (pending_kernel_name[0] != '\0');
-            err = parse_kmpiargs_quoted(argv[i], is_kernel_specific);
+            err = parse_kmpiargs_quoted(argv[i]);
             if (err != 0) {
                 return err;
             }
@@ -275,18 +361,15 @@ parse_run(int argc, char **argv)
                            "Option %s requires arguments.\n", argv[i]);
                 return TPBE_CLI_FAIL;
             }
+            err = parse_run_require_kernel(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
+            }
             i++;
 
-            /* Expand kmpiargs-dim for current kernel */
-            if (pending_kernel_name[0] != '\0') {
-                err = expand_kmpiargs_dim(argv[i], pending_kernel_name);
-                if (err != 0) {
-                    return err;
-                }
-            } else {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "--kmpiargs-dim must follow a --kernel definition.\n");
-                return TPBE_CLI_FAIL;
+            err = expand_kmpiargs_dim(argv[i], pending_kernel_name);
+            if (err != 0) {
+                return err;
             }
 
         } else if (strcmp(argv[i], "--timer") == 0) {
@@ -339,13 +422,8 @@ parse_run(int argc, char **argv)
     return 0;
 }
 
-/* ============================================================================
- * Dimension Expansion Functions
- * ============================================================================ */
+/* Dimension expansion */
 
-/**
- * @brief Apply a dimension value to the current handle.
- */
 static int
 apply_dim_value(tpb_dim_values_t *dim_val, int index)
 {
@@ -370,9 +448,6 @@ apply_dim_value(tpb_dim_values_t *dim_val, int index)
     }
 }
 
-/**
- * @brief Count nesting depth of dimension values.
- */
 static int
 count_dim_depth(tpb_dim_values_t *vals)
 {
@@ -385,9 +460,6 @@ count_dim_depth(tpb_dim_values_t *vals)
     return depth;
 }
 
-/**
- * @brief Get dimension values at specific depth.
- */
 static tpb_dim_values_t *
 get_dim_at_depth(tpb_dim_values_t *vals, int depth)
 {
@@ -398,19 +470,6 @@ get_dim_at_depth(tpb_dim_values_t *vals, int depth)
     return p;
 }
 
-/**
- * @brief Recursive helper for expanding nested dimensions.
- *
- * Creates handles for each combination of dimension values.
- * The first combination modifies the existing handle, subsequent ones create new handles.
- *
- * @param vals       Dimension values structure.
- * @param indices    Array tracking current index at each depth.
- * @param depth      Current recursion depth.
- * @param max_depth  Total nesting depth.
- * @param kernel_name Kernel name for creating new handles.
- * @param is_first   Pointer to flag indicating if this is the first combination.
- */
 static int
 expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
                         int max_depth, const char *kernel_name, int *is_first)
@@ -465,9 +524,6 @@ expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
     return 0;
 }
 
-/**
- * @brief Wrapper for expand_nested_dims_impl.
- */
 static int
 expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
                    int max_depth, const char *kernel_name)
@@ -476,12 +532,6 @@ expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
     return expand_nested_dims_impl(vals, indices, depth, max_depth, kernel_name, &is_first);
 }
 
-/**
- * @brief Expand handles based on dimension configurations.
- *
- * For a kernel with dimension config, this creates multiple handles,
- * one for each combination of dimension values.
- */
 static int
 expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
 {
@@ -525,13 +575,8 @@ expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     return err;
 }
 
-/* ============================================================================
- * Environment Variable Functions
- * ============================================================================ */
+/* Environment variable helpers */
 
-/**
- * @brief Parse comma-separated env key=value string and set environment variables.
- */
 static int
 parse_kenvs_tokstr(const char *tokstr)
 {
@@ -594,9 +639,6 @@ parse_kenvs_tokstr(const char *tokstr)
     return 0;
 }
 
-/**
- * @brief Apply environment dimension value to current handle.
- */
 static int
 apply_env_dim_value(tpb_dim_values_t *dim_val, int index)
 {
@@ -621,11 +663,6 @@ apply_env_dim_value(tpb_dim_values_t *dim_val, int index)
     }
 }
 
-/**
- * @brief Recursive helper for expanding env dimensions.
- *
- * @param orig_hdl_idx Index of the original handle to copy kargs from.
- */
 static int
 expand_env_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
                             int max_depth, const char *kernel_name,
@@ -685,9 +722,6 @@ expand_env_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
     return 0;
 }
 
-/**
- * @brief Expand handles for env dimensions.
- */
 static int
 expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
 {
@@ -736,18 +770,10 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     return err;
 }
 
-/**
- * @brief Parse MPI args string and set/append to current handle.
- *
- * The argument can be enclosed in single or double quotes (quotes will be stripped),
- * or unquoted (used as-is). The shell typically consumes outer quotes, so both
- * forms should work.
- *
- * If is_kernel_specific is true, replaces any existing mpiargs.
- * Otherwise, appends to existing mpiargs with a space separator.
- */
+/* MPI launcher argument helpers */
+
 static int
-parse_kmpiargs_quoted(const char *arg, int is_kernel_specific)
+parse_kmpiargs_quoted(const char *arg)
 {
     if (arg == NULL || arg[0] == '\0') {
         return TPBE_NULLPTR_ARG;
@@ -774,14 +800,7 @@ parse_kmpiargs_quoted(const char *arg, int is_kernel_specific)
         }
     }
 
-    int err;
-    if (is_kernel_specific) {
-        /* Kernel-specific: replace existing mpiargs */
-        err = tpb_driver_set_hdl_mpiargs(content);
-    } else {
-        /* Common/default: append to existing mpiargs */
-        err = tpb_driver_append_hdl_mpiargs(content);
-    }
+    int err = tpb_driver_append_hdl_mpiargs(content);
 
     if (allocated_content != NULL) {
         free(allocated_content);
@@ -789,11 +808,6 @@ parse_kmpiargs_quoted(const char *arg, int is_kernel_specific)
     return err;
 }
 
-/**
- * @brief Parse a single quoted item from a list, returning the content.
- * Advances *pos past the closing quote and any trailing whitespace/comma.
- * Returns NULL if no valid quoted item found.
- */
 static char *
 parse_kmpiargs_list_item(const char *str, const char **pos)
 {
@@ -832,10 +846,6 @@ parse_kmpiargs_list_item(const char *str, const char **pos)
     return item;
 }
 
-/**
- * @brief Parse explicit list of quoted items: ['opt1', 'opt2', ...]
- * Returns array of strings and count.
- */
 static int
 parse_kmpiargs_list(const char *str, const char **pos, char ***out_items, int *out_count)
 {
@@ -897,13 +907,6 @@ parse_kmpiargs_list(const char *str, const char **pos, char ***out_items, int *o
     return 0;
 }
 
-/**
- * @brief Expand handles for --kmpiargs-dim explicit list.
- *
- * Syntax: ['opt1', 'opt2', ...]{['opta', 'optb', ...]}
- *
- * Generates combinations: base + opt1 + opta, base + opt1 + optb, ...
- */
 static int
 expand_kmpiargs_dim(const char *arg, const char *kernel_name)
 {
@@ -1058,8 +1061,8 @@ tpbcli_run(int argc, char **argv)
 
     /* Print kernels to run */
     int nhdl = tpb_get_nhdl();
-    if (nhdl > 1) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Number of kernels to run: %d\n", nhdl - 1);
+    if (nhdl > 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Number of kernels to run: %d\n", nhdl);
     }
 
     /* Run all handles using driver */
@@ -1079,7 +1082,7 @@ tpbcli_run(int argc, char **argv)
 
     /* End auto-record batch */
     if (!rec_err) {
-        int ntask = (nhdl > 1) ? nhdl - 1 : 0;
+        int ntask = nhdl;
         rec_err = tpb_record_end_batch(ntask);
         if (rec_err) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,

@@ -60,10 +60,12 @@ tpbcli <subcommand> <options>
 
 `tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kmpiargs-dim`时，选项需要用一对单引号或双引号包围。
 ``` bash
-tpbcli run <tpbench_options> <default_args> \
+tpbcli run <tpbench_options> \
 [--kernel <kernel_name> \
 [--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
+
+**规则：** `--kargs`、`--kargs-dim`、`--kenvs`、`--kenvs-dim`、`--kmpiargs`、`--kmpiargs-dim` 均必须出现在其所作用的 **`--kernel` 之后**（作用于命令行上最近一个 `--kernel`）。命令行上不再支持在第一个 `--kernel` 之前设置“默认”参数。
 \<tpbench_options\>支持的选项包括：
 - `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。
@@ -75,38 +77,29 @@ tpbcli run <tpbench_options> <default_args> \
 
 **1）选择评测内核和内核参数**（`--kernel`, `--kargs`）
 
-`--kernel` 选项定义一个即将被测试的评测内核，名为 `<kernel_name>`。随后出现的所有以 `--k*` 开头的选项代表内核选项，被应用于该评测内核，直至出现下一个 `--kernel` 或命令行结束。如果 `--kargs`、`--kenvs` 和 `--kmpiargs` 之前未指定 `--kernel`，则该设置的参数作为默认参数，传递给所有待运行内核。TPBench 将执行若干轮测试，直至完成所有 `--kernel` 定义的内核测试，或中途报错退出。一个 `--kargs` 可以设置多个参数，参数之间使用逗号隔开。若等号后使用逗号作为参数设置的一部分，则需要使用引号包裹，防止错误解析。
+`--kernel` 定义名为 `<kernel_name>` 的待测内核。其后出现的 `--k*` 选项作用于该内核，直至下一个 `--kernel` 或命令行结束。每出现一次 `--kernel` 会创建一个运行句柄（维度展开可为同一内核名再增句柄）。一个 `--kargs` 可带多个参数，逗号分隔；若值内含逗号请加引号。
 
 语法：`--kernel <kernel_name> --kargs '<key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...'`
 
-对于一个 `--kernel` 定义，`--kargs`、`--kenvs` 和 `--kmpiargs` 可以出现多次，但是带有后缀 `_dim` 的选项只能出现一次（见2.2.3节）。当同一参数名在一个 `--kernel` 定义后出现多次时，TPBench 将使用最后一次出现的值。
+在同一 `--kernel` 段内，`--kargs`、`--kenvs`、`--kmpiargs` 可出现多次；带 `_dim` 的选项限制见 2.2.3。同一参数名多次出现时，以最后一次为准。
 
-参数选项（`--kargs`、`--kenvs`和`--kmpiargs`）接受一个使用逗号分隔的字符串列表，每个列表元素的格式为`<key>=<value>`。一个参数选项后可以存在多个上述键值对，表示将内核中变量名为“\<key\>”的参数设置为“\<value\>”。TPBench解析选项设置，并检查参数的合法性。若对于一轮测试来说，命令行中出现了多次带有相同参数名的设置，那么优先级由高到低为：可变参数>内核参数>默认参数，优先级更高的参数设置将覆盖低优先级参数。对于一个名为“foo”的内核，`--kernel foo` 后的 `--kargs` 定义与默认参数设置重复，那么 `<foo>` 将使用其作用域中最后一次出现的参数。因此，以下三条指令的作用是一样的。
+`--kargs` / `--kenvs` / `--kmpiargs` 的每项为 `<key>=<value>`。TPBench 按该内核注册的参数做合法性检查。对同一句柄，若有 `--kargs-dim` / `--kenvs-dim` / `--kmpiargs-dim` 展开，其值覆盖同段的普通 `--kargs` / `--kenvs` / `--kmpiargs`；同段内靠后的选项覆盖靠前的。
 
-```
-$ ./bin/tpbcli run --kargs total_memsize=128,ntest=100 --kernel triad
-$ ./bin/tpbcli run --kargs ntest=10 --kernel triad --kargs total_memsize=128,ntest=100
-$ ./bin/tpbcli run --kernel triad \
-    --kargs total_memsize=128 \
-    --kargs ntest=100
-```
+注意：内核内部可能对参数再加工（如对齐），注册默认值与最终使用值可能不一致。例如 `total_memsize=128` KiB、double 精度 triad 下，每数组可能为 **131064** 字节而非 131072。每轮结束后终端会打印内核实际使用的参数。
 
-
-需要注意，默认参数集或输入参数并不总是能被原样采用，主要有2个原因：1）参数处理由评测内核定义；2）评测内核不一定支持所有默认参数名。以总内存容量（`total_memsize=128`）为例，使用 `double` 精度时，triad 计算（`a_i=b_i+s*c_i`）会为每个数组开辟 5461 个 double 变量所需内存（128/3*1024/sizeof(double)，下取整），实际的总内存容量为 **131064 Bytes**，而不是 **131072 Bytes**。因此，在每轮测试结束后，评测内核实际使用的参数将被输出至终端，用户应当以此作为评测内核的实际输入参数。
-
-示例1：运行 triad 内核，总内存容量 128KiB
+示例1：运行 triad，总内存 128KiB
 ```bash
-$ tpbcli run --kargs total_memsize=128 -k triad
+$ tpbcli run -k triad --kargs total_memsize=128
 ```
 
-示例2：测试 2 轮 triad 内核，第 1 轮测试运行 100 个循环，总内存容量 128KiB；第 2 轮测试运行 100 个循环，总内存容量 256KiB
+示例2：两轮 triad：第一轮 100 次循环、128KiB；第二轮 100 次循环、256KiB
 ```bash
-$ tpbcli run --kargs ntest=100 -k triad --kargs total_memsize=128 -k triad --kargs total_memsize=256
+$ tpbcli run -k triad --kargs ntest=100,total_memsize=128 -k triad --kargs ntest=100,total_memsize=256
 ```
 
-示例3：先后运行 triad、pchase 两个内核，每个内核的总内存容量 128KiB。triad 循环 100 次，pchase 循环 1000 次。
+示例3：先 triad 再 pchase：triad 128KiB、100 次循环；pchase 1000 次循环（具体参数名以 pchase 内核为准）。
 ```bash
-$ tpbcli run --kargs total_memsize=128,ntest=100 -k triad -k pchase --kargs=1000
+$ tpbcli run -k triad --kargs total_memsize=128,ntest=100 -k pchase --kargs ntest=1000
 ```
 
 使用 `--kernel -l` 可以列出目前可用的评测内核，使用 `--kernel <foo> --kargs -l` 可以列出 `<foo>` 内核支持的命令行输入参数。
@@ -192,7 +185,7 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THRE
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs ' -np 2'
 ```
 
-可以多次指定 `--kmpiargs`，它们将用空格连接。如果在 `--kernel` 之后指定 `--kmpiargs`，则该内核特定的 MPI 参数将替换通用 MPI 参数。
+在同一 `--kernel` 之后可多次指定 `--kmpiargs`，各段用空格拼接。
 
 **2) 可变 MPI 参数**
 

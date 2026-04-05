@@ -1,3 +1,23 @@
+# --- run argv: --kernel required before k* options (Pack B2) ---
+add_executable(test-cli-run-nokernel EXCLUDE_FROM_ALL
+    test-cli-run-nokernel.c
+)
+target_compile_definitions(test-cli-run-nokernel PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+add_dependencies(test-cli-run-nokernel tpbcli)
+set_target_properties(test-cli-run-nokernel PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B2 B2.1 kargs_before_kernel       test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.2 kargs_dim_before_kernel   test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.3 kenvs_before_kernel       test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.4 kmpiargs_before_kernel    test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.5 normal_with_kernel        test-cli-run-nokernel tpbcli)
+
 # --- dimargs test executable (Pack B1) ---
 add_executable(test-cli-run-dimargs EXCLUDE_FROM_ALL
     test-cli-run-dimargs.c
@@ -20,7 +40,7 @@ tpb_add_subcase(B1 B1.5 total_count      test-cli-run-dimargs tpbcli)
 
 # Aggregate targets
 add_custom_target(test_tpbcli
-    DEPENDS test-cli-run-dimargs
+    DEPENDS test-cli-run-dimargs test-cli-run-nokernel
 )
 
 add_custom_target(check_tpbcli

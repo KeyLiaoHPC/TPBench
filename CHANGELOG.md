@@ -4,6 +4,8 @@
 
 ### Frontend: tpbcli
 
+- **Breaking:** `tpbcli run` no longer accepts `--kargs`, `--kargs-dim`, `--kenvs`, `--kenvs-dim`, `--kmpiargs`, or `--kmpiargs-dim` before a preceding `--kernel`. Each such option must follow the `--kernel` it applies to. The `_tpb_common` pseudo handle (`handle_list[0]`) and default-parameter inheritance from it are removed. Multiple `--kmpiargs` after the same `--kernel` concatenate with a space.
+- **Tests:** Pack B2 (`tests/tpbcli/test-cli-run-nokernel.c`) — expect CLI failure with “preceding --kernel” when k-options precede `--kernel`; B2.5 sanity run with `--kernel stream` first.
 - **Breaking:** `database dump --entry task` prints only task `.tpbe` rows with `derive_to` all-zero (task entry points); line `(N task entry points / M total rows)` reports filtered vs total row count.
 - **Breaking:** `tpbcli list` / `l` removed. Use `tpbcli kernel list`, `kernel ls`, `k list`, or `k ls`.
 - `kernel` / `k` refreshes kernel records in the workspace, then runs the subcommand (`list` / `ls` today).

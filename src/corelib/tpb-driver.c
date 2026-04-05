@@ -27,9 +27,22 @@
 
 /* Local Function Prototypes */
 
-/* Deep copy kernel metadata for query_kernel isolation */
+/*
+ * Deep copy kernel metadata for query_kernel isolation.
+ * Allocates a new tpb_kernel_t; parms, plims, and outs arrays are newly
+ * allocated with no pointers into driver-internal data. Returns NULL on
+ * failure or if src is NULL.
+ */
 static tpb_kernel_t *_sf_deep_copy_kernel(const tpb_kernel_t *src);
+
+/*
+ * Resolve registered kernel by index; writes pointer into driver storage.
+ */
 static int _sf_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
+
+/*
+ * Resolve registered kernel by name (common block or kernel_all entry).
+ */
 static int _sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out);
 
 /* Module-level state variables */
@@ -83,16 +96,6 @@ _sf_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out)
     return 0;
 }
 
-/**
- * @brief Deep copy kernel info from source to destination.
- *
- * Allocates and returns a new tpb_kernel_t with fully isolated copy:
- * - All arrays (parms, plims, outs) are newly allocated
- * - No pointers in dst point to driver-internal data
- *
- * @param src Source kernel (driver-internal)
- * @return Allocated deep copy on success, NULL on failure
- */
 static tpb_kernel_t *
 _sf_deep_copy_kernel(const tpb_kernel_t *src)
 {
@@ -377,27 +380,11 @@ tpb_register_kernel()
         return err;
     }
 
-    /* Create pseudo handle (ihdl=0) for _tpb_common */
-    handle_list = (tpb_k_rthdl_t *)malloc(sizeof(tpb_k_rthdl_t));
-    if (handle_list == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-    memset(&handle_list[0], 0, sizeof(tpb_k_rthdl_t));
-
-    /* Copy kernel_common info to pseudo handle */
-    memcpy(&handle_list[0].kernel, &kernel_common, sizeof(tpb_kernel_t));
-
-    /* Set pseudo handle's argpack parameter count to 0 */
-    handle_list[0].argpack.n = 0;
-    handle_list[0].argpack.args = NULL;
-
-    handle_list[0].respack.n = 0;
-    handle_list[0].respack.outputs = NULL;
-
-    nhdl = 1;
-    ihdl = 0;
-    current_rthdl = &handle_list[0];
-    current_kernel = &kernel_common;
+    /* No pseudo handle: real handles start at handle_list[0] after --kernel */
+    handle_list = NULL;
+    nhdl = 0;
+    ihdl = -1;
+    current_rthdl = NULL;
 
     return 0;
 }
@@ -1017,7 +1004,7 @@ tpb_driver_add_handle(const char *kernel_name)
     /* Copy kernel info */
     memcpy(&hdl->kernel, kernel, sizeof(tpb_kernel_t));
 
-    /* Build argpack: inherit kernel's default values, then apply common parameters from pseudo handle */
+    /* Build argpack from kernel defaults only (no pseudo-handle inheritance) */
     int k_nparms = kernel->info.nparms;
 
     if (k_nparms > 0) {
@@ -1027,22 +1014,8 @@ tpb_driver_add_handle(const char *kernel_name)
         }
         hdl->argpack.n = k_nparms;
 
-        /* Step 1: Copy kernel-specific parameters (value already holds the default) */
         for (int i = 0; i < k_nparms; i++) {
             memcpy(&hdl->argpack.args[i], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
-        }
-
-        /* Step 2: Check each argument's name and set common argument from pseudo handle */
-        if (handle_list != NULL && nhdl > 0) {
-            for (int i = 0; i < hdl->argpack.n; i++) {
-                for (int j = 0; j < handle_list[0].argpack.n; j++) {
-                    if (strcmp(hdl->argpack.args[i].name, handle_list[0].argpack.args[j].name) == 0) {
-                        /* Apply value from pseudo handle (_tpb_common) */
-                        hdl->argpack.args[i].value = handle_list[0].argpack.args[j].value;
-                        break;
-                    }
-                }
-            }
         }
     } else {
         hdl->argpack.n = 0;
@@ -1052,32 +1025,10 @@ tpb_driver_add_handle(const char *kernel_name)
     hdl->respack.n = 0;
     hdl->respack.outputs = NULL;
 
-    /* Initialize envpack and inherit from pseudo handle */
     hdl->envpack.n = 0;
     hdl->envpack.envs = NULL;
 
-    if (handle_list != NULL && nhdl > 0 && handle_list[0].envpack.n > 0) {
-        int env_n = handle_list[0].envpack.n;
-        hdl->envpack.envs = (tpb_env_entry_t *)malloc(sizeof(tpb_env_entry_t) * env_n);
-        if (hdl->envpack.envs == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        hdl->envpack.n = env_n;
-        for (int i = 0; i < env_n; i++) {
-            memcpy(&hdl->envpack.envs[i], &handle_list[0].envpack.envs[i],
-                   sizeof(tpb_env_entry_t));
-        }
-    }
-
-    /* Initialize mpipack and inherit from pseudo handle */
     hdl->mpipack.mpiargs = NULL;
-
-    if (handle_list != NULL && nhdl > 0 && handle_list[0].mpipack.mpiargs != NULL) {
-        hdl->mpipack.mpiargs = strdup(handle_list[0].mpipack.mpiargs);
-        if (hdl->mpipack.mpiargs == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-    }
 
     /* Set ihdl = nhdl, then increment nhdl */
     ihdl = nhdl;
@@ -1161,39 +1112,7 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
         }
     }
 
-    if (parm != NULL) {
-        /* Parameter found in current handle, set the value */
-    } else if (strcmp(current_rthdl->kernel.info.name, "_tpb_common") == 0) {
-        /* Parameter not found but kernel is _tpb_common, search in kernel info and add */
-        for (int i = 0; i < kernel_common.info.nparms; i++) {
-            if (strcmp(kernel_common.info.parms[i].name, parm_name) == 0) {
-                /* Reallocate argpack to add new parameter */
-                int new_n = current_rthdl->argpack.n + 1;
-                tpb_rt_parm_t *new_args = (tpb_rt_parm_t *)realloc(
-                    current_rthdl->argpack.args,
-                    sizeof(tpb_rt_parm_t) * new_n);
-                if (new_args == NULL) {
-                    return TPBE_MALLOC_FAIL;
-                }
-                current_rthdl->argpack.args = new_args;
-                
-                /* Copy parameter from kernel_common */
-                memcpy(&current_rthdl->argpack.args[current_rthdl->argpack.n],
-                       &kernel_common.info.parms[i], sizeof(tpb_rt_parm_t));
-                
-                parm = &current_rthdl->argpack.args[current_rthdl->argpack.n];
-                current_rthdl->argpack.n = new_n;
-                break;
-            }
-        }
-        
-        if (parm == NULL) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                       "Parameter '%s' is not existed as a common parameter.\n", parm_name);
-            return TPBE_KARG_NE_FAIL;
-        }
-    } else {
-        /* Parameter not found and kernel is not _tpb_common */
+    if (parm == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Parameter '%s' is not existed in the kernel.\n", parm_name);
         return TPBE_KARG_NE_FAIL;
@@ -1624,7 +1543,7 @@ tpb_driver_run_all(void)
 {
     int err = 0;
 
-    if (handle_list == NULL || nhdl <= 1) {
+    if (handle_list == NULL || nhdl <= 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, "No kernels to run.\n");
         return 0;
     }
@@ -1632,15 +1551,13 @@ tpb_driver_run_all(void)
     tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start driver runner.\n");
 
-    /* Loop from ihdl=1 to nhdl-1 (skip pseudo handle at index 0) */
-    for (int i = 1; i < nhdl; i++) {
+    for (int i = 0; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
-        /* Progress: i/(nhdl-1) instead of (i+1)/nhdl */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Test %d/%d  \n", i, nhdl - 1);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "Test %d/%d  \n", i + 1, nhdl);
 
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
                    handle->kernel.info.name);
-        s_pli_handle_index = i - 1;
+        s_pli_handle_index = i;
         err = tpb_run_pli(handle);
 
         if (err != 0) {
@@ -1666,48 +1583,26 @@ tpb_driver_enable_kernel_reg(void)
 void
 tpb_driver_disable_kernel_reg(void)
 {
-    /* Restore current_rthdl to pseudo handle (index 0) if available */
-    if (handle_list != NULL && nhdl > 0) {
-        current_rthdl = &handle_list[0];
-    }
+    /* No pseudo handle: leave current_rthdl NULL until add_handle */
+    current_rthdl = NULL;
 }
 
 int
 tpb_driver_reset_handles(void)
 {
-    /* Clean all handles except pseudo handle (index 0), reset handle list */
-    if (handle_list == NULL || nhdl <= 1) {
-        return 0;  /* Nothing to reset */
+    if (handle_list == NULL || nhdl <= 0) {
+        return 0;
     }
 
-    /* Clean handles from index 1 to nhdl-1 */
-    for (int i = 1; i < nhdl; i++) {
+    for (int i = 0; i < nhdl; i++) {
         tpb_driver_clean_handle(&handle_list[i]);
     }
 
-    /* Shrink handle_list to just pseudo handle */
-    tpb_k_rthdl_t *new_list = (tpb_k_rthdl_t *)realloc(handle_list, sizeof(tpb_k_rthdl_t));
-    if (new_list != NULL) {
-        handle_list = new_list;
-    }
-
-    /* Reset handle count and current index */
-    nhdl = 1;
-    ihdl = 0;
-
-    /* Clear pseudo handle's per-run settings (mpiargs, envs) */
-    if (handle_list[0].mpipack.mpiargs != NULL) {
-        free(handle_list[0].mpipack.mpiargs);
-        handle_list[0].mpipack.mpiargs = NULL;
-    }
-    if (handle_list[0].envpack.envs != NULL) {
-        free(handle_list[0].envpack.envs);
-        handle_list[0].envpack.envs = NULL;
-    }
-    handle_list[0].envpack.n = 0;
-
-    /* Reset current_rthdl to pseudo handle */
-    current_rthdl = &handle_list[0];
+    free(handle_list);
+    handle_list = NULL;
+    nhdl = 0;
+    ihdl = -1;
+    current_rthdl = NULL;
 
     return 0;
 }

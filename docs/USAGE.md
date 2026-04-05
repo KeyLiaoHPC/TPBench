@@ -64,10 +64,12 @@ Output results on screen are also written to the log directory.
 Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim`, `--kenvs-dim`, and `--kmpiargs-dim`, the options need to be quoted.
 
 ```bash
-tpbcli run <tpbench_options> <default_args> \
+tpbcli run <tpbench_options> \
 [--kernel <kernel_name> \
 [--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
 ```
+
+**Rule:** Every `--kargs`, `--kargs-dim`, `--kenvs`, `--kenvs-dim`, `--kmpiargs`, and `--kmpiargs-dim` must appear **after** a `--kernel` that it applies to (the most recent `--kernel` on the command line). There is no separate “default” handle for settings before the first `--kernel`.
 
 `<tpbench_options>` supported options include:
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
@@ -80,37 +82,29 @@ tpbcli run <tpbench_options> <default_args> \
 
 **1) Select Evaluation Kernel and Kernel Parameters** (`--kernel, --kargs`)
 
-`--kernel` defines a kernel to test, named `<kernel_name>`. All options starting with `--k*` after this represent kernel options. Applied to this kernel until the next `--kernel` appears or the command line ends. If `--kargs`, `--kenvs`, and `--kmpiargs` appear before `--kernel`, the set parameters serve as defaults. Passed to all kernels to run. TPBench executes multiple rounds of tests. Completes all kernel tests defined by `--kernel`, or exits on error. A single `--kargs` can set multiple parameters. Separate parameters with commas. If a value contains commas, use quotes to prevent incorrect parsing.
+`--kernel` defines a kernel to test, named `<kernel_name>`. All options starting with `--k*` after it apply to that kernel until the next `--kernel` or end of line. TPBench runs one handle per `--kernel` occurrence (dimension expansion can add more handles for the same kernel name). A single `--kargs` can set multiple parameters; separate with commas. If a value contains commas, use quotes.
 
 Syntax: `--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
 
-For one `--kernel` definition, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times, but options with suffix `_dim` can only appear once (see section 2.2.3). When the same parameter name appears multiple times after one `--kernel` definition, TPBench uses the last occurrence.
+For one `--kernel` block, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times, but options with suffix `_dim` follow the limits in section 2.2.3. When the same parameter name is set more than once in the same block, the last occurrence wins.
 
-Parameter options (`--kargs`, `--kenvs`, and `--kmpiargs`) accept a comma-separated string list, with each element in the format `<key>=<value>`. Multiple such key-value pairs can follow a parameter option, indicating that the variable named "<key>" in the kernel should be set to "<value>". TPBench parses the option settings and checks the parameter legality. If multiple settings with the same parameter name appear in the command line for one test, the priority from high to low is: variable parameters > kernel parameters > default parameters, with higher-priority parameter settings overriding lower-priority ones. For a kernel named "foo", if `--kargs` definition after `--kernel foo` duplicates default parameter settings, `<foo>` will use the last occurrence in its scope. Therefore, the following three commands have the same effect.
+Parameter options (`--kargs`, `--kenvs`, and `--kmpiargs`) accept a comma-separated list of `<key>=<value>` entries. TPBench checks names and types against that kernel’s registered parameters. If multiple settings apply to the same parameter for one handle, the priority is: values from `--kargs-dim` / `--kenvs-dim` / `--kmpiargs-dim` expansion (where applicable) override plain `--kargs` / `--kenvs` / `--kmpiargs`, and later options override earlier ones in the same block.
 
-```
-$ tpbcli --kargs total_memsize=128,ntest=100 --kernel triad
-$ tpbcli --kargs ntest=10 --kernel triad --kargs total_memsize=128,ntest=100
-$ tpbcli --kernel triad \
-         --kargs total_memsize=128 \
-         --kargs ntest=100
-```
-
-Note: default parameters may not be adopted as-is. Two main reasons: 1) parameter processing is defined by the evaluation kernel; 2) an evaluation kernel may not support all default parameter names. For example, total memory capacity (`total_memsize=128`): using double precision, the triad calculation (`a_i=b_i+s*c_i`) allocates 5461 double variables per array (128/3*1024/sizeof(double), rounded down). Actual total memory capacity is **131064 Bytes**, not **131072 Bytes**. Therefore, after each test round, actual parameters used by the evaluation kernel are output to the terminal. Use these as the actual input parameters for the evaluation kernel.
+Note: Registered defaults may not match what the kernel finally uses after its own logic (e.g. alignment). For example, `total_memsize=128` KiB with double precision triad (`a_i=b_i+s*c_i`) may yield **131064** bytes per array, not 131072. After each run, the kernel prints the parameters it actually used.
 
 Example 1: Run triad kernel, total memory capacity 128KiB
 ```bash
-$ tpbcli run --kargs total_memsize=128 -k triad
+$ tpbcli run -k triad --kargs total_memsize=128
 ```
 
-Example 2: Test 2 rounds of the triad kernel. Round 1 runs 100 loops, total memory capacity 128KiB. Round 2 runs 100 loops, total memory capacity 256KiB
+Example 2: Two triad runs: first 100 loops at 128KiB, second 100 loops at 256KiB
 ```bash
-$ tpbcli run --kargs ntest=100 -k triad --kargs total_memsize=128 -k triad --kargs total_memsize=256
+$ tpbcli run -k triad --kargs ntest=100,total_memsize=128 -k triad --kargs ntest=100,total_memsize=256
 ```
 
-Example 3: Run triad and pchase kernels sequentially. Each kernel uses total memory capacity 128KiB. triad loops 100 times, pchase loops 1000 times.
+Example 3: Run triad then pchase: triad at 128KiB and 100 loops; pchase at 1000 loops (example parameter names depend on the pchase kernel).
 ```bash
-$ tpbcli run --kargs total_memsize=128,ntest=100 -k triad -k pchase --kargs=1000
+$ tpbcli run -k triad --kargs total_memsize=128,ntest=100 -k pchase --kargs ntest=1000
 ```
 
 Use `--kernel -l` to list currently available evaluation kernels. Use `--kernel <foo> --kargs -l` to list command-line input parameters supported by `<foo>` kernel.
@@ -244,7 +238,7 @@ Example: Run stream_mpi kernel with 100 test iterations, aggregate array size of
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs '-np 2'
 ```
 
-You can specify `--kmpiargs` multiple times; they will be concatenated with a space. If `--kmpiargs` is specified after `--kernel`, the kernel-specific MPI arguments replace the common MPI arguments.
+You can specify `--kmpiargs` multiple times after the same `--kernel`; each fragment is concatenated with a space.
 
 **2) Variable MPI Arguments**
 

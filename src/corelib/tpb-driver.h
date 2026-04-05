@@ -123,7 +123,7 @@ int tpb_driver_get_current_hdl_idx(void);
 int tpb_driver_add_handle(const char *kernel_name);
 
 /**
- * @brief Run all handles starting from index 1.
+ * @brief Run all handles (indices 0 .. nhdl-1).
  * @return 0 on success, error code on first failure.
  */
 int tpb_driver_run_all(void);
@@ -156,7 +156,7 @@ void tpb_driver_disable_kernel_reg(void);
 /**
  * @brief Reset handles for next batch run.
  *
- * Cleans and removes all handles except the pseudo handle (index 0).
+ * Frees all runtime handles and clears the handle list.
  * Preserves the kernel registry.
  *
  * @return 0 on success.
