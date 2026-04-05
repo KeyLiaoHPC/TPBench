@@ -121,7 +121,7 @@ tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path)
 
     if (rank == 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT,
-            "TPBench is now initializing by rank: ");
+            "TPBench is now initialized by rank: ");
         for (r = 0; r < nprocs; r++) {
             tpb_printf(TPBM_PRTN_M_DIRECT, "%d (pid=%d)%s",
                 r, allpids[r], (r + 1 < nprocs) ? ", " : "");

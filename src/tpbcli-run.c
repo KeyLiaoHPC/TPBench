@@ -70,14 +70,16 @@ static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
  * Recursive wrapper; first combination uses the current handle.
  */
 static int expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
-                              int max_depth, const char *kernel_name);
+                              int max_depth, const char *kernel_name,
+                              int orig_hdl_idx);
 
 /*
  * Recursive implementation for expand_nested_dims.
  */
 static int expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices,
                                    int depth, int max_depth,
-                                   const char *kernel_name, int *is_first);
+                                   const char *kernel_name, int *is_first,
+                                   int orig_hdl_idx);
 
 /*
  * Return the nested dimension level at depth.
@@ -472,7 +474,8 @@ get_dim_at_depth(tpb_dim_values_t *vals, int depth)
 
 static int
 expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
-                        int max_depth, const char *kernel_name, int *is_first)
+                        int max_depth, const char *kernel_name, int *is_first,
+                        int orig_hdl_idx)
 {
     int err;
     tpb_dim_values_t *current = get_dim_at_depth(vals, depth);
@@ -490,8 +493,12 @@ expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
                 /* First combination: apply to existing handle (already created by --kernel) */
                 *is_first = 0;
             } else {
-                /* Subsequent combinations: add a new handle */
+                /* Subsequent combinations: add a new handle and copy kargs */
                 err = tpb_driver_add_handle(kernel_name);
+                if (err != 0) {
+                    return err;
+                }
+                err = tpb_driver_copy_hdl_from(orig_hdl_idx);
                 if (err != 0) {
                     return err;
                 }
@@ -514,7 +521,7 @@ expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
         for (int i = 0; i < current->n; i++) {
             indices[depth] = i;
             err = expand_nested_dims_impl(vals, indices, depth + 1, max_depth,
-                                          kernel_name, is_first);
+                                          kernel_name, is_first, orig_hdl_idx);
             if (err != 0) {
                 return err;
             }
@@ -526,10 +533,11 @@ expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
 
 static int
 expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
-                   int max_depth, const char *kernel_name)
+                   int max_depth, const char *kernel_name, int orig_hdl_idx)
 {
     int is_first = 1;
-    return expand_nested_dims_impl(vals, indices, depth, max_depth, kernel_name, &is_first);
+    return expand_nested_dims_impl(vals, indices, depth, max_depth, kernel_name,
+                                   &is_first, orig_hdl_idx);
 }
 
 static int
@@ -566,8 +574,12 @@ expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
         return TPBE_MALLOC_FAIL;
     }
 
+    /* Save original handle index before expansion */
+    int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
+
     /* Expand dimensions recursively */
-    err = expand_nested_dims(dim_vals, indices, 0, depth, kernel_name);
+    err = expand_nested_dims(dim_vals, indices, 0, depth, kernel_name,
+                             orig_hdl_idx);
 
     free(indices);
     tpb_dim_values_free(dim_vals);
