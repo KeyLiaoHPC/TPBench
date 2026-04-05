@@ -1,6 +1,6 @@
 /*
  * test-cli-run-nokernel.c
- * Test pack B2: `tpbcli run` rejects kargs/kenvs/kmpiargs (and dim) before --kernel.
+ * Test pack B2: `tpbcli run` rejects kargs/kenvs/kmpiargs and *-dim variants before --kernel.
  */
 
 #include <stdio.h>
@@ -29,6 +29,8 @@ static int test_kargs_before_kernel(void);
 static int test_kargs_dim_before_kernel(void);
 static int test_kenvs_before_kernel(void);
 static int test_kmpiargs_before_kernel(void);
+static int test_kenvs_dim_before_kernel(void);
+static int test_kmpiargs_dim_before_kernel(void);
 static int test_normal_with_kernel(void);
 
 /* Local Function Implementations */
@@ -135,6 +137,26 @@ test_kmpiargs_before_kernel(void)
 }
 
 static int
+test_kenvs_dim_before_kernel(void)
+{
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream",
+             TPB_TEST_TPBCLI_STR);
+    return expect_fail_with_hint("B2.6 kenvs_dim_before_kernel", cmd);
+}
+
+static int
+test_kmpiargs_dim_before_kernel(void)
+{
+    char cmd[4096];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run --kmpiargs-dim 'np=[1,2]' --kernel stream",
+             TPB_TEST_TPBCLI_STR);
+    return expect_fail_with_hint("B2.7 kmpiargs_dim_before_kernel", cmd);
+}
+
+static int
 test_normal_with_kernel(void)
 {
     char cmd[4096];
@@ -175,6 +197,12 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.5") == 0) {
         return test_normal_with_kernel();
+    }
+    if (strcmp(id, "B2.6") == 0) {
+        return test_kenvs_dim_before_kernel();
+    }
+    if (strcmp(id, "B2.7") == 0) {
+        return test_kmpiargs_dim_before_kernel();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

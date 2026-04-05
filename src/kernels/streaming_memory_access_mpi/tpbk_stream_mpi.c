@@ -933,7 +933,7 @@ main(int argc, char **argv)
      * Uses TPB_WORKSPACE from the environment when non-NULL.
      */
     err = tpb_mpik_corelib_init((void *)MPI_COMM_WORLD, NULL);
-    if (err != 0 && err != TPBE_ILLEGAL_CALL) {
+    if (err != 0) {
         if (rank == 0) {
             fprintf(stderr, "Error: tpb_mpik_corelib_init failed: %d\n", err);
         }
