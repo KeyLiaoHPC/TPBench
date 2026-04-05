@@ -98,6 +98,7 @@ int
 tpbk_pli_register_stream_mpi(void)
 {
     int err;
+    int i;
 
     err = tpb_k_register("stream_mpi",
         "STREAM benchmark with MPI and OpenMP.", TPB_KTYPE_PLI);
@@ -172,6 +173,18 @@ tpbk_pli_register_stream_mpi(void)
             | TPB_UATTR_SHAPE_1D);
     if (err != 0) {
         return err;
+    }
+
+    for (i = 0; i < 16; i++) {
+        TPB_UNIT_T u = (i % 4 == 0) ? TPB_UNIT_MBPS : TPB_UNIT_SEC;
+
+        err = tpb_k_add_output(s_summary_names[i],
+            "Rank 0 global STREAM summary; other ranks omit from task record.",
+            TPB_DOUBLE_T,
+            u | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
+        if (err != 0) {
+            return err;
+        }
     }
 
     return tpb_k_finalize_pli();
@@ -279,18 +292,8 @@ run_stream_mpi(void)
 
     if (rank == 0) {
         for (i = 0; i < 16; i++) {
-            TPB_UNIT_T u = (i % 4 == 0) ? TPB_UNIT_MBPS : TPB_UNIT_SEC;
-            tpberr = tpb_k_add_output(s_summary_names[i],
-                "Rank 0 global STREAM summary.",
-                TPB_DOUBLE_T,
-                u | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
-                    | TPB_UATTR_SHAPE_POINT);
-            if (tpberr) {
-                return tpberr;
-            }
-        }
-        for (i = 0; i < 16; i++) {
             void *p = NULL;
+
             tpberr = tpb_k_alloc_output(s_summary_names[i], 1, &p);
             if (tpberr) {
                 return tpberr;

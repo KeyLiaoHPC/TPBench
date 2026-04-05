@@ -83,34 +83,34 @@ tpbk_pli_register_stream(void)
     if (err != 0) return err;
 
     /* Kernel outputs */
-    err = tpb_k_add_output("Allocated memory size", "Actual memory footprint of three stream arrays.",
+    err = tpb_k_add_output("INPARM::Allocated memory size", "Actual memory footprint of three stream arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("STREAM array size", "Actual number of elements per array.",
+    err = tpb_k_add_output("INPARM::STREAM array size", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Copy", "Measured runtime of copy operation.", 
+    err = tpb_k_add_output("EVENT,TIME::Copy", "Measured runtime of copy operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Scale", "Measured runtime of scale operation.", 
+    err = tpb_k_add_output("EVENT,TIME::Scale", "Measured runtime of scale operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Add", "Measured runtime of add operation.", 
+    err = tpb_k_add_output("EVENT,TIME::Add", "Measured runtime of add operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Time::Triad", "Measured runtime of triad operation.", 
+    err = tpb_k_add_output("EVENT,TIME::Triad", "Measured runtime of triad operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Copy", "Measured copy bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("FOM,BANDWIDTH::Copy", "Measured copy bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Scale", "Measured scale bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("FOM,BANDWIDTH::Scale", "Measured scale bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Add", "Measured add bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("FOM,BANDWIDTH::Add", "Measured add bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Bandwidth::Triad", "Measured triad bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("FOM,BANDWIDTH::Triad", "Measured triad bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 
@@ -164,30 +164,30 @@ run_stream(void)
     ntest = (int)ntest64;
 
     /* Malloc callbacks for kernel\'s outputs - 4 separate timing arrays */
-    tpberr = tpb_k_alloc_output("Time::Copy", ntest, &copy_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Copy", ntest, &copy_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Time::Scale", ntest, &scale_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Scale", ntest, &scale_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Time::Add", ntest, &add_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Add", ntest, &add_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Time::Triad", ntest, &triad_time);
+    tpberr = tpb_k_alloc_output("EVENT,TIME::Triad", ntest, &triad_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("Allocated memory size", 1, &real_total_memsize);
+    tpberr = tpb_k_alloc_output("INPARM::Allocated memory size", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("STREAM array size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("INPARM::STREAM array size", 1, &array_size_out);
     if (tpberr) return tpberr;
 
     /* Measured data throughput rate is a derived metrics, adding at run-time */
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpberr = tpb_k_alloc_output("Bandwidth::Copy", ntest, &copy_bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Copy", ntest, &copy_bw);
         if (tpberr) return tpberr;
-        tpberr = tpb_k_alloc_output("Bandwidth::Scale", ntest, &scale_bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Scale", ntest, &scale_bw);
         if (tpberr) return tpberr;
-        tpberr = tpb_k_alloc_output("Bandwidth::Add", ntest, &add_bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Add", ntest, &add_bw);
         if (tpberr) return tpberr;
-        tpberr = tpb_k_alloc_output("Bandwidth::Triad", ntest, &triad_bw);
+        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Triad", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else {
         tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\nThe STREAM benchmark only support wallclock timer. ", timer.name);
@@ -222,7 +222,7 @@ d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
     printf(TPBM_PRTN_M_DIRECT, "This system uses %d bytes per array element.\n", BytesPerWord);
 
     err = 0;
-    /* Use array_size if specified (non-zero), otherwise use total_memsize */
+    /* Use array_size (stream_array_size) if specified (non-zero) */
     if (array_size <= 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT, "Illegal arguments stream_array_size must > 0, currently %u", array_size);
         return TPBE_KERN_ARG_FAIL;

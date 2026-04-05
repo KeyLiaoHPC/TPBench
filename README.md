@@ -38,10 +38,10 @@ export LD_LIBRARY_PATH=$HOME/tpbench/lib:${LD_LIBRARY_PATH}
 
 ### 1.2. Running the STREAM benchmark
 
-Run one STREAM test with `ntest=20` and `total_memsize=3145728`:
+Run one STREAM test with `ntest=20` and `stream_array_size=134217728`:
 
 ```bash
-tpbcli run --kernel stream --kargs total_memsize=3145728,ntest=20
+tpbcli run --kernel stream --kargs stream_array_size=134217728,ntest=20
 ...
 Result quantiles: Q0.05=1.1308E5, Q0.25=1.1769E5, Q0.50=1.3686E5, Q0.75=1.3734E5, Q0.95=1.3777E5
 Metrics: triad_bw_walltime
@@ -58,10 +58,10 @@ Result quantiles: Q0.05=9.9613E4, Q0.25=1.1762E5, Q0.50=1.4419E5, Q0.75=1.4967E5
 
 You should see `TPBench workspace: .../tpbench`, kernel parameters, timing and bandwidth metrics, `Solution Validates`, and a final success note.
 
-To sweep three memory sizes 32 MiB, 512 MiB, and 3 GiB, set `--kargs-dim`:
+To sweep three array sizes ~32 MiB, ~512 MiB, and ~3 GiB, set `--kargs-dim`:
 
 ```bash
-tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'total_memsize=[32768,524288,3145728]'
+tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'stream_array_size=[1398101,22369621,134217728]'
 ```
 
 This command expands to three runs and records three tasks in one batch.
