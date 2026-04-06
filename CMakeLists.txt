@@ -184,6 +184,7 @@ add_custom_target(tpb_cmake_help
 # Main CLI executable and subcommands
 add_executable(tpbcli
     src/tpbcli.c
+    src/tpbcli-argp.c
     src/tpbcli-run.c
     src/tpbcli-run-dim.c
     src/tpbcli-kernel-list.c
