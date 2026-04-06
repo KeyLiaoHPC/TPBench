@@ -16,7 +16,10 @@ tpb_add_subcase(B2 B2.1 kargs_before_kernel       test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.2 kargs_dim_before_kernel   test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.3 kenvs_before_kernel       test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.4 kmpiargs_before_kernel    test-cli-run-nokernel tpbcli)
-tpb_add_subcase(B2 B2.5 normal_with_kernel        test-cli-run-nokernel tpbcli)
+# B2.5 runs --kernel stream; omit when TPB_KERNELS excludes stream (see integration tests).
+if(TARGET tpbk_stream.tpbx)
+    tpb_add_subcase(B2 B2.5 normal_with_kernel test-cli-run-nokernel tpbcli)
+endif()
 tpb_add_subcase(B2 B2.6 kenvs_dim_before_kernel   test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.7 kmpiargs_dim_before_kernel test-cli-run-nokernel tpbcli)
 

@@ -587,16 +587,16 @@ tpbcli_add_arg(parent, &(tpbcli_argconf_t){
 
 | 文件 | 目的 |
 |------|---------|
-| [`src/tpbcli-argp.h`](src/tpbcli-argp.h) | 公共头文件：所有类型、配置结构体、带 Doxygen 的 6 个 API 原型 |
-| [`src/tpbcli-argp.c`](src/tpbcli-argp.c) | 实现：树生命周期、带封存/去重的 add_arg、栈解析器、find_arg、默认帮助生成器 |
-| [`tests/tpbcli/test_tpbcli_argp.c`](tests/tpbcli/test_tpbcli_argp.c) | 单元测试包 B3（10 个用例） |
+| [`src/tpbcli-argp.h`](src/tpbcli-argp.h) | 公共头文件：所有类型、配置结构体、带 Doxygen 文档的 6 个 API 原型 |
+| [`src/tpbcli-argp.c`](src/tpbcli-argp.c) | 实现：树生命周期、带封存/去重的 add_arg、栈解析器、find_arg、默认帮助生成器、验证检查 |
+| [`tests/tpbcli/test_tpbcli_argp.c`](tests/tpbcli/test_tpbcli_argp.c) | 单元测试包 B3（10 个测试用例） |
 
 ### 6.2 修改的文件
 
 | 文件 | 变更 |
 |------|--------|
 | [`CMakeLists.txt`](CMakeLists.txt) | 将 `src/tpbcli-argp.c` 添加到 `tpbcli` 可执行文件源列表 |
-| [`tests/tpbcli/CMakeLists.txt`](tests/tpbcli/CMakeLists.txt) | 添加 `test-tpbcli-argp` 可执行文件（直接编译 `src/tpbcli-argp.c`，包 B3，10 个子用例），添加到 `test_tpbcli` 依赖 |
+| [`tests/tpbcli/CMakeLists.txt`](tests/tpbcli/CMakeLists.txt) | 添加 `test-tpbcli-argp` 可执行文件（直接编译 `src/tpbcli-argp.c`，包 B3，10 个测试用例），添加到 `test_tpbcli` 依赖 |
 
 **构建模式。** 测试遵循与包 B1（`test-cli-run-dimargs`）相同的方法：直接将 `src/*.c` 文件编译到测试可执行文件中，并链接 `tpbench` 以获取错误码。无需 corelib CMake 变更。
 
@@ -629,19 +629,19 @@ tpbcli_add_arg(parent, &(tpbcli_argconf_t){
 
 | 函数 | 目的 |
 |----------|---------|
-| `_sf_find_child(node, token)` | 线性扫描 `node->first_child` 兄弟链。返回第一个 `name` 或 `short_name` 匹配 `token` 的子节点，或 NULL。 |
-| `_sf_find_child_by_name(node, name)` | 与上述相同，但仅匹配 `name` 字段（无 `short_name`）。用于 conflict_opts 名称解析。 |
-| `_sf_sibling_exclusive_conflict(match)` | 遍历 `match` 的兄弟节点（通过 `match->parent->first_child` 链）。如果 `match` 有 `EXCLUSIVE` 标志且任何其他兄弟节点已 `is_set`，返回该兄弟节点。如果任何已 `is_set` 的兄弟节点有 `EXCLUSIVE` 标志，返回它。否则返回 NULL。 |
+| `_sf_find_child(parent, token)` | 线性扫描 `parent->first_child` 兄弟链。返回第一个 `name` 或 `short_name` 匹配 `token` 的子节点，或 NULL。 |
+| `_sf_find_child_by_name(parent, name)` | 与上述相同，但仅匹配 `name` 字段（排除 `short_name`）。用于 conflict_opts 名称解析。 |
+| `_sf_find_max_chosen_zero_child(opt, token)` | 搜索 `opt` 的子节点，查找 `max_chosen==0` 且 `name` 或 `short_name` 匹配 `token` 的子节点。用于 OPT 查看逻辑，在将 `argv[i+1]` 作为值消耗之前拦截帮助/已弃用节点。 |
+| `_sf_sibling_exclusive_conflict(match)` | 遍历 `match` 的兄弟节点（通过 `match->parent->first_child` 链）。如果 `match` 有 `EXCLUSIVE` 标志且任何其他兄弟节点已 `is_set`，返回该冲突的兄弟节点。如果任何已 `is_set` 的兄弟节点有 `EXCLUSIVE` 标志，返回它。否则返回 NULL。 |
 | `_sf_sibling_conflict_opts_hit(match)` | 遍历 `match->conflict_opts[0..conflict_count-1]`。通过 `_sf_find_child_by_name(match->parent, name)` 在兄弟节点中解析每个名称。如果任何已解析的兄弟节点 `is_set`，返回它。否则返回 NULL。 |
-| `_sf_find_max_chosen_zero_child(node, token)` | 搜索 `node` 的子节点，查找 `max_chosen==0` 且 `name` 或 `short_name` 匹配 `token` 的子节点。用于 OPT 查看逻辑，在将 `argv[i+1]` 作为值消耗之前拦截帮助/已弃用节点。 |
-| `_sf_validate_pre_increment(match, out)` | 按顺序运行 exclusive、conflict_opts 和 max_chosen 检查。如果任何检查失败，打印诊断并返回失败码。 |
-| `_sf_resolve_conflict_opts_validate(root)` | 解析前遍历：递归遍历所有节点。对于每个有 `conflict_opts` 的节点，验证每个名称解析为兄弟节点。如果任何名称无法解析（附带到 stderr 的诊断），返回非零。 |
-| `_sf_emit_help(node, out)` | 打印 `node` 的默认帮助。对于 CMD 或根节点：分类格式（用法行带 `<cmd1|cmd2|...> [options]`、desc、Commands 部分、Options 部分）。对于有子节点的 OPT 节点：紧凑格式 A（`<name> <value>: <desc>`，然后 `Sub-options:` 部分）。对于叶子节点：`<name>: <desc>`。`max_chosen=0` 且 `help_fn==NULL` 的节点在列表中标记为 `[deprecated]`。此函数**不**委托给 `node->help_fn` —— 它就是默认实现。`tpbcli_default_help` 在 `node->parent` 上调用此函数。 |
-| `_sf_reset_parse_state(node)` | 递归重置 `node` 及其所有后代上的 `is_set`、`chosen_count` 和 `parsed_value` 为零/NULL。 |
-| `_sf_destroy_children(node)` | 递归释放 `node` 的所有子节点（深度优先，先兄弟后子）。不释放 `node` 本身。 |
-| `_sf_mandatory_fail(parent, out)` | 检查 `parent` 的必填子节点。打印第一个缺失必填（无预设）的诊断并返回 `TPBE_CLI_FAIL`。 |
-| `_sf_post_loop(tree, stack, stack_sz, out)` | POST-LOOP 处理程序：如果无子节点设置则自动帮助，然后在栈层级上进行必填检查。 |
-| `_sf_find_arg_dfs(node, target_depth, name, out)` | `tpbcli_find_arg` 的 DFS 辅助函数。查找在 `target_depth` 且匹配 `name` 的节点。 |
+| `_sf_validate_pre_increment(match, out)` | 按顺序执行三个验证检查：(1) 互斥冲突，(2) conflict_opts 冲突，(3) max_chosen（帮助/已弃用/超过）。如果任何检查失败，打印诊断并返回 `TPBE_CLI_FAIL` 或 `TPBE_EXIT_ON_HELP`；如果全部通过，返回 `TPBE_SUCCESS`。 |
+| `_sf_resolve_conflict_opts_validate(root)` | 解析前验证遍历：递归遍历所有节点。对于每个有 `conflict_opts` 的节点，验证每个名称解析为有效的兄弟节点。如果任何名称无法解析（附带到 stderr 的诊断），返回 `TPBE_CLI_FAIL`。 |
+| `_sf_emit_help(node, out)` | 打印 `node` 的默认帮助。对于 CMD 或根节点：分类格式（用法行带 `<cmd1|cmd2|...> [options]`、desc、Commands 部分、Options 部分）。对于有子节点的 OPT 节点：紧凑格式 A（`<name> <value>: <desc>`，然后 `Sub-options:` 部分）。对于叶子节点：`<name>: <desc>`。`max_chosen=0` 且 `help_fn==NULL` 的节点在列表中标记为 `[deprecated]`。此函数**就是**默认帮助生成器；`tpbcli_default_help` 在 `node->parent` 上调用此函数。 |
+| `_sf_reset_parse_state(node)` | 递归重置 `node` 及其所有后代上的 `is_set`、`chosen_count` 和 `parsed_value` 为零/NULL。每次解析前调用。 |
+| `_sf_destroy_children(node)` | 递归释放 `node` 的所有子节点（深度优先：先释放每个子节点的子树，然后释放子节点本身）。不释放 `node` 本身。 |
+| `_sf_mandatory_fail(parent, out)` | 检查 `parent` 的必填子节点。打印第一个缺失必填子节点（无预设）的诊断并返回 `TPBE_CLI_FAIL`。 |
+| `_sf_post_loop(tree, stack, stack_sz, out)` | POST-LOOP 处理程序：(1) 如果根节点有子节点但无子节点 `is_set` 则自动帮助，(2) 从顶到底对所有栈层级进行必填检查。 |
+| `_sf_find_arg_dfs(node, target_depth, name, out)` | `tpbcli_find_arg` 的 DFS 辅助函数。查找在 `target_depth` 且匹配 `name` 或 `short_name` 的第一个节点。找到则返回 `TPBE_SUCCESS`，否则返回 `TPBE_LIST_NOT_FOUND`。 |
 | `_sf_child_name_exists(parent, name)` | 检查 `parent` 下是否已存在 `name` 的子节点。`tpbcli_add_arg` 用于重复拒绝。 |
 
 ---
@@ -702,5 +702,3 @@ tpbcli_add_arg(parent, &(tpbcli_argconf_t){
 - **必选参数：** 支持位置参数（如 `tpbcli <command> <input-file>`）。
 - **自定义验证器：** 允许 `parse_fn` 返回结构化错误码以提供更丰富的诊断。
 - **JSON/YAML 树导出：** 序列化参数树以生成文档。
-
-(文件结束 - 共 704 行)

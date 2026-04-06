@@ -587,16 +587,16 @@ Callers who want custom help can provide their own `help_fn` instead.
 
 | File | Purpose |
 |------|---------|
-| [`src/tpbcli-argp.h`](src/tpbcli-argp.h) | Public header: all types, config struct, 6 API prototypes with Doxygen |
-| [`src/tpbcli-argp.c`](src/tpbcli-argp.c) | Implementation: tree lifecycle, add_arg with seal/dedup, stack parser, find_arg, default help generator |
-| [`tests/tpbcli/test_tpbcli_argp.c`](tests/tpbcli/test_tpbcli_argp.c) | Unit test pack B3 (10 cases) |
+| [`src/tpbcli-argp.h`](src/tpbcli-argp.h) | Public header: all types, config struct, 6 API prototypes with Doxygen documentation |
+| [`src/tpbcli-argp.c`](src/tpbcli-argp.c) | Implementation: tree lifecycle, add_arg with seal/dedup, stack parser, find_arg, default help generator, validation checks |
+| [`tests/tpbcli/test_tpbcli_argp.c`](tests/tpbcli/test_tpbcli_argp.c) | Unit test pack B3 (10 test cases) |
 
 ### 6.2 Modified Files
 
 | File | Change |
 |------|--------|
 | [`CMakeLists.txt`](CMakeLists.txt) | Add `src/tpbcli-argp.c` to the `tpbcli` executable source list |
-| [`tests/tpbcli/CMakeLists.txt`](tests/tpbcli/CMakeLists.txt) | Add `test-tpbcli-argp` executable (compiles `src/tpbcli-argp.c` directly, Pack B3, 10 subcases), add to `test_tpbcli` depends |
+| [`tests/tpbcli/CMakeLists.txt`](tests/tpbcli/CMakeLists.txt) | Add `test-tpbcli-argp` executable (compiles `src/tpbcli-argp.c` directly, Pack B3, 10 test cases), add to `test_tpbcli` dependencies |
 
 **Build pattern.** The test follows the same approach as Pack B1 (`test-cli-run-dimargs`): compile the `src/*.c` file directly into the test executable and link against `tpbench` for error codes. No corelib CMake changes needed.
 
@@ -629,19 +629,19 @@ Following the style guide (`_sf_` prefix for single-file statics):
 
 | Function | Purpose |
 |----------|---------|
-| `_sf_find_child(node, token)` | Linear scan of `node->first_child` sibling chain. Returns the first child whose `name` or `short_name` matches `token`, or NULL. |
-| `_sf_find_child_by_name(node, name)` | Same as above but matches `name` field only (no `short_name`). Used for conflict_opts name resolution. |
-| `_sf_sibling_exclusive_conflict(match)` | Walk siblings of `match` (via `match->parent->first_child` chain). If `match` has `EXCLUSIVE` flag and any other sibling is already `is_set`, return that sibling. If any `is_set` sibling has `EXCLUSIVE` flag, return it. Otherwise return NULL. |
+| `_sf_find_child(parent, token)` | Linear scan of `parent->first_child` sibling chain. Returns the first child whose `name` or `short_name` matches `token`, or NULL. |
+| `_sf_find_child_by_name(parent, name)` | Same as above but matches `name` field only (excludes `short_name`). Used for conflict_opts name resolution. |
+| `_sf_find_max_chosen_zero_child(opt, token)` | Search children of `opt` for a child with `max_chosen==0` whose `name` or `short_name` matches `token`. Used in the OPT peek logic to intercept help/deprecated nodes before consuming `argv[i+1]` as a value. |
+| `_sf_sibling_exclusive_conflict(match)` | Walk siblings of `match` (via `match->parent->first_child` chain). If `match` has `EXCLUSIVE` flag and any other sibling is already `is_set`, return that conflicting sibling. If any `is_set` sibling has `EXCLUSIVE` flag, return it. Otherwise return NULL. |
 | `_sf_sibling_conflict_opts_hit(match)` | Walk `match->conflict_opts[0..conflict_count-1]`. Resolve each name among siblings via `_sf_find_child_by_name(match->parent, name)`. If any resolved sibling is `is_set`, return it. Otherwise return NULL. |
-| `_sf_find_max_chosen_zero_child(node, token)` | Search children of `node` for a child with `max_chosen==0` whose `name` or `short_name` matches `token`. Used in the OPT peek logic to intercept help/deprecated nodes before consuming `argv[i+1]` as a value. |
-| `_sf_validate_pre_increment(match, out)` | Run exclusive, conflict_opts, and max_chosen checks in order. Print diagnostic and return failure code if any check fails. |
-| `_sf_resolve_conflict_opts_validate(root)` | Pre-parse pass: recursively walk all nodes. For each node with `conflict_opts`, verify every name resolves to a sibling. Return non-zero if any name fails to resolve (with diagnostic to stderr). |
-| `_sf_emit_help(node, out)` | Print default help for `node`. For CMD or root nodes: categorized format (Usage line with `<cmd1|cmd2|...> [options]`, desc, Commands section, Options section). For OPT nodes with children: compact format A (`<name> <value>: <desc>`, then `Sub-options:` section). For leaf nodes: `<name>: <desc>`. Nodes with `max_chosen=0` and `help_fn==NULL` are marked `[deprecated]` in listings. This function does NOT delegate to `node->help_fn` — it IS the default. `tpbcli_default_help` calls this on `node->parent`. |
-| `_sf_reset_parse_state(node)` | Recursively reset `is_set`, `chosen_count`, and `parsed_value` to zero/NULL on `node` and all descendants. |
-| `_sf_destroy_children(node)` | Recursively free all children of `node` (depth-first, sibling-then-child). Does not free `node` itself. |
-| `_sf_mandatory_fail(parent, out)` | Check mandatory children of `parent`. Print diagnostic for first missing mandatory (no preset) and return `TPBE_CLI_FAIL`. |
-| `_sf_post_loop(tree, stack, stack_sz, out)` | POST-LOOP handler: auto-help if no child set, then mandatory check on stack levels. |
-| `_sf_find_arg_dfs(node, target_depth, name, out)` | DFS helper for `tpbcli_find_arg`. Finds node at `target_depth` matching `name`. |
+| `_sf_validate_pre_increment(match, out)` | Run three validation checks in order: (1) exclusive conflict, (2) conflict_opts conflict, (3) max_chosen (help/deprecated/exceeded). Print diagnostic and return `TPBE_CLI_FAIL` or `TPBE_EXIT_ON_HELP` if any check fails; return `TPBE_SUCCESS` if all pass. |
+| `_sf_resolve_conflict_opts_validate(root)` | Pre-parse validation pass: recursively walk all nodes. For each node with `conflict_opts`, verify every name resolves to a valid sibling. Return `TPBE_CLI_FAIL` if any name fails to resolve (with diagnostic to stderr). |
+| `_sf_emit_help(node, out)` | Print default help for `node`. For CMD or root nodes: categorized format (Usage line with `<cmd1|cmd2|...> [options]`, desc, Commands section, Options section). For OPT nodes with children: compact format A (`<name> <value>: <desc>`, then `Sub-options:` section). For leaf nodes: `<name>: <desc>`. Nodes with `max_chosen=0` and `help_fn==NULL` are marked `[deprecated]` in listings. This function IS the default help generator; `tpbcli_default_help` calls this on `node->parent`. |
+| `_sf_reset_parse_state(node)` | Recursively reset `is_set`, `chosen_count`, and `parsed_value` to zero/NULL on `node` and all descendants. Called before each parse. |
+| `_sf_destroy_children(node)` | Recursively free all children of `node` (depth-first: free each child's subtree, then free the child itself). Does not free `node` itself. |
+| `_sf_mandatory_fail(parent, out)` | Check mandatory children of `parent`. Print diagnostic for first missing mandatory child (no preset) and return `TPBE_CLI_FAIL`. |
+| `_sf_post_loop(tree, stack, stack_sz, out)` | POST-LOOP handler: (1) auto-help if root has children but none are `is_set`, (2) mandatory check on all stack levels from top to bottom. |
+| `_sf_find_arg_dfs(node, target_depth, name, out)` | DFS helper for `tpbcli_find_arg`. Finds first node at `target_depth` matching `name` or `short_name`. Returns `TPBE_SUCCESS` if found, `TPBE_LIST_NOT_FOUND` otherwise. |
 | `_sf_child_name_exists(parent, name)` | Check if a child with `name` already exists under `parent`. Used by `tpbcli_add_arg` for duplicate rejection. |
 
 ---
