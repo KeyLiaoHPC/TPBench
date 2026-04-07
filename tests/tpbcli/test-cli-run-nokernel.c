@@ -32,6 +32,12 @@ static int test_kmpiargs_before_kernel(void);
 static int test_kenvs_dim_before_kernel(void);
 static int test_kmpiargs_dim_before_kernel(void);
 static int test_normal_with_kernel(void);
+static int test_dry_run_basic(void);
+static int test_help_run_level(void);
+static int test_help_kernel_no_name(void);
+static int test_bad_kernel_name(void);
+static int test_dry_run_cartesian(void);
+static int test_help_kernel_specific(void);
 
 /* Local Function Implementations */
 
@@ -86,9 +92,9 @@ expect_fail_with_hint(const char *case_name, const char *cmd)
         fprintf(stderr, "    expected nonzero exit, got 0\n");
         return 1;
     }
-    if (strstr(buf, "preceding --kernel") == NULL) {
+    if (strstr(buf, "unknown argument") == NULL) {
         FAIL(case_name);
-        fprintf(stderr, "    stderr missing hint \"preceding --kernel\"\n");
+        fprintf(stderr, "    stderr missing \"unknown argument\"\n");
         fprintf(stderr, "    output (truncated): %.500s\n", buf);
         return 1;
     }
@@ -175,6 +181,166 @@ test_normal_with_kernel(void)
     return 0;
 }
 
+static int
+test_dry_run_basic(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run -d --kernel stream "
+             "--kargs stream_array_size=1000,ntest=5",
+             TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.8 dry_run_basic: nonzero exit");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "[DRY-RUN]") == NULL) {
+        FAIL("B2.8 dry_run_basic: missing DRY-RUN");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Exec:") == NULL) {
+        FAIL("B2.8 dry_run_basic: missing Exec");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_help_run_level(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd), "\"%s\" run --help", TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.9 help_run_level: expected exit 0 (help is success)");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Usage:") == NULL || strstr(buf, "--kernel") == NULL) {
+        FAIL("B2.9 help_run_level: missing expected help text");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_help_kernel_no_name(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd), "\"%s\" run --kernel -h", TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.10: expected exit 0 (help is success)");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "requires a legal kernel name") == NULL) {
+        FAIL("B2.10: missing hint");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_bad_kernel_name(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run --kernel nonexistent_kern",
+             TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code == 0) {
+        FAIL("B2.11: expected nonzero exit");
+        return 1;
+    }
+    if (strstr(buf, "requires a legal kernel name") == NULL) {
+        FAIL("B2.11: missing hint");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_dry_run_cartesian(void)
+{
+    char cmd[4096];
+    char buf[16384];
+    int code;
+    int exec_count = 0;
+    const char *p;
+
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run -d --kernel stream "
+             "--kargs-dim 'stream_array_size=[1000,2000]' "
+             "--kargs-dim 'ntest=[10,20]'",
+             TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.12 dry_run_cartesian: nonzero exit");
+        return 1;
+    }
+    p = buf;
+    while ((p = strstr(p, "Exec:")) != NULL) {
+        exec_count++;
+        p += 5;
+    }
+    if (exec_count != 4) {
+        FAIL("B2.12: expected 4 Exec lines");
+        fprintf(stderr, "    got %d\n", exec_count);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_help_kernel_specific(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run --kernel stream --help",
+             TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.13: expected exit 0 (help is success)");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Parameters:") == NULL
+        && strstr(buf, "Outputs:") == NULL) {
+        FAIL("B2.13: missing kernel info");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -203,6 +369,24 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.7") == 0) {
         return test_kmpiargs_dim_before_kernel();
+    }
+    if (strcmp(id, "B2.8") == 0) {
+        return test_dry_run_basic();
+    }
+    if (strcmp(id, "B2.9") == 0) {
+        return test_help_run_level();
+    }
+    if (strcmp(id, "B2.10") == 0) {
+        return test_help_kernel_no_name();
+    }
+    if (strcmp(id, "B2.11") == 0) {
+        return test_bad_kernel_name();
+    }
+    if (strcmp(id, "B2.12") == 0) {
+        return test_dry_run_cartesian();
+    }
+    if (strcmp(id, "B2.13") == 0) {
+        return test_help_kernel_specific();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

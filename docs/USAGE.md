@@ -74,6 +74,8 @@ tpbcli run <tpbench_options> \
 `<tpbench_options>` supported options include:
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
+- `-d` / `--dry-run`: Parse arguments, expand dimensions, print `Exec:` lines for each handle, but do not fork the kernel or write auto-record batches.
+- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints kernel-specific help (see below).
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
     - `sigbit_trim=<x>`: Limit the number of significant digits in output data. Integer parts exceeding the number of digits will be represented in scientific notation.
@@ -162,7 +164,7 @@ Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1
 
 When configuring variable parameter evaluation, TPBench runs tests sequentially according to predefined value sequences. Each value executes the kernel once. Get results as a parameter changes along a coordinate axis (e.g., a performance curve as a parameter changes). When specifying evaluation kernel `--kernel <foo>`, any parameter configurable via `--kargs` in the `foo` kernel can be configured via `--kargs-dim` as a variable parameter. If a variable parameter name duplicates a parameter name in `--kargs`, the `--kargs` value is ignored.
 
-Currently, `tpbcli run` supports configuring explicit list and recursive sequence. To traverse multiple dimensions, nest multiple parameter sequences.
+Currently, `tpbcli run` supports explicit list and recursive sequence for each `--kargs-dim` (and similarly `--kenvs-dim`). To sweep multiple parameters, use **multiple** `--kargs-dim` options after the same `--kernel`; TPBench builds the **Cartesian product** of all those dimensions (e.g. two lists of length 2 and 3 yield six runs). The `{…}` nesting syntax in a single `--kargs-dim` string is **not** supported.
 
 **1) Explicit List**
 
@@ -188,16 +190,14 @@ Example: Run `triad` kernel. Each round executes 100 loops. Set `total_memsize` 
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
-**3) Nested Sequence**
+**3) Multiple dimensions (Cartesian product)**
 
-Nest multiple variable parameters. After defining each variable parameter, define another variable parameter in braces. In command-line parsing, innermost parameter list calculated first. Note, currently not allowed to define same parameter name at different nesting levels.
-
-Syntax: `--kargs-dim <dim>{<nested_dim1>{<nested_dim2>{...}}}`
-
-Example: Run `triad` kernel. Each round executes 100 loops. Use `double`, `float`, and `iso-fp16` data formats sequentially. For each format, set `total_memsize` to `16`, `32`, `64`, `128` sequentially. Runs 12 rounds of tests.
+Use one `--kargs-dim` per parameter axis. Example: combine a three-value `dtype` list with a four-value `total_memsize` recursive sweep (12 runs total):
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}
+$ tpbcli run --kernel triad --kargs ntest=100 \
+    --kargs-dim dtype=[double,float,iso-fp16] \
+    --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
 ### 2.2.5 Set Timing Method
@@ -242,11 +242,11 @@ You can specify `--kmpiargs` multiple times after the same `--kernel`; each frag
 
 **2) Variable MPI Arguments**
 
-`--kmpiargs-dim` supports explicit list and nested list formats for scanning different MPI configurations.
+`--kmpiargs-dim` supports a single quoted list of MPI argument strings. Each list entry becomes one handle (after copying the rest of the handle from the template). To combine process counts and binding policies, put both fragments in **one** list entry (space-separated within the quoted string).
 
-Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
+Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]"`
 
-Example 1: Run stream_mpi kernel, scanning MPI process counts from 1 to 4.
+Example: Run `stream_mpi`, scanning MPI process counts 1, 2, and 4.
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
@@ -254,19 +254,13 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
 ```
 
-Example 2: Use nested lists to scan process counts and binding policies.
+Example: Several full `mpirun` argument bundles in one list (each row is one handle):
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs '--bind-to core' \
-    --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
+    --kmpiargs-dim "['-np 2 --bind-to core', '-np 2 --bind-to socket', \
+                     '-np 4 --bind-to core', '-np 4 --bind-to socket']"
 ```
-
-The above command generates 4 combinations:
-- `-np 2 --bind-to core`
-- `-np 2 --bind-to socket`
-- `-np 4 --bind-to core`
-- `-np 4 --bind-to socket`
 
 **3) Command Line Visibility**
 

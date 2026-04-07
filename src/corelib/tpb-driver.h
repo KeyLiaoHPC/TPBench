@@ -129,6 +129,15 @@ int tpb_driver_add_handle(const char *kernel_name);
 int tpb_driver_run_all(void);
 
 /**
+ * @brief Set dry-run mode for tpb_run_pli.
+ *
+ * When enabled, tpb_run_pli prints the Exec command then skips fork/exec.
+ *
+ * @param enabled Nonzero to enable, zero to disable.
+ */
+void tpb_driver_set_dry_run(int enabled);
+
+/**
  * @brief Register common parameters
  * @return Error code (0 on success)
  */

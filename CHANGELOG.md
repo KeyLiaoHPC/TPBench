@@ -4,8 +4,13 @@
 
 ### Frontend: tpbcli
 
+- **Refactor:** `tpbcli run` argument parsing uses the `tpbcli-argp` tree parser. Kernel-scoped options (`--kargs`, `--kargs-dim`, etc.) are only valid under `--kernel`; unknown options at the wrong depth report `error: unknown argument '…'`.
+- **New:** `-d` / `--dry-run` — expand dimensions, print the same `Exec:` lines as a real run, skip `fork`/`exec` in the driver, and skip task/tbatch auto-record.
+- **New:** `run --help` / `run -h` prints run-level help; `--kernel <name> --help` prints that kernel’s registered parameters and outputs; `--kernel -h` (no name) prints a legal-kernel hint, kernel list, and kernel sub-option help.
+- **Removed:** Nested `{…}` syntax inside a single `--kargs-dim` / `--kenvs-dim` string. Use multiple `--kargs-dim` (or `--kenvs-dim`) options under one `--kernel` for a flat Cartesian product.
+- **Change:** `--kmpiargs-dim` accepts a single quoted list `['…','…']` only (no nested `{…}` list).
 - **Breaking:** `tpbcli run` no longer accepts `--kargs`, `--kargs-dim`, `--kenvs`, `--kenvs-dim`, `--kmpiargs`, or `--kmpiargs-dim` before a preceding `--kernel`. Each such option must follow the `--kernel` it applies to. The `_tpb_common` pseudo handle (`handle_list[0]`) and default-parameter inheritance from it are removed. Multiple `--kmpiargs` after the same `--kernel` concatenate with a space.
-- **Tests:** Pack B2 (`tests/tpbcli/test-cli-run-nokernel.c`) — expect CLI failure with “preceding --kernel” when k-options precede `--kernel`; B2.5 sanity run with `--kernel stream` first.
+- **Tests:** Pack B2 — k-options before `--kernel` expect `unknown argument` in output; B2.5+ cover dry-run, help, and Cartesian dim cases. Pack B1 — nested dim string rejected (B1.4).
 - **Breaking:** `database dump --entry task` prints only task `.tpbe` rows with `derive_to` all-zero (task entry points); line `(N task entry points / M total rows)` reports filtered vs total row count.
 - **Breaking:** `tpbcli list` / `l` removed. Use `tpbcli kernel list`, `kernel ls`, `k list`, or `k ls`.
 - `kernel` / `k` refreshes kernel records in the workspace, then runs the subcommand (`list` / `ls` today).
@@ -14,6 +19,7 @@
 
 ### Corelib
 
+- **New:** `tpb_driver_set_dry_run(int)` — when enabled, `tpb_run_pli` prints `Exec:` then returns without forking (dry-run mode for `tpbcli run -d`).
 - **Breaking:** TBatch `.tpbr` auto-record layout: two headers `TPBLINK::TaskID` (append 20-byte TaskRecordIDs) and `TPBLINK::KernelID` (empty data for now), replacing `KernelRecordIDs` / `TaskRecordIDs` / `ScoreRecordIDs`. Skeleton `.tpbr` is written at `tpb_record_begin_batch`; `tpb_record_end_batch` runs an internal scan of `task.tpbe` (rows with `utc_bits` not before batch start, matching `tbatch_id`, `derive_to` all-zero) and appends each via `tpb_raf_record_append_tbatch`, then patches `duration` / `ntask` / `nkernel` with `tpb_raf_record_patch_tbatch_counters`.
 - **Breaking:** RAFDB lineage fields renamed: `dup_from` → `inherit_from`, `dup_to` → `derive_to` in `tbatch_attr_t` / `tbatch_entry_t` / `kernel_attr_t` / `kernel_entry_t` / `task_attr_t` / `task_entry_t` and in CLI dump key names. `tpb_k_task_set_derive_to(task_id, derive_to_id)` replaces `tpb_k_task_set_dup_to`. On-disk layout byte positions unchanged; existing workspaces are not read as compatible.
 - Auto-record tbatch finalization sets `ntask` and fills `TPBLINK::TaskID` from task `.tpbe` rows that match the batch (including `utc_bits` not before batch start), with `derive_to` all-zero (one logical task per MPI invocation when a capsule is used). Unique-kernel counting (`nkernel`) uses the same entry-point filter so the capsule row is not skipped as a duplicate of per-rank rows.

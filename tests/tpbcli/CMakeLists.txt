@@ -23,6 +23,17 @@ endif()
 tpb_add_subcase(B2 B2.6 kenvs_dim_before_kernel   test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.7 kmpiargs_dim_before_kernel test-cli-run-nokernel tpbcli)
 
+if(TARGET tpbk_stream.tpbx)
+    tpb_add_subcase(B2 B2.8 dry_run_basic test-cli-run-nokernel tpbcli)
+endif()
+tpb_add_subcase(B2 B2.9 help_run_level test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.10 help_kernel_no_name test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.11 bad_kernel_name test-cli-run-nokernel tpbcli)
+if(TARGET tpbk_stream.tpbx)
+    tpb_add_subcase(B2 B2.12 dry_run_cartesian test-cli-run-nokernel tpbcli)
+    tpb_add_subcase(B2 B2.13 help_kernel_specific test-cli-run-nokernel tpbcli)
+endif()
+
 # --- dimargs test executable (Pack B1) ---
 add_executable(test-cli-run-dimargs EXCLUDE_FROM_ALL
     test-cli-run-dimargs.c
@@ -40,7 +51,7 @@ set_target_properties(test-cli-run-dimargs PROPERTIES
 tpb_add_subcase(B1 B1.1 list_expansion   test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.2 recur_expansion  test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.3 string_list      test-cli-run-dimargs tpbcli)
-tpb_add_subcase(B1 B1.4 nested_expansion test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.4 nested_rejected test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.5 total_count      test-cli-run-dimargs tpbcli)
 
 # --- tpbcli-argp (Pack B3) ---

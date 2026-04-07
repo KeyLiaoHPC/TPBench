@@ -18,6 +18,7 @@
 #include "tpbcli-run.h"
 #include "corelib/tpb-argp.h"
 #include "tpbcli-run-dim.h"
+#include "tpbcli-argp.h"
 #include "corelib/tpb-driver.h"
 #include "corelib/tpb-impl.h"
 #include "corelib/tpb-io.h"
@@ -26,102 +27,43 @@
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16
 
+/* Argp migration: run-subcommand state */
+static int g_dry_run;
+static int g_kernel_parsed_for_help;
+static tpb_dim_config_t *g_pending_dim_cfgs[MAX_DIM_CONFIGS];
+static int g_n_pending_dims;
+static char g_pending_kernel_name[TPBM_NAME_STR_MAX_LEN];
+
 /* Local Function Prototypes */
 
-/*
- * Apply a dimension value to the current handle.
- */
 static int apply_dim_value(tpb_dim_values_t *dim_val, int index);
-
-/*
- * Apply environment dimension value to the current handle.
- */
 static int apply_env_dim_value(tpb_dim_values_t *dim_val, int index);
-
-/*
- * Count nesting depth of dimension values.
- */
-static int count_dim_depth(tpb_dim_values_t *vals);
-
-/*
- * Expand handles based on dimension configurations.
- */
-static int expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
-
-/*
- * Expand handles for env dimensions.
- */
-static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name);
-
-/*
- * Recursive helper for env dimension Cartesian expansion.
- */
-static int expand_env_nested_dims_impl(tpb_dim_values_t *vals, int *indices,
-                                       int depth, int max_depth,
-                                       const char *kernel_name,
-                                       int *is_first, int orig_hdl_idx);
-
-/*
- * Expand handles for --kmpiargs-dim explicit list syntax.
- */
+static int expand_dim_handles(tpb_dim_config_t *dim_cfg,
+                              const char *kernel_name);
+static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg,
+                                  const char *kernel_name);
 static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
-
-/*
- * Recursive wrapper; first combination uses the current handle.
- */
-static int expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
-                              int max_depth, const char *kernel_name,
-                              int orig_hdl_idx);
-
-/*
- * Recursive implementation for expand_nested_dims.
- */
-static int expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices,
-                                   int depth, int max_depth,
-                                   const char *kernel_name, int *is_first,
-                                   int orig_hdl_idx);
-
-/*
- * Return the nested dimension level at depth.
- */
-static tpb_dim_values_t *get_dim_at_depth(tpb_dim_values_t *vals, int depth);
-
-/*
- * Parse comma-separated env key=value pairs for the current handle.
- */
 static int parse_kenvs_tokstr(const char *tokstr);
-
-/*
- * Parse ['a','b',...] list for --kmpiargs-dim.
- */
+static char *parse_kmpiargs_list_item(const char *str, const char **pos);
 static int parse_kmpiargs_list(const char *str, const char **pos,
                                char ***out_items, int *out_count);
-
-/*
- * Parse one quoted item from a --kmpiargs-dim list.
- */
-static char *parse_kmpiargs_list_item(const char *str, const char **pos);
-
-/*
- * Parse quoted MPI args string and append to the current handle.
- */
 static int parse_kmpiargs_quoted(const char *arg);
-
-/*
- * Parse outargs string (unit_cast, sigbit_trim).
- */
 static int parse_outargs_string(const char *outargs_str);
 
-/*
- * Parse run-specific arguments after kernel registration.
- */
-static int parse_run(int argc, char **argv);
-
-/*
- * Enforce that --kargs/--kenvs/--kmpiargs (and dim) follow --kernel.
- */
-static int parse_run_require_kernel(const char *opt_name,
-                                    const char *pending_kernel_name);
+static int _sf_expand_cartesian_kargs(void);
+static void _sf_flush_pending_dims(void);
+static void _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out);
+static int _sf_parse_dry_run(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kargs(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kargs_dim(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kenvs(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kenvs_dim(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kernel(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kmpiargs(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_kmpiargs_dim(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_outargs(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_timer(tpbcli_argnode_t *node, const char *value);
+static void _sf_print_kernel_list(FILE *out);
 
 /* Local Function Implementations */
 
@@ -185,248 +127,6 @@ parse_outargs_string(const char *outargs_str)
 }
 
 static int
-parse_run_require_kernel(const char *opt_name, const char *pending_kernel_name)
-{
-    if (pending_kernel_name == NULL || pending_kernel_name[0] == '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Option %s requires a preceding --kernel. "
-                   "Usage: tpbcli run --kernel <name> %s <args>\n",
-                   opt_name, opt_name);
-        return TPBE_CLI_FAIL;
-    }
-    return 0;
-}
-
-static int
-parse_run(int argc, char **argv)
-{
-    int err = 0;
-    int nkern_parsed = 0;
-
-    /* Dimension config tracking per kernel */
-    tpb_dim_config_t *pending_dim_cfg = NULL;
-    char pending_kernel_name[TPBM_NAME_STR_MAX_LEN] = {0};
-
-    /* Set default timer */
-    err = tpb_argp_set_timer("clock_gettime");
-    if (err != 0) {
-        return err;
-    }
-
-    for (int i = 2; i < argc; i++) {
-        if (strcmp(argv[i], "--kernel") == 0 || strcmp(argv[i], "-k") == 0) {
-            /* Before adding new kernel, expand any pending dimension config */
-            if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
-                err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
-                if (err != 0) {
-                    tpb_dim_config_free(pending_dim_cfg);
-                    return err;
-                }
-                tpb_dim_config_free(pending_dim_cfg);
-                pending_dim_cfg = NULL;
-                pending_kernel_name[0] = '\0';
-            }
-
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            i++;  /* Move to kernel name */
-
-            /* Add handle for this kernel */
-            err = tpb_driver_add_handle(argv[i]);
-            if (err != 0) {
-                return err;
-            }
-
-            /* Track current kernel name for potential dim expansion */
-            snprintf(pending_kernel_name, TPBM_NAME_STR_MAX_LEN, "%s", argv[i]);
-            nkern_parsed++;
-
-        } else if (strcmp(argv[i], "--kargs") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;  /* Move to the argument string */
-
-            /* Parse and set the kargs for current handle */
-            err = tpb_argp_set_kargs_tokstr((int)strlen(argv[i]), argv[i], NULL);
-            if (err != 0) {
-                return err;
-            }
-
-        } else if (strcmp(argv[i], "--kargs-dim") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;  /* Move to the dimension argument string */
-
-            /* Parse dimension configuration */
-            tpb_dim_config_t *new_cfg = NULL;
-            err = tpb_argp_parse_dim(argv[i], &new_cfg);
-            if (err != 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Failed to parse --kargs-dim: %s\n", argv[i]);
-                return err;
-            }
-
-            /* Chain nested dimensions if there's already a pending config */
-            if (pending_dim_cfg != NULL) {
-                /* Find the deepest nested config and attach new one */
-                tpb_dim_config_t *tail = pending_dim_cfg;
-                while (tail->nested != NULL) {
-                    tail = tail->nested;
-                }
-                tail->nested = new_cfg;
-            } else {
-                pending_dim_cfg = new_cfg;
-            }
-
-        } else if (strcmp(argv[i], "--kenvs") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;  /* Move to the env argument string */
-
-            /* Parse and set the environment variables for current handle */
-            err = parse_kenvs_tokstr(argv[i]);
-            if (err != 0) {
-                return err;
-            }
-
-        } else if (strcmp(argv[i], "--kenvs-dim") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;  /* Move to the dimension argument string */
-
-            /* Parse dimension configuration for env vars */
-            tpb_dim_config_t *env_dim_cfg = NULL;
-            err = tpb_argp_parse_dim(argv[i], &env_dim_cfg);
-            if (err != 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Failed to parse --kenvs-dim: %s\n", argv[i]);
-                return err;
-            }
-
-            err = expand_env_dim_handles(env_dim_cfg, pending_kernel_name);
-            if (err != 0) {
-                tpb_dim_config_free(env_dim_cfg);
-                return err;
-            }
-            tpb_dim_config_free(env_dim_cfg);
-
-        } else if (strcmp(argv[i], "--kmpiargs") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;
-            err = parse_kmpiargs_quoted(argv[i]);
-            if (err != 0) {
-                return err;
-            }
-
-        } else if (strcmp(argv[i], "--kmpiargs-dim") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            err = parse_run_require_kernel(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-            i++;
-
-            err = expand_kmpiargs_dim(argv[i], pending_kernel_name);
-            if (err != 0) {
-                return err;
-            }
-
-        } else if (strcmp(argv[i], "--timer") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            i++;
-            err = tpb_argp_set_timer(argv[i]);
-            if (err != 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid timer: %s\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-
-        } else if (strcmp(argv[i], "--outargs") == 0) {
-            if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
-                           "Option %s requires arguments.\n", argv[i]);
-                return TPBE_CLI_FAIL;
-            }
-            i++;
-            err = parse_outargs_string(argv[i]);
-            if (err != 0) {
-                return err;
-            }
-
-        } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Unknown option %s.\n", argv[i]);
-            return TPBE_CLI_FAIL;
-        }
-    }
-
-    /* Expand any remaining pending dimension config */
-    if (pending_dim_cfg != NULL && pending_kernel_name[0] != '\0') {
-        err = expand_dim_handles(pending_dim_cfg, pending_kernel_name);
-        if (err != 0) {
-            tpb_dim_config_free(pending_dim_cfg);
-            return err;
-        }
-        tpb_dim_config_free(pending_dim_cfg);
-        pending_dim_cfg = NULL;
-    }
-
-    if (nkern_parsed == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "No kernels specified. Use --kernel option.\n");
-        return TPBE_CLI_FAIL;
-    }
-
-    return 0;
-}
-
-/* Dimension expansion */
-
-static int
 apply_dim_value(tpb_dim_values_t *dim_val, int index)
 {
     char value_str[256];
@@ -437,7 +137,8 @@ apply_dim_value(tpb_dim_values_t *dim_val, int index)
 
     if (dim_val->is_string && dim_val->str_values != NULL) {
         /* Use string value directly */
-        return tpb_driver_set_hdl_karg(dim_val->parm_name, dim_val->str_values[index]);
+        return tpb_driver_set_hdl_karg(dim_val->parm_name,
+                                       dim_val->str_values[index]);
     } else {
         /* Convert numeric value to string */
         double val = dim_val->values[index];
@@ -451,143 +152,114 @@ apply_dim_value(tpb_dim_values_t *dim_val, int index)
 }
 
 static int
-count_dim_depth(tpb_dim_values_t *vals)
+expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
 {
-    int depth = 0;
-    tpb_dim_values_t *p = vals;
-    while (p != NULL) {
-        depth++;
-        p = p->nested;
-    }
-    return depth;
-}
-
-static tpb_dim_values_t *
-get_dim_at_depth(tpb_dim_values_t *vals, int depth)
-{
-    tpb_dim_values_t *p = vals;
-    for (int i = 0; i < depth && p != NULL; i++) {
-        p = p->nested;
-    }
-    return p;
-}
-
-static int
-expand_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
-                        int max_depth, const char *kernel_name, int *is_first,
-                        int orig_hdl_idx)
-{
+    tpb_dim_values_t *vals = NULL;
     int err;
-    tpb_dim_values_t *current = get_dim_at_depth(vals, depth);
+    int orig_hdl_idx;
 
-    if (current == NULL) {
+    if (dim_cfg == NULL || kernel_name == NULL) {
         return 0;
     }
 
-    if (depth == max_depth - 1) {
-        /* Innermost dimension: create handles for each value */
-        for (int i = 0; i < current->n; i++) {
-            indices[depth] = i;
+    err = tpb_dim_generate_values(dim_cfg, &vals);
+    if (err != 0) {
+        return err;
+    }
 
-            if (*is_first) {
-                /* First combination: apply to existing handle (already created by --kernel) */
-                *is_first = 0;
-            } else {
-                /* Subsequent combinations: add a new handle and copy kargs */
-                err = tpb_driver_add_handle(kernel_name);
-                if (err != 0) {
-                    return err;
-                }
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "Expanding %d values for '%s' on kernel '%s'\n",
+               vals->n, vals->parm_name, kernel_name);
+
+    orig_hdl_idx = tpb_driver_get_current_hdl_idx();
+
+    for (int i = 0; i < vals->n; i++) {
+        if (i == 0) {
+            err = apply_dim_value(vals, i);
+        } else {
+            err = tpb_driver_add_handle(kernel_name);
+            if (err == 0) {
                 err = tpb_driver_copy_hdl_from(orig_hdl_idx);
-                if (err != 0) {
-                    return err;
-                }
             }
-
-            /* Apply all dimension values from outer to inner */
-            for (int d = 0; d <= depth; d++) {
-                tpb_dim_values_t *dim_at_d = get_dim_at_depth(vals, d);
-                err = apply_dim_value(dim_at_d, indices[d]);
-                if (err != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                               "Failed to set dimension value for '%s'\n",
-                               dim_at_d->parm_name);
-                    /* Continue anyway - parameter might not exist for this kernel */
-                }
+            if (err == 0) {
+                err = apply_dim_value(vals, i);
             }
         }
-    } else {
-        /* Outer dimension: iterate and recurse */
-        for (int i = 0; i < current->n; i++) {
-            indices[depth] = i;
-            err = expand_nested_dims_impl(vals, indices, depth + 1, max_depth,
-                                          kernel_name, is_first, orig_hdl_idx);
-            if (err != 0) {
-                return err;
-            }
+        if (err != 0) {
+            tpb_dim_values_free(vals);
+            return err;
         }
     }
 
+    tpb_dim_values_free(vals);
     return 0;
 }
 
 static int
-expand_nested_dims(tpb_dim_values_t *vals, int *indices, int depth,
-                   int max_depth, const char *kernel_name, int orig_hdl_idx)
+_sf_expand_cartesian_kargs(void)
 {
-    int is_first = 1;
-    return expand_nested_dims_impl(vals, indices, depth, max_depth, kernel_name,
-                                   &is_first, orig_hdl_idx);
-}
+    tpb_dim_values_t *vals[MAX_DIM_CONFIGS];
+    int ndims = g_n_pending_dims;
+    int total = 1;
+    int orig_hdl_idx;
+    int err = 0;
+    int d;
+    int c;
+    int rem;
+    int idx;
 
-static int
-expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
-{
-    tpb_dim_values_t *dim_vals = NULL;
-    int err;
-    int total_count;
-    int depth;
-
-    if (dim_cfg == NULL || kernel_name == NULL) {
-        return 0;  /* No dimension to expand */
+    if (ndims <= 0) {
+        return 0;
     }
 
-    /* Generate values from configuration */
-    err = tpb_dim_generate_values(dim_cfg, &dim_vals);
-    if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "Failed to generate dimension values\n");
-        return err;
+    for (d = 0; d < ndims; d++) {
+        err = tpb_dim_generate_values(g_pending_dim_cfgs[d], &vals[d]);
+        if (err != 0) {
+            for (d = d - 1; d >= 0; d--) {
+                tpb_dim_values_free(vals[d]);
+            }
+            return err;
+        }
+        total *= vals[d]->n;
     }
-
-    total_count = tpb_dim_get_total_count(dim_cfg);
-    depth = count_dim_depth(dim_vals);
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-               "Expanding %d dimension combinations for kernel '%s'\n",
-               total_count, kernel_name);
+               "Expanding %d Cartesian combinations for kernel '%s'\n",
+               total, g_pending_kernel_name);
 
-    /* Allocate indices array for recursive expansion */
-    int *indices = (int *)calloc(depth, sizeof(int));
-    if (indices == NULL) {
-        tpb_dim_values_free(dim_vals);
-        return TPBE_MALLOC_FAIL;
+    orig_hdl_idx = tpb_driver_get_current_hdl_idx();
+
+    for (c = 0; c < total; c++) {
+        if (c > 0) {
+            err = tpb_driver_add_handle(g_pending_kernel_name);
+            if (err != 0) {
+                break;
+            }
+            err = tpb_driver_copy_hdl_from(orig_hdl_idx);
+            if (err != 0) {
+                break;
+            }
+        }
+
+        rem = c;
+        for (d = ndims - 1; d >= 0; d--) {
+            idx = rem % vals[d]->n;
+            rem /= vals[d]->n;
+            err = apply_dim_value(vals[d], idx);
+            if (err != 0) {
+                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                           "Failed to set dim '%s'\n",
+                           vals[d]->parm_name);
+            }
+        }
     }
 
-    /* Save original handle index before expansion */
-    int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
-
-    /* Expand dimensions recursively */
-    err = expand_nested_dims(dim_vals, indices, 0, depth, kernel_name,
-                             orig_hdl_idx);
-
-    free(indices);
-    tpb_dim_values_free(dim_vals);
+    for (d = 0; d < ndims; d++) {
+        tpb_dim_values_free(vals[d]);
+    }
 
     return err;
 }
-
-/* Environment variable helpers */
 
 static int
 parse_kenvs_tokstr(const char *tokstr)
@@ -595,6 +267,7 @@ parse_kenvs_tokstr(const char *tokstr)
     char buf[TPBM_CLI_STR_MAX_LEN];
     char *saveptr;
     char *token;
+    int err;
 
     if (tokstr == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -640,7 +313,7 @@ parse_kenvs_tokstr(const char *tokstr)
         }
 
         /* Set environment variable for current handle */
-        int err = tpb_driver_set_hdl_env(key, value);
+        err = tpb_driver_set_hdl_env(key, value);
         if (err != 0) {
             return err;
         }
@@ -661,10 +334,9 @@ apply_env_dim_value(tpb_dim_values_t *dim_val, int index)
     }
 
     if (dim_val->is_string && dim_val->str_values != NULL) {
-        /* Use string value directly */
-        return tpb_driver_set_hdl_env(dim_val->parm_name, dim_val->str_values[index]);
+        return tpb_driver_set_hdl_env(dim_val->parm_name,
+                                      dim_val->str_values[index]);
     } else {
-        /* Convert numeric value to string */
         double val = dim_val->values[index];
         if (val == (int64_t)val) {
             snprintf(value_str, sizeof(value_str), "%" PRId64, (int64_t)val);
@@ -676,113 +348,50 @@ apply_env_dim_value(tpb_dim_values_t *dim_val, int index)
 }
 
 static int
-expand_env_nested_dims_impl(tpb_dim_values_t *vals, int *indices, int depth,
-                            int max_depth, const char *kernel_name,
-                            int *is_first, int orig_hdl_idx)
-{
-    int err;
-    tpb_dim_values_t *current = get_dim_at_depth(vals, depth);
-
-    if (current == NULL) {
-        return 0;
-    }
-
-    if (depth == max_depth - 1) {
-        /* Innermost dimension: create handles for each value */
-        for (int i = 0; i < current->n; i++) {
-            indices[depth] = i;
-
-            if (*is_first) {
-                /* First combination: apply to existing handle */
-                *is_first = 0;
-            } else {
-                /* Subsequent combinations: add a new handle and copy kargs */
-                err = tpb_driver_add_handle(kernel_name);
-                if (err != 0) {
-                    return err;
-                }
-                /* Copy kargs and envs from original handle */
-                err = tpb_driver_copy_hdl_from(orig_hdl_idx);
-                if (err != 0) {
-                    return err;
-                }
-            }
-
-            /* Apply all env dimension values from outer to inner */
-            for (int d = 0; d <= depth; d++) {
-                tpb_dim_values_t *dim_at_d = get_dim_at_depth(vals, d);
-                err = apply_env_dim_value(dim_at_d, indices[d]);
-                if (err != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                               "Failed to set env dimension value for '%s'\n",
-                               dim_at_d->parm_name);
-                }
-            }
-        }
-    } else {
-        /* Outer dimension: iterate and recurse */
-        for (int i = 0; i < current->n; i++) {
-            indices[depth] = i;
-            err = expand_env_nested_dims_impl(vals, indices, depth + 1, max_depth,
-                                              kernel_name, is_first, orig_hdl_idx);
-            if (err != 0) {
-                return err;
-            }
-        }
-    }
-
-    return 0;
-}
-
-static int
 expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
 {
-    tpb_dim_values_t *dim_vals = NULL;
+    tpb_dim_values_t *vals = NULL;
     int err;
-    int total_count;
-    int depth;
+    int orig_hdl_idx;
 
     if (dim_cfg == NULL || kernel_name == NULL) {
         return 0;
     }
 
-    /* Generate values from configuration */
-    err = tpb_dim_generate_values(dim_cfg, &dim_vals);
+    err = tpb_dim_generate_values(dim_cfg, &vals);
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Failed to generate env dimension values\n");
         return err;
     }
 
-    total_count = tpb_dim_get_total_count(dim_cfg);
-    depth = count_dim_depth(dim_vals);
-
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-               "Expanding %d env dimension combinations for kernel '%s'\n",
-               total_count, kernel_name);
+               "Expanding %d env values for '%s' on kernel '%s'\n",
+               vals->n, vals->parm_name, kernel_name);
 
-    /* Allocate indices array for recursive expansion */
-    int *indices = (int *)calloc(depth, sizeof(int));
-    if (indices == NULL) {
-        tpb_dim_values_free(dim_vals);
-        return TPBE_MALLOC_FAIL;
+    orig_hdl_idx = tpb_driver_get_current_hdl_idx();
+
+    for (int i = 0; i < vals->n; i++) {
+        if (i == 0) {
+            err = apply_env_dim_value(vals, i);
+        } else {
+            err = tpb_driver_add_handle(kernel_name);
+            if (err == 0) {
+                err = tpb_driver_copy_hdl_from(orig_hdl_idx);
+            }
+            if (err == 0) {
+                err = apply_env_dim_value(vals, i);
+            }
+        }
+        if (err != 0) {
+            tpb_dim_values_free(vals);
+            return err;
+        }
     }
 
-    /* Save original handle index before expansion */
-    int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
-
-    /* Expand env dimensions recursively */
-    int is_first = 1;
-    err = expand_env_nested_dims_impl(dim_vals, indices, 0, depth, kernel_name,
-                                      &is_first, orig_hdl_idx);
-
-    free(indices);
-    tpb_dim_values_free(dim_vals);
-
-    return err;
+    tpb_dim_values_free(vals);
+    return 0;
 }
-
-/* MPI launcher argument helpers */
 
 static int
 parse_kmpiargs_quoted(const char *arg)
@@ -823,12 +432,14 @@ parse_kmpiargs_quoted(const char *arg)
 static char *
 parse_kmpiargs_list_item(const char *str, const char **pos)
 {
+    (void)str;
+
     /* Skip leading whitespace */
     while (**pos == ' ' || **pos == '\t' || **pos == ',') {
         (*pos)++;
     }
 
-    if (**pos == '\0' || **pos == ']' || **pos == '{') {
+    if (**pos == '\0' || **pos == ']') {
         return NULL;
     }
 
@@ -859,7 +470,8 @@ parse_kmpiargs_list_item(const char *str, const char **pos)
 }
 
 static int
-parse_kmpiargs_list(const char *str, const char **pos, char ***out_items, int *out_count)
+parse_kmpiargs_list(const char *str, const char **pos, char ***out_items,
+                    int *out_count)
 {
     /* Skip leading whitespace */
     while (**pos == ' ' || **pos == '\t') {
@@ -890,8 +502,9 @@ parse_kmpiargs_list(const char *str, const char **pos, char ***out_items, int *o
             if (**pos == ']' || **pos == '\0') {
                 break;
             }
-            /* Invalid character */
-            for (int i = 0; i < count; i++) free(items[i]);
+            for (int i = 0; i < count; i++) {
+                free(items[i]);
+            }
             free(items);
             return TPBE_CLI_FAIL;
         }
@@ -901,7 +514,9 @@ parse_kmpiargs_list(const char *str, const char **pos, char ***out_items, int *o
             char **new_items = (char **)realloc(items, sizeof(char *) * capacity);
             if (new_items == NULL) {
                 free(item);
-                for (int i = 0; i < count; i++) free(items[i]);
+                for (int i = 0; i < count; i++) {
+                    free(items[i]);
+                }
                 free(items);
                 return TPBE_MALLOC_FAIL;
             }
@@ -927,80 +542,33 @@ expand_kmpiargs_dim(const char *arg, const char *kernel_name)
     }
 
     const char *pos = arg;
-    char **outer_items = NULL;
-    int outer_count = 0;
-    char **inner_items = NULL;
-    int inner_count = 0;
+    char **items = NULL;
+    int count = 0;
     int err;
 
-    /* Parse outer list */
-    err = parse_kmpiargs_list(arg, &pos, &outer_items, &outer_count);
+    err = parse_kmpiargs_list(arg, &pos, &items, &count);
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_DIRECT,
                    "Failed to parse --kmpiargs-dim list: %s\n", arg);
         return err;
     }
 
-    if (outer_count == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "--kmpiargs-dim: empty list.\n");
-        free(outer_items);
+    if (count == 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT, "--kmpiargs-dim: empty list.\n");
+        free(items);
         return TPBE_CLI_FAIL;
     }
 
-    /* Check for nested list */
-    while (*pos == ' ' || *pos == '\t') {
-        pos++;
-    }
-
-    if (*pos == '{') {
-        pos++;  /* Skip '{' */
-        err = parse_kmpiargs_list(arg, &pos, &inner_items, &inner_count);
-        if (err != 0) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
-                       "Failed to parse nested --kmpiargs-dim list.\n");
-            for (int i = 0; i < outer_count; i++) free(outer_items[i]);
-            free(outer_items);
-            return err;
-        }
-        /* Skip closing '}' */
-        while (*pos == ' ' || *pos == '\t') pos++;
-        if (*pos == '}') pos++;
-    }
-
-    /* Calculate total combinations */
-    int total = outer_count * (inner_count > 0 ? inner_count : 1);
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-               "Expanding %d kmpiargs-dim combinations for kernel '%s'\n",
-               total, kernel_name);
+               "Expanding %d kmpiargs-dim values for kernel '%s'\n",
+               count, kernel_name);
 
-    /* Get original handle index and save base mpiargs */
     int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
     const char *base_mpiargs = tpb_driver_get_hdl_mpiargs();
     char *saved_base = (base_mpiargs != NULL) ? strdup(base_mpiargs) : NULL;
-    int is_first = 1;
 
-    /* Generate all combinations */
-    for (int i = 0; i < outer_count; i++) {
-        int inner_max = (inner_count > 0) ? inner_count : 1;
-        for (int j = 0; j < inner_max; j++) {
-            if (is_first) {
-                is_first = 0;
-            } else {
-                /* Add new handle and copy from original */
-                err = tpb_driver_add_handle(kernel_name);
-                if (err != 0) {
-                    free(saved_base);
-                    goto cleanup;
-                }
-                err = tpb_driver_copy_hdl_from(orig_hdl_idx);
-                if (err != 0) {
-                    free(saved_base);
-                    goto cleanup;
-                }
-            }
-
-            /* Reset mpiargs to base value (before dimension expansion) */
+    for (int i = 0; i < count; i++) {
+        if (i == 0) {
             if (saved_base != NULL) {
                 err = tpb_driver_set_hdl_mpiargs(saved_base);
             } else {
@@ -1010,27 +578,32 @@ expand_kmpiargs_dim(const char *arg, const char *kernel_name)
                 free(saved_base);
                 goto cleanup;
             }
-
-            /* Build combined mpiargs: base + outer[i] + " " + inner[j] */
-            if (inner_count > 0) {
-                size_t len = strlen(outer_items[i]) + 1 + strlen(inner_items[j]) + 1;
-                char *combined = (char *)malloc(len);
-                if (combined == NULL) {
-                    err = TPBE_MALLOC_FAIL;
-                    free(saved_base);
-                    goto cleanup;
-                }
-                sprintf(combined, "%s %s", outer_items[i], inner_items[j]);
-                err = tpb_driver_append_hdl_mpiargs(combined);
-                free(combined);
-            } else {
-                err = tpb_driver_append_hdl_mpiargs(outer_items[i]);
-            }
-
+            err = tpb_driver_append_hdl_mpiargs(items[i]);
+        } else {
+            err = tpb_driver_add_handle(kernel_name);
             if (err != 0) {
                 free(saved_base);
                 goto cleanup;
             }
+            err = tpb_driver_copy_hdl_from(orig_hdl_idx);
+            if (err != 0) {
+                free(saved_base);
+                goto cleanup;
+            }
+            if (saved_base != NULL) {
+                err = tpb_driver_set_hdl_mpiargs(saved_base);
+            } else {
+                err = tpb_driver_set_hdl_mpiargs("");
+            }
+            if (err != 0) {
+                free(saved_base);
+                goto cleanup;
+            }
+            err = tpb_driver_append_hdl_mpiargs(items[i]);
+        }
+        if (err != 0) {
+            free(saved_base);
+            goto cleanup;
         }
     }
 
@@ -1038,64 +611,435 @@ expand_kmpiargs_dim(const char *arg, const char *kernel_name)
     err = 0;
 
 cleanup:
-    for (int i = 0; i < outer_count; i++) free(outer_items[i]);
-    free(outer_items);
-    for (int i = 0; i < inner_count; i++) free(inner_items[i]);
-    free(inner_items);
+    for (int i = 0; i < count; i++) {
+        free(items[i]);
+    }
+    free(items);
 
     return err;
 }
 
-/* Public Function Implementations */
+static void
+_sf_print_kernel_list(FILE *out)
+{
+    int nkern = tpb_query_kernel(0, NULL, NULL);
+    int i;
+
+    fprintf(out,
+            "Available kernels:\n"
+            "  %-15s %-9s %s\n",
+            "Kernel", "KernelID", "Description");
+
+    for (i = 0; i < nkern; i++) {
+        tpb_kernel_t *kernel = NULL;
+
+        tpb_query_kernel(i, NULL, &kernel);
+        if (kernel == NULL) {
+            continue;
+        }
+        fprintf(out, "  %-15s %-9s %s\n",
+                kernel->info.name, "-",
+                kernel->info.note);
+        tpb_free_kernel(kernel);
+        free(kernel);
+    }
+}
+
+static void
+_sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
+{
+    tpb_kernel_t *kernel = NULL;
+    int i;
+
+    if (g_kernel_parsed_for_help) {
+        g_kernel_parsed_for_help = 0;
+        tpb_query_kernel(-1, g_pending_kernel_name, &kernel);
+        if (kernel == NULL) {
+            fprintf(out, "Kernel '%s' info not available.\n",
+                    g_pending_kernel_name);
+            return;
+        }
+        fprintf(out, "Kernel: %s\n", kernel->info.name);
+        fprintf(out, "  %s\n\n", kernel->info.note);
+
+        if (kernel->info.nparms > 0) {
+            fprintf(out, "Parameters:\n");
+            for (i = 0; i < kernel->info.nparms; i++) {
+                tpb_rt_parm_t *p = &kernel->info.parms[i];
+                fprintf(out, "  %-20s %s\n", p->name, p->note);
+            }
+            fprintf(out, "\n");
+        }
+
+        if (kernel->info.nouts > 0) {
+            fprintf(out, "Outputs:\n");
+            for (i = 0; i < kernel->info.nouts; i++) {
+                tpb_k_output_t *o = &kernel->info.outs[i];
+                fprintf(out, "  %-20s %s\n", o->name, o->note);
+            }
+        }
+
+        tpb_free_kernel(kernel);
+        free(kernel);
+        return;
+    }
+
+    fprintf(out,
+            "--kernel option requires a legal kernel name.\n\n");
+    _sf_print_kernel_list(out);
+    fprintf(out, "\n");
+    tpbcli_default_help(node, out);
+}
+
+static void
+_sf_flush_pending_dims(void)
+{
+    int err;
+
+    if (g_n_pending_dims <= 0) {
+        return;
+    }
+
+    if (g_n_pending_dims == 1) {
+        err = expand_dim_handles(g_pending_dim_cfgs[0],
+                                 g_pending_kernel_name);
+    } else {
+        err = _sf_expand_cartesian_kargs();
+    }
+
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Dimension expansion failed (%d)\n",
+                   err);
+    }
+
+    for (int i = 0; i < g_n_pending_dims; i++) {
+        tpb_dim_config_free(g_pending_dim_cfgs[i]);
+        g_pending_dim_cfgs[i] = NULL;
+    }
+    g_n_pending_dims = 0;
+}
+
+static int
+_sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
+{
+    int err;
+
+    _sf_flush_pending_dims();
+
+    err = tpb_driver_add_handle(value);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "--kernel option requires a legal kernel name.\n");
+        _sf_print_kernel_list(stderr);
+        fprintf(stderr, "\n");
+        tpbcli_default_help(node, stderr);
+        return err;
+    }
+
+    snprintf(g_pending_kernel_name, TPBM_NAME_STR_MAX_LEN, "%s", value);
+    g_kernel_parsed_for_help = 1;
+
+    return 0;
+}
+
+static int
+_sf_parse_kargs(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    return tpb_argp_set_kargs_tokstr((int)strlen(value), (char *)value, NULL);
+}
+
+static int
+_sf_parse_kargs_dim(tpbcli_argnode_t *node, const char *value)
+{
+    tpb_dim_config_t *cfg = NULL;
+    int err;
+
+    (void)node;
+
+    if (g_n_pending_dims >= MAX_DIM_CONFIGS) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Too many --kargs-dim options (max %d)\n",
+                   MAX_DIM_CONFIGS);
+        return TPBE_CLI_FAIL;
+    }
+
+    err = tpb_argp_parse_dim(value, &cfg);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Failed to parse --kargs-dim: %s\n", value);
+        return err;
+    }
+
+    g_pending_dim_cfgs[g_n_pending_dims++] = cfg;
+    return 0;
+}
+
+static int
+_sf_parse_kenvs(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    return parse_kenvs_tokstr(value);
+}
+
+static int
+_sf_parse_kenvs_dim(tpbcli_argnode_t *node, const char *value)
+{
+    tpb_dim_config_t *cfg = NULL;
+    int err;
+
+    (void)node;
+
+    err = tpb_argp_parse_dim(value, &cfg);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Failed to parse --kenvs-dim: %s\n", value);
+        return err;
+    }
+
+    err = expand_env_dim_handles(cfg, g_pending_kernel_name);
+    tpb_dim_config_free(cfg);
+    return err;
+}
+
+static int
+_sf_parse_kmpiargs(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    return parse_kmpiargs_quoted(value);
+}
+
+static int
+_sf_parse_kmpiargs_dim(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    return expand_kmpiargs_dim(value, g_pending_kernel_name);
+}
+
+static int
+_sf_parse_timer(tpbcli_argnode_t *node, const char *value)
+{
+    int err;
+
+    (void)node;
+
+    err = tpb_argp_set_timer(value);
+    if (err != 0) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Invalid timer: %s\n", value);
+    }
+    return err;
+}
+
+static int
+_sf_parse_outargs(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    return parse_outargs_string(value);
+}
+
+static int
+_sf_parse_dry_run(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    g_dry_run = 1;
+    return 0;
+}
 
 int
 tpbcli_run(int argc, char **argv)
 {
     int err = 0;
+    tpbcli_argtree_t *tree = NULL;
+    tpbcli_argnode_t *root;
+    tpbcli_argnode_t *run_cmd;
+    tpbcli_argnode_t *kernel;
+    int nhdl;
+    int rec_err;
+    int i;
 
-    if (argc <= 1) {
-        /* No args */
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "No arguments provided, exit after printing help message.\n");
-        tpb_print_help_total();
-        return TPBE_EXIT_ON_HELP;
+    g_dry_run = 0;
+    g_kernel_parsed_for_help = 0;
+    g_n_pending_dims = 0;
+    g_pending_kernel_name[0] = '\0';
+
+    err = tpb_argp_set_timer("clock_gettime");
+    if (err != 0) {
+        return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
 
-    err = parse_run(argc, argv);
-    if (err == TPBE_EXIT_ON_HELP) {
+    tree = tpbcli_argtree_create(
+        (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",
+        "Run benchmark kernels");
+    if (tree == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    root = &tree->root;
+
+    run_cmd = tpbcli_add_arg(root, &(tpbcli_argconf_t){
+        .name = "run",
+        .short_name = "r",
+        .desc = "Run kernels (this subcommand)",
+        .type = TPBCLI_ARG_CMD,
+        .flags = TPBCLI_ARGF_EXCLUSIVE,
+        .max_chosen = 1,
+    });
+    if (run_cmd == NULL) {
+        tpbcli_argtree_destroy(tree);
+        return TPBE_MALLOC_FAIL;
+    }
+
+    kernel = tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--kernel",
+        .short_name = "-k",
+        .desc = "Kernel to run",
+        .type = TPBCLI_ARG_OPT,
+        .flags = TPBCLI_ARGF_MANDATORY,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kernel,
+    });
+    if (kernel == NULL) {
+        tpbcli_argtree_destroy(tree);
+        return TPBE_MALLOC_FAIL;
+    }
+
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kargs",
+        .desc = "Kernel arguments (key=val,...)",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kargs,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kargs-dim",
+        .desc = "Dimension sweep for kernel args",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kargs_dim,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kenvs",
+        .desc = "Environment variables (KEY=VAL,...)",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kenvs,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kenvs-dim",
+        .desc = "Dimension sweep for env vars",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kenvs_dim,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kmpiargs",
+        .desc = "MPI runtime arguments",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kmpiargs,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--kmpiargs-dim",
+        .desc = "Dimension sweep for MPI args",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_kmpiargs_dim,
+    });
+    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
+        .name = "--help",
+        .short_name = "-h",
+        .desc = "Show kernel options help",
+        .type = TPBCLI_ARG_FLAG,
+        .max_chosen = 0,
+        .help_fn = _sf_help_kernel_children,
+    });
+
+    tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--timer",
+        .desc = "Timer backend",
+        .type = TPBCLI_ARG_OPT,
+        .flags = TPBCLI_ARGF_PRESET,
+        .max_chosen = 1,
+        .preset_value = "clock_gettime",
+        .parse_fn = _sf_parse_timer,
+    });
+    tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--outargs",
+        .desc = "Output format (unit_cast,sigbit_trim)",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = 1,
+        .parse_fn = _sf_parse_outargs,
+    });
+    tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--dry-run",
+        .short_name = "-d",
+        .desc = "Validate args, print commands, skip execution",
+        .type = TPBCLI_ARG_FLAG,
+        .max_chosen = 1,
+        .parse_fn = _sf_parse_dry_run,
+    });
+    tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--help",
+        .short_name = "-h",
+        .desc = "Show help for this command",
+        .type = TPBCLI_ARG_FLAG,
+        .max_chosen = 0,
+        .help_fn = tpbcli_default_help,
+    });
+
+    err = tpbcli_parse_args(tree, argc, argv);
+    tpbcli_argtree_destroy(tree);
+
+    if (err != TPBE_SUCCESS) {
+        for (i = 0; i < g_n_pending_dims; i++) {
+            tpb_dim_config_free(g_pending_dim_cfgs[i]);
+            g_pending_dim_cfgs[i] = NULL;
+        }
+        g_n_pending_dims = 0;
         return err;
     }
-    __tpbm_exit_on_error(err, "At tpbcli-run.c: parse_run");
 
-    /* Print kernels to run */
-    int nhdl = tpb_get_nhdl();
+    _sf_flush_pending_dims();
+
+    nhdl = tpb_get_nhdl();
     if (nhdl > 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Number of kernels to run: %d\n", nhdl);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "Number of kernels to run: %d\n", nhdl);
     }
 
-    /* Run all handles using driver */
+    if (g_dry_run) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "=== DRY RUN MODE ===\n");
+        tpb_driver_set_dry_run(1);
+        err = tpb_driver_run_all();
+        tpb_driver_set_dry_run(0);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "=== DRY RUN COMPLETE ===\n");
+        g_dry_run = 0;
+        return err;
+    }
 
-    // Sleep 1.x seconds to prevent tbatch conflicting.
     usleep((useconds_t)(1000000 + (rand() % 1000) * 1000));
 
-    /* Begin auto-record batch */
-    int rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
+    rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
     if (rec_err) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                   "tpbcli_run: begin_batch failed (%d), continuing without recording.\n", rec_err);
+                   "tpbcli_run: begin_batch failed (%d), "
+                   "continuing without recording.\n", rec_err);
     }
 
     err = tpb_driver_run_all();
     __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_driver_run_all");
 
-    /* End auto-record batch */
     if (!rec_err) {
-        int ntask = nhdl;
-        rec_err = tpb_record_end_batch(ntask);
+        rec_err = tpb_record_end_batch(nhdl);
         if (rec_err) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
                        "tpbcli_run: end_batch failed (%d)\n", rec_err);

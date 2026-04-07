@@ -603,10 +603,19 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
             continue;
         }
 
-        /* pop */
+        /* pop: reset children of popped node for reuse on rematch */
         if (stack_sz <= 1) {
             fprintf(stderr, "error: unknown argument '%s'\n", tok);
             return TPBE_CLI_FAIL;
+        }
+        {
+            tpbcli_argnode_t *popped = stack[stack_sz - 1];
+            tpbcli_argnode_t *ch;
+
+            for (ch = popped->first_child; ch != NULL;
+                 ch = ch->next_sibling) {
+                _sf_reset_parse_state(ch);
+            }
         }
         stack_sz--;
         goto retry;
