@@ -29,6 +29,11 @@ typedef enum {
 #define TPBCLI_ARGF_MANDATORY   (1u << 1)
 /** @brief Node has default from @c preset_value. */
 #define TPBCLI_ARGF_PRESET      (1u << 2)
+/**
+ * @brief CMD only: after this subcommand token is consumed, stop argv scanning;
+ *        run @c parse_fn from post-loop (top-level dispatch to another parser).
+ */
+#define TPBCLI_ARGF_DELEGATE_SUBCMD (1u << 3)
 
 /**
  * @brief Print help for a node (e.g. matched @c max_chosen==0 help FLAG).

@@ -77,6 +77,7 @@ tpb_add_subcase(B3 B3.7  unknown_arg          test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.8  stack_pop_retry      test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.9  max_chosen           test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.10 find_arg             test-tpbcli-argp tpbcli)
+tpb_add_subcase(B3 B3.11 delegate_subcmd      test-tpbcli-argp tpbcli)
 
 # Aggregate targets
 add_custom_target(test_tpbcli

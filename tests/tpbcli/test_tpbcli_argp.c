@@ -14,6 +14,7 @@ static int g_fail;
 static int g_help_root;
 static int g_help_run;
 static int g_help_kernel;
+static int g_delegate_called;
 
 #define ASSERT_EQ_INT(msg, exp, act) do {                               \
     if ((exp) == (act)) {                                               \
@@ -612,6 +613,49 @@ test_find_arg(void)
     return (g_fail > before) ? 1 : 0;
 }
 
+static int
+delegate_parse_cb(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    g_delegate_called = 1;
+    return 0;
+}
+
+static int
+test_delegate_subcmd(void)
+{
+    tpbcli_argtree_t *tree;
+    char *argv[] = { (char *)"prog", (char *)"sub", (char *)"--unparsed" };
+    int argc = 3;
+    int err;
+    int before = g_fail;
+
+    g_delegate_called = 0;
+    tree = tpbcli_argtree_create("prog", "test delegate");
+    ASSERT_PTR("delegate tree", tree != NULL);
+    if (tree == NULL) {
+        return (g_fail > before) ? 1 : 0;
+    }
+    ASSERT_PTR("delegate add_arg",
+               tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
+                   .name = "sub",
+                   .type = TPBCLI_ARG_CMD,
+                   .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+                   .max_chosen = 1,
+                   .parse_fn = delegate_parse_cb,
+               }) != NULL);
+    if (g_fail > before) {
+        tpbcli_argtree_destroy(tree);
+        return 1;
+    }
+    err = tpbcli_parse_args(tree, argc, argv);
+    tpbcli_argtree_destroy(tree);
+    ASSERT_EQ_INT("delegate rc", TPBE_SUCCESS, err);
+    ASSERT_EQ_INT("delegate called", 1, g_delegate_called);
+    return (g_fail > before) ? 1 : 0;
+}
+
 typedef struct {
     const char *id;
     const char *name;
@@ -669,6 +713,7 @@ main(int argc, char **argv)
         { "B3.8",  "stack_pop_retry",      test_stack_pop_retry      },
         { "B3.9",  "max_chosen",           test_max_chosen           },
         { "B3.10", "find_arg",             test_find_arg             },
+        { "B3.11", "delegate_subcmd",      test_delegate_subcmd      },
     };
     int n = (int)(sizeof(cases) / sizeof(cases[0]));
 
