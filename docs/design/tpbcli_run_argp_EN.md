@@ -23,7 +23,7 @@ tpbcli_run()
 | File | Responsibility |
 |------|----------------|
 | `src/tpbcli-run.c` | `run` subcommand entry, argument dispatch, dim expansion |
-| `src/tpbcli-run-dim.c` | Dimension syntax parsing (list, recursive sequence, nesting) |
+| `src/tpbcli-run-dim.c` | Dimension syntax parsing (list, recursive sequence) |
 | `src/tpbcli-run-dim.h` | Dimension type definitions, data structures |
 | `src/corelib/tpb-driver.c` | Handle management, parameter setting, kernel execution |
 | `src/corelib/tpb-argp.c` | General argument parsing utilities (tokenization, type conversion, range validation) |
@@ -88,7 +88,7 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // Current kernel name
 | `--kenvs K=V,K=V` | Requires `pending_kernel_name`; `parse_kenvs_tokstr()` | Immediate |
 | `--kenvs-dim '...'` | Requires `pending_kernel_name`; parsed then **immediately** `expand_env_dim_handles()` | Immediate |
 | `--kmpiargs '...'` | Requires `pending_kernel_name`; `parse_kmpiargs_quoted()` → **append** (multiple calls concatenate) | Immediate |
-| `--kmpiargs-dim '[...]{...}'` | Requires `pending_kernel_name`; `expand_kmpiargs_dim()` **immediately expands** | Immediate |
+| `--kmpiargs-dim '[...]'` | Requires `pending_kernel_name`; `expand_kmpiargs_dim()` **immediately expands** | Immediate |
 | `--timer <name>` | Set timer backend (clock_gettime / tsc_asym) | Immediate |
 | `--outargs ...` | Set output formatting (unit_cast, sigbit_trim) | Immediate |
 
@@ -96,7 +96,7 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // Current kernel name
 
 ### 3.2 Chaining Multiple `--kargs-dim` Segments
 
-In `parse_run()`, multiple `--kargs-dim` occurrences form a linked list via the `nested` pointer:
+In `parse_run()`, multiple `--kargs-dim` occurrences are chained into a linked list. Each new `--kargs-dim` is appended to the tail of the existing list:
 
 ```bash
 tpbcli run --kernel stream \
@@ -106,9 +106,11 @@ tpbcli run --kernel stream \
 
 ```
 First:   pending_dim_cfg → cfg_A
-Second:  Find tail (cfg_A), tail->nested = cfg_B
-Result:  cfg_A → nested → cfg_B
+Second:  Find tail (cfg_A), append cfg_B
+Result:  cfg_A → next → cfg_B
 ```
+
+The linked list structure allows building a flat list of dimension configurations, which are then expanded as a Cartesian product during handle expansion.
 
 ### 3.3 Dim Expansion on `--kernel` Switch
 
@@ -132,16 +134,16 @@ After parsing completes, any remaining pending config is checked and expanded (a
 
 ## 4. `--kargs-dim` Parsing: `tpb_argp_parse_dim()`
 
-Location: `src/tpbcli-run-dim.c:457`
+Location: `src/tpbcli-run-dim.c:374`
 
-Input format is `parm_name=spec`, with automatic detection of three syntaxes:
+Input format is `parm_name=spec`, with automatic detection of two syntaxes:
 
 ### 4.1 Syntax Routing
 
 ```
 tpb_argp_parse_dim("total_memsize=[32768,524288,3145728]")
   │
-  ├─ Check if '{' appears before '=' → nested mode → tpb_argp_parse_dim_nest()
+  ├─ Check if '{' appears → Error: nested syntax not supported
   │
   ├─ Split parm_name and spec
   │
@@ -151,7 +153,7 @@ tpb_argp_parse_dim("total_memsize=[32768,524288,3145728]")
        └─ Letter → Recursive sequence → tpb_argp_parse_dim_recur()
 ```
 
-### 4.2 Three Dimension Types
+### 4.2 Two Dimension Types
 
 #### Type A: Explicit List `[a, b, c, ...]`
 
@@ -198,17 +200,6 @@ Validation rules:
 - Generation stops when value exceeds `[min, max]`
 - Generation stops when `nlim` steps reached (`nlim=0` means range-bound only)
 
-#### Type C: Nesting `outer{inner}`
-
-```c
-// tpb_argp_parse_dim_nest()
-// Input: "dtype=[double,float]{total_memsize=mul(@,2)(16,16,128,0)}"
-// Output: cfg(dtype) → nested → cfg(total_memsize)
-// Supports multi-level nesting: A{B{C{...}}}
-```
-
-Nesting forms a linked list via the `nested` pointer of `tpb_dim_config_t`, with maximum depth `TPBM_DIM_MAX_NEST_DEPTH = 8`.
-
 ### 4.3 Data Structures
 
 ```c
@@ -220,7 +211,6 @@ typedef struct tpb_dim_config {
         struct { int n; char **str_values; double *values; int is_string; } list;
         struct { tpb_dim_op_t op; double x, st, min, max; int nlim; } recur;
     } spec;
-    struct tpb_dim_config *nested;           // Nested dimension
 } tpb_dim_config_t;
 
 // Values structure (after generation)
@@ -230,13 +220,14 @@ typedef struct tpb_dim_values {
     char **str_values;
     double *values;
     int is_string;
-    struct tpb_dim_values *nested;
 } tpb_dim_values_t;
 ```
 
+Note: The `nested` pointer has been removed. Multiple dimensions are now handled via a linked list at the CLI layer (chained via `next` pointer in `pending_dim_cfg`), not within individual dimension configs.
+
 ## 5. Value Generation: `tpb_dim_generate_values()`
 
-Location: `src/tpbcli-run-dim.c:555`
+Location: `src/tpbcli-run-dim.c:457`
 
 Converts `tpb_dim_config_t` (parsed config) to `tpb_dim_values_t` (concrete value array):
 
@@ -246,14 +237,11 @@ tpb_dim_generate_values(cfg, &dim_vals)
   ├─ TPB_DIM_LIST:
   │   Directly copy str_values and values arrays
   │
-  ├─ TPB_DIM_RECUR:
-  │   current = st
-  │   while (current in [min,max] && n < nlim):
-  │     values[n++] = current
-  │     current = op(current, x)  // add/sub/mul/div/pow
-  │
-  └─ If nested:
-      Recursively call tpb_dim_generate_values(cfg->nested, &val->nested)
+  └─ TPB_DIM_RECUR:
+      current = st
+      while (current in [min,max] && n < nlim):
+        values[n++] = current
+        current = op(current, x)  // add/sub/mul/div/pow
 ```
 
 Recursive sequence generation loop (capped at `TPBM_DIM_MAX_VALUES = 4096` when `nlim=0`):
@@ -285,21 +273,21 @@ This is the **final parameter generation** step — expanding dimension configs 
 expand_dim_handles(dim_cfg, kernel_name)
   ├── tpb_dim_generate_values(dim_cfg, &dim_vals)   // Generate value arrays
   ├── tpb_dim_get_total_count(dim_cfg)               // Compute total combination count
-  ├── expand_nested_dims(dim_vals, indices, ...)     // Recursively expand Cartesian product
+  ├── expand_dim_handles_impl(dim_vals, indices, ...) // Expand Cartesian product
   └── Clean up dim_vals and indices
 ```
 
-### 6.1 Cartesian Product Expansion in `expand_nested_dims_impl()`
+### 6.1 Cartesian Product Expansion in `expand_dim_handles_impl()`
 
 ```c
-// Example: --kargs-dim 'A=[1,2]{B=[x,y]}'
-// dim_vals: A=[1,2] → nested → B=[x,y]
-// Depth=2, total combinations=2×2=4
+// Example: --kargs-dim 'A=[1,2]' --kargs-dim 'B=[x,y]'
+// dim_cfg: A=[1,2] → next → B=[x,y]
+// Total dimensions=2, total combinations=2×2=4
 
-expand_nested_dims_impl(vals, indices, depth=0, max_depth=2, kernel_name, &is_first)
+expand_dim_handles_impl(dim_list, indices, depth=0, total_dims=2, kernel_name, &is_first)
   │
-  ├─ depth=0 (outer A): iterate i=0,1
-  │   └─ depth=1 (inner B): iterate j=0,1
+  ├─ depth=0 (first dim A): iterate i=0,1
+  │   └─ depth=1 (second dim B): iterate j=0,1
   │       ├─ is_first=1: Modify existing handle (ihdl=0), set A=1, B=x
   │       ├─ is_first=0: add_handle("stream"), set A=1, B=y
   │       ├─ is_first=0: add_handle("stream"), set A=2, B=x
@@ -309,7 +297,7 @@ expand_nested_dims_impl(vals, indices, depth=0, max_depth=2, kernel_name, &is_fi
 **Key behaviors**:
 - The first combination **modifies in-place** the existing handle (created by `--kernel`)
 - Subsequent combinations call `tpb_driver_add_handle()` to create new handles
-- Each combination applies all dimension values from **outer to inner** order
+- Each combination applies all dimension values from **first to last** order
 
 ### 6.2 `apply_dim_value()` — Setting a Dimension Value onto a Handle
 
@@ -321,7 +309,7 @@ apply_dim_value(dim_val, index)
   └── If numeric:
         ├── Integer: formatted as "%lld"
         └── Float:   formatted as "%.15g"
-        → tpb_driver_set_hdl_karg(parm_name, value_str)
+        → tpb_driver_set_hdl_karg(value_str)
 ```
 
 `tpb_driver_set_hdl_karg()` performs:
@@ -335,9 +323,9 @@ apply_dim_value(dim_val, index)
 
 | Dimension Type | Expansion Timing | Expansion Method |
 |----------------|------------------|------------------|
-| `--kargs-dim` | **Deferred** (on next `--kernel` or end of parsing) | Recursive Cartesian product; first combination modifies existing handle |
-| `--kenvs-dim` | **Immediate** | Recursive Cartesian product; subsequent combinations call `tpb_driver_copy_hdl_from()` to copy kargs |
-| `--kmpiargs-dim` | **Immediate** | Parses `['opt1','opt2']{['a','b']}` format; subsequent combinations copy handle |
+| `--kargs-dim` | **Deferred** (on next `--kernel` or end of parsing) | Cartesian product; first combination modifies existing handle |
+| `--kenvs-dim` | **Immediate** | Cartesian product; subsequent combinations call `tpb_driver_copy_hdl_from()` to copy kargs |
+| `--kmpiargs-dim` | **Immediate** | Parses `['opt1','opt2']` format; subsequent combinations copy handle |
 
 ### 7.1 `--kenvs-dim` Specifics
 
@@ -351,16 +339,16 @@ This ensures every env dimension combination carries the same kargs base configu
 ### 7.2 `--kmpiargs-dim` Explicit List Syntax
 
 ```bash
---kmpiargs-dim "['-np 2','-np 4']{['--bind-to core','--bind-to none']}"
+--kmpiargs-dim "['-np 2','-np 4']"
 ```
 
 Parsing flow:
-1. `parse_kmpiargs_list()` parses the outer list `['-np 2','-np 4']`
-2. Checks for a nested list starting with `{`
-3. Computes total combinations = outer_count × inner_count
-4. For each combination:
+1. `parse_kmpiargs_list()` parses the list `['-np 2','-np 4']`
+2. For each combination:
    - First: modifies the existing handle
    - Subsequent: `add_handle()` + `copy_hdl_from()` + reset mpiargs + append combined value
+
+Note: The `{...}` nesting syntax for `--kmpiargs-dim` has been removed. Use multiple `--kmpiargs-dim` options for Cartesian products.
 
 ## 8. Handle Creation and Parameter Inheritance
 
@@ -441,7 +429,7 @@ tpbcli run --kernel stream --kargs ntest=20 \
 | [1] | stream | 10 (kernel default) | **524288** | New handle; does not inherit `--kargs` from [0] |
 | [2] | stream | 10 (kernel default) | **3145728** | Same as above |
 
-To ensure every dim combination carries `ntest=20`, use nested `--kargs-dim` (e.g. `ntest=[20]{stream_array_size=[...]}`) or explicitly set via script / multiple `--kernel` invocations.
+To ensure every dim combination carries `ntest=20`, use multiple `--kargs-dim` options (e.g., `--kargs-dim ntest=[20,20,20] --kargs-dim stream_array_size=[...]`) or explicitly set via script / multiple `--kernel` invocations.
 
 ## 10. Key Data Structure Relationships
 

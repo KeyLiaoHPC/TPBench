@@ -134,16 +134,16 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim 'dtype=[
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'total_memsize=mul(@,2)(16,16,128,0)'
 ```
 
-**3）嵌套序列**
+**3）多参数笛卡尔积**
 
-嵌套多个可变参数，每个可变参数定义后，可以在大括号中定义另一个可变参数。在命令行解析中，最内层的参数列表将被优先计算。注意，目前不允许在不同嵌套层定义相同参数名。
+要同时遍历多个参数的组合，使用**多个** `--kargs-dim` 选项（每个参数一个）。TPBench 会自动构建所有维度的**笛卡尔积**（例如两个长度分别为 2 和 3 的列表会产生 6 次运行）。单个 `--kargs-dim` 字符串中的 `{...}` 嵌套语法**不再支持**。
 
-语法：`--kargs-dim '<dim>{<nested_dim1>{<nested_dim2>{...}}}'`
-
-示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式。对于每种格式，轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试。
+示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式，并对每种格式轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试（3 种数据类型 × 4 种内存大小）。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}'
+$ tpbcli run --kernel triad --kargs ntest=100 \
+    --kargs-dim dtype=[double,float,iso-fp16] \
+    --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
 ### 2.2.4 设置计时方法
