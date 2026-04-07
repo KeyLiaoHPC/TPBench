@@ -7,11 +7,11 @@ The `tpbcli-argp` module provides a tree-based, stack-parsed command-line argume
 **Key features:**
 - Tree data structure representing CLI grammar (subcommands, options, flags)
 - Stack-based parser with automatic backtracking
-- Heuristic help: context-sensitive `-h/--help` at any position
+- Heuristic help: context-sensitive `--help`/`-h` at any position
 - Validation: mandatory, exclusive, conflict_opts, max_chosen, preset-value
 - Zero global state: all state lives in the caller-owned tree
 
-**Scope:** Module implementation and unit tests only. No changes to `tpbcli.c` or any `tpbcli-*.c` frontend files.
+**Scope:** Module implementation (`tpbcli-argp.c/h`) and unit tests (Pack B3). **Callers** include [`tpbcli.c`](../../src/tpbcli.c) (top-level subcommands) and [`tpbcli-database.c`](../../src/tpbcli-database.c) (nested tree for `database`/`db` → `list`|`dump` and dump options).
 
 ---
 
@@ -36,7 +36,7 @@ Selective conflicts are specified by **sibling name strings** in `conflict_opts`
 |------|-------------|----------------|-------------------|
 | `TPBCLI_ARG_CMD` | Subcommand (e.g., `run`, `benchmark`) | Pushed when matched | No |
 | `TPBCLI_ARG_OPT` | Option (e.g., `--kernel`) | Pushed if has children | Yes (next token) |
-| `TPBCLI_ARG_FLAG` | Boolean flag (e.g., `-h`) | Never pushed | No |
+| `TPBCLI_ARG_FLAG` | Boolean flag (e.g., `--help` with short `-h`) | Never pushed | No |
 
 **Flag semantics:**
 
@@ -55,7 +55,7 @@ Selective conflicts are specified by **sibling name strings** in `conflict_opts`
 | `N > 1` | Selectable up to N times. |
 | `-1` | Unlimited. |
 
-**Help nodes.** There is no hardcoded `-h`/`--help` intercept in the parser. Instead, help is implemented via regular FLAG nodes with `max_chosen=0` and a `help_fn`. The caller adds `-h`/`--help` as children of each node that should support help. The module exports `tpbcli_default_help(node, out)` — a convenience function that prints default help for `node->parent` using `_sf_emit_help`. Callers set `.help_fn = tpbcli_default_help` for standard help behavior.
+**Help nodes.** There is no hardcoded help intercept in the parser. Instead, help is implemented via regular FLAG nodes with `max_chosen=0` and a `help_fn`. **Convention:** use **`.name = "--help"`** and **`.short_name = "-h"`** so generated help lines list the long form first. The caller adds one such FLAG under each node that should support context-sensitive help. The module exports `tpbcli_default_help(node, out)` — a convenience function that prints default help for `node->parent` using `_sf_emit_help`. Callers set `.help_fn = tpbcli_default_help` for standard help behavior (or a custom `help_fn`, as for `tpbcli database --help`).
 
 **Exclusive does NOT block self-reselection.** The exclusive check scans OTHER siblings only, not the matched node itself. Self-reselection is handled by `max_chosen`. Example: `tpbcli run run` — second `run` pops to root, matches `run` again. Exclusive check: any other sibling is_set? No → passes. max_chosen: `chosen_count(1) >= max_chosen(1)` → rejected.
 
@@ -71,23 +71,37 @@ root "tpbcli" (depth 0)
  |    |    +-- OPT "--kenvs-dim"      (depth 3)
  |    |    +-- OPT "--kmpiargs"       (depth 3)
  |    |    +-- OPT "--kmpiargs-dim"   (depth 3)
- |    |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, depth 3)
+ |    |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, depth 3)
  |    +-- OPT "--timer"          (preset="clock_gettime", depth 2)
  |    +-- OPT "--outargs"        (depth 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, depth 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, depth 2)
  +-- CMD "benchmark" (exclusive, depth 1)
  |    +-- OPT "--suite"          (mandatory, depth 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, depth 2)
- +-- CMD "database"  (exclusive, depth 1)
- |    +-- CMD "list" / "ls"      (exclusive, depth 2)
- |    +-- CMD "dump"             (exclusive, depth 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, depth 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, depth 2)
+ +-- CMD "database" / "db"  (exclusive, depth 1; DELEGATE_SUBCMD → nested tree in tpbcli-database.c)
+ |    +-- (see below — not all nodes live in tpbcli.c)
  +-- CMD "kernel"    (exclusive, depth 1)
  |    +-- CMD "list" / "ls"      (exclusive, depth 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, depth 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, depth 2)
  +-- CMD "help"      (exclusive, depth 1)
- +-- FLAG "-h" / "--help"        (max_chosen=0, help_fn, depth 1)
+ +-- FLAG "--help" / "-h"        (max_chosen=0, help_fn, depth 1)
 ```
+
+**Nested `database` tree** (built inside `tpbcli_database`; `argv[1]` is `database` or `db`):
+
+```
+root "tpbcli" (synthetic; first token consumed is database|db)
+ +-- FLAG "--help" / "-h"   (root-level, optional)
+ +-- CMD "database" / "db"
+ |    +-- FLAG "--help" / "-h"   (custom help_fn: subcommand + dump summary)
+ |    +-- CMD "list" / "ls"      (exclusive vs dump)
+ |    |    +-- FLAG "--help" / "-h"
+ |    +-- CMD "dump"
+ |    |    +-- FLAG "--help" / "-h"
+ |    |    +-- OPT "--id", "--tbatch-id", … "--entry"  (mutual conflict_opts)
+```
+
+The top-level `tpbcli.c` tree only registers `database`/`db` with `TPBCLI_ARGF_DELEGATE_SUBCMD` and a dispatch callback; the inner structure above is maintained in [`tpbcli-database.c`](../../src/tpbcli-database.c).
 
 `--kernel` is an OPT with children. When matched, it consumes its value (the kernel name) via `parse_fn` AND is pushed onto the stack because it has children. Subsequent tokens like `--kargs` are matched at depth 3. When a token does not match at depth 3 (e.g., `--timer`), the parser pops `--kernel` and retries at depth 2 under `run`. When a second `--kernel` appears, the parser pops back to depth 2, matches `--kernel` again (`max_chosen=-1`), consumes the new kernel name, and pushes it again for its children.
 

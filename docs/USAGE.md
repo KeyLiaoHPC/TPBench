@@ -49,11 +49,13 @@ tpbcli basic format:
 tpbcli <subcommand> <options>
 ```
 
-Supports 4 subcommands: `run`, `benchmark`, `list`, and `help`.
-- `tpbcli run`: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
-- `tpbcli benchmark`: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
-- `tpbcli list`: List currently supported evaluation kernels.
-- `tpbcli help`: Display help documentation.
+Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
+
+- **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
+- **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
+- **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
+- **`tpbcli kernel`**: Refresh kernel metadata in the workspace, then **`list`** / **`ls`** registered PLI kernels (not the same as the old top-level `list` command).
+- **`tpbcli help`**: Display help documentation.
 
 Output results on screen are also written to the log directory.
 
@@ -271,3 +273,19 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <para
 ```
 
 Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.
+
+## 2.3 tpbcli database
+
+Synonyms: **`tpbcli database`**, **`tpbcli db`**.
+
+You must supply a subcommand: **`list`** (alias **`ls`**) or **`dump`**.
+
+- **`tpbcli db list`** — Print recent tbatch rows from the workspace index (same data as **`database list`**).
+- **`tpbcli db dump`** — Requires exactly one of: **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`** *path*, **`--entry`** *name* (see **`dump --help`** for semantics). Selectors are mutually exclusive.
+
+Examples:
+
+```bash
+$ tpbcli db list
+$ tpbcli database dump --tbatch-id <40_hex_chars>
+```

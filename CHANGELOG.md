@@ -2,8 +2,15 @@
 
 ## Unreleased
 
+### Documentation
+
+- **Update:** [`docs/USAGE.md`](docs/USAGE.md) / [`docs/USAGE_CN.md`](docs/USAGE_CN.md) — current top-level commands and aliases (`database`/`db`, `kernel`/`k`, etc.), new §2.3 `database`; [`docs/howtos/1.1_howto_build_EN.md`](docs/howtos/1.1_howto_build_EN.md) — runtime kernel listing uses `tpbcli kernel list` (replacing removed `tpbcli list`); [`docs/design/tpbcli_argp_EN.md`](docs/design/tpbcli_argp_EN.md) / [`docs/design/tpbcli_argp_CN.md`](docs/design/tpbcli_argp_CN.md) — help flag wording `--help`/`-h` and `database` caller scope; [`AGENTS.md`](AGENTS.md) — nested `database`/`db` argp in `tpbcli-database.c`.
+
 ### Frontend: tpbcli
 
+- **Refactor:** `tpbcli database` uses the `tpbcli-argp` tree parser (same stack-based model as `run`). Top-level `database` has short alias **`db`**. After `database`/`db`, a subcommand is **required**: `list` (alias `ls`) or `dump`. Help flags use **`--help`** as the primary name and **`-h`** as the short name at each level. `tpbcli database --help` prints subcommand descriptions and a brief summary of dump selectors; `tpbcli database dump --help` lists all dump options. Conflicting dump selectors (`--id`, `--file`, etc.) are rejected by the parser.
+- **Breaking (API):** `tpbcli_database_dump(int argc, char **argv, …)` is removed from the public header; use **`tpbcli_database_dump_resolved(workspace, selector_name, primary_value, entry_value)`** (`selector_name` is a long option string such as `"--id"`, or NULL for usage).
+- **Tests:** Pack **B4** (`tests/tpbcli/test-cli-database.c`) covers missing subcommand, help, list/dump help, dump usage, conflicts, unknown args, and `ls` alias.
 - **Refactor:** `tpbcli run` argument parsing uses the `tpbcli-argp` tree parser. Kernel-scoped options (`--kargs`, `--kargs-dim`, etc.) are only valid under `--kernel`; unknown options at the wrong depth report `error: unknown argument '…'`.
 - **New:** `-d` / `--dry-run` — expand dimensions, print the same `Exec:` lines as a real run, skip `fork`/`exec` in the driver, and skip task/tbatch auto-record.
 - **New:** `run --help` / `run -h` prints run-level help; `--kernel <name> --help` prints that kernel’s registered parameters and outputs; `--kernel -h` (no name) prints a legal-kernel hint, kernel list, and kernel sub-option help.
