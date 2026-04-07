@@ -68,39 +68,75 @@ This command expands to three runs and records three tasks in one batch.
 
 ### 1.3. Checking results
 
-Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rafdb`. So you don't have to keep terminal outputs. Here the "node01" is the hostname of your system, you need to adjust to align with your own system:
+Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rafdb`. The log filename includes your actual hostname.
+
+#### Quick results access
+
+For most users, the quickest way to review recent benchmark results is:
 
 ```bash
-# Here the "node01" is the hostname of your system, you need to adjust to align with your own system.
-tree ~/tpbench/rafdb
-/home/hpckey/tpbench/rafdb/
-├── kernel
-│   ├── ad57c7c94b52b18c042ed7036b9818391968c8b5.tpbr
-│   └── kernel.tpbe
-├── log
-│   ├── tpbrunlog_20260324T151817_node01.log
-│   └── tpbrunlog_20260324T151959_node01.log
-├── task
-│   ├── 1b809109eee590f5d865f245fa0ebcd86f6ce159.tpbr
-│   ├── 4c48e958bcb93c21609bbb5e4d509943212d197f.tpbr
-│   ├── 7c25f0b333842ddc316d8e7d7377aaf969ee9eba.tpbr
-│   ├── cdad43d7505ec25d814f26b2d4b89d379cba9af8.tpbr
-│   └── task.tpbe
-└── task_batch
-    ├── 28d62c15ee2941aceb75b66f26d3d03641233520.tpbr
-    ├── ca394f1f07e576ff0a281cf3af3029eb38b8cba3.tpbr
-    └── task_batch.tpbe
-tail ~/tpbench/rafdb/log/tpbrunlog_20260324T151817_node01.log
-Result quantiles: Q0.05=1.1609E5, Q0.25=1.1766E5, Q0.50=1.1816E5, Q0.75=1.1871E5, Q0.95=1.3181E5
-Metrics: triad_bw_walltime
-Units: MB/s
-Result mean: 1.1697E5
-Result quantiles: Q0.05=9.9532E4, Q0.25=1.1730E5, Q0.50=1.1825E5, Q0.75=1.1879E5, Q0.95=1.3678E5
-===
-2026-03-24 15:18:22 [NOTE] Kernel stream finished successfully.
-2026-03-24 15:18:22 [NOTE] Auto-record: task recorded, TaskID=4c48e958bcb93c21609bbb5e4d509943212d197f
-2026-03-24 15:18:22 [NOTE] TPBench exit.
-2026-03-24 15:18:22 [NOTE] Auto-record: batch ended, 3 tasks recorded.
+# List recent runs with basic summary
+tpbcli db list
+
+# Get detailed output from the latest log file (uses your actual hostname)
+LOG_FILE=$(ls -t ~/.tpbench/rafdb/log/tpbrunlog_*.log | head -1)
+tail -50 "$LOG_FILE"
+```
+
+The terminal output during the run (also saved in the log file) typically contains the performance metrics (e.g., bandwidth, latency) in human-readable form.
+
+#### Working with MPI results
+
+For MPI kernels like `stream_mpi`:
+
+- Each run creates a **task capsule** that groups all rank records.
+- `tpbcli db list` shows the capsule as the entry point (counts as 1 task).
+- To get the capsule ID from a TBatchID:
+
+```bash
+tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
+```
+
+- The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.
+- To dump the capsule and see all member task IDs:
+
+```bash
+tpbcli db dump --task-id <CapsuleID>
+```
+
+- To get metrics from a specific rank (e.g., rank 0):
+
+```bash
+tpbcli db dump --task-id <Rank0TaskID>
+```
+
+#### Raw record exploration
+
+The `--entry` option shows summary information without needing a specific ID:
+
+```bash
+# List all task batch entries
+tpbcli db dump --entry task_batch
+
+# List all kernel definitions
+tpbcli db dump --entry kernel
+
+# List all task entry points (capsules and standalone tasks)
+tpbcli db dump --entry task
+```
+
+**Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
+
+#### Using TaskID from logs
+
+The TaskID printed in the log (e.g., `4c48e958...`) can be used directly:
+
+```bash
+# Dump a specific task record (use first 4+ hex chars)
+tpbcli db dump --task-id 4c48e958bcb93c21609bbb5e4d509943212d197f
+
+# You can also check all recorded task entry IDs
+tpbcli db dump --entry task
 ```
 
 Use `tpbcli database` to check detailed record, you can find the TasiID above is `4c48e958bcb93c21609bbb5e4d509943212d197f` :

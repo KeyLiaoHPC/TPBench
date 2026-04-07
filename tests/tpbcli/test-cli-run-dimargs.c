@@ -144,42 +144,21 @@ test_string_list(void)
     return (g_fail > before) ? 1 : 0;
 }
 
-/* B1.4: nested dimension expansion (Cartesian product) */
+/* B1.4: nested brace syntax is rejected */
 static int
-test_nested_expansion(void)
+test_nested_rejected(void)
 {
     tpb_dim_config_t *cfg = NULL;
-    tpb_dim_values_t *vals = NULL;
     int err;
     int before = g_fail;
 
     err = tpb_argp_parse_dim(
         "dtype=[double,float]{total_memsize=[16,32]}", &cfg);
-    ASSERT_EQ_INT("nested parse", 0, err);
-    if (err != 0) return 1;
-
-    ASSERT_EQ_STR("nested parm_name", "dtype", cfg->parm_name);
-    ASSERT_EQ_INT("nested outer count", 2, cfg->spec.list.n);
-
-    ASSERT_EQ_INT("nested has child", 1, cfg->nested != NULL);
-    if (cfg->nested == NULL) { tpb_dim_config_free(cfg); return 1; }
-
-    ASSERT_EQ_STR("nested child parm", "total_memsize",
-                   cfg->nested->parm_name);
-    ASSERT_EQ_INT("nested child count", 2, cfg->nested->spec.list.n);
-
-    err = tpb_dim_generate_values(cfg, &vals);
-    ASSERT_EQ_INT("nested gen", 0, err);
-    if (err != 0) { tpb_dim_config_free(cfg); return 1; }
-
-    ASSERT_EQ_INT("nested vals n", 2, vals->n);
-    ASSERT_EQ_INT("nested child vals", 1, vals->nested != NULL);
-    if (vals->nested != NULL) {
-        ASSERT_EQ_INT("nested child vals n", 2, vals->nested->n);
+    ASSERT_EQ_INT("nested rejected", 1, err != 0);
+    if (cfg != NULL) {
+        tpb_dim_config_free(cfg);
     }
 
-    tpb_dim_values_free(vals);
-    tpb_dim_config_free(cfg);
     return (g_fail > before) ? 1 : 0;
 }
 
@@ -191,15 +170,15 @@ test_total_count(void)
     int err, total;
     int before = g_fail;
 
-    /* Nested: 2 dtypes x 2 memsizes = 4 */
-    err = tpb_argp_parse_dim(
-        "dtype=[double,float]{total_memsize=[16,32]}", &cfg);
-    ASSERT_EQ_INT("count parse", 0, err);
+    /* Single element list: 1 value */
+    err = tpb_argp_parse_dim("x=[42]", &cfg);
+    ASSERT_EQ_INT("count single parse", 0, err);
     if (err != 0) return 1;
 
     total = tpb_dim_get_total_count(cfg);
-    ASSERT_EQ_INT("count 2x2", 4, total);
+    ASSERT_EQ_INT("count single 1", 1, total);
     tpb_dim_config_free(cfg);
+    cfg = NULL;
 
     /* Flat list: 3 values */
     cfg = NULL;
@@ -273,7 +252,7 @@ main(int argc, char **argv)
         { "B1.1", "list_expansion",    test_list_expansion    },
         { "B1.2", "recur_expansion",   test_recur_expansion   },
         { "B1.3", "string_list",       test_string_list       },
-        { "B1.4", "nested_expansion",  test_nested_expansion  },
+        { "B1.4", "nested_rejected",   test_nested_rejected    },
         { "B1.5", "total_count",       test_total_count       },
     };
     int n = sizeof(cases) / sizeof(cases[0]);

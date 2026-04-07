@@ -7,11 +7,11 @@
 **核心特性：**
 - 表示 CLI 语法的树形数据结构（子命令、选项、标志）
 - 带自动回溯的栈式解析器
-- 启发式帮助：任意位置的上下文感知 `-h/--help`
+- 启发式帮助：任意位置的上下文感知 **`--help`** / **`-h`**
 - 验证：必填、互斥、conflict_opts、max_chosen、预设值
 - 零全局状态：所有状态都存在于调用者拥有的树中
 
-**范围：** 仅限模块实现和单元测试。不涉及 `tpbcli.c` 或任何 `tpbcli-*.c` 前端文件的修改。
+**范围：** 模块实现（`tpbcli-argp.c/h`）与单元测试（Pack B3）。**调用方**包括 [`tpbcli.c`](../../src/tpbcli.c)（顶层子命令）与 [`tpbcli-database.c`](../../src/tpbcli-database.c)（`database`/`db` → `list`|`dump` 及 dump 选项的嵌套树）。
 
 ---
 
@@ -36,7 +36,7 @@
 |------|-------------|----------------|-------------------|
 | `TPBCLI_ARG_CMD` | 子命令（如 `run`、`benchmark`） | 匹配时入栈 | 否 |
 | `TPBCLI_ARG_OPT` | 选项（如 `--kernel`） | 有子节点时入栈 | 是（下一个标记） |
-| `TPBCLI_ARG_FLAG` | 布尔标志（如 `-h`） | 永不入栈 | 否 |
+| `TPBCLI_ARG_FLAG` | 布尔标志（如主名 `--help`、短名 `-h`） | 永不入栈 | 否 |
 
 **标志语义：**
 
@@ -55,7 +55,7 @@
 | `N > 1` | 最多可选 N 次。 |
 | `-1` | 无限制。 |
 
-**帮助节点。** 解析器中没有硬编码的 `-h`/`--help` 拦截。相反，帮助通过带有 `max_chosen=0` 和 `help_fn` 的常规 FLAG 节点实现。调用者为每个应支持帮助的节点添加 `-h`/`--help` 作为其子节点。模块导出 `tpbcli_default_help(node, out)` —— 一个使用 `_sf_emit_help` 打印 `node->parent` 默认帮助的便捷函数。调用者为标准帮助行为设置 `.help_fn = tpbcli_default_help`。
+**帮助节点。** 解析器中没有硬编码的帮助拦截。相反，帮助通过带有 `max_chosen=0` 和 `help_fn` 的常规 FLAG 节点实现。**约定：** 使用 **`.name = "--help"`**、**`.short_name = "-h"`**，使生成的帮助行以长选项形式列在前面。调用者在需要上下文感知的每个节点下添加一个此类 FLAG。模块导出 `tpbcli_default_help(node, out)` —— 使用 `_sf_emit_help` 打印 `node->parent` 默认帮助。标准行为设 `.help_fn = tpbcli_default_help`（亦可自定义，如 `tpbcli database --help`）。
 
 **互斥不阻止自身重选。** 互斥检查仅扫描其他兄弟节点，而非匹配的节点本身。自身重选由 `max_chosen` 处理。示例：`tpbcli run run` —— 第二个 `run` 弹出到根节点，再次匹配 `run`。互斥检查：任何其他兄弟节点 is_set？否 → 通过。max_chosen：`chosen_count(1) >= max_chosen(1)` → 拒绝。
 
@@ -71,23 +71,37 @@ root "tpbcli" (深度 0)
  |    |    +-- OPT "--kenvs-dim"      (深度 3)
  |    |    +-- OPT "--kmpiargs"       (深度 3)
  |    |    +-- OPT "--kmpiargs-dim"   (深度 3)
- |    |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, 深度 3)
+ |    |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, 深度 3)
  |    +-- OPT "--timer"          (预设="clock_gettime", 深度 2)
  |    +-- OPT "--outargs"        (深度 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, 深度 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, 深度 2)
  +-- CMD "benchmark" (互斥，深度 1)
  |    +-- OPT "--suite"          (必填，深度 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, 深度 2)
- +-- CMD "database"  (互斥，深度 1)
- |    +-- CMD "list" / "ls"      (互斥，深度 2)
- |    +-- CMD "dump"             (互斥，深度 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, 深度 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, 深度 2)
+ +-- CMD "database" / "db"  (互斥，深度 1；DELEGATE_SUBCMD → `tpbcli-database.c` 内嵌套树)
+ |    +-- （详见下文 —— 并非全部节点都在 `tpbcli.c`）
  +-- CMD "kernel"    (互斥，深度 1)
  |    +-- CMD "list" / "ls"      (互斥，深度 2)
- |    +-- FLAG "-h" / "--help"   (max_chosen=0, help_fn, 深度 2)
+ |    +-- FLAG "--help" / "-h"   (max_chosen=0, help_fn, 深度 2)
  +-- CMD "help"      (互斥，深度 1)
- +-- FLAG "-h" / "--help"        (max_chosen=0, help_fn, 深度 1)
+ +-- FLAG "--help" / "-h"        (max_chosen=0, help_fn, 深度 1)
 ```
+
+**嵌套的 `database` 树**（在 `tpbcli_database` 内构建；`argv[1]` 为 `database` 或 `db`）：
+
+```
+root "tpbcli"（形式根；首个匹配的 token 为 database|db）
+ +-- FLAG "--help" / "-h"   （根级，可选）
+ +-- CMD "database" / "db"
+ |    +-- FLAG "--help" / "-h"   （自定义 help_fn：子命令与 dump 摘要）
+ |    +-- CMD "list" / "ls"      （与 dump 互斥）
+ |    |    +-- FLAG "--help" / "-h"
+ |    +-- CMD "dump"
+ |    |    +-- FLAG "--help" / "-h"
+ |    |    +-- OPT "--id"、"--tbatch-id"、… "--entry"  （conflict_opts 互斥）
+```
+
+顶层 `tpbcli.c` 仅为 `database`/`db` 注册 `TPBCLI_ARGF_DELEGATE_SUBCMD` 与派发回调；上述内层结构由 [`tpbcli-database.c`](../../src/tpbcli-database.c) 维护。
 
 `--kernel` 是一个有子节点的 OPT。匹配时，它通过 `parse_fn` 消耗其值（内核名称）**并且**入栈，因为它有子节点。后续标记如 `--kargs` 在深度 3 匹配。当标记在深度 3 不匹配时（如 `--timer`），解析器弹出 `--kernel` 并在 `run` 下的深度 2 重试。当出现第二个 `--kernel` 时，解析器弹回深度 2，再次匹配 `--kernel`（`max_chosen=-1`），消耗新的内核名称，并再次为其子节点入栈。
 

@@ -7,8 +7,8 @@
 #define TPBCLI_LOG_H
 
 /**
- * @brief Dispatches `tpbcli database` after argv[0..1] (`tpbcli`, `database`).
- * @details When: CLI invoked as `database <subcommand>`. Input: full argc/argv.
+ * @brief Dispatches `tpbcli database` or `tpbcli db` after argv[0..1].
+ * @details When: CLI invoked as `database`/`db` then subcommand. Input: full argc/argv.
  *          Output: Resolves workspace, runs list/ls or dump, or usage error.
  * @param argc Argument count
  * @param argv Argument vector
@@ -26,14 +26,18 @@ int tpbcli_database(int argc, char **argv);
 int tpbcli_database_ls(const char *workspace);
 
 /**
- * @brief Implements `database dump` (flags from argv[3..]).
- * @details When: Subcommand is dump. Input: full argc/argv and workspace.
- *          Output: CSV-style dump to stdout or CLI error; TPBE_* code.
- * @param argc Argument count
- * @param argv Argument vector (argv[2] must be "dump")
+ * @brief Run `database dump` using a pre-parsed selector and value.
  * @param workspace Resolved workspace root
+ * @param selector_name Long option name: `--id`, `--tbatch-id`, `--kernel-id`,
+ *                      `--task-id`, `--score-id`, `--file`, or `--entry`;
+ *                      NULL means no selector (usage printed).
+ * @param primary_value Hex string, file path, or entry label per selector
+ * @param entry_value Reserved; pass NULL
  * @return TPBE_SUCCESS or a TPBE_* error code
  */
-int tpbcli_database_dump(int argc, char **argv, const char *workspace);
+int tpbcli_database_dump_resolved(const char *workspace,
+                                  const char *selector_name,
+                                  const char *primary_value,
+                                  const char *entry_value);
 
 #endif /* TPBCLI_LOG_H */

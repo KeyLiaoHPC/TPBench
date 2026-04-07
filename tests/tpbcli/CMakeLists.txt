@@ -23,6 +23,17 @@ endif()
 tpb_add_subcase(B2 B2.6 kenvs_dim_before_kernel   test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.7 kmpiargs_dim_before_kernel test-cli-run-nokernel tpbcli)
 
+if(TARGET tpbk_stream.tpbx)
+    tpb_add_subcase(B2 B2.8 dry_run_basic test-cli-run-nokernel tpbcli)
+endif()
+tpb_add_subcase(B2 B2.9 help_run_level test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.10 help_kernel_no_name test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.11 bad_kernel_name test-cli-run-nokernel tpbcli)
+if(TARGET tpbk_stream.tpbx)
+    tpb_add_subcase(B2 B2.12 dry_run_cartesian test-cli-run-nokernel tpbcli)
+    tpb_add_subcase(B2 B2.13 help_kernel_specific test-cli-run-nokernel tpbcli)
+endif()
+
 # --- dimargs test executable (Pack B1) ---
 add_executable(test-cli-run-dimargs EXCLUDE_FROM_ALL
     test-cli-run-dimargs.c
@@ -40,7 +51,7 @@ set_target_properties(test-cli-run-dimargs PROPERTIES
 tpb_add_subcase(B1 B1.1 list_expansion   test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.2 recur_expansion  test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.3 string_list      test-cli-run-dimargs tpbcli)
-tpb_add_subcase(B1 B1.4 nested_expansion test-cli-run-dimargs tpbcli)
+tpb_add_subcase(B1 B1.4 nested_rejected test-cli-run-dimargs tpbcli)
 tpb_add_subcase(B1 B1.5 total_count      test-cli-run-dimargs tpbcli)
 
 # --- tpbcli-argp (Pack B3) ---
@@ -66,10 +77,35 @@ tpb_add_subcase(B3 B3.7  unknown_arg          test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.8  stack_pop_retry      test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.9  max_chosen           test-tpbcli-argp tpbcli)
 tpb_add_subcase(B3 B3.10 find_arg             test-tpbcli-argp tpbcli)
+tpb_add_subcase(B3 B3.11 delegate_subcmd      test-tpbcli-argp tpbcli)
+
+# --- database subcommand (Pack B4) ---
+add_executable(test-cli-database EXCLUDE_FROM_ALL
+    test-cli-database.c
+)
+target_compile_definitions(test-cli-database PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+add_dependencies(test-cli-database tpbcli)
+set_target_properties(test-cli-database PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B4 B4.1  database_missing_subcmd   test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.2  database_help_overview    test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.3  database_list_help        test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.4  database_dump_help        test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.5  database_dump_no_selector test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.6  database_dump_conflict    test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.7  database_unknown_action   test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.8  database_dump_unknown_flag test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.9  database_ls_alias         test-cli-database tpbcli)
 
 # Aggregate targets
 add_custom_target(test_tpbcli
-    DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp
+    DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp test-cli-database
 )
 
 add_custom_target(check_tpbcli

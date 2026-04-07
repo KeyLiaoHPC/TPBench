@@ -46,11 +46,13 @@ $ make
 ```bash
 tpbcli <subcommand> <options>
 ```
-支持 2 个子命令：`run` 和 `benchmark`。
-- `tpbcli run`: 用于运行一个或多个 TPBench 内核，支持设置运行时参数，进行可变参数维度扫描。支持通过 TPBench 框架为每个待测内核传递运行时命令行参数、环境变量或 MPI 运行时参数。
-- `tpbcli benchmark`: 运行预定义的评测套件，每个套件包含一系列评测内核及预定义参数、计分规则及公式，输出评测过程和结果评分。
-- `tpbcli list`: 列出目前支持的评测内核。
-- `tpbcli help`: 帮助文档。
+顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。
+
+- **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
+- **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。
+- **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期 tbatch 表）或 **`dump`**，且 **`dump`** 须且仅能指定一个选择项（**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`**、**`--entry`**）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
+- **`tpbcli kernel`**：刷新工作区内核元数据后执行 **`list`** / **`ls`**，列出已注册的 PLI 内核（与旧版顶层 `list` 不同）。
+- **`tpbcli help`**：帮助文档。
 
 屏幕上的输出结果会同时输出到log目录下。
 
@@ -134,16 +136,16 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=256 --kargs-dim 'dtype=[
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'total_memsize=mul(@,2)(16,16,128,0)'
 ```
 
-**3）嵌套序列**
+**3）多参数笛卡尔积**
 
-嵌套多个可变参数，每个可变参数定义后，可以在大括号中定义另一个可变参数。在命令行解析中，最内层的参数列表将被优先计算。注意，目前不允许在不同嵌套层定义相同参数名。
+要同时遍历多个参数的组合，使用**多个** `--kargs-dim` 选项（每个参数一个）。TPBench 会自动构建所有维度的**笛卡尔积**（例如两个长度分别为 2 和 3 的列表会产生 6 次运行）。单个 `--kargs-dim` 字符串中的 `{...}` 嵌套语法**不再支持**。
 
-语法：`--kargs-dim '<dim>{<nested_dim1>{<nested_dim2>{...}}}'`
-
-示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式。对于每种格式，轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试。
+示例：运行 `triad` 内核，每轮执行 100 个循环，轮流使用 `double`、`float` 和 `iso-fp16` 这三种数据格式，并对每种格式轮流将 `total_memsize` 设置为 `16`、`32`、`64`、`128`，共运行 12 轮测试（3 种数据类型 × 4 种内存大小）。
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim 'dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}'
+$ tpbcli run --kernel triad --kargs ntest=100 \
+    --kargs-dim dtype=[double,float,iso-fp16] \
+    --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
 ### 2.2.4 设置计时方法
@@ -224,3 +226,19 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <para
 ```
 
 注意：MPI 参数直接传递给 `mpirun`，TPBench 不进行验证。如果 `mpirun` 子进程失败，将报告错误。
+
+## 2.3 tpbcli database
+
+同义写法：**`tpbcli database`**、**`tpbcli db`**。
+
+必须再指定子命令：**`list`**（别名 **`ls`**）或 **`dump`**。
+
+- **`tpbcli db list`** — 打印工作区索引中近期 tbatch 表（与 **`database list`** 相同）。
+- **`tpbcli db dump`** — 须且仅能指定以下之一：**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`** *路径*、**`--entry`** *名称*（详见 **`dump --help`**）。各选择项互斥。
+
+示例：
+
+```bash
+$ tpbcli db list
+$ tpbcli database dump --tbatch-id <40位十六进制>
+```

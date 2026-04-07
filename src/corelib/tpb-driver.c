@@ -58,6 +58,7 @@ static tpb_timer_t timer;
 static tpb_k_rthdl_t *handle_list = NULL;  // array of runtime handles
 static int timer_set = 0;                  // flag to track if timer is set
 static int s_pli_handle_index = 0;         // 0-based handle index for auto-record
+static int g_dry_run_enabled = 0;
 
 static int
 _sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
@@ -1485,6 +1486,14 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     /* Print full command for debugging/analysis */
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Exec: %s\n", full_cmd);
 
+    if (g_dry_run_enabled) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "[DRY-RUN] Skipping fork for %s\n",
+                   hdl->kernel.info.name);
+        free(full_cmd);
+        return 0;
+    }
+
     /*
      * Close parent's log stream and publish path so the PLI child opens the same file
      * in append mode; reopen in the parent after fork.
@@ -1569,6 +1578,12 @@ tpb_driver_run_all(void)
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
     return 0;
+}
+
+void
+tpb_driver_set_dry_run(int enabled)
+{
+    g_dry_run_enabled = (enabled != 0);
 }
 
 /* PLI API implementations */

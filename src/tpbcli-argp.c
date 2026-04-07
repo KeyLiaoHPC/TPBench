@@ -417,6 +417,14 @@ _sf_post_loop(tpbcli_argtree_t *tree, tpbcli_argnode_t **stack, int stack_sz,
         if (err != TPBE_SUCCESS)
             return err;
     }
+
+    for (i = stack_sz - 1; i >= 1; i--) {
+        tpbcli_argnode_t *n = stack[i];
+
+        if (n->type == TPBCLI_ARG_CMD && n->parse_fn != NULL) {
+            return n->parse_fn(n, NULL);
+        }
+    }
     return TPBE_SUCCESS;
 }
 
@@ -555,6 +563,9 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
                     return TPBE_CLI_FAIL;
                 stack[stack_sz++] = match;
                 i++;
+                if ((match->flags & TPBCLI_ARGF_DELEGATE_SUBCMD) != 0u) {
+                    goto end_parse;
+                }
                 continue;
             }
 
@@ -603,15 +614,25 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
             continue;
         }
 
-        /* pop */
+        /* pop: reset children of popped node for reuse on rematch */
         if (stack_sz <= 1) {
             fprintf(stderr, "error: unknown argument '%s'\n", tok);
             return TPBE_CLI_FAIL;
+        }
+        {
+            tpbcli_argnode_t *popped = stack[stack_sz - 1];
+            tpbcli_argnode_t *ch;
+
+            for (ch = popped->first_child; ch != NULL;
+                 ch = ch->next_sibling) {
+                _sf_reset_parse_state(ch);
+            }
         }
         stack_sz--;
         goto retry;
     }
 
+end_parse:
     return _sf_post_loop(tree, stack, stack_sz, stderr);
 }
 

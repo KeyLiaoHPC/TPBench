@@ -369,88 +369,6 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     return 0;
 }
 
-/* Nested Sequence Parser */
-
-int
-tpb_argp_parse_dim_nest(const char *spec, tpb_dim_config_t *cfg)
-{
-    char buf[TPBM_CLI_STR_MAX_LEN];
-    char *p;
-    char *brace_start;
-    char *brace_end;
-    char *outer_spec;
-    char *nested_spec;
-    int err;
-
-    if (spec == NULL || cfg == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    snprintf(buf, sizeof(buf), "%s", spec);
-    p = buf;
-
-    /* Find opening brace for nested part */
-    brace_start = strchr(p, '{');
-    if (brace_start == NULL) {
-        /* No nesting, parse as regular dimension */
-        return tpb_argp_parse_dim(spec, &cfg);
-    }
-
-    /* Extract outer specification (before '{') */
-    *brace_start = '\0';
-    outer_spec = trim_whitespace_dim(p);
-
-    /* Find matching closing brace */
-    brace_end = find_matching_bracket(brace_start + 1, '{', '}');
-    if (brace_end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Invalid nested sequence: missing '}' in '%s'\n", spec);
-        return TPBE_CLI_FAIL;
-    }
-    *brace_end = '\0';
-    nested_spec = brace_start + 1;
-
-    /* Parse outer dimension */
-    tpb_dim_config_t *outer_cfg = NULL;
-    err = tpb_argp_parse_dim(outer_spec, &outer_cfg);
-    if (err != 0) {
-        return err;
-    }
-
-    /* Copy outer config to cfg */
-    memcpy(cfg, outer_cfg, sizeof(tpb_dim_config_t));
-    cfg->nested = NULL;
-    free(outer_cfg);
-
-    /* Parse nested dimension recursively */
-    tpb_dim_config_t *nested_cfg = (tpb_dim_config_t *)malloc(sizeof(tpb_dim_config_t));
-    if (nested_cfg == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-    memset(nested_cfg, 0, sizeof(tpb_dim_config_t));
-
-    /* Check if nested part also has nesting */
-    if (strchr(nested_spec, '{') != NULL) {
-        err = tpb_argp_parse_dim_nest(nested_spec, nested_cfg);
-    } else {
-        tpb_dim_config_t *inner = NULL;
-        err = tpb_argp_parse_dim(nested_spec, &inner);
-        if (err == 0 && inner != NULL) {
-            memcpy(nested_cfg, inner, sizeof(tpb_dim_config_t));
-            free(inner);
-        }
-    }
-
-    if (err != 0) {
-        free(nested_cfg);
-        return err;
-    }
-
-    cfg->nested = nested_cfg;
-
-    return 0;
-}
-
 /* Main Entry Point */
 
 int
@@ -476,19 +394,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     snprintf(buf, sizeof(buf), "%s", argstr);
     p = trim_whitespace_dim(buf);
 
-    /* Check for nested sequence first (contains '{' before '=') */
-    char *brace = strchr(p, '{');
     eq = strchr(p, '=');
-
-    if (brace != NULL && (eq == NULL || brace < eq)) {
-        /* Nested sequence without '=' before '{' - unusual but handle it */
-        err = tpb_argp_parse_dim_nest(p, *cfg);
-        if (err != 0) {
-            free(*cfg);
-            *cfg = NULL;
-        }
-        return err;
-    }
 
     /* Find '=' to separate parameter name from specification */
     if (eq == NULL) {
@@ -507,18 +413,14 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     /* Store parameter name */
     snprintf((*cfg)->parm_name, TPBM_NAME_STR_MAX_LEN, "%s", parm_name);
 
-    /* Check for nested sequence (has '{' in spec) */
-    brace = strchr(spec, '{');
-    if (brace != NULL) {
-        /* Re-parse with full string for nested handling */
-        char nested_buf[TPBM_CLI_STR_MAX_LEN];
-        snprintf(nested_buf, sizeof(nested_buf), "%s=%s", parm_name, spec);
-        err = tpb_argp_parse_dim_nest(nested_buf, *cfg);
-        if (err != 0) {
-            free(*cfg);
-            *cfg = NULL;
-        }
-        return err;
+    if (strchr(spec, '{') != NULL) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Nested dimension syntax '{...}' is not supported. "
+                   "Use multiple --kargs-dim (or --kenvs-dim) options for a "
+                   "flat Cartesian product.\n");
+        free(*cfg);
+        *cfg = NULL;
+        return TPBE_CLI_FAIL;
     }
 
     /* Detect sequence type based on first character */
@@ -556,7 +458,6 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
 {
     tpb_dim_values_t *val;
     int n = 0;
-    int err;
 
     if (cfg == NULL || values == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -666,17 +567,6 @@ recur_done:
         return TPBE_CLI_FAIL;
     }
 
-    /* Handle nested dimensions */
-    if (cfg->nested != NULL) {
-        err = tpb_dim_generate_values(cfg->nested, &val->nested);
-        if (err != 0) {
-            tpb_dim_values_free(val);
-            return err;
-        }
-    } else {
-        val->nested = NULL;
-    }
-
     *values = val;
     return 0;
 }
@@ -712,12 +602,6 @@ tpb_dim_get_total_count(tpb_dim_config_t *cfg)
         break;
     }
 
-    /* Multiply by nested count */
-    if (cfg->nested != NULL) {
-        int nested_count = tpb_dim_get_total_count(cfg->nested);
-        count *= nested_count;
-    }
-
     return count;
 }
 
@@ -740,10 +624,6 @@ tpb_dim_config_free(tpb_dim_config_t *cfg)
         free(cfg->spec.list.values);
     }
 
-    if (cfg->nested != NULL) {
-        tpb_dim_config_free(cfg->nested);
-    }
-
     free(cfg);
 }
 
@@ -762,10 +642,6 @@ tpb_dim_values_free(tpb_dim_values_t *values)
     }
 
     free(values->values);
-
-    if (values->nested != NULL) {
-        tpb_dim_values_free(values->nested);
-    }
 
     free(values);
 }

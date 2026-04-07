@@ -17,11 +17,23 @@
 #include "tpbcli-benchmark.h"
 #include "tpbcli-help.h"
 #include "tpbcli-database.h"
+#include "tpbcli-argp.h"
 #include "corelib/tpb-io.h"
 
 /* Local Function Prototypes */
 static int parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
                                    int *first_action_index);
+
+static int g_top_argc;
+static char **g_top_argv;
+
+static int _sf_dispatch_run(tpbcli_argnode_t *node, const char *value);
+static int _sf_dispatch_benchmark(tpbcli_argnode_t *node, const char *value);
+static int _sf_dispatch_database(tpbcli_argnode_t *node, const char *value);
+static int _sf_dispatch_kernel(tpbcli_argnode_t *node, const char *value);
+static int _sf_dispatch_help_cmd(tpbcli_argnode_t *node, const char *value);
+static void _sf_top_help_flag(const tpbcli_argnode_t *node, FILE *out);
+static int _sf_build_top_arg_tree(tpbcli_argtree_t *tree);
 
 static int
 parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
@@ -43,9 +55,12 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
             continue;
         }
         if (argv[i][0] == '-') {
+            if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+                break;
+            }
             fprintf(stderr, "tpbcli: unknown option \"%s\"\n", argv[i]);
             fprintf(stderr, "Set \"--workspace\" or one of sub applications. \n"
-                            "r[un], b[enchmark], d[atabase], k[ernel], h[elp].\n");
+                            "r[un], b[enchmark], db|database, k[ernel], h[elp].\n");
             return TPBE_CLI_FAIL;
         }
         break;
@@ -55,37 +70,163 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
     return TPBE_SUCCESS;
 }
 
+static int
+_sf_dispatch_run(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    return tpbcli_run(g_top_argc, g_top_argv);
+}
+
+static int
+_sf_dispatch_benchmark(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    return tpbcli_benchmark(g_top_argc, g_top_argv);
+}
+
+static int
+_sf_dispatch_database(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    return tpbcli_database(g_top_argc, g_top_argv);
+}
+
+static int
+_sf_dispatch_kernel(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    return tpbcli_kernel(g_top_argc, g_top_argv);
+}
+
+static int
+_sf_dispatch_help_cmd(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    return tpbcli_help(g_top_argc, g_top_argv);
+}
+
+static void
+_sf_top_help_flag(const tpbcli_argnode_t *node, FILE *out)
+{
+    (void)node;
+    (void)out;
+    tpb_print_help_total();
+}
+
+static int
+_sf_build_top_arg_tree(tpbcli_argtree_t *tree)
+{
+    tpbcli_argnode_t *root;
+
+    if (tree == NULL) {
+        return TPBE_CLI_FAIL;
+    }
+    root = &tree->root;
+
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "run",
+            .short_name = "r",
+            .desc = "Run benchmark kernels",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_run,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "benchmark",
+            .short_name = "b",
+            .desc = "Run benchmark suite from YAML",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_benchmark,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "database",
+            .short_name = "db",
+            .desc = "Database operations (list, dump)",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_database,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "kernel",
+            .short_name = "k",
+            .desc = "Kernel management (list)",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_kernel,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "help",
+            .short_name = "h",
+            .desc = "Show help message",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_help_cmd,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "--help",
+            .short_name = "-h",
+            .desc = "Show help message",
+            .type = TPBCLI_ARG_FLAG,
+            .flags = TPBCLI_ARGF_EXCLUSIVE,
+            .max_chosen = 0,
+            .help_fn = _sf_top_help_flag,
+        }) == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+    return TPBE_SUCCESS;
+}
+
 /* Public Function Implementations */
 
 int
 tpbcli_main(int argc, char **argv)
 {
+    tpbcli_argtree_t *tree;
+    int err;
+
+    g_top_argc = argc;
+    g_top_argv = argv;
+
     if (argc <= 1) {
         tpb_print_help_total();
         return TPBE_EXIT_ON_HELP;
     }
 
-    if (strcmp(argv[1], "run") == 0 || strcmp(argv[1], "r") == 0) {
-        return tpbcli_run(argc, argv);
+    tree = tpbcli_argtree_create(
+        (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",
+        "TPBench performance benchmarking CLI");
+    if (tree == NULL) {
+        return TPBE_MALLOC_FAIL;
     }
-    if (strcmp(argv[1], "benchmark") == 0 || strcmp(argv[1], "b") == 0) {
-        return tpbcli_benchmark(argc, argv);
+    err = _sf_build_top_arg_tree(tree);
+    if (err != TPBE_SUCCESS) {
+        tpbcli_argtree_destroy(tree);
+        return err;
     }
-    if (strcmp(argv[1], "database") == 0 || strcmp(argv[1], "d") == 0) {
-        return tpbcli_database(argc, argv);
-    }
-    if (strcmp(argv[1], "kernel") == 0 || strcmp(argv[1], "k") == 0) {
-        return tpbcli_kernel(argc, argv);
-    }
-    if (strcmp(argv[1], "help") == 0 || strcmp(argv[1], "h") == 0) {
-        return tpbcli_help(argc, argv);
-    }
-
-    tpb_printf(TPBM_PRTN_M_DIRECT,
-               "Unsupported action: %s. Please use one of sub applications:\n"
-               "r[un], b[enchmark], d[atabase], k[ernel], h[elp].\n", argv[1]);
-    tpb_print_help_total();
-    return TPBE_CLI_FAIL;
+    err = tpbcli_parse_args(tree, argc, argv);
+    tpbcli_argtree_destroy(tree);
+    return err;
 }
 
 int

@@ -49,11 +49,13 @@ tpbcli basic format:
 tpbcli <subcommand> <options>
 ```
 
-Supports 4 subcommands: `run`, `benchmark`, `list`, and `help`.
-- `tpbcli run`: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
-- `tpbcli benchmark`: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
-- `tpbcli list`: List currently supported evaluation kernels.
-- `tpbcli help`: Display help documentation.
+Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
+
+- **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
+- **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
+- **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
+- **`tpbcli kernel`**: Refresh kernel metadata in the workspace, then **`list`** / **`ls`** registered PLI kernels (not the same as the old top-level `list` command).
+- **`tpbcli help`**: Display help documentation.
 
 Output results on screen are also written to the log directory.
 
@@ -74,6 +76,8 @@ tpbcli run <tpbench_options> \
 `<tpbench_options>` supported options include:
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
+- `-d` / `--dry-run`: Parse arguments, expand dimensions, print `Exec:` lines for each handle, but do not fork the kernel or write auto-record batches.
+- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints kernel-specific help (see below).
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
     - `sigbit_trim=<x>`: Limit the number of significant digits in output data. Integer parts exceeding the number of digits will be represented in scientific notation.
@@ -162,7 +166,7 @@ Output includes FLOP/s measurements at arithmetic intensities: 0.1, 0.25, 0.5, 1
 
 When configuring variable parameter evaluation, TPBench runs tests sequentially according to predefined value sequences. Each value executes the kernel once. Get results as a parameter changes along a coordinate axis (e.g., a performance curve as a parameter changes). When specifying evaluation kernel `--kernel <foo>`, any parameter configurable via `--kargs` in the `foo` kernel can be configured via `--kargs-dim` as a variable parameter. If a variable parameter name duplicates a parameter name in `--kargs`, the `--kargs` value is ignored.
 
-Currently, `tpbcli run` supports configuring explicit list and recursive sequence. To traverse multiple dimensions, nest multiple parameter sequences.
+Currently, `tpbcli run` supports explicit list and recursive sequence for each `--kargs-dim` (and similarly `--kenvs-dim`). To sweep multiple parameters, use **multiple** `--kargs-dim` options after the same `--kernel`; TPBench builds the **Cartesian product** of all those dimensions (e.g. two lists of length 2 and 3 yield six runs). The `{…}` nesting syntax in a single `--kargs-dim` string is **not** supported.
 
 **1) Explicit List**
 
@@ -188,16 +192,14 @@ Example: Run `triad` kernel. Each round executes 100 loops. Set `total_memsize` 
 $ tpbcli --kernel triad --kargs ntest=100 --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
-**3) Nested Sequence**
+**3) Multiple dimensions (Cartesian product)**
 
-Nest multiple variable parameters. After defining each variable parameter, define another variable parameter in braces. In command-line parsing, innermost parameter list calculated first. Note, currently not allowed to define same parameter name at different nesting levels.
-
-Syntax: `--kargs-dim <dim>{<nested_dim1>{<nested_dim2>{...}}}`
-
-Example: Run `triad` kernel. Each round executes 100 loops. Use `double`, `float`, and `iso-fp16` data formats sequentially. For each format, set `total_memsize` to `16`, `32`, `64`, `128` sequentially. Runs 12 rounds of tests.
+Use one `--kargs-dim` per parameter axis. Example: combine a three-value `dtype` list with a four-value `total_memsize` recursive sweep (12 runs total):
 
 ```
-$ tpbcli --kernel triad --kargs ntest=100 --kargs-dim dtype=[double,float,iso-fp16]{total_memsize=mul(@,2)(16,16,128,0)}
+$ tpbcli run --kernel triad --kargs ntest=100 \
+    --kargs-dim dtype=[double,float,iso-fp16] \
+    --kargs-dim total_memsize=mul(@,2)(16,16,128,0)
 ```
 
 ### 2.2.5 Set Timing Method
@@ -242,11 +244,11 @@ You can specify `--kmpiargs` multiple times after the same `--kernel`; each frag
 
 **2) Variable MPI Arguments**
 
-`--kmpiargs-dim` supports explicit list and nested list formats for scanning different MPI configurations.
+`--kmpiargs-dim` supports a single quoted list of MPI argument strings. Each list entry becomes one handle (after copying the rest of the handle from the template). To combine process counts and binding policies, put both fragments in **one** list entry (space-separated within the quoted string).
 
-Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
+Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]"`
 
-Example 1: Run stream_mpi kernel, scanning MPI process counts from 1 to 4.
+Example: Run `stream_mpi`, scanning MPI process counts 1, 2, and 4.
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
@@ -254,19 +256,13 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
     --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
 ```
 
-Example 2: Use nested lists to scan process counts and binding policies.
+Example: Several full `mpirun` argument bundles in one list (each row is one handle):
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs '--bind-to core' \
-    --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
+    --kmpiargs-dim "['-np 2 --bind-to core', '-np 2 --bind-to socket', \
+                     '-np 4 --bind-to core', '-np 4 --bind-to socket']"
 ```
-
-The above command generates 4 combinations:
-- `-np 2 --bind-to core`
-- `-np 2 --bind-to socket`
-- `-np 4 --bind-to core`
-- `-np 4 --bind-to socket`
 
 **3) Command Line Visibility**
 
@@ -277,3 +273,76 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <para
 ```
 
 Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.
+
+## 2.3 tpbcli database
+
+Synonyms: **`tpbcli database`**, **`tpbcli db`**.
+
+You must supply a subcommand: **`list`** (alias **`ls`**) or **`dump`**.
+
+- **`tpbcli db list`** — Print recent tbatch rows from the workspace index (same data as **`database list`**).
+- **`tpbcli db dump`** — Requires exactly one of: **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`** *path*, **`--entry`** *name* (see **`dump --help`** for semantics). Selectors are mutually exclusive.
+
+Examples:
+
+```bash
+$ tpbcli db list
+$ tpbcli database dump --tbatch-id <40_hex_chars>
+```
+
+### 2.3.1 Quick Results Access
+
+For most users, the quickest way to review recent benchmark results is:
+
+```bash
+# List recent runs with basic summary
+tpbcli db list
+
+# Get detailed output from the latest log file (includes printed metrics)
+LOG_FILE=$(ls -t ~/.tpbench/rafdb/log/tpbrunlog_*.log | head -1)
+tail -50 "$LOG_FILE"
+```
+
+The `list` command shows the TBatchID, number of tasks, and duration. The terminal output during the run (also saved in the log file) typically contains the actual performance metrics (e.g., bandwidth, latency) in human-readable form.
+
+### 2.3.2 Working with MPI Results
+
+For MPI kernels like `stream_mpi`:
+
+- Each run creates a **task capsule** that groups all rank records.
+- `tpbcli db list` shows the capsule as the entry point (counts as 1 task).
+- To get the capsule ID from a TBatchID:
+
+```bash
+tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
+```
+
+- The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.
+- For aggregate metrics (recommended), use the capsule record:
+
+```bash
+tpbcli db dump --task-id <CapsuleID>
+```
+
+This outputs the capsule metadata and the list of member task IDs. The actual performance numbers are in the individual rank task records. Use the member IDs to dump specific ranks:
+
+```bash
+tpbcli db dump --task-id <Rank0TaskID>
+```
+
+### 2.3.3 Raw Record Exploration
+
+The `--entry` option shows summary information without needing a specific ID:
+
+```bash
+# List all task batch entries
+tpbcli db dump --entry task_batch
+
+# List all kernel definitions
+tpbcli db dump --entry kernel
+
+# List all task entry points (capsules and standalone tasks)
+tpbcli db dump --entry task
+```
+
+**Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.

@@ -741,6 +741,44 @@ The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbat
 
 **Magic bytes:** Same task-domain record magics as section 2.4.3 (`.tpbr` task domain).
 
+#### 2.4.4.1 Accessing MPI Results
+
+After an `stream_mpi` run:
+
+1. Find the TBatchID from `tpbcli db list`:
+
+   ```bash
+   tpbcli db list
+   ```
+
+2. Dump the TBatch record to get the `TaskRecordIDs` list (includes capsule IDs):
+
+   ```bash
+   tpbcli db dump --tbatch-id <TBatchID>
+   ```
+
+   Look for the `TPBLINK::TaskID` header data which lists the capsule ID(s).
+
+3. Identify the capsule ID (it will be in the TaskRecordIDs array, usually the first entry).
+
+4. Dump the capsule to see all rank TaskRecordIDs:
+
+   ```bash
+   tpbcli db dump --task-id <CapsuleID>
+   ```
+
+   The output includes a `TPBLINK::TaskID` header with a 1-D array of 20-byte SHA1 IDs for all ranks.
+
+5. Pick a rank's TaskRecordID (e.g., rank 0) and dump it:
+
+   ```bash
+   tpbcli db dump --task-id <Rank0ID>
+   ```
+
+   This will show the actual `ntest`, `stream_array_size` arguments and the output metrics (`copy_bw_walltime`, `scale_bw_walltime`, `add_bw_walltime`, `triad_bw_walltime`) from that rank.
+
+**Important:** All MPI ranks compute the same metrics; the capsule does not store metrics itself, only the group membership. For aggregate bandwidth, the kernel output (printed to terminal and log file) already shows the total across all ranks.
+
 ### 2.5. Score Record
 
 **TODO: This section is not implemented in current version, need further design.**
