@@ -60,7 +60,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
             }
             fprintf(stderr, "tpbcli: unknown option \"%s\"\n", argv[i]);
             fprintf(stderr, "Set \"--workspace\" or one of sub applications. \n"
-                            "r[un], b[enchmark], d[atabase], k[ernel], h[elp].\n");
+                            "r[un], b[enchmark], db|database, k[ernel], h[elp].\n");
             return TPBE_CLI_FAIL;
         }
         break;
@@ -152,7 +152,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "database",
-            .short_name = "d",
+            .short_name = "db",
             .desc = "Database operations (list, dump)",
             .type = TPBCLI_ARG_CMD,
             .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,

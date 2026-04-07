@@ -38,17 +38,6 @@ typedef enum {
 /* Local Function Prototypes */
 
 /*
- * When: While parsing `database dump` argv to choose what to dump.
- * Input: argc, argv (full CLI vector); pathlen, entrylen buffer sizes;
- *        optional consumed_to (may be NULL).
- * Output: Returns target kind; copies first matching path/hex or entry name
- *         into path_or_hex / entry_name; caller uses enum to interpret.
- */
-static dump_target_t parse_dump_target(int argc, char **argv, int *consumed_to,
-                                       char *path_or_hex, size_t pathlen,
-                                       char *entry_name, size_t entrylen);
-
-/*
  * When: After `--entry <name>`; normalize user spelling for domain lookup.
  * Input: in — raw entry label; out buffer with capacity outlen.
  * Output: Fills out with lowercased, space/hyphen→underscore name; TPBE_* code.
@@ -641,80 +630,6 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
     }
 }
 
-static dump_target_t
-parse_dump_target(int argc, char **argv, int *consumed_to,
-                  char *path_or_hex, size_t pathlen,
-                  char *entry_name, size_t entrylen)
-{
-    int i;
-
-    if (consumed_to) {
-        *consumed_to = argc;
-    }
-    if (!path_or_hex || pathlen == 0) {
-        return DUMP_T_NONE;
-    }
-    path_or_hex[0] = '\0';
-    if (entry_name && entrylen > 0) {
-        entry_name[0] = '\0';
-    }
-
-    for (i = 3; i < argc; i++) {
-        const char *a = argv[i];
-
-        if (strcmp(a, "--id") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_ID_GLOBAL;
-        }
-        if (strcmp(a, "--tbatch-id") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_TBATCH_ID;
-        }
-        if (strcmp(a, "--kernel-id") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_KERNEL_ID;
-        }
-        if (strcmp(a, "--task-id") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_TASK_ID;
-        }
-        if (strcmp(a, "--score-id") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_SCORE_ID;
-        }
-        if (strcmp(a, "--file") == 0) {
-            if (i + 1 >= argc) {
-                return DUMP_T_NONE;
-            }
-            snprintf(path_or_hex, pathlen, "%s", argv[i + 1]);
-            return DUMP_T_FILE;
-        }
-        if (strcmp(a, "--entry") == 0) {
-            if (i + 1 >= argc || !entry_name) {
-                return DUMP_T_NONE;
-            }
-            snprintf(entry_name, entrylen, "%s", argv[i + 1]);
-            return DUMP_T_ENTRY;
-        }
-    }
-    return DUMP_T_NONE;
-}
-
 static void
 dump_headers(const tpb_meta_header_t *hdrs, uint32_t n)
 {
@@ -1303,22 +1218,54 @@ dump_file_path(const char *workspace, const char *filepath)
     return dump_tpbr_task(workspace, id);
 }
 
-/*
- * When: `database dump` is selected (argv[2] == "dump").
- * Input: full argc/argv and resolved workspace string.
- * Output: Parsed flags choose tpbr/tpbe dump path; return TPBE_* (see header).
+/**
+ * @brief Run database dump from resolved selector and value.
  */
 int
-tpbcli_database_dump(int argc, char **argv, const char *workspace)
+tpbcli_database_dump_resolved(const char *workspace,
+                              const char *selector_name,
+                              const char *primary_value,
+                              const char *entry_value)
 {
     dump_target_t t;
-    int dummy;
     char buf[TPB_RAF_PATH_MAX];
     char entrybuf[256];
     uint8_t dom;
 
-    t = parse_dump_target(argc, argv, &dummy, buf, sizeof(buf),
-                          entrybuf, sizeof(entrybuf));
+    (void)entry_value;
+
+    if (workspace == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    if (selector_name == NULL || primary_value == NULL) {
+        t = DUMP_T_NONE;
+    } else if (strcmp(selector_name, "--id") == 0) {
+        t = DUMP_T_ID_GLOBAL;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--tbatch-id") == 0) {
+        t = DUMP_T_TBATCH_ID;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--kernel-id") == 0) {
+        t = DUMP_T_KERNEL_ID;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--task-id") == 0) {
+        t = DUMP_T_TASK_ID;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--score-id") == 0) {
+        t = DUMP_T_SCORE_ID;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--file") == 0) {
+        t = DUMP_T_FILE;
+        snprintf(buf, sizeof(buf), "%s", primary_value);
+    } else if (strcmp(selector_name, "--entry") == 0) {
+        t = DUMP_T_ENTRY;
+        snprintf(entrybuf, sizeof(entrybuf), "%s", primary_value);
+        buf[0] = '\0';
+    } else {
+        return TPBE_CLI_FAIL;
+    }
+
     if (t == DUMP_T_NONE) {
         tpb_printf(TPBM_PRTN_M_DIRECT,
                    "Usage: tpbcli database dump "
