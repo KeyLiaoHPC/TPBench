@@ -41,6 +41,17 @@ Step 2: Run a single-core kernel. If the kernel does not finish normally and pri
 $ ./build/bin/tpbcli run --kernel stream --kargs stream_array_size=524288,ntest=100
 ```
 
+Step 3 (optional): Verify results are recorded in the database:
+
+```bash
+# List recent runs
+./build/bin/tpbcli db list
+
+# Check the latest log file for detailed output
+LOG_FILE=$(ls -t ~/.tpbench/rafdb/log/tpbrunlog_*.log | head -1)
+tail -50 "$LOG_FILE"
+```
+
 #### 1.1.3 Project Structure
 
 The following file tree shows the source code organization. Items in `.gitignore` (build artifacts, binaries, data files) are excluded.
@@ -203,3 +214,4 @@ Both corelib and the kernel call `tpbk_pli_register_<kern>()` (params and static
 7. **Tests**: Add unit tests in `tests/` following existing patterns. Ask users for the index.
 8. **Limited Kernel Modification**: When kernel codes have to be changed according to front-end or corelib modifications, unless explicit requests, only modify and test [`tpbk_stream.c`](src/kernels/simple/tpbk_stream.c), do not touch other kernels.
 9. **All code contributions MUST follow the style rules defined in [`docs/STYLE_GUIDE.md`](docs/STYLE_GUIDE.md).** Before writing or modifying any C code, review, obey, and per-item check the whole style guide.
+10. **Documentation Updates**: When modifying functionality that affects user workflow (e.g., database queries, result retrieval, MPI recording), update the relevant documentation in [`docs/USAGE.md`](docs/USAGE.md) and docs in `docs/design` to reflect the changes. Ensure examples use realistic commands that users can actually run.

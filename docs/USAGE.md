@@ -289,3 +289,60 @@ Examples:
 $ tpbcli db list
 $ tpbcli database dump --tbatch-id <40_hex_chars>
 ```
+
+### 2.3.1 Quick Results Access
+
+For most users, the quickest way to review recent benchmark results is:
+
+```bash
+# List recent runs with basic summary
+tpbcli db list
+
+# Get detailed output from the latest log file (includes printed metrics)
+LOG_FILE=$(ls -t ~/.tpbench/rafdb/log/tpbrunlog_*.log | head -1)
+tail -50 "$LOG_FILE"
+```
+
+The `list` command shows the TBatchID, number of tasks, and duration. The terminal output during the run (also saved in the log file) typically contains the actual performance metrics (e.g., bandwidth, latency) in human-readable form.
+
+### 2.3.2 Working with MPI Results
+
+For MPI kernels like `stream_mpi`:
+
+- Each run creates a **task capsule** that groups all rank records.
+- `tpbcli db list` shows the capsule as the entry point (counts as 1 task).
+- To get the capsule ID from a TBatchID:
+
+```bash
+tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
+```
+
+- The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.
+- For aggregate metrics (recommended), use the capsule record:
+
+```bash
+tpbcli db dump --task-id <CapsuleID>
+```
+
+This outputs the capsule metadata and the list of member task IDs. The actual performance numbers are in the individual rank task records. Use the member IDs to dump specific ranks:
+
+```bash
+tpbcli db dump --task-id <Rank0TaskID>
+```
+
+### 2.3.3 Raw Record Exploration
+
+The `--entry` option shows summary information without needing a specific ID:
+
+```bash
+# List all task batch entries
+tpbcli db dump --entry task_batch
+
+# List all kernel definitions
+tpbcli db dump --entry kernel
+
+# List all task entry points (capsules and standalone tasks)
+tpbcli db dump --entry task
+```
+
+**Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
