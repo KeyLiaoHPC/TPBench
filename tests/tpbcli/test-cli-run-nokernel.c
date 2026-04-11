@@ -37,6 +37,7 @@ static int test_help_run_level(void);
 static int test_help_kernel_no_name(void);
 static int test_bad_kernel_name(void);
 static int test_dry_run_cartesian(void);
+static int test_kargs_dim_bad_parm(void);
 static int test_help_kernel_specific(void);
 
 /* Local Function Implementations */
@@ -316,6 +317,30 @@ test_dry_run_cartesian(void)
 }
 
 static int
+test_kargs_dim_bad_parm(void)
+{
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" run --kernel stream --kargs-dim 'array_size=[524288]'",
+             TPB_TEST_TPBCLI_STR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code == 0) {
+        FAIL("B2.14 kargs_dim_bad_parm: expected nonzero exit");
+        return 1;
+    }
+    if (strstr(buf, "Dimension expansion failed") == NULL) {
+        FAIL("B2.14 kargs_dim_bad_parm: missing expansion failure line");
+        fprintf(stderr, "    output (truncated): %.800s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
 test_help_kernel_specific(void)
 {
     char cmd[4096];
@@ -387,6 +412,9 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.13") == 0) {
         return test_help_kernel_specific();
+    }
+    if (strcmp(id, "B2.14") == 0) {
+        return test_kargs_dim_bad_parm();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

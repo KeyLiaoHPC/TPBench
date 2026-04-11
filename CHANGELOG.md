@@ -8,6 +8,7 @@
 
 ### Frontend: tpbcli
 
+- **Fix:** `tpbcli run` exits non-zero when deferred `--kargs-dim` expansion fails (e.g. unknown parameter name); previously a warning was printed and execution continued. Pack B2 adds **B2.14** (`kargs_dim_bad_parm`).
 - **Refactor:** `tpbcli database` uses the `tpbcli-argp` tree parser (same stack-based model as `run`). Top-level `database` has short alias **`db`**. After `database`/`db`, a subcommand is **required**: `list` (alias `ls`) or `dump`. Help flags use **`--help`** as the primary name and **`-h`** as the short name at each level. `tpbcli database --help` prints subcommand descriptions and a brief summary of dump selectors; `tpbcli database dump --help` lists all dump options. Conflicting dump selectors (`--id`, `--file`, etc.) are rejected by the parser.
 - **Breaking (API):** `tpbcli_database_dump(int argc, char **argv, …)` is removed from the public header; use **`tpbcli_database_dump_resolved(workspace, selector_name, primary_value, entry_value)`** (`selector_name` is a long option string such as `"--id"`, or NULL for usage).
 - **Tests:** Pack **B4** (`tests/tpbcli/test-cli-database.c`) covers missing subcommand, help, list/dump help, dump usage, conflicts, unknown args, and `ls` alias.
@@ -17,7 +18,7 @@
 - **Removed:** Nested `{…}` syntax inside a single `--kargs-dim` / `--kenvs-dim` string. Use multiple `--kargs-dim` (or `--kenvs-dim`) options under one `--kernel` for a flat Cartesian product.
 - **Change:** `--kmpiargs-dim` accepts a single quoted list `['…','…']` only (no nested `{…}` list).
 - **Breaking:** `tpbcli run` no longer accepts `--kargs`, `--kargs-dim`, `--kenvs`, `--kenvs-dim`, `--kmpiargs`, or `--kmpiargs-dim` before a preceding `--kernel`. Each such option must follow the `--kernel` it applies to. The `_tpb_common` pseudo handle (`handle_list[0]`) and default-parameter inheritance from it are removed. Multiple `--kmpiargs` after the same `--kernel` concatenate with a space.
-- **Tests:** Pack B2 — k-options before `--kernel` expect `unknown argument` in output; B2.5+ cover dry-run, help, and Cartesian dim cases. Pack B1 — nested dim string rejected (B1.4).
+- **Tests:** Pack B2 — k-options before `--kernel` expect `unknown argument` in output; B2.5+ cover dry-run, help, Cartesian dim, and invalid `--kargs-dim` parameter names (B2.14). Pack B1 — nested dim string rejected (B1.4).
 - **Breaking:** `database dump --entry task` prints only task `.tpbe` rows with `derive_to` all-zero (task entry points); line `(N task entry points / M total rows)` reports filtered vs total row count.
 - **Breaking:** `tpbcli list` / `l` removed. Use `tpbcli kernel list`, `kernel ls`, `k list`, or `k ls`.
 - `kernel` / `k` refreshes kernel records in the workspace, then runs the subcommand (`list` / `ls` today).

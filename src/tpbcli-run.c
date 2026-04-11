@@ -51,7 +51,7 @@ static int parse_kmpiargs_quoted(const char *arg);
 static int parse_outargs_string(const char *outargs_str);
 
 static int _sf_expand_cartesian_kargs(void);
-static void _sf_flush_pending_dims(void);
+static int _sf_flush_pending_dims(void);
 static void _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out);
 static int _sf_parse_dry_run(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_kargs(tpbcli_argnode_t *node, const char *value);
@@ -691,13 +691,13 @@ _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
     tpbcli_default_help(node, out);
 }
 
-static void
+static int
 _sf_flush_pending_dims(void)
 {
-    int err;
+    int err = 0;
 
     if (g_n_pending_dims <= 0) {
-        return;
+        return 0;
     }
 
     if (g_n_pending_dims == 1) {
@@ -708,7 +708,7 @@ _sf_flush_pending_dims(void)
     }
 
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Dimension expansion failed (%d)\n",
                    err);
     }
@@ -718,6 +718,8 @@ _sf_flush_pending_dims(void)
         g_pending_dim_cfgs[i] = NULL;
     }
     g_n_pending_dims = 0;
+
+    return err;
 }
 
 static int
@@ -725,7 +727,10 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
 {
     int err;
 
-    _sf_flush_pending_dims();
+    err = _sf_flush_pending_dims();
+    if (err != 0) {
+        return err;
+    }
 
     err = tpb_driver_add_handle(value);
     if (err != 0) {
@@ -1006,7 +1011,10 @@ tpbcli_run(int argc, char **argv)
         return err;
     }
 
-    _sf_flush_pending_dims();
+    err = _sf_flush_pending_dims();
+    if (err != 0) {
+        return err;
+    }
 
     nhdl = tpb_get_nhdl();
     if (nhdl > 0) {

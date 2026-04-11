@@ -32,6 +32,7 @@ tpb_add_subcase(B2 B2.11 bad_kernel_name test-cli-run-nokernel tpbcli)
 if(TARGET tpbk_stream.tpbx)
     tpb_add_subcase(B2 B2.12 dry_run_cartesian test-cli-run-nokernel tpbcli)
     tpb_add_subcase(B2 B2.13 help_kernel_specific test-cli-run-nokernel tpbcli)
+    tpb_add_subcase(B2 B2.14 kargs_dim_bad_parm test-cli-run-nokernel tpbcli)
 endif()
 
 # --- dimargs test executable (Pack B1) ---
