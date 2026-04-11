@@ -221,7 +221,7 @@ void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 ### `tpb_register_kernel`
 
-Register common parameters, scan PLI kernel shared libraries from the install tree, and sync kernel records with the active workspace. Call once before `tpb_query_kernel` or run. Used by `tpbcli` and may be called by embedding applications.
+Scan PLI kernel shared libraries from the install tree and sync kernel records with the active workspace. Parameter metadata (`ntest`, `twarm`, etc.) comes from each kernel’s PLI registration, not from a separate synthetic kernel. Call once before `tpb_query_kernel` or run. Used by `tpbcli` and may be called by embedding applications.
 
 ```c
 int tpb_register_kernel(void);
@@ -449,32 +449,6 @@ int tpb_driver_run_all(void);
 **Returns:**
 - `0` on success
 - Error code on first failure
-
----
-
-### `tpb_register_common`
-
-Register common parameters.
-
-```c
-int tpb_register_common(void);
-```
-
-**Returns:**
-- Error code (0 on success)
-
----
-
-### `tpb_register_kernel`
-
-Initialize kernel registry and register common parameters.
-
-```c
-int tpb_register_kernel(void);
-```
-
-**Returns:**
-- Error code (0 on success)
 
 ---
 

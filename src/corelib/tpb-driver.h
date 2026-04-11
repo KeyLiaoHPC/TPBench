@@ -137,12 +137,6 @@ int tpb_driver_run_all(void);
  */
 void tpb_driver_set_dry_run(int enabled);
 
-/**
- * @brief Register common parameters
- * @return Error code (0 on success)
- */
-int tpb_register_common();
-
 /* tpb_register_kernel() is declared in tpb-public.h / tpbench.h */
 
 /* PLI (Process-Level Integration) internal API */

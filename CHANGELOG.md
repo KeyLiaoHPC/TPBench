@@ -26,6 +26,7 @@
 
 ### Corelib
 
+- **Removed:** Internal `tpb_register_common()` / static `_tpb_common` metadata and unused `tpb_check_kargs()` (with `_sf_build_rt_parms` merge path). `tpb_query_kernel(-1, "_tpb_common", &k)` no longer returns a kernel copy; use each PLI kernel’s registered parameters instead.
 - **New:** `tpb_driver_set_dry_run(int)` — when enabled, `tpb_run_pli` prints `Exec:` then returns without forking (dry-run mode for `tpbcli run -d`).
 - **Breaking:** TBatch `.tpbr` auto-record layout: two headers `TPBLINK::TaskID` (append 20-byte TaskRecordIDs) and `TPBLINK::KernelID` (empty data for now), replacing `KernelRecordIDs` / `TaskRecordIDs` / `ScoreRecordIDs`. Skeleton `.tpbr` is written at `tpb_record_begin_batch`; `tpb_record_end_batch` runs an internal scan of `task.tpbe` (rows with `utc_bits` not before batch start, matching `tbatch_id`, `derive_to` all-zero) and appends each via `tpb_raf_record_append_tbatch`, then patches `duration` / `ntask` / `nkernel` with `tpb_raf_record_patch_tbatch_counters`.
 - **Breaking:** RAFDB lineage fields renamed: `dup_from` → `inherit_from`, `dup_to` → `derive_to` in `tbatch_attr_t` / `tbatch_entry_t` / `kernel_attr_t` / `kernel_entry_t` / `task_attr_t` / `task_entry_t` and in CLI dump key names. `tpb_k_task_set_derive_to(task_id, derive_to_id)` replaces `tpb_k_task_set_dup_to`. On-disk layout byte positions unchanged; existing workspaces are not read as compatible.

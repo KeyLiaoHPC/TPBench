@@ -6,7 +6,7 @@ This document analyzes the argument parsing workflow of the `tpbcli run` subcomm
 
 ```
 tpbcli_run()
-  ├── tpb_register_kernel()          // Register _tpb_common metadata + scan .so (no handle created)
+  ├── tpb_register_kernel()          // Scan PLI kernel .so libraries (no handle created yet)
   ├── parse_run()                    // Parse CLI arguments
   │   ├── --kernel                   // Create new handle (first becomes handle_list[0])
   │   ├── --kargs …                  // Must follow --kernel; sets current handle
@@ -26,7 +26,7 @@ tpbcli_run()
 | `src/tpbcli-run-dim.c` | Dimension syntax parsing (list, recursive sequence) |
 | `src/tpbcli-run-dim.h` | Dimension type definitions, data structures |
 | `src/corelib/tpb-driver.c` | Handle management, parameter setting, kernel execution |
-| `src/corelib/tpb-argp.c` | General argument parsing utilities (tokenization, type conversion, range validation) |
+| `src/corelib/tpb-argp.c` | `--kargs` comma-split helper (`tpb_argp_set_kargs_tokstr`); timer name dispatch |
 
 ## 2. Entry Point: `tpbcli_run()`
 
@@ -52,20 +52,11 @@ Location: `src/corelib/tpb-driver.c`
 
 ```
 tpb_register_kernel()
-  ├── tpb_register_common()          // Populate kernel_common (_tpb_common) for tpb_query_kernel etc.
   ├── tpb_dl_scan()                  // Dynamically scan .so kernel libraries under lib/
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
 
-`_tpb_common` still describes a set of "documentation/merge-purpose" common parameter names, but **no longer** corresponds to a runtime pseudo-handle. The CLI disallows any `--kargs*` / `--kenvs*` / `--kmpiargs*` before the first `--kernel`.
-
-Common parameters (`kernel_common`) default values (metadata only; unrelated to whether a specific kernel implements same-named parameters):
-
-| Parameter | Type | Default | Range |
-|-----------|------|---------|-------|
-| `ntest` | int64 | 10 | [1, 100000] |
-| `twarm` | int64 | 100 | [0, 10000] |
-| `total_memsize` | double | 32 (KiB) | [0.0009765625, DBL_MAX] |
+There is no synthetic `_tpb_common` kernel or shared `kernel_common` metadata block: each real kernel supplies its own parameter definitions via PLI registration. The CLI disallows any `--kargs*` / `--kenvs*` / `--kmpiargs*` before the first `--kernel`.
 
 ## 3. Core Parsing: `parse_run()`
 
@@ -314,10 +305,9 @@ apply_dim_value(dim_val, index)
 
 `tpb_driver_set_hdl_karg()` performs:
 1. Look up the parameter name in the current handle's `argpack`
-2. If not found and the handle is `_tpb_common`, add from `kernel_common.info.parms`
-3. Parse the string value based on the parameter's `ctrlbits` type code (int/uint/float/double/char)
-4. Perform range validation (`TPB_PARM_RANGE`) or list validation (`TPB_PARM_LIST`)
-5. Update `parm->value`
+2. Parse the string value based on the parameter's `ctrlbits` type code (int/uint/float/double/char)
+3. Perform range validation (`TPB_PARM_RANGE`) or list validation (`TPB_PARM_LIST`)
+4. Update `parm->value`
 
 ## 7. Differential Handling of `--kenvs-dim` and `--kmpiargs-dim`
 

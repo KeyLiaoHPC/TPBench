@@ -6,7 +6,7 @@
 
 ```
 tpbcli_run()
-  ├── tpb_register_kernel()          // 注册 _tpb_common 元数据 + 扫描 .so（不创建 handle）
+  ├── tpb_register_kernel()          // 扫描 PLI 内核 .so（尚未创建 handle）
   ├── parse_run()                    // 解析命令行参数
   │   ├── --kernel                   // 创建新 handle（首个为 handle_list[0]）
   │   ├── --kargs …                  // 须在 --kernel 之后；设置当前 handle
@@ -26,7 +26,7 @@ tpbcli_run()
 | `src/tpbcli-run-dim.c` | 维度语法解析（列表、递归序列） |
 | `src/tpbcli-run-dim.h` | 维度类型定义、数据结构 |
 | `src/corelib/tpb-driver.c` | Handle 管理、参数设置、内核执行 |
-| `src/corelib/tpb-argp.c` | 通用参数解析工具（token 分割、类型转换、范围校验） |
+| `src/corelib/tpb-argp.c` | `--kargs` 逗号切分（`tpb_argp_set_kargs_tokstr`）；定时器名称分发 |
 
 ## 2. 入口：`tpbcli_run()`
 
@@ -52,20 +52,11 @@ int tpbcli_run(int argc, char **argv)
 
 ```
 tpb_register_kernel()
-  ├── tpb_register_common()          // 填充 kernel_common（_tpb_common），供 tpb_query_kernel 等使用
   ├── tpb_dl_scan()                  // 动态扫描 lib/ 下的 .so 内核库
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
 
-`_tpb_common` 仍描述一组"文档/合并用"的公共参数名，但**不再**对应运行时的伪 handle。CLI 在第一个 `--kernel` 之前不允许使用任何 `--kargs*` / `--kenvs*` / `--kmpiargs*`。
-
-公共参数（`kernel_common`）默认值（仅元数据，与具体内核是否实现同名参数无关）：
-
-| 参数 | 类型 | 默认值 | 范围 |
-|------|------|--------|------|
-| `ntest` | int64 | 10 | [1, 100000] |
-| `twarm` | int64 | 100 | [0, 10000] |
-| `total_memsize` | double | 32 (KiB) | [0.0009765625, DBL_MAX] |
+不存在合成的 `_tpb_common` 内核或共享的 `kernel_common` 元数据块：各真实内核在 PLI 注册时提供自己的参数定义。CLI 在第一个 `--kernel` 之前不允许使用任何 `--kargs*` / `--kenvs*` / `--kmpiargs*`。
 
 ## 3. 核心解析：`parse_run()`
 
@@ -314,10 +305,9 @@ apply_dim_value(dim_val, index)
 
 `tpb_driver_set_hdl_karg()` 会：
 1. 在当前 handle 的 `argpack` 中查找参数名
-2. 如果未找到且是 `_tpb_common`，从 `kernel_common.info.parms` 中添加
-3. 根据参数的 `ctrlbits` 类型码（int/uint/float/double/char）解析字符串值
-4. 执行范围校验（`TPB_PARM_RANGE`）或列表校验（`TPB_PARM_LIST`）
-5. 更新 `parm->value`
+2. 根据参数的 `ctrlbits` 类型码（int/uint/float/double/char）解析字符串值
+3. 执行范围校验（`TPB_PARM_RANGE`）或列表校验（`TPB_PARM_LIST`）
+4. 更新 `parm->value`
 
 ## 7. `--kenvs-dim` 和 `--kmpiargs-dim` 的差异化处理
 

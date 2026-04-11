@@ -9,7 +9,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
-#include <float.h>
 #include <unistd.h>
 #include <sys/wait.h>
 #ifdef __linux__
@@ -41,7 +40,7 @@ static tpb_kernel_t *_sf_deep_copy_kernel(const tpb_kernel_t *src);
 static int _sf_get_kernel_by_index(int idx, tpb_kernel_t **kernel_out);
 
 /*
- * Resolve registered kernel by name (common block or kernel_all entry).
+ * Resolve registered kernel by name (kernel_all entry).
  */
 static int _sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out);
 
@@ -51,7 +50,6 @@ static int nkern = 0, nhdl, ihdl;  // number of registered kernels，number of h
 static tpb_kernel_t *kernel_all = NULL;  // array of all kernels
 static tpb_kernel_t *current_kernel = NULL;  // kernel being registered
 static tpb_k_rthdl_t *current_rthdl = NULL;  // runtime handle being tested
-static tpb_kernel_t kernel_common;  // common parameters for all kernels
 static tpb_timer_t timer;
 
 /* Handle management state */
@@ -65,11 +63,6 @@ _sf_get_kernel_by_name(const char *name, tpb_kernel_t **kernel_out)
 {
     if (name == NULL || kernel_out == NULL) {
         return TPBE_KERN_ARG_FAIL;
-    }
-
-    if (strcmp(kernel_common.info.name, name) == 0) {
-        *kernel_out = &kernel_common;
-        return 0;
     }
 
     for (int i = 0; i < nkern; i++) {
@@ -294,67 +287,7 @@ tpb_get_nhdl(void)
     return nhdl;
 }
 
-/* Register common parameters that apply to all kernels by default */
-int
-tpb_register_common()
-{
-    memset(&kernel_common, 0, sizeof(tpb_kernel_t));
-    kernel_common.info.nparms = 3;
-    kernel_common.info.parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
-    if (kernel_common.info.parms == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-    sprintf(kernel_common.info.name, "_tpb_common");
-
-    memset(kernel_common.info.parms, 0,
-           sizeof(tpb_rt_parm_t) * kernel_common.info.nparms);
-
-    /* ntest: number of test iterations */
-    snprintf(kernel_common.info.parms[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
-    snprintf(kernel_common.info.parms[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
-    kernel_common.info.parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[0].value.i64 = 10;
-    kernel_common.info.parms[0].nlims = 2;
-    kernel_common.info.parms[0].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    if (kernel_common.info.parms[0].plims == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-    kernel_common.info.parms[0].plims[0].i64 = 1;
-    kernel_common.info.parms[0].plims[1].i64 = 100000;
-
-    /* twarm: warmup time in milliseconds */
-    snprintf(kernel_common.info.parms[1].name, TPBM_NAME_STR_MAX_LEN, "twarm");
-    snprintf(kernel_common.info.parms[1].note, TPBM_NOTE_STR_MAX_LEN, "Warm-up time in milliseconds");
-    kernel_common.info.parms[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[1].value.i64 = 100;
-    kernel_common.info.parms[1].nlims = 2;
-    kernel_common.info.parms[1].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    if (kernel_common.info.parms[1].plims == NULL) {
-        free (kernel_common.info.parms[0].plims);
-        return TPBE_MALLOC_FAIL;
-    }
-    kernel_common.info.parms[1].plims[0].i64 = 0;
-    kernel_common.info.parms[1].plims[1].i64 = 10000;
-
-    /* total_memsize: memory size in KiB */
-    snprintf(kernel_common.info.parms[2].name, TPBM_NAME_STR_MAX_LEN, "total_memsize");
-    snprintf(kernel_common.info.parms[2].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
-    kernel_common.info.parms[2].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
-    kernel_common.info.parms[2].value.u64 = 32;
-    kernel_common.info.parms[2].nlims = 2;
-    kernel_common.info.parms[2].plims = (tpb_parm_value_t *)malloc(sizeof(tpb_parm_value_t) * 2);
-    if (kernel_common.info.parms[2].plims == NULL) {
-        free (kernel_common.info.parms[0].plims);
-        free (kernel_common.info.parms[1].plims);
-        return TPBE_MALLOC_FAIL;
-    }
-    kernel_common.info.parms[2].plims[0].f64 = 0.0009765625;
-    kernel_common.info.parms[2].plims[1].f64 = DBL_MAX;
-
-    return 0;
-}
-
-/* Initialize kernel registry and common parameters. */
+/* Initialize kernel registry. */
 int
 tpb_register_kernel()
 {
@@ -368,12 +301,6 @@ tpb_register_kernel()
 
     nhdl = 0;
     ihdl = -1;
-
-    /* Register common parameters */
-    err = tpb_register_common();
-    if (err != 0) {
-        return err;
-    }
 
     /* Dynamically scan for kernel shared libraries */
     err = tpb_dl_scan();
