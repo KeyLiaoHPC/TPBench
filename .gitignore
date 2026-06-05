@@ -15,6 +15,9 @@ Make.dev
 .vscode/
 .continue/
 .cursor/
+.qwen/
+.claude/
+.opencode/
 .plan/
 data/
 bin/
