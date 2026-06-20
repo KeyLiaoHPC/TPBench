@@ -203,7 +203,7 @@ Each ID is a 20-byte SHA1 has string stored in a 20-byte unsigned char variable.
 | Record Type | ID | Description |
 |-------------|-----------|-------------|
 | **TBatch Record** | `SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>)` | One record per tbatch invocation |
-| **Kernel Record** | `SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)` | Check or generate once a kernel is built. |
+| **Kernel Record** | `<so_sha1>` (SHA-1 of the `libtpbk_<name>.so` file) | Check or generate once a kernel is built. |
 | **Task Record** | `SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <kernel_id> + <order_in_batch> + <pid> + <tid>)` | One record per kernel invocation |
 | **Score Record** | `SHA1("score" + <utc_bits> + <btime> + <hostname> + <username> + <score_name> + <calc_order>)` | One record per calculated score or sub-score |
 
@@ -387,12 +387,9 @@ The Kernel domain stores metadata about a kernel being evaluated, including desc
 
 ```c
 typedef struct kernel_attr {
-    unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1), ASCII */
+    unsigned char kernel_id[20];        /**< KernelID - Primary Link ID (20-byte SHA-1), equals kernel .so SHA-1 */
     unsigned char derive_to[20];           /**< Derivation target: 0=none, else other KernelID, ASCII */
     unsigned char inherit_from[20];         /**< Lineage: source KernelID if copied/forked, else zero */
-    unsigned char src_sha1[20];         /**< SHA-1 hash of concatenated source files, ASCII */
-    unsigned char so_sha1[20];          /**< SHA-1 hash of shared library file, ASCII */
-    unsigned char bin_sha1[20];         /**< SHA-1 hash of executable file, ASCII */
 
     char kernel_name[256];              /**< Kernel name (without tpbk_ prefix), utf-8 */
     char version[64];                   /**< Version string, utf-8 */
@@ -418,8 +415,10 @@ Fixed header members:
 
 KernelID:
 ```
-SHA1("kernel" + <kernel_name> + <so_sha1> + <bin_sha1>)
+<so_sha1>
 ```
+
+KernelID is the SHA-1 digest of the PLI kernel module `libtpbk_<name>.so`.
 
 Notes:
 - `kctrl` stores the kernel integration type from `tpb-public.h`. Always set to `TPB_KTYPE_PLI`.
@@ -446,11 +445,10 @@ Entry member (slim subset of `kernel_attr_t`):
 | kernel_id | 20 |
 | inherit_from | 20 |
 | kernel_name | 64 |
-| so_sha1 | 20 |
 | kctrl | 4 |
 | nparm | 4 |
 | nmetric | 4 |
-| reserve | 128 (`TPB_RAF_RESERVE_SIZE`) |
+| reserve | 148 (`TPB_RAF_RESERVE_SIZE + 20`) |
 | **Total** | **264** |
 
 Magic signature:
@@ -479,28 +477,24 @@ File structure:
 +-------------------64-+
 | inherit_from             |  <- 20B
 +-------------------84-+
-| src_sha1             |  <- 20B
-+------------------104-+
-| so_sha1              |  <- 20B
-+------------------124-+
-| bin_sha1             |  <- 20B
-+------------------144-+
 | kernel_name          |  <- 256B
-+------------------400-+
++------------------340-+
 | version              |  <- 64B
-+------------------464-+
++------------------404-+
 | description          |  <- 2048B
-+-----------------2512-+
++-----------------2452-+
 | nparm                |  <- 4B
-+-----------------2516-+
++-----------------2456-+
 | nmetric              |  <- 4B
-+-----------------2520-+
++-----------------2460-+
 | kctrl                |  <- 4B
-+-----------------2524-+
++-----------------2464-+
 | nheader              |  <- 4B
-+-----------------2528-+
-| 128-Byte reserve     |  <- `TPB_RAF_RESERVE_SIZE`, opaque
-+-----------------2656-+
++-----------------2468-+
+| reserve              |  <- 4B
++-----------------2472-+
+| 188-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`, opaque
++-----------------2660-+
 | fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + user headers
 +-------------metasize-+
 | record_magic         |  <- 8B
@@ -991,7 +985,7 @@ Record (.tpbr):
 
 ID Generation:
 - `tpb_raf_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID
-- `tpb_raf_gen_kernel_id(name, so_sha1, bin_sha1, id_out)` -- KernelID
+- `tpb_raf_gen_kernel_id(tpbx_sha1, id_out)` -- KernelID (copy kernel .so SHA-1)
 - `tpb_raf_gen_task_id(utc_bits, btime, hostname, username, tbatch_id, kernel_id, order, pid, tid, id_out)` -- TaskRecordID
 - `tpb_raf_gen_taskcapsule_id(...)` -- same inputs as task ID, leading literal `"taskcapsule"` -- TaskCapsuleRecordID
 - `tpb_raf_id_to_hex(id, hex)` -- convert 20-byte ID to 40-char hex string

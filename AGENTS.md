@@ -177,12 +177,12 @@ After building with `cmake --build build`, the output structure is:
 ```
 build/
 ├── bin/
-│   ├── tpbcli              # Main CLI executable
-│   ├── tpbk_*.tpbx         # Kernel PLI executables (e.g., tpbk_stream.tpbx)
-│   └── tests/              # Test executables
+│   ├── tpbcli                  # Main CLI executable
+│   ├── tpbcli-pli-launcher     # PLI kernel launcher (fork/exec child)
+│   └── tests/                  # Test executables
 ├── lib/
-│   ├── libtpbench.so       # Core TPBench library
-│   └── libtpbk_*.so        # Kernel shared libraries
+│   ├── libtpbench.so           # Core TPBench library
+│   └── libtpbk_*.so            # Kernel PLI shared libraries
 └── etc/
     └── yaml/               # Installed configuration files
 ```
@@ -191,14 +191,16 @@ build/
 
 **Source discovery.** [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) finds `tpbk_<kern>.c` with `file(GLOB ... "/*/tpbk_${_kname}.c")` under **any** immediate subdirectory of `src/kernels/` (e.g. `simple/`, `streaming_memory_access_mpi/`). Place new CPU kernels accordingly; the registry name `<kern>` must match the basename `tpbk_<kern>.c`.
 
-**Single-file kernels.** 
+**Single-file kernels.**
 
 One file `tpbk_<kern>.c` instrumented by TPBench API and linked to `libtpbench.so`:
 
-- **`libtpbk_<kern>.so`**: `add_library` compiles that file **without** `TPB_K_BUILD_MAIN`. Corelib discovers it under `lib/` and calls `dlsym("tpbk_pli_register_<kern>")` (see [`src/corelib/tpb-dynloader.c`](src/corelib/tpb-dynloader.c)).
-- **`tpbk_<kern>.tpbx`**: `add_executable` compiles the **same** file with compile definition `TPB_K_BUILD_MAIN`, which enables `main()` for fork/exec from the driver. The executable links `tpbench` only (not the kernel `.so`).
+- **`libtpbk_<kern>.so`**: `add_library(SHARED)` compiles the kernel source once. Corelib discovers it under `lib/` via `dlopen()` and calls `dlsym("tpbk_pli_register_<kern>")` for registration (see [`src/corelib/tpb-dynloader.c`](src/corelib/tpb-dynloader.c)).
+- **`tpbcli-pli-launcher`**: A thin ET_EXEC launcher under `bin/`. `tpb_run_pli()` fork/execs it; the child `dlopen()`s the kernel `.so` and calls `tpbk_<kern>_entry()`. Each kernel also exports a debug `main()` wrapper that forwards to `tpbk_<kern>_entry()` for local debugging.
 
-**Registry vs source.** In [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake), `stream_mpi` is enabled when MPI is found; `scale_mpi`, `axpy_mpi`, `rtriad_mpi`, and `sum_mpi` have sources under `streaming_memory_access_mpi/` but their registry rows are commented out until re-enabled.
+**Registry vs source.** In [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake), `stream_mpi` is enabled when MPI is found; `scale_mpi`, `axpy_mpi`, `rtriad_mpi`, and `sum_mpi` use the same single-file `.so` layout under `streaming_memory_access_mpi/` but their registry rows are commented out until re-enabled.
+
+**ROCm kernels.** Each GPU kernel builds one `libtpbk_<kern>.so` from the HIP/C++ sources plus a PLI entry source (`tpbk_<kern>_entry()` + debug `main()`). Execution uses the same `tpbcli-pli-launcher` as CPU kernels.
 
 Both corelib and the kernel call `tpbk_pli_register_<kern>()` (params and static outputs) to register parameters and target metrics information; dynamic outputs may still be added at run time in the runner.
 
@@ -206,9 +208,9 @@ Both corelib and the kernel call `tpbk_pli_register_<kern>()` (params and static
 ### 1.2 Development Guidelines
 
 1. **New `TPB_*` build option**: Add an `option()` or `set(... CACHE STRING "help" )` in root [`CMakeLists.txt`](CMakeLists.txt) (or in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) for kernel-selection caches). **Also** append one `"VAR|same short description"` entry to `_tpb_cmake_help_doc_lines` in [`cmake/TPBenchCmakeHelp.cmake`](cmake/TPBenchCmakeHelp.cmake). That list is the fallback when CMake replaces the cache HELPSTRING (e.g. after `-DTPB_*=...` on the command line); without it, `tpb_cmake_help` would show a generic placeholder. Reconfigure and run `cmake --build build --target tpb_cmake_help` to verify. Existing kernel compile overrides: `TPB_KERNEL_CFLAGS`, `TPB_KERNEL_CXXFLAGS`, `TPB_KERNEL_FFLAGS` in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) (empty default uses `-O2` for the relevant language).
-2. **New CPU kernel**: Add one row to `TPB_CPU_KERNEL_DEFS` in [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake) (`NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION`). Add `tpbk_<kern>.c` under **any** `src/kernels/<subdir>/` that the GLOB can see (convention: `simple/` for single-process). Implement `tpbk_pli_register_<kern>`, the runner, and (for the single-file pattern) `main` under `#ifdef TPB_K_BUILD_MAIN`. Build rules are generated in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) (no per-kernel `add_library` in root CMake). [`src/kernels/kernels.h`](src/kernels/kernels.h) is legacy; PLI does not require new `register_*` declarations there.
-3. **New MPI CPU kernel**: Use `CONDITION` `MPI_C_FOUND` and `EXTRA_LINK_LIBS` `MPI::MPI_C` in the registry row (see existing `stream_mpi` row). Root [`CMakeLists.txt`](CMakeLists.txt) enables `find_package(MPI)` when a selected kernel needs it. Prefer `streaming_memory_access_mpi/` for MPI sources; follow the single-file or dual-file layout described in §1.1.4.
-4. **New ROCm kernel**: Add one row to `TPB_ROCM_KERNEL_DEFS` in the same registry (`NAME|TAGS|PREREQ_TEXT|rocm|<hip path>|<pli main path>` relative to source root). Do not hand-edit per-kernel `add_library` in root CMake; build rules are generated by [`cmake/TPBenchGpuKernelsRocm.cmake`](cmake/TPBenchGpuKernelsRocm.cmake).
+2. **New CPU kernel**: Add one row to `TPB_CPU_KERNEL_DEFS` in [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake) (`NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION`). Add `tpbk_<kern>.c` under **any** `src/kernels/<subdir>/` that the GLOB can see (convention: `simple/` for single-process). Implement `tpbk_pli_register_<kern>`, `tpbk_<kern>_entry`, the runner, and a thin debug `main()` that calls `tpbk_<kern>_entry()`. Build rules are generated in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) (no per-kernel `add_library` in root CMake). [`src/kernels/kernels.h`](src/kernels/kernels.h) is legacy; PLI does not require new `register_*` declarations there.
+3. **New MPI CPU kernel**: Use `CONDITION` `MPI_C_FOUND` and `EXTRA_LINK_LIBS` `MPI::MPI_C` in the registry row (see existing `stream_mpi` row). Root [`CMakeLists.txt`](CMakeLists.txt) enables `find_package(MPI)` when a selected kernel needs it. Prefer `streaming_memory_access_mpi/` for MPI sources; use the same single-file layout as §1.1.4 (`tpbk_pli_register_<kern>`, `tpbk_<kern>_entry`, debug `main()`).
+4. **New ROCm kernel**: Add one row to `TPB_ROCM_KERNEL_DEFS` in the same registry (`NAME|TAGS|PREREQ_TEXT|rocm|<hip path>|<entry source path>` relative to source root). The entry source provides `tpbk_<kern>_entry()` and debug `main()`. Build rules are generated by [`cmake/TPBenchGpuKernelsRocm.cmake`](cmake/TPBenchGpuKernelsRocm.cmake).
 5. **CLI Commands**: Add new subcommands in `src/tpbcli-<cmd>.c/h` (and benchmark/YAML helpers in `src/tpb-bench-*.c/h` if needed) and register in [`tpbcli.c`](src/tpbcli.c) (top-level `tpbcli-argp` tree). Nested parsing for `database`/`db` lives in [`tpbcli-database.c`](src/tpbcli-database.c).
 6. **Corelib Feature Extensions**: Extend [`src/corelib/`](src/corelib/) for new TPBench features.
 7. **Tests**: Add unit tests in `tests/` following existing patterns. Ask users for the index.

@@ -222,7 +222,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
 TPBench 执行 PLI 内核时，将完整命令行打印至终端，便于调试和分析。命令行格式为：
 
 ```
-TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <params...>
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <launcher> <kernel.so> <timer> <params...>
 ```
 
 注意：MPI 参数直接传递给 `mpirun`，TPBench 不进行验证。如果 `mpirun` 子进程失败，将报告错误。

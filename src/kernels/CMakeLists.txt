@@ -48,8 +48,6 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
         continue()
     endif()
 
-    # Automatically find kernel source in any subdirectory under src/kernels/
-    # Supports multiple kernel directories (simple/, streaming_memory_access_mpi/, etc.)
     file(GLOB _possible_sources "${CMAKE_CURRENT_SOURCE_DIR}/*/tpbk_${_kname}.c")
     list(LENGTH _possible_sources _src_count)
     if(_src_count EQUAL 0)
@@ -59,51 +57,38 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
     endif()
     list(GET _possible_sources 0 _kernel_source)
 
-    set(_lib_target  "tpbk_${_kname}")
-    set(_exec_target "tpbk_${_kname}.tpbx")
+    set(_so_target "tpbk_${_kname}")
 
-    add_library(${_lib_target} SHARED "${_kernel_source}")
-    target_include_directories(${_lib_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(${_lib_target} PRIVATE tpbench m)
-    tpb_kernel_apply_c_options(${_lib_target})
+    add_library(${_so_target} SHARED "${_kernel_source}")
+    target_include_directories(${_so_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
+    target_link_libraries(${_so_target} PRIVATE tpbench m)
+    set_target_properties(${_so_target} PROPERTIES
+        OUTPUT_NAME "tpbk_${_kname}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+    )
+    if(UNIX)
+        target_link_options(${_so_target} PRIVATE "-Wl,--export-dynamic")
+    endif()
+    tpb_kernel_apply_c_options(${_so_target})
     if(TPB_ENABLE_OPENMP AND OpenMP_C_FOUND)
-        target_link_libraries(${_lib_target} PRIVATE OpenMP::OpenMP_C)
+        target_link_libraries(${_so_target} PRIVATE OpenMP::OpenMP_C)
     endif()
     if(NOT "${_kextra}" STREQUAL "")
-        target_link_libraries(${_lib_target} PRIVATE ${_kextra})
+        target_link_libraries(${_so_target} PRIVATE ${_kextra})
     endif()
     if(TPB_SHOW_DEBUG)
-        target_compile_definitions(${_lib_target} PRIVATE TPB_K_DEBUG=1)
+        target_compile_definitions(${_so_target} PRIVATE TPB_K_DEBUG=1)
     endif()
 
-    add_executable(${_exec_target} "${_kernel_source}")
-    target_compile_definitions(${_exec_target} PRIVATE TPB_K_BUILD_MAIN)
-    target_include_directories(${_exec_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(${_exec_target} PRIVATE tpbench m)
-    tpb_kernel_apply_c_options(${_exec_target})
-    if(TPB_ENABLE_OPENMP AND OpenMP_C_FOUND)
-        target_link_libraries(${_exec_target} PRIVATE OpenMP::OpenMP_C)
-    endif()
-    if(NOT "${_kextra}" STREQUAL "")
-        target_link_libraries(${_exec_target} PRIVATE ${_kextra})
-    endif()
-    if(TPB_SHOW_DEBUG)
-        target_compile_definitions(${_exec_target} PRIVATE TPB_K_DEBUG=1)
-    endif()
+    tpb_set_install_rpath_tpbench_shlib(${_so_target})
 
-    tpb_set_install_rpath_tpbench_shlib(${_lib_target})
-    tpb_set_install_rpath_tpbench_exe(${_exec_target})
-
-    install(TARGETS ${_lib_target}
+    install(TARGETS ${_so_target}
             COMPONENT tpbench_kernels
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-    install(TARGETS ${_exec_target}
-            COMPONENT tpbench_kernels
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-    list(APPEND TPB_BUILT_KERNEL_LIBS  "${_lib_target}")
-    list(APPEND TPB_BUILT_KERNEL_EXES  "${_exec_target}")
+    list(APPEND TPB_BUILT_KERNEL_LIBS  "${_so_target}")
     list(APPEND TPB_BUILT_KERNEL_NAMES "${_kname}")
 endforeach()
 

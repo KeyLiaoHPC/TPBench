@@ -6,6 +6,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
 BIN_DIR="${BUILD_DIR}/bin"
+LIB_DIR="${BUILD_DIR}/lib"
+LAUNCHER="${BIN_DIR}/tpbcli-pli-launcher"
 
 # Colors for output
 RED='\033[0;31m'
@@ -75,18 +77,18 @@ else
     echo "$output"
 fi
 
-# Test 3: Scale PLI executable
-echo "Test 3: Scale PLI executable (.tpbx)"
-if [ -f "$BIN_DIR/tpbk_scale.tpbx" ]; then
-    output=$("$BIN_DIR/tpbk_scale.tpbx" clock_gettime ntest=3 total_memsize=32 2>&1) || true
+# Test 3: Scale PLI module via launcher
+echo "Test 3: Scale PLI module (.so via launcher)"
+if [ -f "$LIB_DIR/libtpbk_scale.so" ] && [ -f "$LAUNCHER" ]; then
+    output=$("$LAUNCHER" "$LIB_DIR/libtpbk_scale.so" clock_gettime ntest=3 total_memsize=32 2>&1) || true
     if echo "$output" | grep -q "scale"; then
-        print_result 0 "Scale PLI executable ran successfully"
+        print_result 0 "Scale PLI module ran successfully"
     else
-        print_result 1 "Scale PLI executable failed"
+        print_result 1 "Scale PLI module failed"
         echo "$output"
     fi
 else
-    print_result 1 "Scale PLI executable not found"
+    print_result 1 "Scale PLI module or launcher not found"
 fi
 
 # ==============================================================================
@@ -114,18 +116,18 @@ else
     echo "$output"
 fi
 
-# Test 6: AXPY PLI executable
-echo "Test 6: AXPY PLI executable (.tpbx)"
-if [ -f "$BIN_DIR/tpbk_axpy.tpbx" ]; then
-    output=$("$BIN_DIR/tpbk_axpy.tpbx" clock_gettime ntest=3 total_memsize=32 2>&1) || true
+# Test 6: AXPY PLI module via launcher
+echo "Test 6: AXPY PLI module (.so via launcher)"
+if [ -f "$LIB_DIR/libtpbk_axpy.so" ] && [ -f "$LAUNCHER" ]; then
+    output=$("$LAUNCHER" "$LIB_DIR/libtpbk_axpy.so" clock_gettime ntest=3 total_memsize=32 2>&1) || true
     if echo "$output" | grep -q "axpy"; then
-        print_result 0 "AXPY PLI executable ran successfully"
+        print_result 0 "AXPY PLI module ran successfully"
     else
-        print_result 1 "AXPY PLI executable failed"
+        print_result 1 "AXPY PLI module failed"
         echo "$output"
     fi
 else
-    print_result 1 "AXPY PLI executable not found"
+    print_result 1 "AXPY PLI module or launcher not found"
 fi
 
 # ==============================================================================
@@ -224,12 +226,12 @@ fi
 # ==============================================================================
 # Test MPI Kernels (if MPI is available)
 # ==============================================================================
-if [ -f "$BIN_DIR/tpbk_scale_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
+if [ -f "$LIB_DIR/libtpbk_scale_mpi.so" ] && [ -f "$LAUNCHER" ] && command -v mpirun &> /dev/null; then
     print_header "Scale MPI Kernel Tests"
 
     # Test 9: Scale MPI kernel with 2 ranks
     echo "Test 9: Scale MPI kernel with 2 ranks"
-    output=$(mpirun -np 2 "$BIN_DIR/tpbk_scale_mpi.tpbx" clock_gettime ntest=3 total_memsize=64 2>&1) || true
+    output=$(mpirun -np 2 "$LAUNCHER" "$LIB_DIR/libtpbk_scale_mpi.so" clock_gettime ntest=3 total_memsize=64 2>&1) || true
     if echo "$output" | grep -q "scale_mpi max error"; then
         print_result 0 "Scale MPI kernel ran successfully"
     else
@@ -239,7 +241,7 @@ if [ -f "$BIN_DIR/tpbk_scale_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
 
     # Test 10: Scale MPI kernel with 4 ranks
     echo "Test 10: Scale MPI kernel with 4 ranks"
-    output=$(mpirun -np 4 "$BIN_DIR/tpbk_scale_mpi.tpbx" clock_gettime ntest=3 total_memsize=128 2>&1) || true
+    output=$(mpirun -np 4 "$LAUNCHER" "$LIB_DIR/libtpbk_scale_mpi.so" clock_gettime ntest=3 total_memsize=128 2>&1) || true
     if echo "$output" | grep -q "scale_mpi max error"; then
         print_result 0 "Scale MPI kernel with 4 ranks ran successfully"
     else
@@ -251,12 +253,12 @@ else
     echo -e "${YELLOW}[SKIP]${NC} Scale MPI tests - MPI not available or kernel not built"
 fi
 
-if [ -f "$BIN_DIR/tpbk_axpy_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
+if [ -f "$LIB_DIR/libtpbk_axpy_mpi.so" ] && [ -f "$LAUNCHER" ] && command -v mpirun &> /dev/null; then
     print_header "AXPY MPI Kernel Tests"
 
     # Test: AXPY MPI kernel with 2 ranks
     echo "Test: AXPY MPI kernel with 2 ranks"
-    output=$(mpirun -np 2 "$BIN_DIR/tpbk_axpy_mpi.tpbx" clock_gettime ntest=3 total_memsize=64 2>&1) || true
+    output=$(mpirun -np 2 "$LAUNCHER" "$LIB_DIR/libtpbk_axpy_mpi.so" clock_gettime ntest=3 total_memsize=64 2>&1) || true
     if echo "$output" | grep -q "axpy_mpi max error"; then
         print_result 0 "AXPY MPI kernel ran successfully"
     else
@@ -268,11 +270,11 @@ else
     echo -e "${YELLOW}[SKIP]${NC} AXPY MPI tests - MPI not available or kernel not built"
 fi
 
-if [ -f "$BIN_DIR/tpbk_rtriad_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
+if [ -f "$LIB_DIR/libtpbk_rtriad_mpi.so" ] && [ -f "$LAUNCHER" ] && command -v mpirun &> /dev/null; then
     print_header "Repeat Triad MPI Kernel Tests"
 
     echo "Test: Rtriad MPI kernel with 2 ranks"
-    output=$(mpirun -np 2 "$BIN_DIR/tpbk_rtriad_mpi.tpbx" clock_gettime ntest=3 total_memsize=64 2>&1) || true
+    output=$(mpirun -np 2 "$LAUNCHER" "$LIB_DIR/libtpbk_rtriad_mpi.so" clock_gettime ntest=3 total_memsize=64 2>&1) || true
     if echo "$output" | grep -q "rtriad_mpi max error"; then
         print_result 0 "Rtriad MPI kernel ran successfully"
     else
@@ -284,11 +286,11 @@ else
     echo -e "${YELLOW}[SKIP]${NC} Rtriad MPI tests - MPI not available or kernel not built"
 fi
 
-if [ -f "$BIN_DIR/tpbk_sum_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
+if [ -f "$LIB_DIR/libtpbk_sum_mpi.so" ] && [ -f "$LAUNCHER" ] && command -v mpirun &> /dev/null; then
     print_header "Sum MPI Kernel Tests"
 
     echo "Test: Sum MPI kernel with 2 ranks"
-    output=$(mpirun -np 2 "$BIN_DIR/tpbk_sum_mpi.tpbx" clock_gettime ntest=3 total_memsize=64 2>&1) || true
+    output=$(mpirun -np 2 "$LAUNCHER" "$LIB_DIR/libtpbk_sum_mpi.so" clock_gettime ntest=3 total_memsize=64 2>&1) || true
     if echo "$output" | grep -q "sum_mpi"; then
         print_result 0 "Sum MPI kernel ran successfully"
     else
@@ -303,7 +305,7 @@ fi
 # ==============================================================================
 # Test with tpbcli run using --kmpiargs (if MPI kernels are registered)
 # ==============================================================================
-if [ -f "$BIN_DIR/tpbk_scale_mpi.tpbx" ] && command -v mpirun &> /dev/null; then
+if [ -f "$LIB_DIR/libtpbk_scale_mpi.so" ] && command -v mpirun &> /dev/null; then
     print_header "tpbcli MPI Integration Tests"
 
     # Test 13: Scale MPI via tpbcli

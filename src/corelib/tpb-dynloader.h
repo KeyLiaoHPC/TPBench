@@ -2,8 +2,8 @@
  * @file tpb-dynloader.h
  * @brief Dynamic kernel loader for PLI (Process-Level Integration) mode.
  *
- * Provides functions to scan ${TPB_DIR}/lib and ${TPB_DIR}/bin for PLI kernels,
- * dynamically load kernel shared libraries, and manage kernel executable paths.
+ * Scans ${TPB_DIR}/lib for PLI kernel modules (libtpbk_*.so). Each module is
+ * registered via dlopen(); execution uses tpbcli-pli-launcher.
  */
 
 #ifndef TPB_DYNLOADER_H
@@ -18,29 +18,41 @@
 const char *tpb_dl_get_tpb_dir(void);
 
 /**
- * @brief Scan ${TPB_DIR}/lib and ${TPB_DIR}/bin for PLI kernels.
+ * @brief Scan all PLI kernels under ${TPB_DIR}/lib.
  *
- * For each libtpbk_<name>.so found, attempts to:
- *   1. dlopen() the library
- *   2. dlsym() for tpbk_pli_register_<name> function
- *   3. Call the registration function to register name/note/parameters
- *   4. Store the exec path mapping: kernel_name -> ${TPB_DIR}/bin/tpbk_<name>.tpbx
- *
- * Kernels missing their .tpbx executable are marked as incomplete.
+ * For each libtpbk_<name>.so found, attempts dlopen() registration.
+ * Scan failures are logged as warnings; successful kernels remain
+ * registered.
  *
  * @return 0 on success, error code otherwise.
  */
 int tpb_dl_scan(void);
 
 /**
- * @brief Get the PLI kernel executable path by name.
+ * @brief Scan one PLI kernel by name.
+ *
+ * Attempts dlopen() registration on ${TPB_DIR}/lib/libtpbk_<name>.so.
+ *
+ * @param kernel_name Kernel registry name.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_dl_scan_kernel(const char *kernel_name);
+
+/**
+ * @brief Get the PLI launcher path (${TPB_DIR}/bin/tpbcli-pli-launcher).
+ * @return Path to the launcher executable, or NULL if unavailable.
+ */
+const char *tpb_dl_get_pli_launch_path(void);
+
+/**
+ * @brief Get the PLI kernel module path by name.
  * @param kernel_name Name of the kernel.
- * @return Path to the .tpbx executable, or NULL if not found or incomplete.
+ * @return Path to the .so module, or NULL if not found or incomplete.
  */
 const char *tpb_dl_get_exec_path(const char *kernel_name);
 
 /**
- * @brief Check if a kernel has both .so and .tpbx files.
+ * @brief Check if a kernel registered successfully with a runnable .so.
  * @param kernel_name Name of the kernel.
  * @return 1 if complete, 0 if incomplete or not found.
  */

@@ -288,9 +288,7 @@ test_merge_pthread(void)
 
     /* Generate a fake KernelID */
     memset(dummy_sha1, 0xAB, 20);
-    err = tpb_raf_gen_kernel_id("test_stream",
-                                  dummy_sha1, dummy_sha1,
-                                  kernel_id);
+    err = tpb_raf_gen_kernel_id(dummy_sha1, kernel_id);
     CHECK("gen_kernel_id", err == 0);
 
     /* Spawn threads */

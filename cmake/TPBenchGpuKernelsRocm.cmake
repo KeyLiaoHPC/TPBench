@@ -2,7 +2,7 @@
 #
 # Include from root CMakeLists.txt after add_subdirectory(src/kernels),
 # enable_language(HIP), and find_package(hip). Requires TPB_ROCM_KERNEL_DEFS,
-# _tpb_sel_names, _tpb_sel_tags, and empty TPB_ROCM_KERNEL_{LIBS,EXES} to append.
+# _tpb_sel_names, _tpb_sel_tags, and empty TPB_ROCM_KERNEL_LIBS to append.
 
 function(tpb_kernel_apply_rocm_compile_options _tgt)
     if("${TPB_KERNEL_CXXFLAGS}" STREQUAL "")
@@ -23,7 +23,7 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
     list(GET _parts 1 _rk_tags_str)
     list(GET _parts 3 _rk_backend)
     list(GET _parts 4 _rk_hip_src)
-    list(GET _parts 5 _rk_pli_src)
+    list(GET _parts 5 _rk_entry_src)
     string(REPLACE "," ";" _rk_taglist "${_rk_tags_str}")
 
     if(NOT _rk_backend STREQUAL "rocm")
@@ -40,13 +40,12 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
     endif()
 
     set(_lib_target "tpbk_${_rk_name}")
-    set(_exec_target "tpbk_${_rk_name}.tpbx")
     set(_hip_path "${CMAKE_SOURCE_DIR}/${_rk_hip_src}")
-    set(_pli_path "${CMAKE_SOURCE_DIR}/${_rk_pli_src}")
+    set(_entry_path "${CMAKE_SOURCE_DIR}/${_rk_entry_src}")
 
-    add_library(${_lib_target} SHARED "${_hip_path}")
+    add_library(${_lib_target} SHARED "${_hip_path}" "${_entry_path}")
     target_include_directories(${_lib_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(${_lib_target} PRIVATE tpbench hip::device m)
+    target_link_libraries(${_lib_target} PRIVATE tpbench hip::device hip::host m)
     tpb_kernel_apply_rocm_compile_options(${_lib_target})
     if(TPB_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
         target_link_libraries(${_lib_target} PRIVATE OpenMP::OpenMP_CXX)
@@ -55,40 +54,24 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
     endif()
     set_target_properties(${_lib_target} PROPERTIES
         HIP_SEPARABLE_COMPILATION ON
-        POSITION_INDEPENDENT_CODE ON)
+        POSITION_INDEPENDENT_CODE ON
+        OUTPUT_NAME "tpbk_${_rk_name}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+    if(UNIX)
+        target_link_options(${_lib_target} PRIVATE "-Wl,--export-dynamic")
+    endif()
     if(TPB_SHOW_DEBUG)
         target_compile_definitions(${_lib_target} PRIVATE TPB_K_DEBUG=1)
         message(STATUS "TPB_K_DEBUG enabled for ${_lib_target}")
     endif()
 
-    add_executable(${_exec_target} "${_pli_path}")
-    target_include_directories(${_exec_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
-    target_link_libraries(${_exec_target} PRIVATE tpbench ${_lib_target} hip::host m)
-    tpb_kernel_apply_rocm_compile_options(${_exec_target})
-    if(TPB_ENABLE_OPENMP AND OpenMP_CXX_FOUND)
-        target_link_libraries(${_exec_target} PRIVATE OpenMP::OpenMP_CXX)
-    elseif(TPB_ENABLE_OPENMP AND OpenMP_C_FOUND)
-        target_link_libraries(${_exec_target} PRIVATE OpenMP::OpenMP_C)
-    endif()
-    set_target_properties(${_exec_target} PROPERTIES
-        LINKER_LANGUAGE CXX
-        CXX_STANDARD 11)
-    if(TPB_SHOW_DEBUG)
-        target_compile_definitions(${_exec_target} PRIVATE TPB_K_DEBUG=1)
-        message(STATUS "TPB_K_DEBUG enabled for ${_exec_target}")
-    endif()
-
     tpb_set_install_rpath_tpbench_shlib(${_lib_target})
-    tpb_set_install_rpath_tpbench_exe(${_exec_target})
 
     install(TARGETS ${_lib_target}
             COMPONENT tpbench_kernels
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-    install(TARGETS ${_exec_target}
-            COMPONENT tpbench_kernels
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
     list(APPEND TPB_ROCM_KERNEL_LIBS "${_lib_target}")
-    list(APPEND TPB_ROCM_KERNEL_EXES "${_exec_target}")
 endforeach()

@@ -215,7 +215,7 @@ void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 **Run log file:** When the workspace is initialized (`tpb_corelib_init` / `tpb_k_corelib_init`), corelib opens a timestamped log under `<workspace>/rafdb/log/tpbrunlog_*_<host>.log` via `tpb_log_init()` (declared in `tpb-io.h`, internal to the `tpbench` library). `tpb_printf` mirrors each line to that file when logging is active.
 
-**`TPB_LOG_FILE`:** Before fork/exec of a PLI kernel, the driver calls `tpb_log_cleanup()`, sets this environment variable to the current log path (`TPB_LOG_FILE_ENV` / `"TPB_LOG_FILE"`), and forks. The parent immediately calls `tpb_log_init()` again so it appends to the same file; the child process inherits `TPB_LOG_FILE` and `tpb_log_init()` inside `tpb_k_corelib_init` opens that path in append mode without writing a second session header. This yields one log file for both `tpbcli` and the `.tpbx` kernel. At the start of `tpb_corelib_init()`, `TPB_LOG_FILE` is cleared (`unsetenv`) so a normal CLI session always starts a new timestamped log instead of appending to a stale path.
+**`TPB_LOG_FILE`:** Before fork/exec of a PLI kernel, the driver calls `tpb_log_cleanup()`, sets this environment variable to the current log path (`TPB_LOG_FILE_ENV` / `"TPB_LOG_FILE"`), and forks. The parent immediately calls `tpb_log_init()` again so it appends to the same file; the child process inherits `TPB_LOG_FILE` and `tpb_log_init()` inside `tpb_k_corelib_init` opens that path in append mode without writing a second session header. This yields one log file for both `tpbcli` and the kernel child launched via `tpbcli-pli-launcher`. At the start of `tpb_corelib_init()`, `TPB_LOG_FILE` is cleared (`unsetenv`) so a normal CLI session always starts a new timestamped log instead of appending to a stale path.
 
 ---
 
@@ -566,7 +566,8 @@ tpb_free_kernel(&hdl->kernel);  // Frees nested data only
 ### `tpb_run_pli`
 
 Run a PLI kernel via fork/exec. Builds the execution command with environment
-variables, MPI arguments, and kernel parameters, then launches the `.tpbx`
+variables, MPI arguments, and kernel parameters, then launches the kernel
+via `tpbcli-pli-launcher` and the kernel `.so`
 executable via shell. The child inherits the parent’s stdout and stderr; the
 shared run log is written through `tpb_printf` in both processes using
 `TPB_LOG_FILE` as described under `tpb_printf` (run log file).
@@ -1464,16 +1465,14 @@ int tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
 
 #### `tpb_raf_gen_kernel_id`
 
-Generate KernelID from kernel artifacts.
+Copy kernel `.so` SHA-1 digest into KernelID output buffer.
 
 ```c
-int tpb_raf_gen_kernel_id(const char *kernel_name,
-                            const unsigned char so_sha1[20],
-                            const unsigned char bin_sha1[20],
+int tpb_raf_gen_kernel_id(const unsigned char tpbx_sha1[20],
                             unsigned char id_out[20]);
 ```
 
-**Formula:** `SHA1("kernel" + kernel_name + so_sha1 + bin_sha1)`
+**Formula:** `KernelID = so_sha1`
 
 ---
 
@@ -1583,14 +1582,13 @@ typedef struct tbatch_entry {
 
 ```c
 typedef struct kernel_entry {
-    unsigned char kernel_id[20];    // KernelID
+    unsigned char kernel_id[20];    // KernelID (kernel .so SHA1)
     unsigned char inherit_from[20];     // Lineage: source KernelID or zero
     char kernel_name[64];           // Kernel name
-    unsigned char so_sha1[20];    // Shared library SHA1
     uint32_t kctrl;                 // Kernel control bits
     uint32_t nparm;                 // Number of parameters
     uint32_t nmetric;               // Number of metrics
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; // Reserved (128)
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 20]; // Reserved (148)
 } kernel_entry_t;
 ```
 
@@ -1641,12 +1639,9 @@ typedef struct tbatch_attr {
 
 ```c
 typedef struct kernel_attr {
-    unsigned char kernel_id[20];    // KernelID
+    unsigned char kernel_id[20];    // KernelID (kernel .so SHA1)
     unsigned char derive_to[20];       // Derivation target, or zero
     unsigned char inherit_from[20];     // Lineage / provenance
-    unsigned char src_sha1[20];     // Source SHA1
-    unsigned char so_sha1[20];     // Shared library SHA1
-    unsigned char bin_sha1[20];    // Executable SHA1
     char kernel_name[256];          // Kernel name
     char version[64];               // Version string
     char description[2048];          // Description

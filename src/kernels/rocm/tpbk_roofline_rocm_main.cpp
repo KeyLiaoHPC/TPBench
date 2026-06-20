@@ -1,6 +1,6 @@
 /**
  * tpbk_roofline_rocm_main.cpp
- * Description: PLI executable for roofline_rocm kernel
+ * PLI entry and debug main wrapper for roofline_rocm kernel.
  */
 
 #include <cstdio>
@@ -10,15 +10,10 @@
 extern "C" {
 #include "tpbench.h"
 
-extern int _tpbk_register_roofline_rocm(void);
+extern int tpbk_pli_register_roofline_rocm(void);
 extern int _tpbk_run_roofline_rocm(void);
 }
 
-/*
- * Debug logging - enabled via:
- *   - CMake: -DTPB_SHOW_DEBUG=ON
- *   - Compiler: -DTPB_K_DEBUG=1
- */
 #ifndef TPB_K_DEBUG
 #define TPB_K_DEBUG 0
 #endif
@@ -32,12 +27,12 @@ extern int _tpbk_run_roofline_rocm(void);
 #define MAIN_DBG(fmt, ...) ((void)0)
 #endif
 
-int
-main(int argc, char **argv)
+extern "C" int
+tpbk_roofline_rocm_entry(int argc, char **argv)
 {
     int err;
 
-    MAIN_DBG("=== main() START, argc=%d ===", argc);
+    MAIN_DBG("=== tpbk_roofline_rocm_entry() START, argc=%d ===", argc);
     for (int i = 0; i < argc; i++) {
         MAIN_DBG("  argv[%d] = %s", i, argv[i]);
     }
@@ -62,13 +57,13 @@ main(int argc, char **argv)
     }
     MAIN_DBG("tpb_k_pli_set_timer OK");
 
-    MAIN_DBG("Calling _tpbk_register_roofline_rocm...");
-    err = _tpbk_register_roofline_rocm();
+    MAIN_DBG("Calling tpbk_pli_register_roofline_rocm...");
+    err = tpbk_pli_register_roofline_rocm();
     if (err != 0) {
         fprintf(stderr, "Error: Failed to register kernel\n");
         return err;
     }
-    MAIN_DBG("_tpbk_register_roofline_rocm OK");
+    MAIN_DBG("tpbk_pli_register_roofline_rocm OK");
 
     MAIN_DBG("Building handle...");
     tpb_k_rthdl_t handle;
@@ -87,18 +82,26 @@ main(int argc, char **argv)
     MAIN_DBG("Calling _tpbk_run_roofline_rocm...");
     err = _tpbk_run_roofline_rocm();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel roofline_rocm failed: %d\n", err);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "Kernel roofline_rocm failed: %d\n", err);
         return err;
     }
     MAIN_DBG("_tpbk_run_roofline_rocm OK");
 
     MAIN_DBG("Outputting results...");
     tpb_cliout_results(&handle);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel roofline_rocm finished successfully.\n");
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "Kernel roofline_rocm finished successfully.\n");
 
     MAIN_DBG("Cleaning up...");
     tpb_driver_clean_handle(&handle);
 
-    MAIN_DBG("=== main() END ===");
+    MAIN_DBG("=== tpbk_roofline_rocm_entry() END ===");
     return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+    return tpbk_roofline_rocm_entry(argc, argv);
 }

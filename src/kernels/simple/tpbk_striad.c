@@ -379,12 +379,9 @@ check_d_striad(int narr, int ntest, int stride, int jump,
     return 0;
 }
 
-/* =========================================================================
- * PLI executable entry point (only compiled into .tpbx, not into .so)
- * ========================================================================= */
-#ifdef TPB_K_BUILD_MAIN
+/* PLI entry and debug main wrapper */
 int
-main(int argc, char **argv)
+tpbk_striad_entry(int argc, char **argv)
 {
     int err;
 
@@ -442,4 +439,8 @@ main(int argc, char **argv)
 
     return 0;
 }
-#endif /* TPB_K_BUILD_MAIN */
+int
+main(int argc, char **argv)
+{
+    return tpbk_striad_entry(argc, argv);
+}

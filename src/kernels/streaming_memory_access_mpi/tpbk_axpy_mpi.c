@@ -331,3 +331,89 @@ check_d_axpy(int narr, int ntest, double *a, double *b, double s,
 
     return 0;
 }
+
+/* PLI entry and debug main wrapper */
+int
+tpbk_axpy_mpi_entry(int argc, char **argv)
+{
+    int err;
+    int rank;
+
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    const char *timer_name = NULL;
+    if (argc >= 2) {
+        timer_name = argv[1];
+    } else {
+        timer_name = getenv("TPBENCH_TIMER");
+    }
+    if (timer_name == NULL) {
+        if (rank == 0) {
+            fprintf(stderr,
+                "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        }
+        MPI_Finalize();
+        return TPBE_CLI_FAIL;
+    }
+
+    err = tpb_k_pli_set_timer(timer_name);
+    if (err != 0) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        }
+        MPI_Finalize();
+        return err;
+    }
+
+    err = tpbk_pli_register_axpy_mpi();
+    if (err != 0) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: Failed to register kernel\n");
+        }
+        MPI_Finalize();
+        return err;
+    }
+
+    tpb_k_rthdl_t handle;
+    err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
+    if (err != 0) {
+        if (rank == 0) {
+            fprintf(stderr, "Error: Failed to build handle\n");
+        }
+        MPI_Finalize();
+        return err;
+    }
+
+    if (rank == 0) {
+        tpb_cliout_args(&handle);
+        tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
+    }
+
+    err = _tpbk_run_axpy_mpi();
+    if (err != 0) {
+        if (rank == 0) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                "Kernel axpy_mpi failed: %d\n", err);
+        }
+        MPI_Finalize();
+        return err;
+    }
+
+    if (rank == 0) {
+        tpb_cliout_results(&handle);
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+            "Kernel axpy_mpi finished successfully.\n");
+    }
+
+    tpb_driver_clean_handle(&handle);
+
+    MPI_Finalize();
+    return 0;
+}
+
+int
+main(int argc, char **argv)
+{
+    return tpbk_axpy_mpi_entry(argc, argv);
+}

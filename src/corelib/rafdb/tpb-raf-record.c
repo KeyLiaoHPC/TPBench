@@ -837,7 +837,7 @@ tpb_raf_record_write_kernel(const char *workspace,
 {
     char fpath[TPB_RAF_PATH_MAX];
     unsigned char magic[TPB_RAF_MAGIC_LEN];
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
+    unsigned char reserve[TPB_RAF_KERNEL_ATTR_RESERVE];
     FILE *fp;
     uint64_t metasize;
     uint32_t i;
@@ -850,8 +850,8 @@ tpb_raf_record_write_kernel(const char *workspace,
     fp = fopen(fpath, "wb");
     if (!fp) return TPBE_FILE_IO_FAIL;
 
-    /* Fixed attrs: 6*20 + 256 + 64 + 2048 + 5*4 = 2508 */
-    metasize = 2508 + TPB_RAF_RESERVE_SIZE;
+    /* Fixed attrs: 3*20 + 256 + 64 + 2048 + 5*4 = 2448 */
+    metasize = 2448 + TPB_RAF_KERNEL_ATTR_RESERVE;
     metasize += attr->nheader * TPB_RAF_HDR_FIXED_SIZE;
 
     tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
@@ -868,9 +868,6 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (fwrite(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->derive_to, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->inherit_from, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->src_sha1, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->so_sha1, 1, 20, fp) != 20) goto fail;
-    if (fwrite(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
     if (fwrite(attr->kernel_name, 1, 256, fp) != 256) goto fail;
     if (fwrite(attr->version, 1, 64, fp) != 64) goto fail;
     if (fwrite(attr->description, 1, 2048, fp) != 2048) {
@@ -882,9 +879,9 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (_sf_write_u32(fp, attr->nheader) != 0) goto fail;
     if (_sf_write_u32(fp, attr->reserve) != 0) goto fail;
 
-    memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
-    if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
-        != TPB_RAF_RESERVE_SIZE) {
+    memset(reserve, 0, TPB_RAF_KERNEL_ATTR_RESERVE);
+    if (fwrite(reserve, 1, TPB_RAF_KERNEL_ATTR_RESERVE, fp)
+        != TPB_RAF_KERNEL_ATTR_RESERVE) {
         goto fail;
     }
 
@@ -918,7 +915,7 @@ tpb_raf_record_read_kernel(const char *workspace,
 {
     char fpath[TPB_RAF_PATH_MAX];
     unsigned char magic[TPB_RAF_MAGIC_LEN];
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE];
+    unsigned char reserve[TPB_RAF_KERNEL_ATTR_RESERVE];
     FILE *fp;
     uint64_t metasize, ds;
 
@@ -949,9 +946,6 @@ tpb_raf_record_read_kernel(const char *workspace,
     if (fread(attr->kernel_id, 1, 20, fp) != 20) goto fail;
     if (fread(attr->derive_to, 1, 20, fp) != 20) goto fail;
     if (fread(attr->inherit_from, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->src_sha1, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->so_sha1, 1, 20, fp) != 20) goto fail;
-    if (fread(attr->bin_sha1, 1, 20, fp) != 20) goto fail;
     if (fread(attr->kernel_name, 1, 256, fp) != 256) goto fail;
     if (fread(attr->version, 1, 64, fp) != 64) goto fail;
     if (fread(attr->description, 1, 2048, fp) != 2048) goto fail;
@@ -961,8 +955,8 @@ tpb_raf_record_read_kernel(const char *workspace,
     if (_sf_read_u32(fp, &attr->nheader) != 0) goto fail;
     if (_sf_read_u32(fp, &attr->reserve) != 0) goto fail;
 
-    if (fread(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
-        != TPB_RAF_RESERVE_SIZE) {
+    if (fread(reserve, 1, TPB_RAF_KERNEL_ATTR_RESERVE, fp)
+        != TPB_RAF_KERNEL_ATTR_RESERVE) {
         goto fail;
     }
 

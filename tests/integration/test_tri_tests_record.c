@@ -5,7 +5,7 @@
  * Runs:
  *   1) tpbcli r --kernel stream --kargs stream_array_size=32
  *   2) tpbcli run --kernel stream --kargs ntest=100 --kargs-dim stream_array_size=[242144,524288,1048576]
- *   3) tpbk_stream.tpbx clock_gettime 10 32 0  (direct invoke)
+ *   3) tpbcli-pli-launcher lib/libtpbk_stream.so clock_gettime 10 32 0  (direct invoke)
  *
  * Verifies:
  *   - 2 tbatch entries (batch 1: ntask=1, batch 2: ntask=3)
@@ -113,8 +113,9 @@ test_tri_record(void)
 
     /* --- Run 3: Direct kernel invocation (no TPB_TBATCH_ID) --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbk_stream.tpbx clock_gettime 10 32 0",
-             g_test_dir, g_bin_dir);
+             "TPB_WORKSPACE=%s %s/tpbcli-pli-launcher %s/../lib/libtpbk_stream.so "
+             "clock_gettime 10 32 0",
+             g_test_dir, g_bin_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run3 exit", err == 0);
 

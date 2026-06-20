@@ -269,7 +269,7 @@ $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
 When TPBench executes a PLI kernel, the full command line is printed to the terminal for debugging and analysis. The command line format is:
 
 ```
-TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <exec_path> <timer> <params...>
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <launcher> <kernel.so> <timer> <params...>
 ```
 
 Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.

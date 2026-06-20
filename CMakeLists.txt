@@ -119,7 +119,6 @@ if(TPB_NEED_MPI)
 endif()
 
 set(TPB_ROCM_KERNEL_LIBS "")
-set(TPB_ROCM_KERNEL_EXES "")
 
 if(TPB_NEED_HIP)
     cmake_minimum_required(VERSION 3.21)
@@ -167,7 +166,7 @@ add_subdirectory(src/corelib)
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRpath.cmake)
 
-# Kernels (.so + .tpbx) with name/tag-based selection
+# Kernels (libtpbk_*.so) with name/tag-based selection
 add_subdirectory(src/kernels)
 
 if(TPB_NEED_HIP)
@@ -199,19 +198,29 @@ add_executable(tpbcli
 )
 target_include_directories(tpbcli PRIVATE src)
 target_compile_options(tpbcli PRIVATE -O2)
-target_link_libraries(tpbcli PRIVATE tpbench ${TPB_BUILT_KERNEL_LIBS} m)
+target_link_libraries(tpbcli PRIVATE tpbench m)
 tpb_set_install_rpath_tpbench_exe(tpbcli)
 
+add_executable(tpbcli-pli-launcher src/tpbcli-pli-launcher.c)
+target_include_directories(tpbcli-pli-launcher PRIVATE src)
+target_link_libraries(tpbcli-pli-launcher PRIVATE dl)
+target_compile_options(tpbcli-pli-launcher PRIVATE -O2)
+set_target_properties(tpbcli-pli-launcher PROPERTIES OUTPUT_NAME "tpbcli-pli-launcher")
+tpb_set_install_rpath_tpbench_exe(tpbcli-pli-launcher)
+install(TARGETS tpbcli-pli-launcher
+        COMPONENT tpbench_kernels
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
 add_custom_target(tpb_build_kernel
-    DEPENDS tpbench ${TPB_BUILT_KERNEL_LIBS} ${TPB_BUILT_KERNEL_EXES}
-            ${TPB_ROCM_KERNEL_LIBS} ${TPB_ROCM_KERNEL_EXES}
-    COMMENT "Build libtpbench.so and selected kernel .so / .tpbx only")
+    DEPENDS tpbench tpbcli-pli-launcher ${TPB_BUILT_KERNEL_LIBS}
+            ${TPB_ROCM_KERNEL_LIBS}
+    COMMENT "Build libtpbench.so, tpbcli-pli-launcher, and selected kernel .so only")
 
 add_custom_target(tpb_install_kernel
     DEPENDS tpb_build_kernel
     COMMAND ${CMAKE_COMMAND} --install "${CMAKE_BINARY_DIR}"
             --component tpbench_kernels --prefix "${CMAKE_INSTALL_PREFIX}"
-    COMMENT "Install kernel shared libraries and .tpbx (COMPONENT tpbench_kernels)")
+    COMMENT "Install PLI launcher and kernel .so (COMPONENT tpbench_kernels)")
 
 # Tests
 option(BUILD_TESTING "Build test targets" ON)

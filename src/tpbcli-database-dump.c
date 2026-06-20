@@ -936,9 +936,6 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
-    dump_print_kv_hex20("src_sha1", attr.src_sha1);
-    dump_print_kv_hex20("so_sha1", attr.so_sha1);
-    dump_print_kv_hex20("bin_sha1", attr.bin_sha1);
     dump_print_kv_str("kernel_name", attr.kernel_name);
     dump_print_kv_str("version", attr.version);
     dump_print_kv_str("description", attr.description);
@@ -1072,8 +1069,6 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             dump_print_kv_hex20(p, e[i].inherit_from);
             snprintf(p, sizeof(p), "entry[%d].kernel_name", i);
             dump_print_kv_str(p, e[i].kernel_name);
-            snprintf(p, sizeof(p), "entry[%d].so_sha1", i);
-            dump_print_kv_hex20(p, e[i].so_sha1);
             snprintf(p, sizeof(p), "entry[%d].kctrl", i);
             dump_print_kv_u32(p, e[i].kctrl);
             snprintf(p, sizeof(p), "entry[%d].nparm", i);

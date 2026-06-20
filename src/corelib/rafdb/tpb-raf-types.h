@@ -42,7 +42,8 @@
 /* block_size(4) + ndim(4) + data_size(8) + type_bits(4) + _reserve(4) + uattr_bits(8) + name(256) + note(2048) + dimsizes[7](56) + dimnames[7][64](448) */
 #define TPB_RAF_HDR_FIXED_SIZE 2840
 
-/* TPB_RAF_RESERVE_SIZE is in tpb-public.h (shared with entry tail reserve) */
+/* Kernel .tpbr fixed meta reserve (128 + former src/so/bin SHA1 fields) */
+#define TPB_RAF_KERNEL_ATTR_RESERVE  (TPB_RAF_RESERVE_SIZE + 60)
 
 /* Maximum workspace path length */
 #define TPB_RAF_PATH_MAX       PATH_MAX

@@ -10,7 +10,6 @@
 #   tpbench_add_kernel(
 #       NAME        mykern
 #       SOURCES     tpbk_mykern.c
-#       MAIN_SOURCE tpbk_mykern_main.c
 #   )
 #
 # Then:

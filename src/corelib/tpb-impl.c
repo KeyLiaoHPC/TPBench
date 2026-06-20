@@ -26,7 +26,7 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_ILLEGAL_CALL,        TPBE_FAIL, "Illegal call."},
     {TPBE_KERNEL_NE_FAIL,      TPBE_FAIL, "Kernel does not exist."},
     {TPBE_KARG_NE_FAIL,        TPBE_FAIL, "Kernel argument does not exist."},
-    {TPBE_KERNEL_INCOMPLETE,   TPBE_FAIL, "Incomplete kernel (missing .so or .tpbx)."},
+    {TPBE_KERNEL_INCOMPLETE,   TPBE_FAIL, "Incomplete kernel (missing .so)."},
     {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."}
 };
 

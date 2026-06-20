@@ -50,6 +50,9 @@ static int parse_kmpiargs_list(const char *str, const char **pos,
 static int parse_kmpiargs_quoted(const char *arg);
 static int parse_outargs_string(const char *outargs_str);
 
+static int _sf_collect_run_kernel_names(int argc, char **argv,
+                                        char names[][TPBM_NAME_STR_MAX_LEN],
+                                        int *n_out);
 static int _sf_expand_cartesian_kargs(void);
 static void _sf_flush_pending_dims(void);
 static void _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out);
@@ -192,6 +195,68 @@ expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     }
 
     tpb_dim_values_free(vals);
+    return 0;
+}
+
+static int
+_sf_run_kernel_value(const char *arg)
+{
+    if (arg == NULL || arg[0] == '\0') {
+        return 0;
+    }
+    if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+        return 0;
+    }
+    if (arg[0] == '-') {
+        return 0;
+    }
+    return 1;
+}
+
+static int
+_sf_collect_run_kernel_names(int argc, char **argv,
+                             char names[][TPBM_NAME_STR_MAX_LEN],
+                             int *n_out)
+{
+    int n = 0;
+    int i;
+    int j;
+
+    if (n_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+    *n_out = 0;
+
+    for (i = 0; i < argc; i++) {
+        if (strcmp(argv[i], "--kernel") != 0 &&
+            strcmp(argv[i], "-k") != 0) {
+            continue;
+        }
+        if (i + 1 >= argc) {
+            continue;
+        }
+        if (!_sf_run_kernel_value(argv[i + 1])) {
+            continue;
+        }
+
+        for (j = 0; j < n; j++) {
+            if (strcmp(names[j], argv[i + 1]) == 0) {
+                break;
+            }
+        }
+        if (j < n) {
+            continue;
+        }
+
+        if (n >= MAX_DIM_CONFIGS) {
+            return TPBE_CLI_FAIL;
+        }
+
+        snprintf(names[n], TPBM_NAME_STR_MAX_LEN, "%s", argv[i + 1]);
+        n++;
+    }
+
+    *n_out = n;
     return 0;
 }
 
@@ -859,6 +924,9 @@ tpbcli_run(int argc, char **argv)
     int nhdl;
     int rec_err;
     int i;
+    char run_kernel_names[MAX_DIM_CONFIGS][TPBM_NAME_STR_MAX_LEN];
+    const char *run_kernel_ptrs[MAX_DIM_CONFIGS];
+    int n_run_kernels = 0;
 
     g_dry_run = 0;
     g_kernel_parsed_for_help = 0;
@@ -872,8 +940,23 @@ tpbcli_run(int argc, char **argv)
 
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                "Initializing TPBench kernels.\n");
-    err = tpb_register_kernel();
-    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernel");
+
+    err = _sf_collect_run_kernel_names(argc, argv, run_kernel_names,
+                                       &n_run_kernels);
+    if (err != 0) {
+        return err;
+    }
+
+    for (i = 0; i < n_run_kernels; i++) {
+        run_kernel_ptrs[i] = run_kernel_names[i];
+    }
+
+    if (n_run_kernels > 0) {
+        err = tpb_register_kernels(n_run_kernels, run_kernel_ptrs);
+    } else {
+        err = tpb_register_kernel();
+    }
+    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernels");
 
     tree = tpbcli_argtree_create(
         (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",

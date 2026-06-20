@@ -273,7 +273,8 @@ test_bad_kernel_name(void)
         FAIL("B2.11: expected nonzero exit");
         return 1;
     }
-    if (strstr(buf, "requires a legal kernel name") == NULL) {
+    if (strstr(buf, "requires a legal kernel name") == NULL &&
+        strstr(buf, "Failed to scan kernel nonexistent_kern") == NULL) {
         FAIL("B2.11: missing hint");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;

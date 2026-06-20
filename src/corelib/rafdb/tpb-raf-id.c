@@ -56,26 +56,17 @@ tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
 }
 
 /**
- * @brief Generate KernelID via SHA1.
+ * @brief Copy tpbx SHA-1 digest into KernelID output buffer.
  */
 int
-tpb_raf_gen_kernel_id(const char *kernel_name,
-                        const unsigned char so_sha1[20],
-                        const unsigned char bin_sha1[20],
+tpb_raf_gen_kernel_id(const unsigned char tpbx_sha1[20],
                         unsigned char id_out[20])
 {
-    tpb_sha1_ctx_t ctx;
-
-    if (!kernel_name || !so_sha1 || !bin_sha1 || !id_out) {
+    if (!tpbx_sha1 || !id_out) {
         return TPBE_NULLPTR_ARG;
     }
 
-    tpb_sha1_init(&ctx);
-    tpb_sha1_update(&ctx, "kernel", 6);
-    tpb_sha1_update(&ctx, kernel_name, strlen(kernel_name));
-    tpb_sha1_update(&ctx, so_sha1, 20);
-    tpb_sha1_update(&ctx, bin_sha1, 20);
-    tpb_sha1_final(&ctx, id_out);
+    memcpy(id_out, tpbx_sha1, 20);
     return TPBE_SUCCESS;
 }
 

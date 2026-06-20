@@ -362,26 +362,66 @@ tpb_register_kernel()
 
     if (current_rthdl || kernel_all || handle_list) {
         err = TPBE_ILLEGAL_CALL;
-        tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err), "Illegal call to tpb_register_kernel().\n");
+        tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
+                   "Illegal call to tpb_register_kernel().\n");
         return err;
     }
 
     nhdl = 0;
     ihdl = -1;
 
-    /* Register common parameters */
     err = tpb_register_common();
     if (err != 0) {
         return err;
     }
 
-    /* Dynamically scan for kernel shared libraries */
     err = tpb_dl_scan();
     if (err != 0) {
         return err;
     }
 
-    /* No pseudo handle: real handles start at handle_list[0] after --kernel */
+    handle_list = NULL;
+    nhdl = 0;
+    ihdl = -1;
+    current_rthdl = NULL;
+
+    return 0;
+}
+
+/**
+ * @brief Register common parameters and scan only the named PLI kernels.
+ */
+int
+tpb_register_kernels(int n, const char *const *names)
+{
+    int err;
+    int i;
+
+    if (current_rthdl || kernel_all || handle_list) {
+        err = TPBE_ILLEGAL_CALL;
+        tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
+                   "Illegal call to tpb_register_kernels().\n");
+        return err;
+    }
+
+    nhdl = 0;
+    ihdl = -1;
+
+    err = tpb_register_common();
+    if (err != 0) {
+        return err;
+    }
+
+    for (i = 0; i < n; i++) {
+        if (names == NULL || names[i] == NULL) {
+            return TPBE_NULLPTR_ARG;
+        }
+        err = tpb_dl_scan_kernel(names[i]);
+        if (err != 0) {
+            return err;
+        }
+    }
+
     handle_list = NULL;
     nhdl = 0;
     ihdl = -1;
@@ -981,11 +1021,12 @@ tpb_driver_add_handle(const char *kernel_name)
         return TPBE_KERNEL_NE_FAIL;
     }
 
-    /* For PLI kernels, check that both .so and .tpbx exist */
+    /* For PLI kernels, require a registered runnable .so */
     if ((kernel->info.kctrl & TPB_KTYPE_MASK) == TPB_KTYPE_PLI) {
         if (!tpb_dl_is_complete(kernel_name)) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                       "Incomplete kernel: '%s' (missing .tpbx executable)\n", kernel_name);
+                       "Incomplete kernel: '%s' (missing or failed .so scan)\n",
+                       kernel_name);
             return TPBE_KERNEL_INCOMPLETE;
         }
     }
@@ -1361,6 +1402,7 @@ int
 tpb_run_pli(tpb_k_rthdl_t *hdl)
 {
     char *exec_path;
+    const char *launch_path;
     char *full_cmd;
     char workspace[PATH_MAX];
     char kernel_id_hex[41];
@@ -1383,6 +1425,14 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     if (exec_path == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "Incomplete kernel: '%s'\n", hdl->kernel.info.name);
+        return TPBE_KERNEL_INCOMPLETE;
+    }
+
+    launch_path = tpb_dl_get_pli_launch_path();
+    if (launch_path == NULL && strstr(exec_path, ".so") != NULL) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                   "PLI launcher not found under %s/bin/tpbcli-pli-launcher\n",
+                   tpb_dl_get_tpb_dir());
         return TPBE_KERNEL_INCOMPLETE;
     }
 
@@ -1422,7 +1472,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         }
     }
 
-    /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <exec_path> <timer_name> <params...> */
+    /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <launcher> <so> <timer> <params...> */
     {
         char value_buf[256];
         size_t cmd_size = 8192;
@@ -1460,7 +1510,13 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
             pos += snprintf(full_cmd + pos, cmd_size - pos, "mpirun %s ", hdl->mpipack.mpiargs);
         }
 
-        pos += snprintf(full_cmd + pos, cmd_size - pos, "%s %s", exec_path, timer.name);
+        if (launch_path != NULL && strstr(exec_path, ".so") != NULL) {
+            pos += snprintf(full_cmd + pos, cmd_size - pos, "%s %s %s",
+                            launch_path, exec_path, timer.name);
+        } else {
+            pos += snprintf(full_cmd + pos, cmd_size - pos, "%s %s",
+                            exec_path, timer.name);
+        }
 
         for (int i = 0; i < hdl->argpack.n; i++) {
             tpb_rt_parm_t *parm = &hdl->argpack.args[i];

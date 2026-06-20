@@ -146,7 +146,7 @@ typedef enum {
 int tpb_corelib_init(const char *tpb_workspace_path);
 
 /**
- * @brief Same as tpb_corelib_init but sets caller context to KERNEL after success (PLI .tpbx entry).
+ * @brief Same as tpb_corelib_init but sets caller context to KERNEL after success (PLI kernel entry).
  * @param tpb_workspace_path Same as tpb_corelib_init.
  * @return Same as tpb_corelib_init.
  */
@@ -456,7 +456,7 @@ int tpb_k_finalize_pli(void);
 /**
  * @brief Set timer for PLI kernel executable.
  *
- * Intended to be called from .tpbx executables. Sets up the timer based
+ * Intended to be called from PLI kernel entry functions. Sets up the timer based
  * on the provided timer name.
  *
  * @param timer_name Timer name (e.g., "clock_gettime", "tsc_asym")
@@ -468,7 +468,7 @@ int tpb_k_pli_set_timer(const char *timer_name);
  * @brief Build handle from positional arguments for PLI executable.
  *
  * Parses positional arguments (in parameter registration order) and
- * builds a runtime handle. Called from .tpbx executables.
+ * builds a runtime handle. Called from PLI kernel entry functions.
  *
  * @param handle Pointer to runtime handle to populate.
  * @param argc Number of positional argument values.
@@ -496,7 +496,7 @@ int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
  * @brief Run a PLI kernel via fork/exec.
  *
  * Builds the execution command with environment variables, MPI arguments,
- * and kernel parameters, then launches the .tpbx executable via shell.
+ * and kernel parameters, then launches the kernel `.so` via `tpbcli-pli-launcher`.
  * Captures and forwards stdout/stderr to both console and log file.
  *
  * @param hdl Runtime handle for the kernel (must be non-NULL).
@@ -505,11 +505,23 @@ int tpb_driver_clean_handle(tpb_k_rthdl_t *handle);
 int tpb_run_pli(tpb_k_rthdl_t *hdl);
 
 /**
- * @brief Register common parameters, scan PLI kernel shared libraries, and sync kernel
- *        records with the active workspace. Call once before tpb_query_kernel or run.
+ * @brief Register common parameters, scan all PLI kernels, and sync kernel records
+ *        with the active workspace. Call once before tpb_query_kernel or kernel ls.
  * @return 0 on success, error code otherwise.
  */
 int tpb_register_kernel(void);
+
+/**
+ * @brief Register common parameters and scan only the named PLI kernels.
+ *
+ * Used by tpbcli run to avoid loading every kernel. Any named kernel that fails
+ * to scan returns an error.
+ *
+ * @param n Number of kernel names in names
+ * @param names Array of kernel name strings (may be NULL when n is 0)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_register_kernels(int n, const char *const *names);
 
 /* ===== CLI Output Helpers ===== */
 
@@ -609,12 +621,9 @@ typedef struct tbatch_entry {
 
 /** @brief Kernel full attributes (.tpbr meta section) */
 typedef struct kernel_attr {
-    unsigned char kernel_id[20];  /**< KernelID (SHA-1) */
+    unsigned char kernel_id[20];  /**< KernelID (kernel .so SHA-1) */
     unsigned char derive_to[20];     /**< Derivation target, or zero */
     unsigned char inherit_from[20];   /**< Lineage: source KernelID, or zero */
-    unsigned char src_sha1[20];   /**< Source files SHA-1 */
-    unsigned char so_sha1[20];    /**< Shared library SHA-1 */
-    unsigned char bin_sha1[20];   /**< Executable SHA-1 */
     char kernel_name[256];        /**< Kernel name */
     char version[64];             /**< Version string */
     char description[2048];       /**< Description */
@@ -628,14 +637,13 @@ typedef struct kernel_attr {
 
 /** @brief Kernel entry (slim record in .tpbe) */
 typedef struct kernel_entry {
-    unsigned char kernel_id[20];  /**< KernelID */
+    unsigned char kernel_id[20];  /**< KernelID (kernel .so SHA-1) */
     unsigned char inherit_from[20];   /**< Lineage: source KernelID, or zero */
     char kernel_name[64];         /**< Kernel name */
-    unsigned char so_sha1[20];    /**< Shared library SHA-1 */
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nparm;               /**< Number of parameters */
     uint32_t nmetric;             /**< Number of metrics */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; /**< Reserved */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 20]; /**< Reserved */
 } kernel_entry_t;
 
 /** @brief Task full attributes (.tpbr meta section) */
@@ -986,16 +994,12 @@ int tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
                             unsigned char id_out[20]);
 
 /**
- * @brief Generate KernelID via SHA1.
- * @param kernel_name Kernel name string
- * @param so_sha1     20-byte SO hash
- * @param bin_sha1    20-byte binary hash
- * @param id_out      20-byte output buffer
+ * @brief Copy kernel `.so` SHA-1 digest into KernelID output buffer.
+ * @param tpbx_sha1 20-byte kernel module SHA-1
+ * @param id_out    20-byte output buffer
  * @return 0 on success, error code otherwise
  */
-int tpb_raf_gen_kernel_id(const char *kernel_name,
-                            const unsigned char so_sha1[20],
-                            const unsigned char bin_sha1[20],
+int tpb_raf_gen_kernel_id(const unsigned char tpbx_sha1[20],
                             unsigned char id_out[20]);
 
 /**

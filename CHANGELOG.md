@@ -2,12 +2,22 @@
 
 ## Unreleased
 
+### Build
+
+- **Breaking:** PLI kernels ship as a single shared library per kernel: `lib/libtpbk_<name>.so` (CPU, MPI, and ROCm). Per-kernel `.tpbx` executables and the old dual `.so` + `.tpbx` layout are removed.
+- **New:** `bin/tpbcli-pli-launcher` — thin ET_EXEC child process used by `tpb_run_pli()`; `dlopen()`s the kernel `.so` and calls `tpbk_<name>_entry()` (fallback: `main()`).
+- **Change:** `tpbench_add_kernel()` (out-of-tree) builds one `.so` only; `MAIN_SOURCE` is no longer required.
+- **Change:** `tpbcli` no longer links kernel libraries at build time; kernels are discovered at runtime under `${TPB_DIR}/lib/`.
+- **Change:** `tpb_build_kernel` / `tpb_install_kernel` depend on `tpbcli-pli-launcher` and kernel `.so` targets only.
+
 ### Documentation
 
 - **Update:** [`docs/USAGE.md`](docs/USAGE.md) / [`docs/USAGE_CN.md`](docs/USAGE_CN.md) — current top-level commands and aliases (`database`/`db`, `kernel`/`k`, etc.), new §2.3 `database`; [`docs/howtos/1.1_howto_build_EN.md`](docs/howtos/1.1_howto_build_EN.md) — runtime kernel listing uses `tpbcli kernel list` (replacing removed `tpbcli list`); [`docs/design/tpbcli_argp_EN.md`](docs/design/tpbcli_argp_EN.md) / [`docs/design/tpbcli_argp_CN.md`](docs/design/tpbcli_argp_CN.md) — help flag wording `--help`/`-h` and `database` caller scope; [`AGENTS.md`](AGENTS.md) — nested `database`/`db` argp in `tpbcli-database.c`.
+- **Update:** PLI kernel layout, build outputs, and KernelID semantics in [`AGENTS.md`](AGENTS.md), [`docs/API_Reference.md`](docs/API_Reference.md), [`docs/design/design_record_EN.md`](docs/design/design_record_EN.md) / [`docs/design/design_record_CN.md`](docs/design/design_record_CN.md), and [`docs/howtos/1.1_howto_build_EN.md`](docs/howtos/1.1_howto_build_EN.md) — single `.so` model, `tpbcli-pli-launcher`, and `tpbk_<kern>_entry()`.
 
 ### Frontend: tpbcli
 
+- **Change:** `tpbcli run` registers only the kernel(s) named on the command line via `tpb_register_kernels()` (full `lib/` scan remains for `tpbcli kernel list`).
 - **Refactor:** `tpbcli database` uses the `tpbcli-argp` tree parser (same stack-based model as `run`). Top-level `database` has short alias **`db`**. After `database`/`db`, a subcommand is **required**: `list` (alias `ls`) or `dump`. Help flags use **`--help`** as the primary name and **`-h`** as the short name at each level. `tpbcli database --help` prints subcommand descriptions and a brief summary of dump selectors; `tpbcli database dump --help` lists all dump options. Conflicting dump selectors (`--id`, `--file`, etc.) are rejected by the parser.
 - **Breaking (API):** `tpbcli_database_dump(int argc, char **argv, …)` is removed from the public header; use **`tpbcli_database_dump_resolved(workspace, selector_name, primary_value, entry_value)`** (`selector_name` is a long option string such as `"--id"`, or NULL for usage).
 - **Tests:** Pack **B4** (`tests/tpbcli/test-cli-database.c`) covers missing subcommand, help, list/dump help, dump usage, conflicts, unknown args, and `ls` alias.
@@ -26,6 +36,12 @@
 
 ### Corelib
 
+- **New:** `tpb_register_kernels(int n, const char *const *names)` — register `_tpb_common` and scan only the named PLI kernels (strict: any failure aborts registration). Used by `tpbcli run`.
+- **New:** `tpb_dl_scan_kernel(const char *kernel_name)` — scan one `${TPB_DIR}/lib/libtpbk_<name>.so`.
+- **New:** `tpb_dl_get_pli_launch_path()` — resolve `${TPB_DIR}/bin/tpbcli-pli-launcher`.
+- **Change:** `tpb_dl_scan()` walks `${TPB_DIR}/lib/` for `libtpbk_*.so` (was `${TPB_DIR}/lib/` + `${TPB_DIR}/bin/` for `.so` / `.tpbx`). Per-kernel scan failures during a full scan are warnings; `tpbcli kernel list` continues with successfully registered kernels.
+- **Change:** `tpb_run_pli()` builds `… tpbcli-pli-launcher <kernel.so> <timer> …` for `.so` modules (process isolation in the launcher child); non-`.so` exec paths (e.g. test mocks) still exec directly.
+- **Breaking (RAFDB / KernelID):** `KernelID` is the SHA-1 digest of `libtpbk_<name>.so` (direct copy via `tpb_raf_gen_kernel_id(tpbx_sha1, id_out)`). Removed `src_sha1`, `so_sha1`, and `bin_sha1` from `kernel_attr_t` / `kernel_entry_t`; on-disk reserve padding adjusted (`TPB_RAF_KERNEL_ATTR_RESERVE`, `kernel_entry_t.reserve` +20 bytes). Existing kernel records keyed on the old composite ID are not compatible.
 - **New:** `tpb_driver_set_dry_run(int)` — when enabled, `tpb_run_pli` prints `Exec:` then returns without forking (dry-run mode for `tpbcli run -d`).
 - **Breaking:** TBatch `.tpbr` auto-record layout: two headers `TPBLINK::TaskID` (append 20-byte TaskRecordIDs) and `TPBLINK::KernelID` (empty data for now), replacing `KernelRecordIDs` / `TaskRecordIDs` / `ScoreRecordIDs`. Skeleton `.tpbr` is written at `tpb_record_begin_batch`; `tpb_record_end_batch` runs an internal scan of `task.tpbe` (rows with `utc_bits` not before batch start, matching `tbatch_id`, `derive_to` all-zero) and appends each via `tpb_raf_record_append_tbatch`, then patches `duration` / `ntask` / `nkernel` with `tpb_raf_record_patch_tbatch_counters`.
 - **Breaking:** RAFDB lineage fields renamed: `dup_from` → `inherit_from`, `dup_to` → `derive_to` in `tbatch_attr_t` / `tbatch_entry_t` / `kernel_attr_t` / `kernel_entry_t` / `task_attr_t` / `task_entry_t` and in CLI dump key names. `tpb_k_task_set_derive_to(task_id, derive_to_id)` replaces `tpb_k_task_set_dup_to`. On-disk layout byte positions unchanged; existing workspaces are not read as compatible.
@@ -57,15 +73,13 @@ Design and implement task capsule record to enclose mp/mt task records instead o
 
 ### Kernel
 
-- During `tpb_dl_scan()`, workspace kernel record sync sets `kernel_record_ok` per loaded PLI kernel.
-- AXPY: Migrate to the new PLI kernel format.
-- SCALE: Migrate to the new PLI kernel format.
-- TRIAD: Migrate to the new PLI kernel format.
-- SUM: Migrate to the new PLI kernel format.
-- RTRIAD: Migrate to the new PLI kernel format.
-- STAXPY: Migrate to the new PLI kernel format.
-- STRIAD: Migrate to the new PLI kernel format.
+- **Breaking:** All PLI kernels (CPU, MPI, ROCm) use one source tree → one `libtpbk_<name>.so`. Export `tpbk_pli_register_<name>`, `tpbk_<name>_entry()`, and a debug `main()` that forwards to the entry. Removed `TPB_K_BUILD_MAIN` and separate `*_main.c` / `.tpbx` executables.
+- **CPU:** `stream`, `triad`, `scale`, `axpy`, `rtriad`, `sum`, `staxpy`, `striad` — entry + launcher model; registration unchanged at scan time.
+- **MPI:** `stream_mpi` uses `tpbk_stream_mpi_entry()`; `scale_mpi`, `axpy_mpi`, `rtriad_mpi`, `sum_mpi` merged from dual-file layout into single `.c` sources (registry rows still commented until re-enabled).
+- **ROCm:** `roofline_rocm` builds one `.so` from HIP + entry source; `tpbk_roofline_rocm_entry()` replaces the old standalone `.tpbx` main.
+- During `tpb_dl_scan()` / `tpb_dl_scan_kernel()`, workspace kernel record sync sets `kernel_record_ok` per loaded PLI kernel.
 - stream_mpi: Success path calls `tpb_mpik_write_task` (corelib MPI collectives + `derive_to` patch + rank-0 capsule appends); rank 0 `tpb_k_unlink_capsule_sync_shm` after barrier. Error path still uses `tpb_k_write_task` only.
 - stream_mpi: Static PLI registration (`tpb_k_pli_register_stream_mpi`) registers all outputs on every rank (kernel `.so` scan / handle build): `INPARM::*`, per-iteration `EVENT,TIME::Copy/Scale/Add/Triad`, and sixteen aggregate `FOM,BANDWIDTH::…` / `FOM,TIME::…` summaries. Only MPI rank 0 calls `tpb_k_alloc_output` for the FOM slots; other ranks leave them unallocated so task `.tpbr` records omit FOM payload (corelib skips unallocated outputs).
 - Other CPU PLI kernels: call `tpb_k_write_task(..., NULL)` for the optional TaskID argument (backward compatible).
+- **Tests:** integration C1 direct invoke uses `tpbcli-pli-launcher` + `lib/libtpbk_stream.so`; `test_scale_axpy.sh` MPI sections updated for launcher + `.so`.
 

@@ -315,13 +315,10 @@ test_merge_hybrid(void)
                             (uint32_t)getpid(),
                             tbatch_id);
 
-    unsigned char so_sha1[20], bin_sha1[20];
-    memset(so_sha1, 0xAA, 20);
-    memset(bin_sha1, 0xBB, 20);
+    unsigned char tpbx_sha1[20];
+    memset(tpbx_sha1, 0xAA, 20);
     unsigned char kernel_id[20];
-    tpb_raf_gen_kernel_id("stream",
-                            so_sha1, bin_sha1,
-                            kernel_id);
+    tpb_raf_gen_kernel_id(tpbx_sha1, kernel_id);
 
     /* Write kernel record + entry */
     kernel_attr_t kattr;

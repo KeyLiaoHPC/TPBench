@@ -328,12 +328,9 @@ check_d_rtriad(int narr, int ntest, int64_t repeat, double *a, double *b, double
     return 0;
 }
 
-/* =========================================================================
- * PLI executable entry point (only compiled into .tpbx, not into .so)
- * ========================================================================= */
-#ifdef TPB_K_BUILD_MAIN
+/* PLI entry and debug main wrapper */
 int
-main(int argc, char **argv)
+tpbk_rtriad_entry(int argc, char **argv)
 {
     int err;
 
@@ -391,4 +388,8 @@ main(int argc, char **argv)
 
     return 0;
 }
-#endif /* TPB_K_BUILD_MAIN */
+int
+main(int argc, char **argv)
+{
+    return tpbk_rtriad_entry(argc, argv);
+}

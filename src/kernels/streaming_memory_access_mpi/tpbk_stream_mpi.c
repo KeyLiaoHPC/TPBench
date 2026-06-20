@@ -907,9 +907,9 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
 #endif
 }
 
-#ifdef TPB_K_BUILD_MAIN
+/* PLI entry and debug main wrapper */
 int
-main(int argc, char **argv)
+tpbk_stream_mpi_entry(int argc, char **argv)
 {
     int err;
     int rank;
@@ -1031,4 +1031,9 @@ main(int argc, char **argv)
     MPI_Finalize();
     return 0;
 }
-#endif /* TPB_K_BUILD_MAIN */
+
+int
+main(int argc, char **argv)
+{
+    return tpbk_stream_mpi_entry(argc, argv);
+}

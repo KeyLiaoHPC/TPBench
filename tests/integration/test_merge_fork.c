@@ -164,9 +164,7 @@ test_merge_fork(void)
     CHECK("gen_tbatch_id", err == 0);
 
     memset(dummy_sha, 0xAB, 20);
-    err = tpb_raf_gen_kernel_id("test_fork_kernel",
-                                   dummy_sha, dummy_sha,
-                                   kernel_id);
+    err = tpb_raf_gen_kernel_id(dummy_sha, kernel_id);
     CHECK("gen_kernel_id", err == 0);
 
     /* Create pipes */

@@ -240,15 +240,15 @@ static int
 test_id_kernel(void)
 {
     unsigned char id1[20], id2[20];
-    unsigned char so[20], bin[20];
+    unsigned char tpbx[20];
 
-    memset(so, 0xAA, 20);
-    memset(bin, 0xBB, 20);
+    memset(tpbx, 0xBB, 20);
 
-    tpb_raf_gen_kernel_id("triad", so, bin, id1);
-    tpb_raf_gen_kernel_id("triad", so, bin, id2);
+    tpb_raf_gen_kernel_id(tpbx, id1);
+    tpb_raf_gen_kernel_id(tpbx, id2);
 
     if (memcmp(id1, id2, 20) != 0) return 1;
+    if (memcmp(id1, tpbx, 20) != 0) return 1;
     return 0;
 }
 
@@ -282,13 +282,13 @@ static int
 test_id_uniqueness(void)
 {
     unsigned char id_a[20], id_b[20];
-    unsigned char so[20], bin[20];
+    unsigned char tpbx_a[20], tpbx_b[20];
 
-    memset(so, 0xAA, 20);
-    memset(bin, 0xBB, 20);
+    memset(tpbx_a, 0xAA, 20);
+    memset(tpbx_b, 0xBB, 20);
 
-    tpb_raf_gen_kernel_id("triad", so, bin, id_a);
-    tpb_raf_gen_kernel_id("stream", so, bin, id_b);
+    tpb_raf_gen_kernel_id(tpbx_a, id_a);
+    tpb_raf_gen_kernel_id(tpbx_b, id_b);
 
     if (memcmp(id_a, id_b, 20) == 0) return 1;
 
@@ -357,7 +357,6 @@ test_entry_kernel(void)
     memset(e.kernel_id, 0xBB, 20);
     memset(e.inherit_from, 0xDD, 20);
     snprintf(e.kernel_name, 64, "triad");
-    memset(e.so_sha1, 0xCC, 20);
     e.kctrl = TPB_KTYPE_PLI;
     e.nparm = 3;
     e.nmetric = 1;
@@ -585,8 +584,6 @@ test_record_kernel(void)
     memset(attr.kernel_id, 0x22, 20);
     memset(attr.derive_to, 0xAA, 20);
     memset(attr.inherit_from, 0xBB, 20);
-    memset(attr.so_sha1, 0x33, 20);
-    memset(attr.bin_sha1, 0x44, 20);
     snprintf(attr.kernel_name, 256, "triad");
     snprintf(attr.version, 64, "1.0");
     snprintf(attr.description, 2048, "Test kernel");
