@@ -51,7 +51,7 @@ tpbcli <subcommand> <options>
 - **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
 - **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。
 - **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期 tbatch 表）或 **`dump`**，且 **`dump`** 须且仅能指定一个选择项（**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`**、**`--entry`**）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
-- **`tpbcli kernel`**：刷新工作区内核元数据后执行 **`list`** / **`ls`**，列出已注册的 PLI 内核（与旧版顶层 `list` 不同）。
+- **`tpbcli kernel`**：管理工作区内的 kernel 编译历史 —— **`list`** / **`ls`**（扫描并注册 PLI 内核）、**`get`**（只读查询）、**`set`**（写入 metadata），以及构建系统内部使用的 **`backup-inactive`**。
 - **`tpbcli help`**：帮助文档。
 
 屏幕上的输出结果会同时输出到log目录下。
@@ -242,3 +242,67 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <launcher> <kernel.so> <t
 $ tpbcli db list
 $ tpbcli database dump --tbatch-id <40位十六进制>
 ```
+
+## 2.4 tpbcli kernel
+
+**`kernel`** 子命令管理 rafdb 中的 Kernel 域记录：已注册参数、指标、编译 metadata 以及每个 KernelID 变体的 **`active`** 状态。
+
+### 2.4.1 列出已注册内核
+
+```bash
+tpbcli kernel list
+# 别名：tpbcli kernel ls
+```
+
+扫描 `lib/libtpbk_*.so`，注册新 KernelID 并打印可用内核名。可能创建或刷新 kernel 的 `.tpbe`/`.tpbr` 记录。
+
+### 2.4.2 查询 kernel 记录（只读）
+
+```bash
+tpbcli kernel get --kernel <name>
+tpbcli kernel get -v --kernel <name>    # 所有变体，从新到旧
+```
+
+**`get` 不会扫描 `.so`，也不会触发注册。** 仅读取 `rafdb/kernel/kernel.tpbe` 及对应 `.tpbr`。不带 **`-v`** 时显示该名称下最新且 **active** 的记录；若无 active 记录，则显示最新一条并标明 inactive。
+
+### 2.4.3 设置编译 metadata
+
+```bash
+tpbcli kernel set --kernel <name> \
+  --key <section>.<subkey> '<value>' \
+  [--key <section>.<subkey> '<value>' ...]
+```
+
+如需要则注册指定内核（对当前 `libtpbk_<name>.so` 求哈希），然后 patch metadata 头部。支持的 section：**`variation`**、**`compilation`**、**`dependency`**。payload 为 `key=value` 文本（每行一对）。
+
+示例：
+
+```bash
+tpbcli kernel set --kernel stream \
+  --key compilation.compiler.id 'GNU' \
+  --key dependency.tpbench 'libtpbench.so'
+
+# 以 '-' 开头的值须紧跟 --key（不会被当作 CLI 选项）：
+tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
+```
+
+当 KernelID 已存在时，除非环境变量 **`TPB_K_OVERRIDE=1`**（或 `true`/`yes`），否则 **`set` 会跳过更新** 并打印 warning。在 **`kernel list`** 或动态加载时重新注册未变化的 `.so` 时，同样受此约束。
+
+### 2.4.4 通过 CMake 记录编译历史
+
+**`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`**（默认）时，每个已构建的 kernel 目标会在 post-build 阶段调用 **`tpbcli kernel set`** 写入 **`variation`**、**`compilation`**、**`dependency`**。构建时请设置 **`TPB_WORKSPACE`**，使记录写入预期工作区：
+
+```bash
+export TPB_WORKSPACE=$HOME/my-tpbench-ws
+cmake -B build-o2 -DTPB_KERNELS=stream -DTPB_KERNEL_CFLAGS=-O2
+TPB_WORKSPACE=$HOME/my-tpbench-ws cmake --build build-o2 --target tpbk_stream
+
+cmake -B build-o3 -DTPB_KERNELS=stream -DTPB_KERNEL_CFLAGS=-O3
+TPB_WORKSPACE=$HOME/my-tpbench-ws cmake --build build-o3 --target tpbk_stream
+
+tpbcli kernel get -v --kernel stream
+```
+
+用相同编译选项重建会产生相同 KernelID；除非设置 **`TPB_K_OVERRIDE=1`**，否则不会覆盖已有 metadata。
+
+替换 `lib/libtpbk_<name>.so` 前，构建系统会将旧文件移至 **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`**，并将旧 KernelID 标为 **`active=0`**。dynloader 仅扫描 `lib/libtpbk_*.so`（非递归），备份文件不会被加载。

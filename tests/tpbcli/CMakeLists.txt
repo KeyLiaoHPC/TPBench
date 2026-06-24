@@ -103,9 +103,34 @@ tpb_add_subcase(B4 B4.7  database_unknown_action   test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.8  database_dump_unknown_flag test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.9  database_ls_alias         test-cli-database tpbcli)
 
+# --- kernel subcommand (Pack B5) ---
+add_executable(test-cli-kernel EXCLUDE_FROM_ALL
+    test-cli-kernel.c
+)
+target_compile_definitions(test-cli-kernel PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+add_dependencies(test-cli-kernel tpbcli)
+set_target_properties(test-cli-kernel PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B5 B5.1 set_missing_args test-cli-kernel tpbcli)
+if(TARGET tpbk_stream)
+    set(_tpb_kernel_test_ws "${CMAKE_BINARY_DIR}/tests/kernel_hist_ws")
+    target_compile_definitions(test-cli-kernel PRIVATE
+        "TPB_TEST_KERNEL_WORKSPACE=\"${_tpb_kernel_test_ws}\"")
+    add_dependencies(test-cli-kernel tpbk_stream)
+    tpb_add_subcase(B5 B5.2 get_readonly test-cli-kernel tpbcli)
+    tpb_add_subcase(B5 B5.3 set_get_metadata test-cli-kernel tpbcli)
+endif()
+
 # Aggregate targets
 add_custom_target(test_tpbcli
-    DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp test-cli-database
+    DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp
+            test-cli-database test-cli-kernel
 )
 
 add_custom_target(check_tpbcli

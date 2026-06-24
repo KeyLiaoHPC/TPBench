@@ -21,6 +21,7 @@
 #include "tpb-driver.h"
 #include "tpb-public.h"
 #include "rafdb/tpb-sha1.h"
+#include "rafdb/tpb-raf-kernel-meta.h"
 
 /* Compile-time TPB_DIR from CMake, may be empty */
 #ifndef TPB_DIR
@@ -71,6 +72,7 @@ static int _sf_load_register_fn(void *handle, const char *kernel_name,
 static int _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                                const char *kernel_name,
                                                const unsigned char so_sha1[20],
+                                               const tpb_kernel_t *registered,
                                                unsigned char out_final_id[20],
                                                int *is_new_kernel);
 static int _sf_resolve_tpb_dir(void);
@@ -283,6 +285,7 @@ static int
 _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                     const char *kernel_name,
                                     const unsigned char so_sha1[20],
+                                    const tpb_kernel_t *registered,
                                     unsigned char out_final_id[20],
                                     int *is_new_kernel)
 {
@@ -291,9 +294,10 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     kernel_entry_t *entries = NULL;
     int nentries = 0;
     unsigned char computed_id[20];
+    char kid_hex[41];
 
     if (workspace == NULL || kernel_name == NULL || so_sha1 == NULL ||
-        out_final_id == NULL || is_new_kernel == NULL) {
+        registered == NULL || out_final_id == NULL || is_new_kernel == NULL) {
         return TPBE_NULLPTR_ARG;
     }
     *is_new_kernel = 0;
@@ -317,6 +321,31 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     }
 
     if (found) {
+        if (!tpb_raf_kernel_override_enabled()) {
+            tpb_raf_id_to_hex(computed_id, kid_hex);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "KernelID %s already recorded; skip update "
+                       "(set %s=1 to override).\n",
+                       kid_hex, TPB_K_OVERRIDE_ENV);
+        } else {
+            kernel_attr_t attr;
+            void *data = NULL;
+            uint64_t datasize = 0;
+
+            err = tpb_raf_kernel_build_registered_attr(registered, computed_id,
+                                                       &attr, &data, &datasize);
+            if (err == TPBE_SUCCESS) {
+                err = tpb_raf_record_write_kernel(workspace, &attr, data,
+                                                  datasize);
+            }
+            tpb_raf_kernel_free_built_attr(&attr, data);
+            if (err == TPBE_SUCCESS) {
+                (void)tpb_raf_kernel_deactivate_same_name(workspace, kernel_name,
+                                                          computed_id);
+                (void)tpb_raf_entry_patch_kernel_active(workspace, computed_id, 1);
+                (void)tpb_raf_record_patch_kernel_active(workspace, computed_id, 1);
+            }
+        }
         err = _sf_follow_kernel_dup_chain(workspace, computed_id, out_final_id);
         free(entries);
         return err;
@@ -325,19 +354,18 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     {
         kernel_attr_t attr;
         kernel_entry_t ent;
+        void *data = NULL;
+        uint64_t datasize = 0;
 
-        memset(&attr, 0, sizeof(attr));
-        memcpy(attr.kernel_id, computed_id, 20);
-        snprintf(attr.kernel_name, sizeof(attr.kernel_name), "%s", kernel_name);
-        snprintf(attr.version, sizeof(attr.version), "%s", "unknown");
-        snprintf(attr.description, sizeof(attr.description),
-                 "%s", "Auto-generated kernel record");
-        attr.nparm = 0;
-        attr.nmetric = 0;
-        attr.kctrl = 0;
-        attr.nheader = 0;
+        err = tpb_raf_kernel_build_registered_attr(registered, computed_id,
+                                                   &attr, &data, &datasize);
+        if (err != TPBE_SUCCESS) {
+            free(entries);
+            return err;
+        }
 
-        err = tpb_raf_record_write_kernel(workspace, &attr, NULL, 0);
+        err = tpb_raf_record_write_kernel(workspace, &attr, data, datasize);
+        tpb_raf_kernel_free_built_attr(&attr, data);
         if (err != TPBE_SUCCESS) {
             free(entries);
             return err;
@@ -346,15 +374,19 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         memset(&ent, 0, sizeof(ent));
         memcpy(ent.kernel_id, computed_id, 20);
         snprintf(ent.kernel_name, sizeof(ent.kernel_name), "%s", kernel_name);
-        ent.kctrl = 0;
-        ent.nparm = 0;
-        ent.nmetric = 0;
+        ent.kctrl = (uint32_t)registered->info.kctrl;
+        ent.nparm = (uint32_t)registered->info.nparms;
+        ent.nmetric = (uint32_t)registered->info.nouts;
+        ent.active = 1;
 
         err = tpb_raf_entry_append_kernel(workspace, &ent);
         if (err != TPBE_SUCCESS) {
             free(entries);
             return err;
         }
+
+        (void)tpb_raf_kernel_deactivate_same_name(workspace, kernel_name,
+                                                  computed_id);
         *is_new_kernel = 1;
     }
 
@@ -433,6 +465,7 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
     int record_ok = 0;
     int err;
     dyn_kernel_entry_t *k;
+    tpb_kernel_t *registered = NULL;
 
     err = _sf_hash_file_sha1(so_path, so_sha1);
     if (err == TPBE_SUCCESS) {
@@ -441,9 +474,19 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
     if (err == TPBE_SUCCESS) {
         ws_err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
         if (ws_err == TPBE_SUCCESS) {
-            ws_err = _sf_resolve_kernel_id_for_workspace(workspace, kernel_name,
-                                                         so_sha1, kernel_id,
-                                                         &is_new_kernel);
+            (void)tpb_query_kernel(-1, kernel_name, &registered);
+            if (registered == NULL) {
+                ws_err = TPBE_KERNEL_NE_FAIL;
+            } else {
+                ws_err = _sf_resolve_kernel_id_for_workspace(workspace,
+                                                             kernel_name,
+                                                             so_sha1,
+                                                             registered,
+                                                             kernel_id,
+                                                             &is_new_kernel);
+                tpb_free_kernel(registered);
+                free(registered);
+            }
         }
     } else {
         memset(kernel_id, 0, 20);

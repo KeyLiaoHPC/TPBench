@@ -877,7 +877,7 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (_sf_write_u32(fp, attr->nmetric) != 0) goto fail;
     if (_sf_write_u32(fp, attr->kctrl) != 0) goto fail;
     if (_sf_write_u32(fp, attr->nheader) != 0) goto fail;
-    if (_sf_write_u32(fp, attr->reserve) != 0) goto fail;
+    if (_sf_write_u32(fp, attr->active) != 0) goto fail;
 
     memset(reserve, 0, TPB_RAF_KERNEL_ATTR_RESERVE);
     if (fwrite(reserve, 1, TPB_RAF_KERNEL_ATTR_RESERVE, fp)
@@ -953,7 +953,7 @@ tpb_raf_record_read_kernel(const char *workspace,
     if (_sf_read_u32(fp, &attr->nmetric) != 0) goto fail;
     if (_sf_read_u32(fp, &attr->kctrl) != 0) goto fail;
     if (_sf_read_u32(fp, &attr->nheader) != 0) goto fail;
-    if (_sf_read_u32(fp, &attr->reserve) != 0) goto fail;
+    if (_sf_read_u32(fp, &attr->active) != 0) goto fail;
 
     if (fread(reserve, 1, TPB_RAF_KERNEL_ATTR_RESERVE, fp)
         != TPB_RAF_KERNEL_ATTR_RESERVE) {

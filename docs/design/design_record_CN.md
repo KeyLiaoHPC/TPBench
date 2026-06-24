@@ -389,8 +389,8 @@ typedef struct kernel_attr {
     uint32_t nparm;                     /**< 注册的参数数量 */
     uint32_t nmetric;                   /**< 注册的输出指标数量 */
     uint32_t kctrl;                     /**< kernel 控制位（PLI=2） */
-    uint32_t nheader;                   /**< 头部数量（= nparm + nmetric） */
-    uint32_t reserve;                   /**< 填充至 8 字节对齐 */
+    uint32_t nheader;                   /**< 头部数量（= nparm + nmetric + 3 个 metadata） */
+    uint32_t active;                    /**< 1 表示可加载变体，0 表示 inactive/历史版本 */
 } kernel_attr_t;
 ```
 
@@ -401,8 +401,14 @@ typedef struct kernel_attr {
     - ndim >= 1，长度由参数定义确定。
 - header[nparm..nparm+nmetric-1]: 指标定义
     - 每个 `tpb_meta_header_t` 描述一个输出指标：名称、dtype、ndim、dims。
-    - 记录数据：每个指标的单位编码。
+    - 记录数据：每个指标的单位编码（静态定义时 `data_size = 0`）。
     - ndim >= 1，长度由指标定义确定。
+- header[nparm+nmetric .. nparm+nmetric+2]: 编译历史 metadata（字符串 payload）
+    - **`variation`**：kernel 名、KernelID、`active`、可选 `build_time`、`.so` 路径
+    - **`compilation`**：编译器 id/版本/路径、C 标志、kernel 专用标志、CMake build type
+    - **`dependency`**：kernel 之上链接的库（如 `libtpbench.so`）
+    - payload 格式：`key=value\n` 行（含 `format=tpbench.kernel_meta.v1`、`section=<name>`）
+    - 头部类型：`TPB_STRING_T`，`ndim = 1`，`dimsizes[0] = payload_len + 1`
 
 KernelID:
 ```
@@ -415,6 +421,8 @@ KernelID:
 - `kctrl` 存放来自 `tpb-public.h` 的内核集成类型。仅支持 `TPB_KTYPE_PLI`。
 - 对于规范记录，`derive_to` 全为零；否则它指向规范的 `kernel_id`。
 - `inherit_from` 全为零，除非此记录由另一条 kernel 记录派生（溯源）。
+- `active` 同时存在于 `.tpbe` 条目和 `.tpbr` 属性中。每个 kernel 名称通常仅有一个 KernelID 为 active；当新 `.so` 替换 `lib/libtpbk_<name>.so` 时，旧变体标为 inactive。
+- 当 KernelID 已存在时，除非 `TPB_K_OVERRIDE` 为真值，否则跳过注册与 metadata 更新。
 
 #### 2.3.2. 条目结构 (.tpbe)
 
@@ -439,7 +447,8 @@ KernelID:
 | kctrl | 4 |
 | nparm | 4 |
 | nmetric | 4 |
-| reserve | 148（`TPB_RAF_RESERVE_SIZE + 20`） |
+| active | 4 |
+| reserve | 144（`TPB_RAF_RESERVE_SIZE + 16`） |
 | **总计** | **264** |
 
 Magic 签名：
@@ -482,11 +491,11 @@ Magic 签名：
 +-----------------2464-+
 | nheader              |  <- 4B
 +-----------------2468-+
-| reserve              |  <- 4B
+| active               |  <- 4B
 +-----------------2472-+
 | 188-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`，不透明保留
 +-----------------2660-+
-| fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + 用户头部
+| fixed_headers[i]     |  <- (nparm + nmetric + 3) x tpb_meta_header_t + 用户头部
 +-------------metasize-+
 | record_magic         |  <- 8B
 +-----------metasize+8-+

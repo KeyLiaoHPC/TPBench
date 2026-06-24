@@ -74,4 +74,9 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
             ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
     list(APPEND TPB_ROCM_KERNEL_LIBS "${_lib_target}")
+
+    if(TPB_RECORD_KERNEL_COMPILE_HISTORY)
+        include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelPostBuild.cmake)
+        tpb_kernel_add_compile_history(${_lib_target} ${_rk_name})
+    endif()
 endforeach()

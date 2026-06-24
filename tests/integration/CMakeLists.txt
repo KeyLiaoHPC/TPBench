@@ -16,6 +16,16 @@ if(TARGET tpbk_stream)
     tpb_add_subcase(C1 C1.1 tri_tests_record test-tri-record integration)
 endif()
 
+# --- Integration: O2/O3 kernel compile history (Pack C3) ---
+if(TARGET tpbk_stream)
+    add_test(
+        NAME integration.C3.1_kernel_o2_o3
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_kernel_o2_o3.sh"
+    )
+    set_tests_properties(integration.C3.1_kernel_o2_o3 PROPERTIES
+        LABELS "integration")
+endif()
+
 # --- Integration test: merge_pthread (Pack C2) ---
 add_executable(test-merge-pthread EXCLUDE_FROM_ALL
     test_merge_pthread.c

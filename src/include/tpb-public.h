@@ -631,7 +631,7 @@ typedef struct kernel_attr {
     uint32_t nmetric;             /**< Registered output metrics */
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nheader;             /**< Number of headers */
-    uint32_t reserve;             /**< Padding for alignment */
+    uint32_t active;              /**< 1 if this KernelID is the loadable variant */
     tpb_meta_header_t *headers;   /**< Header array */
 } kernel_attr_t;
 
@@ -643,7 +643,8 @@ typedef struct kernel_entry {
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nparm;               /**< Number of parameters */
     uint32_t nmetric;             /**< Number of metrics */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 20]; /**< Reserved */
+    uint32_t active;              /**< 1 if loadable, 0 if inactive/historical */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 16]; /**< Reserved */
 } kernel_entry_t;
 
 /** @brief Task full attributes (.tpbr meta section) */

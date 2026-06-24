@@ -54,7 +54,7 @@ Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchm
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
 - **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
 - **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
-- **`tpbcli kernel`**: Refresh kernel metadata in the workspace, then **`list`** / **`ls`** registered PLI kernels (not the same as the old top-level `list` command).
+- **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
 
 Output results on screen are also written to the log directory.
@@ -346,3 +346,67 @@ tpbcli db dump --entry task
 ```
 
 **Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
+
+## 2.4 tpbcli kernel
+
+The **`kernel`** subcommand manages Kernel Domain records in rafdb: registered parameters, metrics, compile metadata, and **`active`** status for each KernelID variant.
+
+### 2.4.1 List registered kernels
+
+```bash
+tpbcli kernel list
+# alias: tpbcli kernel ls
+```
+
+Scans `lib/libtpbk_*.so`, registers any new KernelID, and prints available kernel names. This may create or refresh kernel `.tpbe`/`.tpbr` records.
+
+### 2.4.2 Query kernel records (read-only)
+
+```bash
+tpbcli kernel get --kernel <name>
+tpbcli kernel get -v --kernel <name>    # all variants, newest first
+```
+
+**`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it shows the latest **active** record for the given name; if none are active, it shows the newest record and marks it inactive.
+
+### 2.4.3 Set compile metadata
+
+```bash
+tpbcli kernel set --kernel <name> \
+  --key <section>.<subkey> '<value>' \
+  [--key <section>.<subkey> '<value>' ...]
+```
+
+Registers the named kernel (hashes the current `libtpbk_<name>.so`) if needed, then patches metadata headers. Supported sections: **`variation`**, **`compilation`**, **`dependency`**. Payload is `key=value` text (one pair per line).
+
+Examples:
+
+```bash
+tpbcli kernel set --kernel stream \
+  --key compilation.compiler.id 'GNU' \
+  --key dependency.tpbench 'libtpbench.so'
+
+# Values starting with '-' must follow --key (not parsed as CLI flags):
+tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
+```
+
+When the KernelID already exists, **`set` skips the update** and prints a warning unless **`TPB_K_OVERRIDE=1`** (or `true`/`yes`) is set in the environment. The same guard applies when re-registering an unchanged `.so` during **`kernel list`** or dynamic load.
+
+### 2.4.4 Compile history from CMake
+
+When **`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`** (default), each built kernel target runs a post-build step that calls **`tpbcli kernel set`** with **`variation`**, **`compilation`**, and **`dependency`** keys. Set **`TPB_WORKSPACE`** when building so records land in the intended workspace:
+
+```bash
+export TPB_WORKSPACE=$HOME/my-tpbench-ws
+cmake -B build-o2 -DTPB_KERNELS=stream -DTPB_KERNEL_CFLAGS=-O2
+TPB_WORKSPACE=$HOME/my-tpbench-ws cmake --build build-o2 --target tpbk_stream
+
+cmake -B build-o3 -DTPB_KERNELS=stream -DTPB_KERNEL_CFLAGS=-O3
+TPB_WORKSPACE=$HOME/my-tpbench-ws cmake --build build-o3 --target tpbk_stream
+
+tpbcli kernel get -v --kernel stream
+```
+
+Rebuilding with the same flags produces the same KernelID; metadata is not overwritten unless **`TPB_K_OVERRIDE=1`**.
+
+Before replacing `lib/libtpbk_<name>.so`, the build moves the previous file to **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`** and marks the old KernelID **`active=0`**. The dynloader scans only `lib/libtpbk_*.so` (non-recursive); backup files are not loaded.

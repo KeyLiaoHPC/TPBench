@@ -131,9 +131,30 @@ tpb_add_subcase(A6 A6.6  append_once            test-capsule corelib)
 tpb_add_subcase(A6 A6.7  append_multi           test-capsule corelib)
 tpb_add_subcase(A6 A6.8  subprocess_append      test-capsule corelib)
 
+# --- kernel record tests (Pack A7) ---
+add_executable(test-kernel-record EXCLUDE_FROM_ALL
+    test-kernel-record.c
+)
+target_include_directories(test-kernel-record PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-kernel-record PRIVATE tpbench m)
+set_target_properties(test-kernel-record PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A7 A7.1 build_attr_counts test-kernel-record corelib)
+if(TARGET tpbk_stream)
+    target_compile_definitions(test-kernel-record PRIVATE
+        TPB_TEST_STREAM_SO=1)
+    add_dependencies(test-kernel-record tpbk_stream)
+    tpb_add_subcase(A7 A7.2 stream_register_record test-kernel-record corelib)
+endif()
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
+            test-kernel-record
 )
 
 add_custom_target(check_corelib

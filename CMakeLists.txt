@@ -27,6 +27,8 @@ option(TPB_ENABLE_OPENMP "Add OpenMP compile/link to built kernel targets" OFF)
 
 # Debug options
 option(TPB_SHOW_DEBUG "Enable kernel debug logging (TPB_K_DEBUG)" OFF)
+option(TPB_RECORD_KERNEL_COMPILE_HISTORY
+       "Run post-build metadata registration for built kernel .so targets" ON)
 
 # Apply SIMD compile definitions
 if(TPB_USE_AVX512)
@@ -166,27 +168,16 @@ add_subdirectory(src/corelib)
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRpath.cmake)
 
-# Kernels (libtpbk_*.so) with name/tag-based selection
-add_subdirectory(src/kernels)
-
-if(TPB_NEED_HIP)
-    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchGpuKernelsRocm.cmake)
-endif()
-
-include(${CMAKE_SOURCE_DIR}/cmake/TPBenchCmakeHelp.cmake)
-
-add_custom_target(tpb_cmake_help
-    COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/tpb_cmake_help.txt"
-    COMMENT "TPBench CMake options and kernel catalog"
-    VERBATIM)
-
-# Main CLI executable and subcommands
+# CLI must exist before kernel post-build hooks reference tpbcli.
 add_executable(tpbcli
     src/tpbcli.c
     src/tpbcli-argp.c
     src/tpbcli-run.c
     src/tpbcli-run-dim.c
     src/tpbcli-kernel-list.c
+    src/tpbcli-kernel-set.c
+    src/tpbcli-kernel-get.c
+    src/tpbcli-kernel-backup.c
     src/tpbcli-kernel.c
     src/tpbcli-benchmark.c
     src/tpbcli-help.c
@@ -207,6 +198,21 @@ target_link_libraries(tpbcli-pli-launcher PRIVATE dl)
 target_compile_options(tpbcli-pli-launcher PRIVATE -O2)
 set_target_properties(tpbcli-pli-launcher PROPERTIES OUTPUT_NAME "tpbcli-pli-launcher")
 tpb_set_install_rpath_tpbench_exe(tpbcli-pli-launcher)
+
+# Kernels (libtpbk_*.so) with name/tag-based selection
+add_subdirectory(src/kernels)
+
+if(TPB_NEED_HIP)
+    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchGpuKernelsRocm.cmake)
+endif()
+
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchCmakeHelp.cmake)
+
+add_custom_target(tpb_cmake_help
+    COMMAND ${CMAKE_COMMAND} -E cat "${CMAKE_BINARY_DIR}/tpb_cmake_help.txt"
+    COMMENT "TPBench CMake options and kernel catalog"
+    VERBATIM)
+
 install(TARGETS tpbcli-pli-launcher
         COMPONENT tpbench_kernels
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

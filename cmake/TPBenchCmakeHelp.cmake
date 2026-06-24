@@ -18,6 +18,7 @@ set(_tpb_cmake_help_doc_lines
     "TPB_ROCM_PATH|ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)"
     "TPB_ENABLE_OPENMP|Add OpenMP to built kernel targets (does not select which kernels build)"
     "TPB_SHOW_DEBUG|Enable kernel debug logging (TPB_K_DEBUG)"
+    "TPB_RECORD_KERNEL_COMPILE_HISTORY|Post-build kernel compile metadata via tpbcli kernel set"
     "TPB_USE_AVX512|Enable AVX-512 SIMD instructions"
     "TPB_USE_AVX2|Enable AVX2 SIMD instructions"
     "TPB_USE_KP_SVE|Enable ARM SVE SIMD instructions"

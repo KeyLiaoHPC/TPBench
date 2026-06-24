@@ -398,8 +398,8 @@ typedef struct kernel_attr {
     uint32_t nparm;                     /**< Number of registered parameters */
     uint32_t nmetric;                   /**< Number of registered output metrics */
     uint32_t kctrl;                     /**< Kernel control bits (PLI=2) */
-    uint32_t nheader;                   /**< # of headers (= nparm + nmetric) */
-    uint32_t reserve;                   /**< Padding for 8-byte alignment */
+    uint32_t nheader;                   /**< # of headers (= nparm + nmetric + 3 metadata) */
+    uint32_t active;                    /**< 1 if loadable variant, 0 if inactive/historical */
 } kernel_attr_t;
 ```
 
@@ -410,8 +410,14 @@ Fixed header members:
     - ndim >= 1, length determined by parameter definition.
 - header[nparm..nparm+nmetric-1]: Metric definitions
     - Each `tpb_meta_header_t` describes one output metric: name, dtype, ndim, dims.
-    - Record data: unit encoding for each metric.
+    - Record data: unit encoding for each metric (static definitions use `data_size = 0`).
     - ndim >= 1, length determined by metric definition.
+- header[nparm+nmetric .. nparm+nmetric+2]: Compile-history metadata (string payloads)
+    - **`variation`**: kernel name, KernelID, `active`, optional `build_time`, `.so` path
+    - **`compilation`**: compiler id/version/path, C flags, kernel-specific flags, CMake build type
+    - **`dependency`**: libraries linked above the kernel (e.g. `libtpbench.so`)
+    - Payload format: `key=value\n` lines (`format=tpbench.kernel_meta.v1`, `section=<name>`)
+    - Header type: `TPB_STRING_T`, `ndim = 1`, `dimsizes[0] = payload_len + 1`
 
 KernelID:
 ```
@@ -424,6 +430,8 @@ Notes:
 - `kctrl` stores the kernel integration type from `tpb-public.h`. Always set to `TPB_KTYPE_PLI`.
 - `derive_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
 - `inherit_from` is all-zero unless this record was derived from another kernel record (provenance).
+- `active` is stored in both `.tpbe` entries and `.tpbr` attributes. Only one KernelID per kernel name is typically active; older variants are marked inactive when a new `.so` replaces `lib/libtpbk_<name>.so`.
+- When a KernelID already exists, registration and metadata updates are skipped unless `TPB_K_OVERRIDE` is set to a truthy value.
 
 #### 2.3.2. Entry Structure (.tpbe)
 
@@ -448,7 +456,8 @@ Entry member (slim subset of `kernel_attr_t`):
 | kctrl | 4 |
 | nparm | 4 |
 | nmetric | 4 |
-| reserve | 148 (`TPB_RAF_RESERVE_SIZE + 20`) |
+| active | 4 |
+| reserve | 144 (`TPB_RAF_RESERVE_SIZE + 16`) |
 | **Total** | **264** |
 
 Magic signature:
@@ -491,11 +500,11 @@ File structure:
 +-----------------2464-+
 | nheader              |  <- 4B
 +-----------------2468-+
-| reserve              |  <- 4B
+| active               |  <- 4B
 +-----------------2472-+
 | 188-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`, opaque
 +-----------------2660-+
-| fixed_headers[i]     |  <- (nparm + nmetric) x tpb_meta_header_t + user headers
+| fixed_headers[i]     |  <- (nparm + nmetric + 3) x tpb_meta_header_t + user headers
 +-------------metasize-+
 | record_magic         |  <- 8B
 +-----------metasize+8-+
@@ -508,9 +517,10 @@ File structure:
 Header member:
 - header[0..nparm-1]: Parameter definitions
 - header[nparm..nparm+nmetric-1]: Metric definitions
+- header[nparm+nmetric .. nparm+nmetric+2]: `variation`, `compilation`, `dependency` metadata
 
 Rules:
-- Header ordering is deterministic: all parameters first, then all metrics, then user-defined.
+- Header ordering is deterministic: all parameters first, then all metrics, then the three metadata headers.
 
 Magic signature:
 

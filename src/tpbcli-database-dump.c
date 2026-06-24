@@ -943,7 +943,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("nmetric", attr.nmetric);
     dump_print_kv_u32("kctrl", attr.kctrl);
     dump_print_kv_u32("nheader", attr.nheader);
-    dump_print_kv_u32("reserve", attr.reserve);
+    dump_print_kv_u32("active", attr.active);
 
     dump_headers(attr.headers, attr.nheader);
     dump_record_data(attr.headers, attr.nheader, data, datasize);

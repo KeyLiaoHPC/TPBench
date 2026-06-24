@@ -15,6 +15,7 @@ set(TPB_CORELIB_SOURCES
     rafdb/tpb-raf-record.c
     rafdb/tpb-raf-id.c
     rafdb/tpb-raf-merge.c
+    rafdb/tpb-raf-kernel-meta.c
     rafdb/tpb-sha1.c
 )
 

@@ -7,6 +7,10 @@
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelSelect.cmake)
 
+if(TPB_RECORD_KERNEL_COMPILE_HISTORY)
+    include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelPostBuild.cmake)
+endif()
+
 set(TPB_KERNEL_CFLAGS "" CACHE STRING "C compile options for CPU kernels (empty = -O2 only)")
 set(TPB_KERNEL_CXXFLAGS "" CACHE STRING "C++/HIP compile options for ROCm kernels (empty = -O2 only)")
 set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for Fortran kernels (reserved; empty = -O2 only)")
@@ -90,6 +94,10 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
 
     list(APPEND TPB_BUILT_KERNEL_LIBS  "${_so_target}")
     list(APPEND TPB_BUILT_KERNEL_NAMES "${_kname}")
+
+    if(TPB_RECORD_KERNEL_COMPILE_HISTORY)
+        tpb_kernel_add_compile_history(${_so_target} ${_kname})
+    endif()
 endforeach()
 
 set(TPB_BUILT_KERNEL_LIBS  "${TPB_BUILT_KERNEL_LIBS}"  PARENT_SCOPE)

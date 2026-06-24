@@ -11,6 +11,9 @@
 
 #include "tpbcli-kernel.h"
 #include "tpbcli-kernel-list.h"
+#include "tpbcli-kernel-set.h"
+#include "tpbcli-kernel-get.h"
+#include "tpbcli-kernel-backup.h"
 
 int
 tpbcli_kernel(int argc, char **argv)
@@ -18,8 +21,20 @@ tpbcli_kernel(int argc, char **argv)
     int err;
 
     if (argc < 3) {
-        fprintf(stderr, "Usage: tpbcli kernel <list|ls>\n");
+        fprintf(stderr, "Usage: tpbcli kernel <list|ls|set|get>\n");
         return TPBE_CLI_FAIL;
+    }
+
+    if (strcmp(argv[2], "get") == 0) {
+        return tpbcli_kernel_get(argc, argv);
+    }
+
+    if (strcmp(argv[2], "set") == 0) {
+        return tpbcli_kernel_set(argc, argv);
+    }
+
+    if (strcmp(argv[2], "backup-inactive") == 0) {
+        return tpbcli_kernel_backup_inactive(argc, argv);
     }
 
     err = tpb_register_kernel();
@@ -33,6 +48,6 @@ tpbcli_kernel(int argc, char **argv)
         return tpbcli_kernel_list(argc, argv);
     }
 
-    fprintf(stderr, "Usage: tpbcli kernel <list|ls>\n");
+    fprintf(stderr, "Usage: tpbcli kernel <list|ls|set|get>\n");
     return TPBE_CLI_FAIL;
 }
