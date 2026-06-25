@@ -1,16 +1,21 @@
 /*
  * test-cli-kernel.c
- * Pack B5: `tpbcli kernel set/get` behavior.
+ * Pack B5: `tpbcli kernel set/get/init/build` behavior.
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
 
 #ifndef TPB_TEST_TPBCLI_STR
 #define TPB_TEST_TPBCLI_STR "./bin/tpbcli"
+#endif
+
+#ifndef TPB_TEST_TPB_HOME
+#define TPB_TEST_TPB_HOME "."
 #endif
 
 #define TPB_RAF_KERNEL_DIR_LOCAL     "rafdb/kernel"
@@ -85,8 +90,9 @@ ensure_stream_registered(const char *workspace)
 
     snprintf(cmd, sizeof(cmd),
              "rm -rf \"%s\" && mkdir -p \"%s\" && "
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" kernel list",
-             workspace, workspace, workspace);
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel list",
+             workspace, workspace, TPB_TEST_TPB_HOME, workspace);
     return run_cmd_capture(cmd, NULL, 0);
 }
 
@@ -125,8 +131,9 @@ test_b5_2_get_no_register_side_effect(void)
     before = count_kernel_tpbe_entries(TPB_TEST_KERNEL_WORKSPACE);
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
-             "\" kernel get --kernel stream", TPB_TEST_KERNEL_WORKSPACE);
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel get --kernel stream",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     after = count_kernel_tpbe_entries(TPB_TEST_KERNEL_WORKSPACE);
 
@@ -166,10 +173,10 @@ test_b5_3_set_and_get_metadata(void)
     }
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
              "\" kernel set --kernel stream "
              "--key compilation.kernel_cflags -O2",
-             TPB_TEST_KERNEL_WORKSPACE);
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B5.3 set failed");
@@ -177,9 +184,9 @@ test_b5_3_set_and_get_metadata(void)
     }
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
              "\" kernel get --kernel stream",
-             TPB_TEST_KERNEL_WORKSPACE);
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0 || strstr(buf, "kernel_cflags=-O2") == NULL) {
         FAIL("B5.3 get missing metadata");
@@ -189,6 +196,127 @@ test_b5_3_set_and_get_metadata(void)
     PASS();
     return 0;
 #endif
+}
+
+static int
+test_b5_4_init_missing_args(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" kernel init", buf,
+                               sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.4 expected nonzero");
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b5_5_init_and_build_template(void)
+{
+#ifndef TPB_TEST_KERNEL_INIT_DIR
+    PASS();
+    return 0;
+#else
+    char cmd[8192];
+    char buf[8192];
+    char so_path[1024];
+    int code;
+
+    snprintf(cmd, sizeof(cmd), "rm -rf \"%s\" && mkdir -p \"%s\"",
+             TPB_TEST_KERNEL_INIT_DIR, TPB_TEST_KERNEL_WORKSPACE);
+    if (run_cmd_capture(cmd, NULL, 0) != 0) {
+        FAIL("B5.5 setup failed");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd), "rm -rf \"%s\"", TPB_TEST_KERNEL_INIT_DIR);
+    if (run_cmd_capture(cmd, NULL, 0) != 0) {
+        FAIL("B5.5 cleanup failed");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel init --dir \"%s\" --kernel tmpltest",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_INIT_DIR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B5.5 init failed");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd), "%s/CMakeLists.txt", TPB_TEST_KERNEL_INIT_DIR);
+    if (access(cmd, R_OK) != 0) {
+        FAIL("B5.5 missing CMakeLists.txt");
+        return 1;
+    }
+    snprintf(cmd, sizeof(cmd), "%s/tpbk_tmpltest.c", TPB_TEST_KERNEL_INIT_DIR);
+    if (access(cmd, R_OK) != 0) {
+        FAIL("B5.5 missing tpbk_tmpltest.c");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel build --dir \"%s\" --kernel tmpltest --cflags \"-O2\"",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE,
+             TPB_TEST_KERNEL_INIT_DIR);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B5.5 build failed");
+        fprintf(stderr, "    output: %.800s\n", buf);
+        return 1;
+    }
+
+    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_tmpltest.so",
+             TPB_TEST_TPB_HOME);
+    if (access(so_path, R_OK) != 0) {
+        FAIL("B5.5 installed .so missing");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" run --kernel tmpltest --kargs n=10",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0 || strstr(buf, "Output") == NULL) {
+        FAIL("B5.5 run failed");
+        fprintf(stderr, "    output: %.800s\n", buf);
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel get --kernel tmpltest",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0 || strstr(buf, "kernel_cflags=-O2") == NULL) {
+        FAIL("B5.5 get missing compile metadata");
+        return 1;
+    }
+
+    PASS();
+    return 0;
+#endif
+}
+
+static int
+test_b5_6_build_missing_args(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" kernel build", buf,
+                               sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.6 expected nonzero");
+        return 1;
+    }
+    PASS();
+    return 0;
 }
 
 int
@@ -208,9 +336,21 @@ main(int argc, char **argv)
     if (strcmp(id, "B5.3") == 0) {
         return test_b5_3_set_and_get_metadata();
     }
+    if (strcmp(id, "B5.4") == 0) {
+        return test_b5_4_init_missing_args();
+    }
+    if (strcmp(id, "B5.5") == 0) {
+        return test_b5_5_init_and_build_template();
+    }
+    if (strcmp(id, "B5.6") == 0) {
+        return test_b5_6_build_missing_args();
+    }
 
     test_b5_1_set_missing_args();
     test_b5_2_get_no_register_side_effect();
     test_b5_3_set_and_get_metadata();
+    test_b5_4_init_missing_args();
+    test_b5_5_init_and_build_template();
+    test_b5_6_build_missing_args();
     return (g_fail > 0) ? 1 : 0;
 }

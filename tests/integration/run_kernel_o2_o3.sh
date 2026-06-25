@@ -3,8 +3,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-WS="${ROOT}/build/tests/kernel_o2o3_ws"
-TPBCLI="${ROOT}/build/bin/tpbcli"
+BUILD="${ROOT}/build"
+WS="${BUILD}/tests/kernel_o2o3_ws"
+TPBCLI="${BUILD}/bin/tpbcli"
 
 build_variant() {
     local flags="$1"
@@ -14,7 +15,7 @@ build_variant() {
         -DTPB_KERNEL_CFLAGS="${flags}" \
         -DTPB_RECORD_KERNEL_COMPILE_HISTORY=ON \
         >/dev/null
-    TPB_WORKSPACE="${WS}" cmake --build "${bdir}" --target tpbk_stream --clean-first >/dev/null
+    TPB_HOME="${bdir}" TPB_WORKSPACE="${WS}" cmake --build "${bdir}" --target tpbk_stream --clean-first >/dev/null
 }
 
 rm -rf "${WS}"
@@ -23,6 +24,7 @@ mkdir -p "${WS}"
 build_variant "-O2"
 build_variant "-O3"
 
+export TPB_HOME="${BUILD}"
 export TPB_WORKSPACE="${WS}"
 out="$(TPB_WORKSPACE="${WS}" "${TPBCLI}" kernel get -v --kernel stream 2>&1)"
 

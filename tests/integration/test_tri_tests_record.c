@@ -98,24 +98,26 @@ test_tri_record(void)
 
     /* --- Run 1: tpbcli r --kernel stream --kargs stream_array_size=32 --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbcli r --kernel stream --kargs stream_array_size=32",
-             g_test_dir, g_bin_dir);
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli r --kernel stream "
+             "--kargs stream_array_size=32",
+             g_bin_dir, g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run1 exit", err == 0);
 
-    /* --- Run 2: tpbcli run --kernel stream --kargs ntest=100 --kargs-dim stream_array_size=[242144,524288,1048576] --- */
+    /* --- Run 2: tpbcli run --kernel stream --kargs ntest=100 --kargs-dim ... --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbcli run --kernel stream --kargs ntest=100 "
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli run --kernel stream "
+             "--kargs ntest=100 "
              "--kargs-dim stream_array_size=[242144,524288,1048576]",
-             g_test_dir, g_bin_dir);
+             g_bin_dir, g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run2 exit", err == 0);
 
     /* --- Run 3: Direct kernel invocation (no TPB_TBATCH_ID) --- */
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=%s %s/tpbcli-pli-launcher %s/../lib/libtpbk_stream.so "
-             "clock_gettime 10 32 0",
-             g_test_dir, g_bin_dir, g_bin_dir);
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli-pli-launcher "
+             "%s/../lib/libtpbk_stream.so clock_gettime 10 32 0",
+             g_bin_dir, g_test_dir, g_bin_dir, g_bin_dir);
     err = run_cmd(cmd);
     CHECK("run3 exit", err == 0);
 

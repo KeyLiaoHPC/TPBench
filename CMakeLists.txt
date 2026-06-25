@@ -4,10 +4,12 @@ project(TPBench C CXX) # Project name and languages (CXX needed for ROCm)
 # Optional workspace root: seeds default CMAKE_INSTALL_PREFIX when prefix is CMake default.
 # Precedence at install time: cmake --install --prefix > configured CMAKE_INSTALL_PREFIX.
 set(TPB_WORKSPACE "$ENV{TPB_WORKSPACE}" CACHE PATH
-    "Workspace root; default install prefix when CMAKE_INSTALL_PREFIX is CMake default (else /opt/tpbench)")
+    "Workspace root; default install prefix when CMAKE_INSTALL_PREFIX is CMake default (else $HOME/.tpbench)")
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(TPB_WORKSPACE AND NOT TPB_WORKSPACE STREQUAL "")
         set(CMAKE_INSTALL_PREFIX "${TPB_WORKSPACE}" CACHE PATH "Install path prefix" FORCE)
+    elseif(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+        set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.tpbench" CACHE PATH "Install path prefix" FORCE)
     else()
         set(CMAKE_INSTALL_PREFIX "/opt/tpbench" CACHE PATH "Install path prefix" FORCE)
     endif()
@@ -70,10 +72,14 @@ set(CMAKE_INSTALL_LIBDIR lib)
 set(CMAKE_INSTALL_INCLUDEDIR include)
 
 # TPB_HOME option for kernel discovery
-# If not set, defaults to CMAKE_BINARY_DIR (build directory)
+# If not set, defaults to $HOME/.tpbench
 set(TPB_HOME "" CACHE STRING "TPBench installation directory for kernel discovery")
 if(TPB_HOME STREQUAL "")
-    set(TPB_HOME_RESOLVED "${CMAKE_BINARY_DIR}")
+    if(DEFINED ENV{HOME} AND NOT "$ENV{HOME}" STREQUAL "")
+        set(TPB_HOME_RESOLVED "$ENV{HOME}/.tpbench")
+    else()
+        set(TPB_HOME_RESOLVED "/opt/tpbench")
+    endif()
 else()
     set(TPB_HOME_RESOLVED "${TPB_HOME}")
 endif()
@@ -178,6 +184,9 @@ add_executable(tpbcli
     src/tpbcli-kernel-set.c
     src/tpbcli-kernel-get.c
     src/tpbcli-kernel-backup.c
+    src/tpbcli-kernel-init.c
+    src/tpbcli-kernel-build.c
+    src/tpbcli-kernel-home.c
     src/tpbcli-kernel.c
     src/tpbcli-benchmark.c
     src/tpbcli-help.c
@@ -294,16 +303,33 @@ install(FILES ${CMAKE_BINARY_DIR}/include/tpbench.h DESTINATION ${CMAKE_INSTALL_
 configure_file(
     ${CMAKE_SOURCE_DIR}/cmake/TPBenchConfig.cmake.in
     ${CMAKE_BINARY_DIR}/cmake/TPBenchConfig.cmake
-    @ONLY
+    COPYONLY
 )
 install(FILES ${CMAKE_BINARY_DIR}/cmake/TPBenchConfig.cmake
               ${CMAKE_SOURCE_DIR}/cmake/TPBenchKernel.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TPBench)
 
+# Stage CMake package under build/lib/cmake/TPBench for build-tree out-of-tree kernels
+add_custom_target(copy_cmake_package ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/lib/cmake/TPBench
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/cmake/TPBenchConfig.cmake
+            ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchConfig.cmake
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/cmake/TPBenchKernel.cmake
+            ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchKernel.cmake
+    COMMENT "Staging TPBench CMake package under build/lib/cmake/TPBench"
+)
+add_dependencies(copy_cmake_package copy_yaml_files)
 
-# Copy YAML configuration files to build/etc directory
+# Install kernel skeleton templates for `tpbcli kernel init`
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/
+        DESTINATION etc/cmake/kernel
+        FILES_MATCHING PATTERN "*.in")
+
+# Copy YAML and kernel templates to build/etc for build-tree testing
 add_custom_target(copy_yaml_files ALL
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/etc
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/setup/yaml ${CMAKE_BINARY_DIR}/etc
-    COMMENT "Copying YAML configuration files to build/etc"
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/etc/cmake/kernel
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/cmake/templates/kernel ${CMAKE_BINARY_DIR}/etc/cmake/kernel
+    COMMENT "Copying YAML and kernel template files to build/etc"
 )

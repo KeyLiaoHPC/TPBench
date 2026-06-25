@@ -118,14 +118,21 @@ set_target_properties(test-cli-kernel PROPERTIES
 )
 
 tpb_add_subcase(B5 B5.1 set_missing_args test-cli-kernel tpbcli)
+set(_tpb_kernel_test_ws "${CMAKE_BINARY_DIR}/tests/kernel_hist_ws")
+set(_tpb_kernel_init_dir "${CMAKE_BINARY_DIR}/tests/kinit_b5")
+target_compile_definitions(test-cli-kernel PRIVATE
+    "TPB_TEST_TPB_HOME=\"${CMAKE_BINARY_DIR}\""
+    "TPB_TEST_KERNEL_WORKSPACE=\"${_tpb_kernel_test_ws}\""
+    "TPB_TEST_KERNEL_INIT_DIR=\"${_tpb_kernel_init_dir}\"")
 if(TARGET tpbk_stream)
-    set(_tpb_kernel_test_ws "${CMAKE_BINARY_DIR}/tests/kernel_hist_ws")
-    target_compile_definitions(test-cli-kernel PRIVATE
-        "TPB_TEST_KERNEL_WORKSPACE=\"${_tpb_kernel_test_ws}\"")
     add_dependencies(test-cli-kernel tpbk_stream)
     tpb_add_subcase(B5 B5.2 get_readonly test-cli-kernel tpbcli)
     tpb_add_subcase(B5 B5.3 set_get_metadata test-cli-kernel tpbcli)
 endif()
+add_dependencies(test-cli-kernel copy_cmake_package copy_yaml_files)
+tpb_add_subcase(B5 B5.4 init_missing_args test-cli-kernel tpbcli)
+tpb_add_subcase(B5 B5.5 init_build_template test-cli-kernel tpbcli)
+tpb_add_subcase(B5 B5.6 build_missing_args test-cli-kernel tpbcli)
 
 # Aggregate targets
 add_custom_target(test_tpbcli

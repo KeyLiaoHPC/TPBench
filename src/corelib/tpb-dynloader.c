@@ -20,6 +20,7 @@
 #include "tpb-dynloader.h"
 #include "tpb-driver.h"
 #include "tpb-public.h"
+#include "rafdb/tpb-raf-types.h"
 #include "rafdb/tpb-sha1.h"
 #include "rafdb/tpb-raf-kernel-meta.h"
 
@@ -87,12 +88,35 @@ static int _sf_try_load_from_path(const char *kernel_name, const char *path,
 static int
 _sf_resolve_tpb_home(void)
 {
+    const char *env_home;
+    const char *home;
+    char *resolved;
+
     if (tpb_home_resolved[0] != '\0') {
         return 0;
     }
 
+    env_home = getenv("TPB_HOME");
+    if (env_home != NULL && env_home[0] != '\0') {
+        resolved = realpath(env_home, tpb_home_resolved);
+        if (resolved != NULL) {
+            return 0;
+        }
+        snprintf(tpb_home_resolved, PATH_MAX, "%s", env_home);
+        return 0;
+    }
+
+    home = getenv("HOME");
+    if (home != NULL && home[0] != '\0') {
+        if (snprintf(tpb_home_resolved, PATH_MAX, "%s/%s", home,
+                     TPB_RAF_DEFAULT_DIR) >= PATH_MAX) {
+            return TPBE_FILE_IO_FAIL;
+        }
+        return 0;
+    }
+
     if (strlen(TPB_HOME) > 0) {
-        char *resolved = realpath(TPB_HOME, tpb_home_resolved);
+        resolved = realpath(TPB_HOME, tpb_home_resolved);
         if (resolved != NULL) {
             return 0;
         }
@@ -100,27 +124,7 @@ _sf_resolve_tpb_home(void)
         return 0;
     }
 
-    char exe_path[PATH_MAX];
-    ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
-    if (len > 0) {
-        exe_path[len] = '\0';
-        char *last_slash = strrchr(exe_path, '/');
-        if (last_slash != NULL) {
-            *last_slash = '\0';
-            last_slash = strrchr(exe_path, '/');
-            if (last_slash != NULL) {
-                *last_slash = '\0';
-                snprintf(tpb_home_resolved, PATH_MAX, "%s", exe_path);
-                return 0;
-            }
-        }
-    }
-
-    if (getcwd(tpb_home_resolved, PATH_MAX) == NULL) {
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    return 0;
+    return TPBE_FILE_IO_FAIL;
 }
 
 static int
@@ -592,6 +596,27 @@ tpb_dl_get_tpb_home(void)
         _sf_resolve_tpb_home();
     }
     return tpb_home_resolved;
+}
+
+int
+tpb_dl_force_tpb_home(const char *path)
+{
+    char *resolved;
+
+    if (path == NULL || path[0] == '\0') {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    tpb_home_resolved[0] = '\0';
+    resolved = realpath(path, tpb_home_resolved);
+    if (resolved != NULL) {
+        return TPBE_SUCCESS;
+    }
+    if (snprintf(tpb_home_resolved, PATH_MAX, "%s", path) >= PATH_MAX) {
+        tpb_home_resolved[0] = '\0';
+        return TPBE_FILE_IO_FAIL;
+    }
+    return TPBE_SUCCESS;
 }
 
 int

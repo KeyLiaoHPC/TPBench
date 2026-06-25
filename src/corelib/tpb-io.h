@@ -66,6 +66,12 @@
     "    d, database: Read and manage TPBench database.\n" \
     "    k, kernel: Kernel management (refreshes kernel records in the workspace).\n" \
     "        list, ls: List integrated kernels (Kernel, KernelID, Description).\n" \
+    "        init: Initialize out-of-tree kernel project from templates.\n" \
+    "            --dir <path> --kernel <name>\n" \
+    "        build: Build out-of-tree kernel and install libtpbk_<name>.so.\n" \
+    "            --dir <path> --kernel <name> [--tpb-home <path>] [-D...] [--cc ...] [--cflags ...]\n" \
+    "            TPB home for build: --tpb-home, then $TPB_HOME, then $HOME/.tpbench.\n" \
+    "        set, get, backup-inactive: Kernel metadata and compile history.\n" \
     "    help: Print help message for an object and exit.\n" \
 
 /**

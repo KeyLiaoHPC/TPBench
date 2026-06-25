@@ -26,6 +26,22 @@ if(TARGET tpbk_stream)
         LABELS "integration")
 endif()
 
+# --- Integration: CMake package + kernel template staging (Pack C4) ---
+add_test(
+    NAME integration.C4.1_cmake_template_staging
+    COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_cmake_template_install.sh"
+)
+set_tests_properties(integration.C4.1_cmake_template_staging PROPERTIES
+    LABELS "integration")
+
+# --- Integration: template kernel init/build active switching (Pack C4) ---
+add_test(
+    NAME integration.C4.2_kernel_template_switch
+    COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_kernel_template_switch.sh"
+)
+set_tests_properties(integration.C4.2_kernel_template_switch PROPERTIES
+    LABELS "integration")
+
 # --- Integration test: merge_pthread (Pack C2) ---
 add_executable(test-merge-pthread EXCLUDE_FROM_ALL
     test_merge_pthread.c
@@ -80,6 +96,6 @@ if(TARGET tpbk_stream)
 endif()
 add_custom_target(check_integration
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L "^integration$"
-    DEPENDS test_integration tpbcli tpbcli-pli-launcher ${_tpb_check_integration_kernels}
+    DEPENDS test_integration tpbcli tpbcli-pli-launcher tpbench copy_cmake_package copy_yaml_files ${_tpb_check_integration_kernels}
     USES_TERMINAL
 )

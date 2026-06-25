@@ -54,7 +54,7 @@ Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchm
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
 - **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
 - **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
-- **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
+- **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
 
 Output results on screen are also written to the log directory.
@@ -410,3 +410,41 @@ tpbcli kernel get -v --kernel stream
 Rebuilding with the same flags produces the same KernelID; metadata is not overwritten unless **`TPB_K_OVERRIDE=1`**.
 
 Before replacing `lib/libtpbk_<name>.so`, the build moves the previous file to **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`** and marks the old KernelID **`active=0`**. The dynloader scans only `lib/libtpbk_*.so` (non-recursive); backup files are not loaded.
+
+### 2.4.5 Initialize out-of-tree kernel project
+
+Templates are installed under **`${TPB_HOME}/etc/cmake/kernel/`** (functional CMake package files remain under **`${TPB_HOME}/lib/cmake/TPBench/`**).
+
+```bash
+export TPB_HOME=/path/to/tpbench    # or rely on $HOME/.tpbench default
+tpbcli kernel init --dir ./mykern --kernel mykern
+```
+
+Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (parameter **`n`**, metric **`FOM,COUNT::Value`**).
+
+### 2.4.6 Build out-of-tree kernel
+
+```bash
+tpbcli kernel build --dir ./mykern --kernel mykern \
+  [--tpb-home /path/to/tpbench] \
+  [-DTPB_KERNEL_CFLAGS=-O3] [--cc gcc] [--cflags "-O3 -march=native"]
+```
+
+**`--tpb-home`** is accepted only on **`kernel build`**. Install-root resolution priority: **`--tpb-home`**, then **`$TPB_HOME`**, then **`$HOME/.tpbench`**.
+
+The command configures and builds with **`find_package(TPBench)`**, backs up any prior active `.so`, installs **`libtpbk_<name>.so`** into **`<tpb-home>/lib`**, reactivates the matching KernelID, and writes compile metadata via **`kernel set`**.
+
+Runtime kernel discovery uses **`$TPB_HOME`** (then **`$HOME/.tpbench`**) to locate **`bin/`**, **`lib/`**, and **`include/`** — set these in your environment before **`tpbcli run`**.
+
+Example workflow:
+
+```bash
+export TPB_HOME=$HOME/.tpbench
+export TPB_WORKSPACE=$HOME/my-tpbench-ws
+
+tpbcli kernel init --dir ~/dev/mykern --kernel mykern
+# edit ~/dev/mykern/tpbk_mykern.c if needed
+tpbcli kernel build --dir ~/dev/mykern --kernel mykern --cflags "-O2"
+tpbcli run --kernel mykern --kargs n=100
+tpbcli kernel get -v --kernel mykern
+```

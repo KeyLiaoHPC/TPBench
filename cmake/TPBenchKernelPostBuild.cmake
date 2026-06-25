@@ -15,6 +15,7 @@ function(tpb_kernel_add_compile_history _tgt _kname)
             -DTGT_FILE=$<TARGET_FILE:${_tgt}>
             -DKERNEL_NAME=${_kname}
             -DTPBCLI=$<TARGET_FILE:tpbcli>
+            -DTPB_HOME=${CMAKE_BINARY_DIR}
             -P ${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelPreLink.cmake
         COMMENT "Backup prior libtpbk_${_kname}.so to lib/inactive if present"
         VERBATIM)
@@ -24,6 +25,7 @@ function(tpb_kernel_add_compile_history _tgt _kname)
             -DTGT_FILE=$<TARGET_FILE:${_tgt}>
             -DKERNEL_NAME=${_kname}
             -DTPBCLI=$<TARGET_FILE:tpbcli>
+            -DTPB_HOME=${CMAKE_BINARY_DIR}
             -DC_COMPILER=${CMAKE_C_COMPILER}
             -DC_COMPILER_ID=${CMAKE_C_COMPILER_ID}
             -DC_COMPILER_VERSION=${CMAKE_C_COMPILER_VERSION}

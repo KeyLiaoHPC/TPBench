@@ -14,6 +14,8 @@
 #include "tpbcli-kernel-set.h"
 #include "tpbcli-kernel-get.h"
 #include "tpbcli-kernel-backup.h"
+#include "tpbcli-kernel-init.h"
+#include "tpbcli-kernel-build.h"
 
 int
 tpbcli_kernel(int argc, char **argv)
@@ -21,7 +23,8 @@ tpbcli_kernel(int argc, char **argv)
     int err;
 
     if (argc < 3) {
-        fprintf(stderr, "Usage: tpbcli kernel <list|ls|set|get>\n");
+        fprintf(stderr,
+                "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -37,6 +40,14 @@ tpbcli_kernel(int argc, char **argv)
         return tpbcli_kernel_backup_inactive(argc, argv);
     }
 
+    if (strcmp(argv[2], "init") == 0) {
+        return tpbcli_kernel_init(argc, argv);
+    }
+
+    if (strcmp(argv[2], "build") == 0) {
+        return tpbcli_kernel_build(argc, argv);
+    }
+
     err = tpb_register_kernel();
     if (err != 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
@@ -48,6 +59,7 @@ tpbcli_kernel(int argc, char **argv)
         return tpbcli_kernel_list(argc, argv);
     }
 
-    fprintf(stderr, "Usage: tpbcli kernel <list|ls|set|get>\n");
+    fprintf(stderr,
+            "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
     return TPBE_CLI_FAIL;
 }

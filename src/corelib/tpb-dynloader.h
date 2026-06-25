@@ -18,6 +18,13 @@
 const char *tpb_dl_get_tpb_home(void);
 
 /**
+ * @brief Force the resolved TPB_HOME path (clears prior cache).
+ * @param path Install root containing bin/, lib/, include/.
+ * @return 0 on success, error code otherwise.
+ */
+int tpb_dl_force_tpb_home(const char *path);
+
+/**
  * @brief Scan all PLI kernels under ${TPB_HOME}/lib.
  *
  * For each libtpbk_<name>.so found, attempts dlopen() registration.

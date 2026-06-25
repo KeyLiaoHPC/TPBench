@@ -13,12 +13,13 @@
 #   )
 #
 # Then:
-#   cmake -B build -DTPBench_DIR=@CMAKE_INSTALL_PREFIX@/lib/cmake/TPBench
+#   cmake -B build -DTPBench_DIR=<TPB_HOME>/lib/cmake/TPBench
 #   cmake --build build
-#   cmake --install build --prefix @CMAKE_INSTALL_PREFIX@
+#   cmake --install build --prefix <TPB_HOME>
 
-set(TPBENCH_INCLUDE_DIR "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_INCLUDEDIR@")
-set(TPBENCH_LIB_DIR     "@CMAKE_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@")
+get_filename_component(_TPBENCH_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+set(TPBENCH_INCLUDE_DIR "${_TPBENCH_PREFIX}/include")
+set(TPBENCH_LIB_DIR     "${_TPBENCH_PREFIX}/lib")
 
 if(NOT TARGET tpbench)
     add_library(tpbench SHARED IMPORTED)
