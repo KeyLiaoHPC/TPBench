@@ -9,6 +9,7 @@ TPBench provides native-C frontends:
 
 Refer to documentations in `docs/` for:
 - Build and basic usages ([docs/USAGE.md](docs/USAGE.md)). 基础编译及使用方法：[USAGE_CN.md](docs/USAGE_CN.md).
+- Cheatsheet/命令和选项速查表：[English](docs/cheatsheet.md)/[中文](docs/cheatsheet_CN.md)。
 - Programming interfaces ([docs/API_Reference.md](docs/API_Reference.md)).
 - Case studies and examples ([docs/EXAMPLES.md](docs/EXAMPLES.md)).
 
