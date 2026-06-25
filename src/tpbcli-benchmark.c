@@ -45,7 +45,7 @@ static double parse_result_value(const char *str);
 /**
  * @brief Resolve suite argument to full path.
  * 
- * Checks if argument is an existing file path, otherwise looks in ${TPB_DIR}/etc/
+ * Checks if argument is an existing file path, otherwise looks in ${TPB_HOME}/etc/
  */
 static int
 resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size)
@@ -70,16 +70,16 @@ resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size)
         return TPBE_SUCCESS;
     }
     
-    /* Look in ${TPB_DIR}/etc/ */
-    const char *tpb_dir = tpb_dl_get_tpb_dir();
-    if (tpb_dir != NULL && strlen(tpb_dir) > 0) {
-        snprintf(suite_path, path_size, "%s/etc/%s", tpb_dir, suite_arg);
+    /* Look in ${TPB_HOME}/etc/ */
+    const char *tpb_home = tpb_dl_get_tpb_home();
+    if (tpb_home != NULL && strlen(tpb_home) > 0) {
+        snprintf(suite_path, path_size, "%s/etc/%s", tpb_home, suite_arg);
         if (access(suite_path, F_OK) == 0) {
             return TPBE_SUCCESS;
         }
         
         /* Try with .yml extension */
-        snprintf(suite_path, path_size, "%s/etc/%s.yml", tpb_dir, suite_arg);
+        snprintf(suite_path, path_size, "%s/etc/%s.yml", tpb_home, suite_arg);
         if (access(suite_path, F_OK) == 0) {
             return TPBE_SUCCESS;
         }
@@ -372,7 +372,7 @@ tpbcli_benchmark(int argc, char **argv)
                        "Usage: tpbcli benchmark --suite <path_or_name>\n"
                        "\nOptions:\n"
                        "  --suite <path>  Path to benchmark YAML file, or suite name\n"
-                       "                  (looks in ${TPB_DIR}/etc/ if name given)\n"
+                       "                  (looks in ${TPB_HOME}/etc/ if name given)\n"
                        "  -h, --help      Show this help message\n");
             return TPBE_EXIT_ON_HELP;
             

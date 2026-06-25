@@ -7,7 +7,7 @@
 - **Breaking:** PLI kernels ship as a single shared library per kernel: `lib/libtpbk_<name>.so` (CPU, MPI, and ROCm). Per-kernel `.tpbx` executables and the old dual `.so` + `.tpbx` layout are removed.
 - **New:** `bin/tpbcli-pli-launcher` — thin ET_EXEC child process used by `tpb_run_pli()`; `dlopen()`s the kernel `.so` and calls `tpbk_<name>_entry()` (fallback: `main()`).
 - **Change:** `tpbench_add_kernel()` (out-of-tree) builds one `.so` only; `MAIN_SOURCE` is no longer required.
-- **Change:** `tpbcli` no longer links kernel libraries at build time; kernels are discovered at runtime under `${TPB_DIR}/lib/`.
+- **Change:** `tpbcli` no longer links kernel libraries at build time; kernels are discovered at runtime under `${TPB_HOME}/lib/`.
 - **Change:** `tpb_build_kernel` / `tpb_install_kernel` depend on `tpbcli-pli-launcher` and kernel `.so` targets only.
 
 ### Documentation
@@ -37,9 +37,9 @@
 ### Corelib
 
 - **New:** `tpb_register_kernels(int n, const char *const *names)` — register `_tpb_common` and scan only the named PLI kernels (strict: any failure aborts registration). Used by `tpbcli run`.
-- **New:** `tpb_dl_scan_kernel(const char *kernel_name)` — scan one `${TPB_DIR}/lib/libtpbk_<name>.so`.
-- **New:** `tpb_dl_get_pli_launch_path()` — resolve `${TPB_DIR}/bin/tpbcli-pli-launcher`.
-- **Change:** `tpb_dl_scan()` walks `${TPB_DIR}/lib/` for `libtpbk_*.so` (was `${TPB_DIR}/lib/` + `${TPB_DIR}/bin/` for `.so` / `.tpbx`). Per-kernel scan failures during a full scan are warnings; `tpbcli kernel list` continues with successfully registered kernels.
+- **New:** `tpb_dl_scan_kernel(const char *kernel_name)` — scan one `${TPB_HOME}/lib/libtpbk_<name>.so`.
+- **New:** `tpb_dl_get_pli_launch_path()` — resolve `${TPB_HOME}/bin/tpbcli-pli-launcher`.
+- **Change:** `tpb_dl_scan()` walks `${TPB_HOME}/lib/` for `libtpbk_*.so` (was `${TPB_HOME}/lib/` + `${TPB_HOME}/bin/` for `.so` / `.tpbx`). Per-kernel scan failures during a full scan are warnings; `tpbcli kernel list` continues with successfully registered kernels.
 - **Change:** `tpb_run_pli()` builds `… tpbcli-pli-launcher <kernel.so> <timer> …` for `.so` modules (process isolation in the launcher child); non-`.so` exec paths (e.g. test mocks) still exec directly.
 - **Breaking (RAFDB / KernelID):** `KernelID` is the SHA-1 digest of `libtpbk_<name>.so` (direct copy via `tpb_raf_gen_kernel_id(tpbx_sha1, id_out)`). Removed `src_sha1`, `so_sha1`, and `bin_sha1` from `kernel_attr_t` / `kernel_entry_t`; on-disk reserve padding adjusted (`TPB_RAF_KERNEL_ATTR_RESERVE`, `kernel_entry_t.reserve` +20 bytes). Existing kernel records keyed on the old composite ID are not compatible.
 - **New:** `tpb_driver_set_dry_run(int)` — when enabled, `tpb_run_pli` prints `Exec:` then returns without forking (dry-run mode for `tpbcli run -d`).

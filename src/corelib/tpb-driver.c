@@ -1432,7 +1432,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     if (launch_path == NULL && strstr(exec_path, ".so") != NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
                    "PLI launcher not found under %s/bin/tpbcli-pli-launcher\n",
-                   tpb_dl_get_tpb_dir());
+                   tpb_dl_get_tpb_home());
         return TPBE_KERNEL_INCOMPLETE;
     }
 

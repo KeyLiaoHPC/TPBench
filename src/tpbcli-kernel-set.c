@@ -46,7 +46,7 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
 {
     char so_path[PATH_MAX];
     unsigned char sha1[20];
-    const char *tpb_dir;
+    const char *tpb_home;
     FILE *fp;
     tpb_sha1_ctx_t ctx;
     unsigned char buf[4096];
@@ -56,12 +56,12 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
         return TPBE_NULLPTR_ARG;
     }
 
-    tpb_dir = tpb_dl_get_tpb_dir();
-    if (tpb_dir == NULL) {
+    tpb_home = tpb_dl_get_tpb_home();
+    if (tpb_home == NULL) {
         return TPBE_FILE_IO_FAIL;
     }
     snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
-             tpb_dir, kernel_name);
+             tpb_home, kernel_name);
 
     fp = fopen(so_path, "rb");
     if (fp == NULL) {

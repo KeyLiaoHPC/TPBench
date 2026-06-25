@@ -69,15 +69,15 @@ set(CMAKE_INSTALL_BINDIR bin)
 set(CMAKE_INSTALL_LIBDIR lib)
 set(CMAKE_INSTALL_INCLUDEDIR include)
 
-# TPB_DIR option for kernel discovery
+# TPB_HOME option for kernel discovery
 # If not set, defaults to CMAKE_BINARY_DIR (build directory)
-set(TPB_DIR "" CACHE STRING "TPBench installation directory for kernel discovery")
-if(TPB_DIR STREQUAL "")
-    set(TPB_DIR_RESOLVED "${CMAKE_BINARY_DIR}")
+set(TPB_HOME "" CACHE STRING "TPBench installation directory for kernel discovery")
+if(TPB_HOME STREQUAL "")
+    set(TPB_HOME_RESOLVED "${CMAKE_BINARY_DIR}")
 else()
-    set(TPB_DIR_RESOLVED "${TPB_DIR}")
+    set(TPB_HOME_RESOLVED "${TPB_HOME}")
 endif()
-message(STATUS "TPB_DIR resolved to: ${TPB_DIR_RESOLVED}")
+message(STATUS "TPB_HOME resolved to: ${TPB_HOME_RESOLVED}")
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelSelect.cmake)

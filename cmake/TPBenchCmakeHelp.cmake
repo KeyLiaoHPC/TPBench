@@ -8,7 +8,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
 # with "No help, variable specified on the command line." — use these as stable fallbacks.
 set(_tpb_cmake_help_doc_lines
     "TPB_WORKSPACE|Workspace root; default CMAKE_INSTALL_PREFIX when prefix is CMake default, else /opt/tpbench"
-    "TPB_DIR|TPBench installation directory for kernel discovery"
+    "TPB_HOME|TPBench installation directory for kernel discovery"
     "TPB_KERNELS|Kernel selection: comma-separated names, 'all', or 'default'"
     "TPB_KERNEL_TAGS|Comma-separated tags to select kernels (union with TPB_KERNELS)"
     "TPB_KERNEL_CFLAGS|C compile options for CPU kernels (empty = -O2 only; if set, replaces kernel C flags)"

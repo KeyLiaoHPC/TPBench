@@ -23,9 +23,9 @@
 #include "rafdb/tpb-sha1.h"
 #include "rafdb/tpb-raf-kernel-meta.h"
 
-/* Compile-time TPB_DIR from CMake, may be empty */
-#ifndef TPB_DIR
-#define TPB_DIR ""
+/* Compile-time TPB_HOME from CMake, may be empty */
+#ifndef TPB_HOME
+#define TPB_HOME ""
 #endif
 
 /* Maximum number of dynamically loaded kernels */
@@ -43,7 +43,7 @@ typedef struct {
 } dyn_kernel_entry_t;
 
 /* Module-level state */
-static char tpb_dir_resolved[PATH_MAX] = {0};
+static char tpb_home_resolved[PATH_MAX] = {0};
 static dyn_kernel_entry_t dyn_kernels[MAX_DYN_KERNELS];
 static int num_dyn_kernels = 0;
 static int dynloader_full_scan_done = 0;
@@ -75,7 +75,7 @@ static int _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                                const tpb_kernel_t *registered,
                                                unsigned char out_final_id[20],
                                                int *is_new_kernel);
-static int _sf_resolve_tpb_dir(void);
+static int _sf_resolve_tpb_home(void);
 static int _sf_scan_kernel_internal(const char *kernel_name,
                                     int require_success);
 static int _sf_try_load_from_path(const char *kernel_name, const char *path,
@@ -85,18 +85,18 @@ static int _sf_try_load_from_path(const char *kernel_name, const char *path,
 /* Local Function Implementations */
 
 static int
-_sf_resolve_tpb_dir(void)
+_sf_resolve_tpb_home(void)
 {
-    if (tpb_dir_resolved[0] != '\0') {
+    if (tpb_home_resolved[0] != '\0') {
         return 0;
     }
 
-    if (strlen(TPB_DIR) > 0) {
-        char *resolved = realpath(TPB_DIR, tpb_dir_resolved);
+    if (strlen(TPB_HOME) > 0) {
+        char *resolved = realpath(TPB_HOME, tpb_home_resolved);
         if (resolved != NULL) {
             return 0;
         }
-        snprintf(tpb_dir_resolved, PATH_MAX, "%s", TPB_DIR);
+        snprintf(tpb_home_resolved, PATH_MAX, "%s", TPB_HOME);
         return 0;
     }
 
@@ -110,13 +110,13 @@ _sf_resolve_tpb_dir(void)
             last_slash = strrchr(exe_path, '/');
             if (last_slash != NULL) {
                 *last_slash = '\0';
-                snprintf(tpb_dir_resolved, PATH_MAX, "%s", exe_path);
+                snprintf(tpb_home_resolved, PATH_MAX, "%s", exe_path);
                 return 0;
             }
         }
     }
 
-    if (getcwd(tpb_dir_resolved, PATH_MAX) == NULL) {
+    if (getcwd(tpb_home_resolved, PATH_MAX) == NULL) {
         return TPBE_FILE_IO_FAIL;
     }
 
@@ -132,7 +132,7 @@ _sf_build_kernel_paths(const char *kernel_name, char *so_path,
     }
 
     snprintf(so_path, so_len, "%s/lib/libtpbk_%s.so",
-             tpb_dir_resolved, kernel_name);
+             tpb_home_resolved, kernel_name);
     return TPBE_SUCCESS;
 }
 
@@ -144,7 +144,7 @@ _sf_build_pli_launch_path(char *launch_path, size_t launch_len)
     }
 
     snprintf(launch_path, launch_len, "%s/bin/tpbcli-pli-launcher",
-             tpb_dir_resolved);
+             tpb_home_resolved);
     return TPBE_SUCCESS;
 }
 
@@ -182,7 +182,7 @@ _sf_check_so_exists(const char *kernel_name)
     char so_path[PATH_MAX];
 
     snprintf(so_path, PATH_MAX, "%s/lib/libtpbk_%s.so",
-             tpb_dir_resolved, kernel_name);
+             tpb_home_resolved, kernel_name);
     return (access(so_path, R_OK) == 0);
 }
 
@@ -547,7 +547,7 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
         return TPBE_KERNEL_NE_FAIL;
     }
 
-    err = _sf_resolve_tpb_dir();
+    err = _sf_resolve_tpb_home();
     if (err != 0) {
         return err;
     }
@@ -586,12 +586,12 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
 /* Public Function Implementations */
 
 const char *
-tpb_dl_get_tpb_dir(void)
+tpb_dl_get_tpb_home(void)
 {
-    if (tpb_dir_resolved[0] == '\0') {
-        _sf_resolve_tpb_dir();
+    if (tpb_home_resolved[0] == '\0') {
+        _sf_resolve_tpb_home();
     }
-    return tpb_dir_resolved;
+    return tpb_home_resolved;
 }
 
 int
@@ -613,12 +613,12 @@ tpb_dl_scan(void)
         return 0;
     }
 
-    err = _sf_resolve_tpb_dir();
+    err = _sf_resolve_tpb_home();
     if (err != 0) {
         return err;
     }
 
-    snprintf(lib_path, PATH_MAX, "%s/lib", tpb_dir_resolved);
+    snprintf(lib_path, PATH_MAX, "%s/lib", tpb_home_resolved);
     dir = opendir(lib_path);
     if (dir == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
@@ -648,7 +648,7 @@ tpb_dl_get_pli_launch_path(void)
     static char launch_path[PATH_MAX] = {0};
 
     if (launch_path[0] == '\0') {
-        if (_sf_resolve_tpb_dir() != 0) {
+        if (_sf_resolve_tpb_home() != 0) {
             return NULL;
         }
         _sf_build_pli_launch_path(launch_path, sizeof(launch_path));

@@ -75,7 +75,7 @@ TPBench 配置、编译和测试。
 | 选项                       | 默认值                   | 用途                                                                                |
 | ------------------------ | --------------------- | --------------------------------------------------------------------------------- |
 | `-DTPB_WORKSPACE=<path>` | `$ENV{TPB_WORKSPACE}` | 工作区根；当安装前缀仍为 CMake 默认值时，用作 `CMAKE_INSTALL_PREFIX`。                                |
-| `-DTPB_DIR=<path>`       | `<build-dir>`         | 写入 `libtpbench.so`，供 dynloader 发现 kernel/launcher（`src/corelib/tpb-dynloader.c`）。 |
+| `-DTPB_HOME=<path>`       | `<build-dir>`         | 写入 `libtpbench.so`，供 dynloader 发现 kernel/launcher（`src/corelib/tpb-dynloader.c`）。 |
 | `-DTPB_MPI_PATH=<path>`  | *（空）*                 | 选中 MPI kernel 时的 MPI 安装根；空则自动探测。                                                  |
 | `-DTPB_ROCM_PATH=<path>` | *（空）*                 | 选中带 `rocm` 标签的 GPU kernel 时的 ROCm 根；空则自动探测（可回退 `ROCM_PATH` 环境变量）。                 |
 | `-DBUILD_TESTING=OFF`    | `ON`                  | 不构建测试、不调用 `enable_testing()`。                                                     |

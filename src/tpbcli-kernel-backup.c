@@ -46,7 +46,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
     char kid_hex[41];
     char workspace[PATH_MAX];
     unsigned char kernel_id[20];
-    const char *tpb_dir;
+    const char *tpb_home;
     int err;
     int i;
 
@@ -62,13 +62,13 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
         return TPBE_CLI_FAIL;
     }
 
-    tpb_dir = tpb_dl_get_tpb_dir();
-    if (tpb_dir == NULL) {
+    tpb_home = tpb_dl_get_tpb_home();
+    if (tpb_home == NULL) {
         return TPBE_FILE_IO_FAIL;
     }
 
     snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
-             tpb_dir, kernel_name);
+             tpb_home, kernel_name);
     if (access(so_path, R_OK) != 0) {
         return TPBE_SUCCESS;
     }
@@ -79,7 +79,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
     }
     tpb_raf_id_to_hex(kernel_id, kid_hex);
 
-    snprintf(inactive_dir, sizeof(inactive_dir), "%s/lib/inactive", tpb_dir);
+    snprintf(inactive_dir, sizeof(inactive_dir), "%s/lib/inactive", tpb_home);
     if (mkdir(inactive_dir, 0755) != 0 && access(inactive_dir, F_OK) != 0) {
         return TPBE_FILE_IO_FAIL;
     }

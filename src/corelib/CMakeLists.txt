@@ -26,7 +26,7 @@ target_include_directories(tpbench
             ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(tpbench PUBLIC m dl rt)
-target_compile_definitions(tpbench PRIVATE TPB_DIR="${TPB_DIR_RESOLVED}")
+target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")
 
 if(TARGET MPI::MPI_C)
     target_sources(tpbench PRIVATE tpb_corelib_mpi.c)

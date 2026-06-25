@@ -65,9 +65,9 @@ tpb_dl_get_ktype(const char *kernel_name)
     return TPB_KTYPE_PLI;
 }
 
-/* Overrides tpb_dl_get_tpb_dir in libtpbench.so */
+/* Overrides tpb_dl_get_tpb_home in libtpbench.so */
 const char *
-tpb_dl_get_tpb_dir(void)
+tpb_dl_get_tpb_home(void)
 {
     return "/tmp/tpbench_mock";
 }
