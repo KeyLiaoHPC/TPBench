@@ -16,23 +16,10 @@
 #endif
 #include <ctype.h>
 #include <math.h>
+#include "tpb-public.h"
 #include "tpbcli-benchmark.h"
 #include "tpb-bench-yaml.h"
 #include "tpb-bench-score.h"
-#include "corelib/tpb-io.h"
-#include "corelib/tpb-driver.h"
-#include "corelib/tpb-dynloader.h"
-#include "corelib/tpb-argp.h"
-
-/* Error handling macro */
-#define __tpbm_exit_on_error(e, x) \
-    do { \
-        if ((e) != 0) { \
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, \
-                       "%s, errcode=%d\n", x, (e)); \
-            return (e); \
-        } \
-    } while(0)
 
 /* Local Function Prototypes */
 static int resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size);
@@ -414,12 +401,12 @@ tpbcli_benchmark(int argc, char **argv)
     
     /* Set default timer (same as tpbcli-run) */
     err = tpb_argp_set_timer("clock_gettime");
-    __tpbm_exit_on_error(err, "At tpbcli-benchmark.c: tpb_argp_set_timer");
+    TPB_RETURN_ON_ERROR(err, "At tpbcli-benchmark.c: tpb_argp_set_timer");
     
     /* Initialize kernel registry */
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
-    __tpbm_exit_on_error(err, "At tpbcli-benchmark.c: tpb_register_kernel");
+    TPB_RETURN_ON_ERROR(err, "At tpbcli-benchmark.c: tpb_register_kernel");
     
     /* Run each batch - kernel registry persists across batches */
     for (int i = 0; i < bench.nbatches; i++) {

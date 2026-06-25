@@ -30,41 +30,15 @@
 #define STRFTIME_H
 
 #include <stdint.h>
-
-/**
- * @brief Datetime structure storing components from year to second.
- */
-typedef struct {
-    uint16_t year;    /* Full year, e.g., 2026 (range: 1970-2226) */
-    uint8_t  month;   /* 1-12 */
-    uint8_t  day;     /* 1-31 */
-    uint8_t  hour;    /* 0-23 */
-    uint8_t  min;     /* 0-59 */
-    uint8_t  sec;     /* 0-59 */
-} tpb_datetime_t;
-
-/**
- * @brief 64-bit bit-packed datetime representation.
- *
- * Year is stored as bias from 1970 (0-255, giving range 1970-2226).
- * Timezone bias is stored in 15-minute increments.
- */
-typedef uint64_t tpb_dtbits_t;
+#include "../include/tpb-public.h"
 
 /**
  * @brief Boot-time timestamp (seconds and nanoseconds since system boot).
  */
 typedef struct {
-    uint64_t sec;     /* Seconds since boot */
-    uint32_t nsec;    /* Nanoseconds within the second (0-999999999) */
+    uint64_t sec;  /**< Seconds since boot */
+    uint32_t nsec; /**< Nanoseconds within the second (0-999999999) */
 } tpb_btime_t;
-
-/**
- * @brief Encapsulated buffer for ISO 8601 formatted datetime strings.
- */
-typedef struct {
-    char str[32];  /* Buffer for ISO 8601 formatted datetime string */
-} tpb_datetime_str_t;
 
 /**
  * @brief Mode constants for datetime acquisition.
@@ -148,11 +122,8 @@ int tpb_ts_bits_to_datetime(tpb_dtbits_t bits, tpb_datetime_t *dt,
 /**
  * @brief Convert 64-bit to ISO 8601 UTC string (YYYY-MM-DDThh:mm:ssZ).
  *
- * @param bits 64-bit encoded datetime value
- * @param str Pointer to output string structure (must not be NULL)
- * @return 0 on success, error code otherwise
+ * Declared in tpb-public.h; implemented here.
  */
-int tpb_ts_bits_to_isoutc(tpb_dtbits_t bits, tpb_datetime_str_t *str);
 
 /**
  * @brief Convert 64-bit to ISO 8601 with timezone (YYYY-MM-DDThh:mm:ss+HH:MM).

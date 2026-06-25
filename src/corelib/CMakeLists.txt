@@ -17,13 +17,15 @@ set(TPB_CORELIB_SOURCES
     rafdb/tpb-raf-merge.c
     rafdb/tpb-raf-kernel-meta.c
     rafdb/tpb-sha1.c
+    rafdb/tpb-raf-scan.c
 )
 
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})
 target_compile_options(tpbench PRIVATE -O2)
 target_include_directories(tpbench
     PUBLIC  ${CMAKE_SOURCE_DIR}/src/include
-            ${CMAKE_CURRENT_SOURCE_DIR}
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/rafdb
 )
 target_link_libraries(tpbench PUBLIC m dl rt)
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")

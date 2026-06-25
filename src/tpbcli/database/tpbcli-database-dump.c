@@ -8,21 +8,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <dirent.h>
 #include <stdint.h>
 #include <inttypes.h>
+#ifdef __linux__
+#include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 
-#include "corelib/strftime.h"
-#include "corelib/rafdb/tpb-raf-types.h"
+#include "tpb-public.h"
 #include "tpbcli-database.h"
-
-/* Scan every tpbr subdirectory when searching by id prefix (global --id). */
-#define DOMAIN_FILTER_ALL ((uint8_t)0xFF)
-
-typedef struct id_prefix_match {
-    char     full_hex[41];
-    uint8_t  domain;
-} id_prefix_match_t;
 
 typedef enum {
     DUMP_T_NONE = 0,
@@ -54,35 +49,21 @@ static int entry_name_to_domain(const char *norm, uint8_t *domain_out);
 /*
  * When: Resolving `--file` or basename-only paths under workspace.
  * Input: workspace root; inpath as user typed; out buffer outlen bytes.
- * Output: Fills out with absolute path to existing regular file; TPBE_* code.
+ * Output: Fills out with absolute path via tpb_raf_resolve_record_file().
  */
 static int resolve_file_path(const char *workspace, const char *inpath,
                              char *out, size_t outlen);
 
 /*
- * When: Validating id strings from CLI or filename stem before hex→binary.
- * Input: in — user text; out must hold at least 42 bytes; out_len non-NULL.
- * Output: Lowercased hex in out, length in *out_len; TPBE_SUCCESS or fail.
- */
-static int parse_id_hex_arg(const char *in, char *out, size_t outsz,
-                            size_t *out_len);
-
-/*
- * When: qsort compare for id_prefix_match_t rows (ambiguous prefix table).
- * Input: a, b — pointers to id_prefix_match_t (const void * for qsort).
- * Output: <0, 0, or >0 per strcmp(full_hex) then domain tie-break.
- */
-static int cmp_prefix_match(const void *a, const void *b);
-
-/*
  * When: Partial id (4–39 hex) needs matching .tpbr files in workspace.
- * Input: workspace; prefix and prefix_len; domain_filter or DOMAIN_FILTER_ALL.
- * Output: Allocated *matches_out and *nmatch_out; caller must free(matches_out).
+ * Input: workspace; prefix and prefix_len; domain_filter or TPB_RAF_DOM_ALL.
+ * Output: Allocated *matches_out and *nmatch_out; caller must free with
+ *         tpb_raf_free_id_matches().
  */
 static int scan_tpbr_prefix_matches(const char *workspace,
                                     const char *prefix, size_t prefix_len,
                                     uint8_t domain_filter,
-                                    id_prefix_match_t **matches_out,
+                                    tpb_raf_id_match_t **matches_out,
                                     int *nmatch_out);
 
 /*
@@ -91,7 +72,7 @@ static int scan_tpbr_prefix_matches(const char *workspace,
  * Output: Prints CSV header + rows to stdout via tpb_printf; no return value.
  */
 static void print_ambiguous_id_table(const char *prefix,
-                                     id_prefix_match_t *matches, int nmatch,
+                                     tpb_raf_id_match_t *matches, int nmatch,
                                      const char *workspace);
 
 /*
@@ -289,43 +270,12 @@ static int
 resolve_file_path(const char *workspace, const char *inpath,
                   char *out, size_t outlen)
 {
-    struct stat st;
-    const char *base;
-    char trybuf[TPB_RAF_PATH_MAX];
-
-    if (!workspace || !inpath || !out || outlen == 0) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    if (stat(inpath, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(out, outlen, "%s", inpath);
-        return TPBE_SUCCESS;
-    }
-
-    base = strrchr(inpath, '/');
-    base = base ? base + 1 : inpath;
-
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_TBATCH_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(out, outlen, "%s", trybuf);
-        return TPBE_SUCCESS;
-    }
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_KERNEL_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(out, outlen, "%s", trybuf);
-        return TPBE_SUCCESS;
-    }
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_TASK_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(out, outlen, "%s", trybuf);
-        return TPBE_SUCCESS;
-    }
-
-    return TPBE_FILE_IO_FAIL;
+    return tpb_raf_resolve_record_file(workspace, inpath, out, outlen);
 }
+
+/*
+ * When: Validating id strings from CLI or filename stem before hex→binary.
+ */
 
 /* Leading/trailing whitespace only; 4-40 hex digits, lowercased. No 0x. */
 static int
@@ -363,105 +313,17 @@ parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
 }
 
 static int
-cmp_prefix_match(const void *a, const void *b)
-{
-    const id_prefix_match_t *x = (const id_prefix_match_t *)a;
-    const id_prefix_match_t *y = (const id_prefix_match_t *)b;
-    int c = strcmp(x->full_hex, y->full_hex);
-    if (c != 0) {
-        return c;
-    }
-    return (int)x->domain - (int)y->domain;
-}
-
-static int
 scan_tpbr_prefix_matches(const char *workspace, const char *prefix,
                          size_t prefix_len, uint8_t domain_filter,
-                         id_prefix_match_t **matches_out, int *nmatch_out)
+                         tpb_raf_id_match_t **matches_out, int *nmatch_out)
 {
-    static const struct {
-        const char *reldir;
-        uint8_t     domain;
-    } dirs[3] = {
-        { TPB_RAF_TBATCH_DIR, TPB_RAF_DOM_TBATCH },
-        { TPB_RAF_KERNEL_DIR, TPB_RAF_DOM_KERNEL },
-        { TPB_RAF_TASK_DIR,   TPB_RAF_DOM_TASK },
-    };
-    char dirpath[TPB_RAF_PATH_MAX];
-    id_prefix_match_t *matches = NULL;
-    int n = 0, cap = 0;
-    size_t di;
-
-    if (!workspace || !prefix || !matches_out || !nmatch_out) {
-        return TPBE_NULLPTR_ARG;
-    }
-    *matches_out = NULL;
-    *nmatch_out = 0;
-
-    for (di = 0; di < sizeof(dirs) / sizeof(dirs[0]); di++) {
-        DIR *dp;
-        struct dirent *ent;
-
-        if (domain_filter != DOMAIN_FILTER_ALL &&
-            domain_filter != dirs[di].domain) {
-            continue;
-        }
-        snprintf(dirpath, sizeof(dirpath), "%s/%s",
-                 workspace, dirs[di].reldir);
-        dp = opendir(dirpath);
-        if (!dp) {
-            continue;
-        }
-        while ((ent = readdir(dp)) != NULL) {
-            const char *name = ent->d_name;
-            size_t len = strlen(name);
-            char idpart[41];
-            size_t k;
-
-            if (len != 45 || strcmp(name + 40, ".tpbr") != 0) {
-                continue;
-            }
-            memcpy(idpart, name, 40);
-            idpart[40] = '\0';
-            for (k = 0; k < 40; k++) {
-                if (!isxdigit((unsigned char)idpart[k])) {
-                    break;
-                }
-                idpart[k] = (char)tolower((unsigned char)idpart[k]);
-            }
-            if (k != 40 || strncmp(idpart, prefix, prefix_len) != 0) {
-                continue;
-            }
-            if (n >= cap) {
-                int nc = cap ? cap * 2 : 16;
-                id_prefix_match_t *nm = (id_prefix_match_t *)realloc(
-                    matches, (size_t)nc * sizeof(*matches));
-                if (!nm) {
-                    closedir(dp);
-                    free(matches);
-                    return TPBE_MALLOC_FAIL;
-                }
-                matches = nm;
-                cap = nc;
-            }
-            snprintf(matches[n].full_hex, sizeof(matches[n].full_hex),
-                     "%s", idpart);
-            matches[n].domain = dirs[di].domain;
-            n++;
-        }
-        closedir(dp);
-    }
-
-    if (n > 1) {
-        qsort(matches, (size_t)n, sizeof(*matches), cmp_prefix_match);
-    }
-    *matches_out = matches;
-    *nmatch_out = n;
-    return TPBE_SUCCESS;
+    return tpb_raf_scan_records_by_id_prefix(workspace, prefix, prefix_len,
+                                             domain_filter,
+                                             matches_out, nmatch_out);
 }
 
 static void
-print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
+print_ambiguous_id_table(const char *prefix, tpb_raf_id_match_t *matches,
                          int nmatch, const char *workspace)
 {
     int i;
@@ -481,7 +343,7 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
         double dur_sec = 0.0;
         int have_dur = 0;
 
-        if (tpb_raf_hex_to_id(matches[i].full_hex, id) != TPBE_SUCCESS) {
+        if (tpb_raf_hex_to_id(matches[i].id_hex, id) != TPBE_SUCCESS) {
             continue;
         }
 
@@ -524,11 +386,11 @@ print_ambiguous_id_table(const char *prefix, id_prefix_match_t *matches,
             if (have_dur) {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "%s, %s, %s, %.3f\n",
-                           matches[i].full_hex, dname, utc_col, dur_sec);
+                           matches[i].id_hex, dname, utc_col, dur_sec);
             } else {
                 tpb_printf(TPBM_PRTN_M_DIRECT,
                            "%s, %s, %s, N/A\n",
-                           matches[i].full_hex, dname, utc_col);
+                           matches[i].id_hex, dname, utc_col);
             }
         }
     }
@@ -566,7 +428,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
 
     switch (t) {
     case DUMP_T_ID_GLOBAL:
-        dom_filter = DOMAIN_FILTER_ALL;
+        dom_filter = TPB_RAF_DOM_ALL;
         break;
     case DUMP_T_TBATCH_ID:
         dom_filter = TPB_RAF_DOM_TBATCH;
@@ -598,34 +460,34 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
     }
 
     {
-        id_prefix_match_t *matches = NULL;
+        tpb_raf_id_match_t *matches = NULL;
         int nmatch = 0;
 
         err = scan_tpbr_prefix_matches(workspace, norm, plen, dom_filter,
                                        &matches, &nmatch);
         if (err != TPBE_SUCCESS) {
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             return err;
         }
 
         if (nmatch == 0) {
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             tpb_printf(TPBM_PRTN_M_DIRECT,
                        "No .tpbr matches id prefix %s in workspace.\n", norm);
             return TPBE_FILE_IO_FAIL;
         }
         if (nmatch > 1) {
             print_ambiguous_id_table(norm, matches, nmatch, workspace);
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             return TPBE_CLI_FAIL;
         }
 
-        if (tpb_raf_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
-            free(matches);
+        if (tpb_raf_hex_to_id(matches[0].id_hex, id) != TPBE_SUCCESS) {
+            tpb_raf_free_id_matches(matches);
             return TPBE_CLI_FAIL;
         }
         dom = matches[0].domain;
-        free(matches);
+        tpb_raf_free_id_matches(matches);
         return dump_tpbr_by_domain(workspace, dom, id);
     }
 }
@@ -1007,11 +869,11 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
     const char *fname = NULL;
 
     if (domain == TPB_RAF_DOM_KERNEL) {
-        fname = TPB_RAF_KERNEL_ENTRY;
+        fname = "kernel.tpbe";
     } else if (domain == TPB_RAF_DOM_TASK) {
-        fname = TPB_RAF_TASK_ENTRY;
+        fname = "task.tpbe";
     } else {
-        fname = TPB_RAF_TBATCH_ENTRY;
+        fname = "task_batch.tpbe";
     }
 
     tpb_printf(TPBM_PRTN_M_DIRECT, "Entry File: %s\n", fname);
@@ -1139,7 +1001,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 static int
 dump_file_path(const char *workspace, const char *filepath)
 {
-    char resolved[TPB_RAF_PATH_MAX];
+    char resolved[PATH_MAX];
     uint8_t ftype, domain;
     int err;
     unsigned char id[20];
@@ -1174,7 +1036,7 @@ dump_file_path(const char *workspace, const char *filepath)
     } else {
         char norm[48];
         size_t plen;
-        id_prefix_match_t *matches = NULL;
+        tpb_raf_id_match_t *matches = NULL;
         int nmatch = 0;
         int scan_err;
 
@@ -1185,23 +1047,23 @@ dump_file_path(const char *workspace, const char *filepath)
         scan_err = scan_tpbr_prefix_matches(workspace, norm, plen, domain,
                                             &matches, &nmatch);
         if (scan_err != TPBE_SUCCESS) {
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             return scan_err;
         }
         if (nmatch == 0) {
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             return TPBE_CLI_FAIL;
         }
         if (nmatch > 1) {
             print_ambiguous_id_table(norm, matches, nmatch, workspace);
-            free(matches);
+            tpb_raf_free_id_matches(matches);
             return TPBE_CLI_FAIL;
         }
-        if (tpb_raf_hex_to_id(matches[0].full_hex, id) != TPBE_SUCCESS) {
-            free(matches);
+        if (tpb_raf_hex_to_id(matches[0].id_hex, id) != TPBE_SUCCESS) {
+            tpb_raf_free_id_matches(matches);
             return TPBE_CLI_FAIL;
         }
-        free(matches);
+        tpb_raf_free_id_matches(matches);
     }
 
     if (domain == TPB_RAF_DOM_TBATCH) {
@@ -1223,7 +1085,7 @@ tpbcli_database_dump_resolved(const char *workspace,
                               const char *entry_value)
 {
     dump_target_t t;
-    char buf[TPB_RAF_PATH_MAX];
+    char buf[PATH_MAX];
     char entrybuf[256];
     uint8_t dom;
 

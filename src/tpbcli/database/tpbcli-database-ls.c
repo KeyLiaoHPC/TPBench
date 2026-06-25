@@ -6,8 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "corelib/rafdb/tpb-raf-types.h"
-#include "corelib/strftime.h"
+#include "tpb-public.h"
 #include "tpbcli-database.h"
 
 #define RECORD_LIST_MAX 20

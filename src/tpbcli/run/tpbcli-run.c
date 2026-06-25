@@ -15,14 +15,10 @@
 #endif
 #include <string.h>
 #include <inttypes.h>
+#include "tpb-public.h"
 #include "tpbcli-run.h"
-#include "corelib/tpb-argp.h"
 #include "tpbcli-run-dim.h"
 #include "tpbcli-argp.h"
-#include "corelib/tpb-driver.h"
-#include "corelib/tpb-impl.h"
-#include "corelib/tpb-io.h"
-#include "corelib/tpb-autorecord.h"
 
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16
@@ -956,7 +952,7 @@ tpbcli_run(int argc, char **argv)
     } else {
         err = tpb_register_kernel();
     }
-    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_register_kernels");
+    TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernels");
 
     tree = tpbcli_argtree_create(
         (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",
@@ -1119,7 +1115,7 @@ tpbcli_run(int argc, char **argv)
     }
 
     err = tpb_driver_run_all();
-    __tpbm_exit_on_error(err, "At tpbcli-run.c: tpb_driver_run_all");
+    TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_driver_run_all");
 
     if (!rec_err) {
         rec_err = tpb_record_end_batch(nhdl);

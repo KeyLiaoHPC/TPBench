@@ -6,11 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __linux__
+#include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 
-#include "include/tpb-public.h"
-#include "corelib/rafdb/tpb-raf-kernel-meta.h"
-#include "corelib/rafdb/tpb-sha1.h"
-#include "corelib/tpb-dynloader.h"
+#include "tpb-public.h"
 #include "tpbcli-kernel-set.h"
 
 #define TPBCLI_KERNEL_SET_MAX_KV  32
@@ -19,6 +21,14 @@ typedef struct {
     const char *key;
     const char *value;
 } tpbcli_kernel_kv_t;
+
+/* Local Function Prototypes */
+
+static int _sf_hash_current_kernel_so(const char *kernel_name,
+                                      unsigned char kernel_id[20]);
+static int _sf_kernel_id_exists(const char *workspace,
+                                const unsigned char kernel_id[20]);
+static void _sf_print_set_usage(void);
 
 static int
 _sf_kernel_id_exists(const char *workspace, const unsigned char kernel_id[20])
@@ -47,10 +57,7 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
     char so_path[PATH_MAX];
     unsigned char sha1[20];
     const char *tpb_home;
-    FILE *fp;
-    tpb_sha1_ctx_t ctx;
-    unsigned char buf[4096];
-    size_t nread;
+    int err;
 
     if (kernel_id == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -63,16 +70,10 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
     snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
              tpb_home, kernel_name);
 
-    fp = fopen(so_path, "rb");
-    if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+    err = tpb_raf_hash_file(so_path, sha1);
+    if (err != TPBE_SUCCESS) {
+        return err;
     }
-    tpb_sha1_init(&ctx);
-    while ((nread = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        tpb_sha1_update(&ctx, buf, nread);
-    }
-    tpb_sha1_final(&ctx, sha1);
-    fclose(fp);
 
     return tpb_raf_gen_kernel_id(sha1, kernel_id);
 }

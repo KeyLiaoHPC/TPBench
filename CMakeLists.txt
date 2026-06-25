@@ -174,39 +174,8 @@ add_subdirectory(src/corelib)
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRpath.cmake)
 
-# CLI must exist before kernel post-build hooks reference tpbcli.
-add_executable(tpbcli
-    src/tpbcli.c
-    src/tpbcli-argp.c
-    src/tpbcli-run.c
-    src/tpbcli-run-dim.c
-    src/tpbcli-kernel-list.c
-    src/tpbcli-kernel-set.c
-    src/tpbcli-kernel-get.c
-    src/tpbcli-kernel-backup.c
-    src/tpbcli-kernel-init.c
-    src/tpbcli-kernel-build.c
-    src/tpbcli-kernel-home.c
-    src/tpbcli-kernel.c
-    src/tpbcli-benchmark.c
-    src/tpbcli-help.c
-    src/tpb-bench-yaml.c
-    src/tpb-bench-score.c
-    src/tpbcli-database.c
-    src/tpbcli-database-ls.c
-    src/tpbcli-database-dump.c
-)
-target_include_directories(tpbcli PRIVATE src)
-target_compile_options(tpbcli PRIVATE -O2)
-target_link_libraries(tpbcli PRIVATE tpbench m)
-tpb_set_install_rpath_tpbench_exe(tpbcli)
-
-add_executable(tpbcli-pli-launcher src/tpbcli-pli-launcher.c)
-target_include_directories(tpbcli-pli-launcher PRIVATE src)
-target_link_libraries(tpbcli-pli-launcher PRIVATE dl)
-target_compile_options(tpbcli-pli-launcher PRIVATE -O2)
-set_target_properties(tpbcli-pli-launcher PROPERTIES OUTPUT_NAME "tpbcli-pli-launcher")
-tpb_set_install_rpath_tpbench_exe(tpbcli-pli-launcher)
+# CLI (must exist before kernel post-build hooks reference tpbcli).
+add_subdirectory(src/tpbcli)
 
 # Kernels (libtpbk_*.so) with name/tag-based selection
 add_subdirectory(src/kernels)
@@ -264,12 +233,10 @@ install(CODE "
   endif()
 ")
 
-# Install core library and CLI
+# Install core library
 install(TARGETS tpbench
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(TARGETS tpbcli
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # Kernel install rules are handled inside src/kernels/CMakeLists.txt
 # ROCm kernel install rules are in cmake/TPBenchGpuKernelsRocm.cmake

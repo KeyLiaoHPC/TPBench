@@ -8,8 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/tpb-public.h"
-#include "corelib/rafdb/tpb-raf-types.h"
+#include "tpb-public.h"
 #include "tpbcli-kernel-home.h"
 
 int
@@ -66,7 +65,7 @@ tpbcli_kernel_resolve_home(const char *override, char *out, size_t outlen)
     if (home == NULL || home[0] == '\0') {
         return TPBE_FILE_IO_FAIL;
     }
-    if (snprintf(out, outlen, "%s/%s", home, TPB_RAF_DEFAULT_DIR) >= (int)outlen) {
+    if (snprintf(out, outlen, "%s/.tpbench", home) >= (int)outlen) {
         return TPBE_FILE_IO_FAIL;
     }
     return TPBE_SUCCESS;

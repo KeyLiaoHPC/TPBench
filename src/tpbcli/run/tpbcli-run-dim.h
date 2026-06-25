@@ -11,7 +11,7 @@
 #ifndef TPBCLI_RUN_DIM_H
 #define TPBCLI_RUN_DIM_H
 
-#include "corelib/tpb-types.h"
+#include "tpb-public.h"
 
 /** Maximum number of values in a dimension sequence */
 #define TPBM_DIM_MAX_VALUES 4096

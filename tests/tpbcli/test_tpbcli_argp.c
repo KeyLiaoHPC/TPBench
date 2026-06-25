@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "../../src/tpbcli-argp.h"
+#include "../../src/tpbcli/argp/tpbcli-argp.h"
 
 static int g_pass;
 static int g_fail;

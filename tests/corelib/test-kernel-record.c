@@ -10,7 +10,10 @@
 #include <sys/stat.h>
 
 #include "include/tpb-public.h"
-#include "corelib/rafdb/tpb-raf-kernel-meta.h"
+
+#ifndef TPB_TEST_TPB_HOME
+#define TPB_TEST_TPB_HOME ""
+#endif
 
 static char g_test_dir[512];
 
@@ -103,6 +106,9 @@ test_stream_register_record(void)
 
     snprintf(workspace, sizeof(workspace), "%s", g_test_dir);
     setenv("TPB_WORKSPACE", workspace, 1);
+    if (TPB_TEST_TPB_HOME[0] != '\0') {
+        setenv("TPB_HOME", TPB_TEST_TPB_HOME, 1);
+    }
 
     err = tpb_corelib_init(workspace);
     if (err != TPBE_SUCCESS) {

@@ -6,7 +6,10 @@ TPBench (Test Performance Benchmark) is a flexible benchmarking framework that p
 
 **Version:** 0.8  
 **Language:** C (C11 standard)  
-**Library:** `libtpbench.so`
+**Library:** `libtpbench.so`  
+**Public header:** `#include "tpbench.h"` (generated from `tpb-public.h` and `tpb-unitdefs.h`). Application and frontend code should use only this header; corelib and rafdb internals are not part of the stable API.
+
+The `tpbcli` frontend lives under `src/tpbcli/` and links against `libtpbench.so` through the public header only.
 
 ---
 
@@ -247,16 +250,6 @@ int tpb_mkdir(char *dirpath);
 **Returns:**
 - `0` on success
 - `-1` on error
-
----
-
-### `tpb_print_help_total`
-
-Print overall help message for tpbcli command-line interface.
-
-```c
-void tpb_print_help_total(void);
-```
 
 ---
 
@@ -1030,7 +1023,15 @@ const char *tpb_unit_to_string(TPB_UNIT_T unit);
 
 ## Error Handling
 
-Functions for error handling and validation. Defined in `tpb-impl.h`.
+Functions for error handling and validation. Declared in `tpb-public.h`.
+
+### `TPB_EXIT_ON_ERROR` / `TPB_RETURN_ON_ERROR`
+
+Macros that call `tpb_report_error()` and exit or return when `err != 0`.
+
+### `tpb_report_error` / `tpb_exit_on_error`
+
+Report an error message (with optional context) and optionally exit with the error code.
 
 ### `tpb_get_err_exit_flag`
 
@@ -1677,6 +1678,36 @@ typedef struct task_attr {
     tpb_meta_header_t *headers;         // Header array
 } task_attr_t;
 ```
+
+---
+
+### Record lookup, path resolution, and kernel metadata
+
+These helpers support `tpbcli database dump` and `tpbcli kernel` without exposing rafdb directory layout constants.
+
+| Function | Purpose |
+|----------|---------|
+| `tpb_raf_resolve_record_file()` | Resolve `--file` paths for dump (workspace-relative or absolute) |
+| `tpb_raf_scan_records_by_id_prefix()` | Scan tbatch/kernel/task domains for hex ID prefix matches |
+| `tpb_raf_free_id_matches()` | Free scan result array |
+| `tpb_raf_hash_file()` | SHA-1 hash of a kernel `.so` or other file |
+| `tpb_raf_kernel_override_enabled()` | True when `TPB_K_OVERRIDE` allows overwriting KernelID records |
+| `tpb_raf_kernel_find_header()` / `tpb_raf_kernel_meta_kv_get()` | Read kernel metadata headers and kv payloads |
+| `tpb_raf_entry_patch_kernel_active()` / `tpb_raf_record_patch_kernel_active()` | Soft activate/deactivate kernel history entries |
+| `tpb_raf_kernel_deactivate_same_name()` / `tpb_raf_kernel_update_meta_key()` | Kernel history management from `tpbcli kernel set` |
+
+Kernel metadata header names: `TPB_RAF_KERNEL_HDR_VARIATION`, `TPB_RAF_KERNEL_HDR_COMPILATION`, `TPB_RAF_KERNEL_HDR_DEPENDENCY`. Fixed metadata header count: `TPB_RAF_KERNEL_META_HDR_COUNT`.
+
+### Driver orchestration, batch record, and TPB_HOME
+
+| Function | Purpose |
+|----------|---------|
+| `tpb_driver_add_handle()` … `tpb_driver_run_all()` | Multi-handle driver orchestration (see Driver section) |
+| `tpb_check_kargs()` / `tpb_argp_set_kargs_tokstr()` / `tpb_argp_set_timer()` | Host-side argument parsing helpers |
+| `tpb_record_begin_batch()` / `tpb_record_end_batch()` | Auto-record batch lifecycle |
+| `tpb_set_outargs()` / `tpb_log_get_filepath()` / `tpb_log_cleanup()` | CLI output and run log |
+| `tpb_dl_get_tpb_home()` / `tpb_dl_force_tpb_home()` | Resolve installation root for kernel discovery |
+| `tpb_ts_bits_to_isoutc()` | Format rafdb datetime bits as ISO UTC strings |
 
 ---
 

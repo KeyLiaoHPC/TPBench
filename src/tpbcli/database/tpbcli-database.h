@@ -3,8 +3,8 @@
  * @brief tpbcli `database` subcommand interface.
  */
 
-#ifndef TPBCLI_LOG_H
-#define TPBCLI_LOG_H
+#ifndef TPBCLI_DATABASE_H
+#define TPBCLI_DATABASE_H
 
 /**
  * @brief Dispatches `tpbcli database` or `tpbcli db` after argv[0..1].
@@ -40,4 +40,4 @@ int tpbcli_database_dump_resolved(const char *workspace,
                                   const char *primary_value,
                                   const char *entry_value);
 
-#endif /* TPBCLI_LOG_H */
+#endif /* TPBCLI_DATABASE_H */

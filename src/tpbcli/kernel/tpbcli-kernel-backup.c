@@ -8,33 +8,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef __linux__
+#include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 
-#include "include/tpb-public.h"
-#include "corelib/rafdb/tpb-raf-kernel-meta.h"
-#include "corelib/rafdb/tpb-sha1.h"
-#include "corelib/tpb-dynloader.h"
+#include "tpb-public.h"
 #include "tpbcli-kernel-backup.h"
-
-static int
-_sf_hash_file(const char *path, unsigned char out[20])
-{
-    FILE *fp;
-    tpb_sha1_ctx_t ctx;
-    unsigned char buf[4096];
-    size_t nread;
-
-    fp = fopen(path, "rb");
-    if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
-    }
-    tpb_sha1_init(&ctx);
-    while ((nread = fread(buf, 1, sizeof(buf), fp)) > 0) {
-        tpb_sha1_update(&ctx, buf, nread);
-    }
-    tpb_sha1_final(&ctx, out);
-    fclose(fp);
-    return TPBE_SUCCESS;
-}
 
 int
 tpbcli_kernel_backup_inactive(int argc, char **argv)
@@ -73,7 +54,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
         return TPBE_SUCCESS;
     }
 
-    err = _sf_hash_file(so_path, kernel_id);
+    err = tpb_raf_hash_file(so_path, kernel_id);
     if (err != TPBE_SUCCESS) {
         return err;
     }

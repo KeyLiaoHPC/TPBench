@@ -12,13 +12,14 @@
 #include <limits.h>
 #endif
 
+#include "tpb-public.h"
 #include "tpbcli-run.h"
 #include "tpbcli-kernel.h"
 #include "tpbcli-benchmark.h"
 #include "tpbcli-help.h"
+#include "tpbcli-help-doc.h"
 #include "tpbcli-database.h"
 #include "tpbcli-argp.h"
-#include "corelib/tpb-io.h"
 
 /* Local Function Prototypes */
 static int parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
@@ -115,7 +116,7 @@ _sf_top_help_flag(const tpbcli_argnode_t *node, FILE *out)
 {
     (void)node;
     (void)out;
-    tpb_print_help_total();
+    tpbcli_print_help_total();
 }
 
 static int
@@ -209,7 +210,7 @@ tpbcli_main(int argc, char **argv)
     g_top_argv = argv;
 
     if (argc <= 1) {
-        tpb_print_help_total();
+        tpbcli_print_help_total();
         return TPBE_EXIT_ON_HELP;
     }
 

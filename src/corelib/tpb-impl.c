@@ -8,6 +8,7 @@
 #include <errno.h>
 #include "tpb-impl.h"
 #include "tpb-types.h"
+#include "../include/tpb-public.h"
 
 /* Error type definitions */
 static tpb_error_type tpb_errors[] = {
@@ -27,19 +28,64 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_KERNEL_NE_FAIL,      TPBE_FAIL, "Kernel does not exist."},
     {TPBE_KARG_NE_FAIL,        TPBE_FAIL, "Kernel argument does not exist."},
     {TPBE_KERNEL_INCOMPLETE,   TPBE_FAIL, "Incomplete kernel (missing .so)."},
-    {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."}
+    {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."},
+    {TPBE_MERGE_MISMATCH,      TPBE_FAIL, "Task merge source mismatch."},
+    {TPBE_MERGE_FAIL,          TPBE_FAIL, "Task merge failed."}
 };
+
+#define TPB_ERR_TABLE_SIZE ((int)(sizeof(tpb_errors) / sizeof(tpb_errors[0])))
+
+static const tpb_error_type *
+_sf_lookup_error(int err)
+{
+    int i;
+
+    for (i = 0; i < TPB_ERR_TABLE_SIZE; i++) {
+        if (tpb_errors[i].err_code == err) {
+            return &tpb_errors[i];
+        }
+    }
+    return &tpb_errors[0];
+}
 
 int
 tpb_get_err_exit_flag(int err)
 {
-    return tpb_errors[err].err_type;
+    return (int)_sf_lookup_error(err)->err_type;
 }
 
 const char *
 tpb_get_err_msg(int err)
 {
-    return tpb_errors[err].err_msg;
+    return _sf_lookup_error(err)->err_msg;
+}
+
+int
+tpb_report_error(int err, const char *context)
+{
+    unsigned err_type;
+
+    if (err == TPBE_SUCCESS) {
+        return TPBE_SUCCESS;
+    }
+    err_type = (unsigned)tpb_get_err_exit_flag(err);
+    tpb_printf(TPBM_PRTN_M_TSTAG | err_type,
+               "%s. Error message: %s\n",
+               context != NULL ? context : "TPBench error",
+               tpb_get_err_msg(err));
+    return err;
+}
+
+void
+tpb_exit_on_error(int err, const char *context)
+{
+    if (err == TPBE_SUCCESS) {
+        return;
+    }
+    (void)tpb_report_error(err, context);
+    if (tpb_get_err_exit_flag(err) == TPBE_FAIL) {
+        exit(err);
+    }
 }
 
 int

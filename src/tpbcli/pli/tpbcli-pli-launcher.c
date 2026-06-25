@@ -11,8 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/tpb-public.h"
-#include "include/tpbench.h"
+#include "tpb-public.h"
+#include "tpbench.h"
 
 static int
 _sf_extract_kernel_name(const char *so_path, char *kernel_name, size_t name_len)

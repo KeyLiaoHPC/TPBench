@@ -5,8 +5,13 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifdef __linux__
+#include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 
-#include "corelib/rafdb/tpb-raf-types.h"
+#include "tpb-public.h"
 #include "tpbcli-argp.h"
 #include "tpbcli-database.h"
 
@@ -25,7 +30,7 @@ typedef struct database_cli_ctx {
     int          want_list;
     int          want_dump;
     const char  *dump_selector;
-    char         primary_buf[TPB_RAF_PATH_MAX];
+    char         primary_buf[PATH_MAX];
 } database_cli_ctx_t;
 
 static const char *_sf_conf_not_id[] = {
@@ -262,7 +267,7 @@ tpbcli_database(int argc, char **argv)
 {
     database_cli_ctx_t cli_ctx;
     tpbcli_argtree_t *tree;
-    char workspace[TPB_RAF_PATH_MAX];
+    char workspace[PATH_MAX];
     int err;
 
     memset(&cli_ctx, 0, sizeof(cli_ctx));

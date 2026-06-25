@@ -12,8 +12,7 @@
 #include <limits.h>
 #endif
 
-#include "include/tpb-public.h"
-#include "corelib/rafdb/tpb-raf-kernel-meta.h"
+#include "tpb-public.h"
 #include "tpbcli-kernel-get.h"
 
 static void

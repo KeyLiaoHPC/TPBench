@@ -4,8 +4,12 @@ add_executable(test-cli-run-nokernel EXCLUDE_FROM_ALL
 )
 target_compile_definitions(test-cli-run-nokernel PRIVATE
     "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+    "TPB_TEST_TPB_HOME=\"${CMAKE_BINARY_DIR}\""
 )
 add_dependencies(test-cli-run-nokernel tpbcli)
+if(TARGET tpbk_stream)
+    add_dependencies(test-cli-run-nokernel tpbk_stream)
+endif()
 set_target_properties(test-cli-run-nokernel PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
     LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
@@ -37,9 +41,12 @@ endif()
 # --- dimargs test executable (Pack B1) ---
 add_executable(test-cli-run-dimargs EXCLUDE_FROM_ALL
     test-cli-run-dimargs.c
-    ${CMAKE_SOURCE_DIR}/src/tpbcli-run-dim.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/run/tpbcli-run-dim.c
 )
-target_include_directories(test-cli-run-dimargs PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(test-cli-run-dimargs PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/run
+)
 target_link_libraries(test-cli-run-dimargs PRIVATE tpbench m)
 set_target_properties(test-cli-run-dimargs PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
@@ -57,9 +64,12 @@ tpb_add_subcase(B1 B1.5 total_count      test-cli-run-dimargs tpbcli)
 # --- tpbcli-argp (Pack B3) ---
 add_executable(test-tpbcli-argp EXCLUDE_FROM_ALL
     test_tpbcli_argp.c
-    ${CMAKE_SOURCE_DIR}/src/tpbcli-argp.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/argp/tpbcli-argp.c
 )
-target_include_directories(test-tpbcli-argp PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_include_directories(test-tpbcli-argp PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/argp
+)
 target_link_libraries(test-tpbcli-argp PRIVATE tpbench m)
 set_target_properties(test-tpbcli-argp PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"

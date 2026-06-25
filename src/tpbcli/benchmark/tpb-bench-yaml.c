@@ -9,9 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include "tpb-public.h"
 #include "tpb-bench-yaml.h"
-#include "corelib/tpb-types.h"
-#include "corelib/tpb-io.h"
 
 /* Parser state */
 typedef enum {

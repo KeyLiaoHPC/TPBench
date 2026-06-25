@@ -7,9 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "tpb-public.h"
 #include "tpb-bench-score.h"
-#include "corelib/tpb-io.h"
-#include "corelib/tpb-types.h"
 
 /* Forward declaration for recursive calculation */
 static double calculate_score(tpb_benchmark_t *bench, int score_idx);

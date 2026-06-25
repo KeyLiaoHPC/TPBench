@@ -146,7 +146,8 @@ set_target_properties(test-kernel-record PROPERTIES
 tpb_add_subcase(A7 A7.1 build_attr_counts test-kernel-record corelib)
 if(TARGET tpbk_stream)
     target_compile_definitions(test-kernel-record PRIVATE
-        TPB_TEST_STREAM_SO=1)
+        TPB_TEST_STREAM_SO=1
+        "TPB_TEST_TPB_HOME=\"${CMAKE_BINARY_DIR}\"")
     add_dependencies(test-kernel-record tpbk_stream)
     tpb_add_subcase(A7 A7.2 stream_register_record test-kernel-record corelib)
 endif()

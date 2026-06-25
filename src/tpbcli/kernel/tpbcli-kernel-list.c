@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "include/tpb-public.h"
+#include "tpb-public.h"
 
 #include "tpbcli-kernel-list.h"
 

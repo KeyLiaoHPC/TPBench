@@ -3,7 +3,10 @@
  * Pure-C SHA1 implementation (RFC 3174). No external dependencies.
  */
 
+#include <stdio.h>
 #include <string.h>
+
+#include "../../include/tpb-public.h"
 #include "tpb-sha1.h"
 
 /* Local Function Prototypes */
@@ -168,4 +171,35 @@ tpb_sha1(const void *data, size_t len, unsigned char digest[20])
     tpb_sha1_init(&ctx);
     tpb_sha1_update(&ctx, data, len);
     tpb_sha1_final(&ctx, digest);
+}
+
+/**
+ * @brief SHA-1 hash the contents of a regular file.
+ */
+int
+tpb_raf_hash_file(const char *filepath, unsigned char sha1_out[20])
+{
+    FILE *fp;
+    tpb_sha1_ctx_t ctx;
+    unsigned char buf[4096];
+    size_t nread;
+
+    if (filepath == NULL || sha1_out == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+    fp = fopen(filepath, "rb");
+    if (fp == NULL) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    tpb_sha1_init(&ctx);
+    while ((nread = fread(buf, 1, sizeof(buf), fp)) > 0) {
+        tpb_sha1_update(&ctx, buf, nread);
+    }
+    if (ferror(fp)) {
+        fclose(fp);
+        return TPBE_FILE_IO_FAIL;
+    }
+    tpb_sha1_final(&ctx, sha1_out);
+    fclose(fp);
+    return TPBE_SUCCESS;
 }

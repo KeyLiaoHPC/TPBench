@@ -434,7 +434,9 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
 
 The command configures and builds with **`find_package(TPBench)`**, backs up any prior active `.so`, installs **`libtpbk_<name>.so`** into **`<tpb-home>/lib`**, reactivates the matching KernelID, and writes compile metadata via **`kernel set`**.
 
-Runtime kernel discovery uses **`$TPB_HOME`** (then **`$HOME/.tpbench`**) to locate **`bin/`**, **`lib/`**, and **`include/`** — set these in your environment before **`tpbcli run`**.
+Runtime kernel discovery uses **`$TPB_HOME`** (then **`$HOME/.tpbench`**) to locate **`bin/`**, **`lib/`**, and **`include/`** — set these in your environment before **`tpbcli run`**. When running from a build tree without installing, point **`TPB_HOME`** at the CMake build directory (for example `export TPB_HOME=$PWD/build`).
+
+The **`tpbcli`** executable and its subcommands are implemented under **`src/tpbcli/`**; they consume only the public **`tpbench.h`** API from **`libtpbench.so`**. Third-party tools should link the library the same way rather than including corelib or rafdb private headers.
 
 Example workflow:
 

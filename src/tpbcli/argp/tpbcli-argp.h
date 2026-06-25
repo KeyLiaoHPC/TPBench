@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-#include "include/tpb-public.h"
+#include "tpb-public.h"
 
 typedef struct tpbcli_argnode tpbcli_argnode_t;
 typedef struct tpbcli_argtree tpbcli_argtree_t;

@@ -3,8 +3,9 @@
  * Help subcommand implementation.
  */
 
+#include "tpb-public.h"
 #include "tpbcli-help.h"
-#include "corelib/tpb-io.h"
+#include "tpbcli-help-doc.h"
 
 /* Local Function Prototypes */
 
@@ -40,6 +41,6 @@ tpbcli_help(int argc, char **argv)
         return err;
     }
 
-    tpb_print_help_total();
+    tpbcli_print_help_total();
     return TPBE_EXIT_ON_HELP;
 }

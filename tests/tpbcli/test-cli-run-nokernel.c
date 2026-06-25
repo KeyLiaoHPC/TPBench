@@ -12,7 +12,16 @@
 #define TPB_TEST_TPBCLI_STR "./bin/tpbcli"
 #endif
 
+#ifndef TPB_TEST_TPB_HOME
+#define TPB_TEST_TPB_HOME ""
+#endif
+
 /* Local Function Prototypes */
+
+/*
+ * Prefix shell command with TPB_HOME/TPB_WORKSPACE when TPB_TEST_TPB_HOME set.
+ */
+static void build_tpbcli_cmd(char *cmd, size_t cmd_sz, const char *args);
 
 /*
  * Expect nonzero exit and stderr containing the preceding --kernel hint.
@@ -50,6 +59,19 @@ static int g_fail;
 } while (0)
 
 #define PASS() do { g_pass++; } while (0)
+
+static void
+build_tpbcli_cmd(char *cmd, size_t cmd_sz, const char *args)
+{
+    if (TPB_TEST_TPB_HOME[0] != '\0') {
+        snprintf(cmd, cmd_sz,
+                 "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"%s\" %s",
+                 TPB_TEST_TPB_HOME, TPB_TEST_TPB_HOME,
+                 TPB_TEST_TPBCLI_STR, args);
+    } else {
+        snprintf(cmd, cmd_sz, "\"%s\" %s", TPB_TEST_TPBCLI_STR, args);
+    }
+}
 
 static int
 run_cmd_capture(const char *cmd, char *errbuf, size_t errbuf_sz)
@@ -106,9 +128,7 @@ static int
 test_kargs_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kargs ntest=10 --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd), "run --kargs ntest=10 --kernel stream");
     return expect_fail_with_hint("B2.1 kargs_before_kernel", cmd);
 }
 
@@ -116,9 +136,8 @@ static int
 test_kargs_dim_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kargs-dim 'ntest=[10,20]' --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kargs-dim 'ntest=[10,20]' --kernel stream");
     return expect_fail_with_hint("B2.2 kargs_dim_before_kernel", cmd);
 }
 
@@ -126,9 +145,8 @@ static int
 test_kenvs_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kenvs OMP_NUM_THREADS=4 --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kenvs OMP_NUM_THREADS=4 --kernel stream");
     return expect_fail_with_hint("B2.3 kenvs_before_kernel", cmd);
 }
 
@@ -136,9 +154,8 @@ static int
 test_kmpiargs_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kmpiargs '-np 2' --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kmpiargs '-np 2' --kernel stream");
     return expect_fail_with_hint("B2.4 kmpiargs_before_kernel", cmd);
 }
 
@@ -146,9 +163,8 @@ static int
 test_kenvs_dim_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream");
     return expect_fail_with_hint("B2.6 kenvs_dim_before_kernel", cmd);
 }
 
@@ -156,9 +172,8 @@ static int
 test_kmpiargs_dim_before_kernel(void)
 {
     char cmd[4096];
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kmpiargs-dim 'np=[1,2]' --kernel stream",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kmpiargs-dim 'np=[1,2]' --kernel stream");
     return expect_fail_with_hint("B2.7 kmpiargs_dim_before_kernel", cmd);
 }
 
@@ -168,9 +183,9 @@ test_normal_with_kernel(void)
     char cmd[4096];
     int code;
 
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kernel stream --kargs stream_array_size=524288,ntest=5",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kernel stream "
+                     "--kargs stream_array_size=524288,ntest=5");
     code = run_cmd_capture(cmd, NULL, 0);
     if (code != 0) {
         FAIL("B2.5 normal_with_kernel");
@@ -188,10 +203,9 @@ test_dry_run_basic(void)
     char buf[8192];
     int code;
 
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run -d --kernel stream "
-             "--kargs stream_array_size=1000,ntest=5",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run -d --kernel stream "
+                     "--kargs stream_array_size=1000,ntest=5");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.8 dry_run_basic: nonzero exit");
@@ -219,7 +233,7 @@ test_help_run_level(void)
     char buf[8192];
     int code;
 
-    snprintf(cmd, sizeof(cmd), "\"%s\" run --help", TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd), "run --help");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.9 help_run_level: expected exit 0 (help is success)");
@@ -242,7 +256,7 @@ test_help_kernel_no_name(void)
     char buf[8192];
     int code;
 
-    snprintf(cmd, sizeof(cmd), "\"%s\" run --kernel -h", TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd), "run --kernel -h");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.10: expected exit 0 (help is success)");
@@ -265,9 +279,7 @@ test_bad_kernel_name(void)
     char buf[8192];
     int code;
 
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kernel nonexistent_kern",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd), "run --kernel nonexistent_kern");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code == 0) {
         FAIL("B2.11: expected nonzero exit");
@@ -292,11 +304,10 @@ test_dry_run_cartesian(void)
     int exec_count = 0;
     const char *p;
 
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run -d --kernel stream "
-             "--kargs-dim 'stream_array_size=[1000,2000]' "
-             "--kargs-dim 'ntest=[10,20]'",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run -d --kernel stream "
+                     "--kargs-dim 'stream_array_size=[1000,2000]' "
+                     "--kargs-dim 'ntest=[10,20]'");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.12 dry_run_cartesian: nonzero exit");
@@ -323,9 +334,7 @@ test_help_kernel_specific(void)
     char buf[8192];
     int code;
 
-    snprintf(cmd, sizeof(cmd),
-             "\"%s\" run --kernel stream --help",
-             TPB_TEST_TPBCLI_STR);
+    build_tpbcli_cmd(cmd, sizeof(cmd), "run --kernel stream --help");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.13: expected exit 0 (help is success)");

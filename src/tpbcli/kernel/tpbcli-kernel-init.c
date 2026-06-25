@@ -8,9 +8,13 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>
+#ifdef __linux__
+#include <linux/limits.h>
+#else
+#include <limits.h>
+#endif
 
-#include "include/tpb-public.h"
-#include "corelib/tpb-dynloader.h"
+#include "tpb-public.h"
 #include "tpbcli-kernel-home.h"
 #include "tpbcli-kernel-init.h"
 

@@ -128,6 +128,49 @@ enum _tpb_errno {
 };
 typedef enum _tpb_errno tpb_errno_t;
 
+/**
+ * @brief Map TPBE_* code to TPBE_NOTE / TPBE_WARN / TPBE_FAIL print tag.
+ * @param err Error code from tpb_errno_t.
+ * @return Severity tag suitable for tpb_printf mode bits.
+ */
+int tpb_get_err_exit_flag(int err);
+
+/**
+ * @brief Human-readable message for a TPBE_* code.
+ * @param err Error code from tpb_errno_t.
+ * @return Message string; never NULL.
+ */
+const char *tpb_get_err_msg(int err);
+
+/**
+ * @brief Log a formatted error and return the error code.
+ * @param err Error code from tpb_errno_t.
+ * @param context Short caller context string.
+ * @return err unchanged.
+ */
+int tpb_report_error(int err, const char *context);
+
+/**
+ * @brief Log a formatted error and exit when severity is TPBE_FAIL.
+ * @param err Error code from tpb_errno_t.
+ * @param context Short caller context string.
+ */
+void tpb_exit_on_error(int err, const char *context);
+
+#define TPB_EXIT_ON_ERROR(err, ctx) \
+    do { \
+        if ((err) != TPBE_SUCCESS) { \
+            tpb_exit_on_error((err), (ctx)); \
+        } \
+    } while (0)
+
+#define TPB_RETURN_ON_ERROR(err, ctx) \
+    do { \
+        if ((err) != TPBE_SUCCESS) { \
+            return tpb_report_error((err), (ctx)); \
+        } \
+    } while (0)
+
 /** @brief Process context that last completed corelib init in this process. */
 typedef enum {
     TPB_CORELIB_CTX_CALLER_TPBCLI = 1,
@@ -523,6 +566,185 @@ int tpb_register_kernel(void);
  */
 int tpb_register_kernels(int n, const char *const *names);
 
+/* ===== Driver Orchestration API ===== */
+
+/**
+ * @brief Set kernel argument value for the current handle.
+ * @param parm_name Parameter name.
+ * @param v Pointer to value to set.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
+
+/**
+ * @brief Set environment variable for the current handle.
+ * @param env_name Environment variable name.
+ * @param env_value Environment variable value.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_set_hdl_env(const char *env_name, const char *env_value);
+
+/**
+ * @brief Replace MPI arguments string for the current handle.
+ * @param mpiargs_str MPI arguments string passed to launcher as-is.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_set_hdl_mpiargs(const char *mpiargs_str);
+
+/**
+ * @brief Append MPI arguments to the current handle.
+ * @param mpiargs_str MPI arguments string to append.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_append_hdl_mpiargs(const char *mpiargs_str);
+
+/**
+ * @brief Get MPI arguments string from the current handle.
+ * @return MPI arguments string, or NULL; do not free.
+ */
+const char *tpb_driver_get_hdl_mpiargs(void);
+
+/**
+ * @brief Copy argpack/envpack/mpipack from a source handle index.
+ * @param src_idx Source handle index.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_copy_hdl_from(int src_idx);
+
+/**
+ * @brief Get the current handle index.
+ * @return Current handle index, or -1 if none.
+ */
+int tpb_driver_get_current_hdl_idx(void);
+
+/**
+ * @brief Add a handle for a kernel by name.
+ * @param kernel_name Kernel name.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_add_handle(const char *kernel_name);
+
+/**
+ * @brief Run all handles (indices 0 .. nhdl-1).
+ * @return TPBE_SUCCESS or error code on first failure.
+ */
+int tpb_driver_run_all(void);
+
+/**
+ * @brief Enable dry-run mode for tpb_run_pli.
+ * @param enabled Nonzero to enable, zero to disable.
+ */
+void tpb_driver_set_dry_run(int enabled);
+
+/**
+ * @brief Reset handles for the next batch run.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_driver_reset_handles(void);
+
+/**
+ * @brief Get number of handles in the current batch.
+ * @return Number of handles.
+ */
+int tpb_get_nhdl(void);
+
+/* ===== Host Argument Parsing API ===== */
+
+/**
+ * @brief Validate kernel arguments against kernel parameter definitions.
+ * @param common_tokens Common tokens parsed from CLI.
+ * @param ncommon Number of common tokens.
+ * @param kernel_tokens Kernel-specific tokens parsed from CLI.
+ * @param nkernel Number of kernel-specific tokens.
+ * @param kernel Pointer to kernel definition.
+ * @param rt_parms_out Output runtime parameters array.
+ * @param nparms_out Output number of parameters.
+ * @return TPBE_SUCCESS or validation error code.
+ */
+int tpb_check_kargs(char **common_tokens, int ncommon,
+                    char **kernel_tokens, int nkernel,
+                    tpb_kernel_t *kernel,
+                    tpb_rt_parm_t **rt_parms_out, int *nparms_out);
+
+/**
+ * @brief Parse comma-separated key=value string and set kernel arguments.
+ * @param nchar Number of characters in tokstr (unused, compatibility).
+ * @param tokstr Comma-separated key=value string.
+ * @param narg Optional counter incremented per token.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg);
+
+/**
+ * @brief Set the timer for the driver by name.
+ * @param timer_name Timer name ("clock_gettime", "tsc_asym").
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_argp_set_timer(const char *timer_name);
+
+/* ===== Batch Recording API (host process) ===== */
+
+/**
+ * @brief Begin a new task batch and cache batch context.
+ * @param batch_type TPB_BATCH_TYPE_RUN or TPB_BATCH_TYPE_BENCHMARK.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_record_begin_batch(uint32_t batch_type);
+
+/**
+ * @brief Get the 40-char hex string of the current TBatchID.
+ * @return Pointer to static hex buffer, or NULL if no batch is active.
+ */
+const char *tpb_record_get_tbatch_id_hex(void);
+
+/**
+ * @brief Get the workspace path cached by tpb_record_begin_batch().
+ * @return Pointer to static path buffer, or NULL if no batch is active.
+ */
+const char *tpb_record_get_workspace(void);
+
+/**
+ * @brief End the current task batch and finalize tbatch records.
+ * @param ntask Number of tasks executed in this batch (reserved).
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_record_end_batch(int ntask);
+
+/* ===== Host I/O API ===== */
+
+/**
+ * @brief Set output formatting arguments for CLI display.
+ * @param unit_cast Enable unit casting (0 or 1).
+ * @param sigbit_trim Significant bits for trimming (0 = no trim).
+ */
+void tpb_set_outargs(int unit_cast, int sigbit_trim);
+
+/**
+ * @brief Get the current run log file path.
+ * @return Path to the log file, or NULL if not initialized.
+ */
+const char *tpb_log_get_filepath(void);
+
+/**
+ * @brief Cleanup and close the run log file.
+ */
+void tpb_log_cleanup(void);
+
+/* ===== Installation Path API ===== */
+
+/**
+ * @brief Get the resolved TPBench installation root (TPB_HOME).
+ * @return Installation root path, or NULL if unset.
+ */
+const char *tpb_dl_get_tpb_home(void);
+
+/**
+ * @brief Override the resolved TPBench installation root.
+ * @param path Absolute or relative install root path.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_dl_force_tpb_home(const char *path);
+
 /* ===== CLI Output Helpers ===== */
 
 /**
@@ -557,6 +779,25 @@ int tpb_cliout_results(tpb_k_rthdl_t *handle);
 
 /** @brief 64-bit bit-packed datetime representation */
 typedef uint64_t tpb_dtbits_t;
+
+/**
+ * @brief Datetime structure storing components from year to second.
+ */
+typedef struct tpb_datetime {
+    uint16_t year;  /**< Full year, e.g. 2026 */
+    uint8_t  month; /**< 1-12 */
+    uint8_t  day;   /**< 1-31 */
+    uint8_t  hour;  /**< 0-23 */
+    uint8_t  min;   /**< 0-59 */
+    uint8_t  sec;   /**< 0-59 */
+} tpb_datetime_t;
+
+/**
+ * @brief Buffer for ISO 8601 formatted datetime strings.
+ */
+typedef struct tpb_datetime_str {
+    char str[32]; /**< ISO 8601 formatted datetime string */
+} tpb_datetime_str_t;
 
 /** @brief Maximum number of dimensions for record data */
 #define TPBM_DATA_NDIM_MAX 7
@@ -1069,6 +1310,147 @@ int tpb_raf_hex_to_id(const char *hex, unsigned char id[20]);
 int tpb_raf_find_record(const char *workspace,
                           const unsigned char id[20],
                           uint8_t *domain_out);
+
+/** @brief Domain filter: scan all rafdb record domains. */
+#define TPB_RAF_DOM_ALL ((uint8_t)0xFF)
+
+/** @brief One match from tpb_raf_scan_records_by_id_prefix(). */
+typedef struct tpb_raf_id_match {
+    char    id_hex[41]; /**< Lowercase 40-char hex ID plus NUL */
+    uint8_t domain;     /**< TPB_RAF_DOM_TBATCH, _KERNEL, or _TASK */
+} tpb_raf_id_match_t;
+
+/**
+ * @brief Resolve a user path to an existing rafdb .tpbr/.tpbe file.
+ * @param workspace Workspace root path.
+ * @param inpath User path or basename.
+ * @param resolved Output buffer for absolute path.
+ * @param resolved_cap Capacity of resolved buffer.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_resolve_record_file(const char *workspace, const char *inpath,
+                                char *resolved, size_t resolved_cap);
+
+/**
+ * @brief Scan .tpbr files whose record ID hex starts with a prefix.
+ * @param workspace Workspace root path.
+ * @param id_hex_prefix Lowercase hex prefix.
+ * @param prefix_len Prefix length in characters (4-40).
+ * @param domain_filter TPB_RAF_DOM_* or TPB_RAF_DOM_ALL.
+ * @param matches_out Output allocated array; free with tpb_raf_free_id_matches().
+ * @param nmatch_out Output number of matches.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_scan_records_by_id_prefix(const char *workspace,
+                                      const char *id_hex_prefix,
+                                      size_t prefix_len,
+                                      uint8_t domain_filter,
+                                      tpb_raf_id_match_t **matches_out,
+                                      int *nmatch_out);
+
+/**
+ * @brief Free array returned by tpb_raf_scan_records_by_id_prefix().
+ * @param matches Array from scan API, may be NULL.
+ */
+void tpb_raf_free_id_matches(tpb_raf_id_match_t *matches);
+
+/**
+ * @brief SHA-1 hash the contents of a regular file.
+ * @param filepath Path to readable file.
+ * @param sha1_out Output 20-byte digest buffer.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_hash_file(const char *filepath, unsigned char sha1_out[20]);
+
+/** Number of fixed metadata headers appended after parms/metrics in kernel .tpbr */
+#define TPB_RAF_KERNEL_META_HDR_COUNT   3
+
+/** Metadata header names in kernel .tpbr */
+#define TPB_RAF_KERNEL_HDR_VARIATION    "variation"
+#define TPB_RAF_KERNEL_HDR_COMPILATION  "compilation"
+#define TPB_RAF_KERNEL_HDR_DEPENDENCY   "dependency"
+
+/** Environment variable: allow overwriting an existing KernelID record */
+#define TPB_K_OVERRIDE_ENV              "TPB_K_OVERRIDE"
+
+/**
+ * @brief Return nonzero if TPB_K_OVERRIDE allows overwriting KernelID records.
+ * @return Nonzero when override is enabled.
+ */
+int tpb_raf_kernel_override_enabled(void);
+
+/**
+ * @brief Find a header index by exact name in a kernel attr.
+ * @param attr Kernel attributes from tpb_raf_record_read_kernel().
+ * @param name Header name to find.
+ * @return Index >= 0, or -1 if not found.
+ */
+int tpb_raf_kernel_find_header(const kernel_attr_t *attr, const char *name);
+
+/**
+ * @brief Read a key from metadata kv payload.
+ * @param payload Metadata kv payload string.
+ * @param key Dotted key without section prefix.
+ * @param value_out Output buffer for value.
+ * @param value_len Capacity of value_out.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
+                               char *value_out, size_t value_len);
+
+/**
+ * @brief Patch active flag in kernel .tpbe entry for a KernelID.
+ * @param workspace Workspace root path.
+ * @param kernel_id 20-byte KernelID.
+ * @param active Active flag (0 or 1).
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_entry_patch_kernel_active(const char *workspace,
+                                      const unsigned char kernel_id[20],
+                                      uint32_t active);
+
+/**
+ * @brief Patch active flag in kernel .tpbr fixed attributes.
+ * @param workspace Workspace root path.
+ * @param kernel_id 20-byte KernelID.
+ * @param active Active flag (0 or 1).
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_record_patch_kernel_active(const char *workspace,
+                                       const unsigned char kernel_id[20],
+                                       uint32_t active);
+
+/**
+ * @brief Deactivate all kernel entries with the given name except skip_id.
+ * @param workspace Workspace root path.
+ * @param kernel_name Logical kernel name.
+ * @param skip_id KernelID to keep active.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_kernel_deactivate_same_name(const char *workspace,
+                                        const char *kernel_name,
+                                        const unsigned char skip_id[20]);
+
+/**
+ * @brief Update one metadata key on an existing kernel .tpbr record.
+ * @param workspace Workspace root path.
+ * @param kernel_id 20-byte KernelID.
+ * @param full_key Dotted key with section prefix.
+ * @param value New value string.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_kernel_update_meta_key(const char *workspace,
+                                   const unsigned char kernel_id[20],
+                                   const char *full_key,
+                                   const char *value);
+
+/**
+ * @brief Convert 64-bit datetime bits to ISO 8601 UTC string.
+ * @param bits Encoded datetime bits.
+ * @param str Output ISO string structure.
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_ts_bits_to_isoutc(tpb_dtbits_t bits, tpb_datetime_str_t *str);
 
 /* ===== Task Record Merge API ===== */
 

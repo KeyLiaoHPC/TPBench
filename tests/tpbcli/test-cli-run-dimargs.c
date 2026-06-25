@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "../../src/tpbcli-run-dim.h"
+#include "../../src/tpbcli/run/tpbcli-run-dim.h"
 
 static int g_pass = 0;
 static int g_fail = 0;

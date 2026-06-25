@@ -441,12 +441,6 @@ tpb_printf(uint64_t mode_bit, char *fmt, ...)
     fflush(stderr);
 }
 
-void
-tpb_print_help_total(void)
-{
-    printf(TPBM_HELP_DOC_TOTAL);
-}
-
 int
 tpb_cliout_args(tpb_k_rthdl_t *handle)
 {
