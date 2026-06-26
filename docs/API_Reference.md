@@ -1065,41 +1065,75 @@ const char *tpb_get_err_msg(int err);
 
 ---
 
-### `tpb_char_is_legal_int`
+## Task Capsule API
 
-Verify a string represents an integer within [lower, upper].
+Functions for grouping per-unit task records into a task capsule. Declared in `tpb-public.h`. MPI kernels should prefer `tpb_mpik_write_task()`; the APIs below support ad-hoc multi-thread or multi-process workflows.
+
+### `tpb_k_create_capsule_task`
+
+Create a task capsule record and publish its ID to POSIX shared memory for followers.
 
 ```c
-int tpb_char_is_legal_int(int64_t lower, int64_t upper, char *str);
+int tpb_k_create_capsule_task(const unsigned char first_task_id[20],
+                              unsigned char capsule_id_out[20]);
 ```
 
 **Parameters:**
-- `lower`: Lower bound
-- `upper`: Upper bound
-- `str`: String to verify
+- `first_task_id`: TaskRecordID of the leader's own task record
+- `capsule_id_out`: Output 20-byte TaskCapsuleRecordID
 
 **Returns:**
-- `1` if legal
-- `0` otherwise
+- `0` on success, error code otherwise
 
 ---
 
-### `tpb_char_is_legal_fp`
+### `tpb_k_sync_capsule_task`
 
-Verify a string represents a floating point within [lower, upper].
+Read the task capsule ID from POSIX shared memory (non-leader ranks or threads).
+
+Blocks until the leader sets the ready flag after `tpb_k_create_capsule_task()`. The shared-memory object name is derived from `kernel_id` and `handle_index` (same values as env `TPB_KERNEL_ID` and `TPB_HANDLE_INDEX`).
 
 ```c
-int tpb_char_is_legal_fp(double lower, double upper, char *str);
+int tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
+                            uint32_t handle_index,
+                            unsigned char capsule_id_out[20]);
 ```
 
 **Parameters:**
-- `lower`: Lower bound
-- `upper`: Upper bound
-- `str`: String to verify
+- `kernel_id`: 20-byte KernelID
+- `handle_index`: Handle index within the batch
+- `capsule_id_out`: Output 20-byte TaskCapsuleRecordID
 
 **Returns:**
-- `1` if legal
-- `0` otherwise
+- `0` on success, error code otherwise
+
+---
+
+### `tpb_k_append_capsule_task`
+
+Append a TaskRecordID to an existing task capsule `.tpbr` under advisory locking.
+
+```c
+int tpb_k_append_capsule_task(const unsigned char capsule_id[20],
+                              const unsigned char task_id[20]);
+```
+
+**Returns:**
+- `0` on success, error code otherwise
+
+---
+
+### `tpb_k_unlink_capsule_sync_shm`
+
+Remove the capsule sync shared-memory object after all units have read the capsule ID.
+
+```c
+int tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
+                                  uint32_t handle_index);
+```
+
+**Returns:**
+- `0` on success; `ENOENT` is treated as success
 
 ---
 

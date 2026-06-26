@@ -181,16 +181,44 @@ static int
 test_normal_with_kernel(void)
 {
     char cmd[4096];
+    char buf[32768];
+    const char *triad_line;
+    double triad_bw;
     int code;
 
     build_tpbcli_cmd(cmd, sizeof(cmd),
                      "run --kernel stream "
                      "--kargs stream_array_size=524288,ntest=5");
-    code = run_cmd_capture(cmd, NULL, 0);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
         FAIL("B2.5 normal_with_kernel");
         fprintf(stderr, "    expected exit 0, got %d\n", code);
         return 1;
+    }
+    if (strstr(buf, "Solution Validates") == NULL) {
+        FAIL("B2.5 normal_with_kernel: missing validation");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "FOM,BANDWIDTH::Triad") == NULL &&
+        strstr(buf, "Triad:") == NULL) {
+        FAIL("B2.5 normal_with_kernel: missing Triad metric");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "MB/s") == NULL) {
+        FAIL("B2.5 normal_with_kernel: missing MB/s units");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    triad_line = strstr(buf, "Triad:");
+    if (triad_line != NULL) {
+        if (sscanf(triad_line, "Triad: %lf", &triad_bw) != 1 ||
+            triad_bw <= 0.0) {
+            FAIL("B2.5 normal_with_kernel: invalid Triad bandwidth");
+            fprintf(stderr, "    line: %.80s\n", triad_line);
+            return 1;
+        }
     }
     PASS();
     return 0;

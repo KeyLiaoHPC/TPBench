@@ -57,14 +57,6 @@ tpb_dl_scan_kernel(const char *kernel_name)
     return 0;
 }
 
-/* Overrides tpb_dl_get_ktype in libtpbench.so */
-TPB_K_CTRL
-tpb_dl_get_ktype(const char *kernel_name)
-{
-    (void)kernel_name;
-    return TPB_KTYPE_PLI;
-}
-
 /* Overrides tpb_dl_get_tpb_home in libtpbench.so */
 const char *
 tpb_dl_get_tpb_home(void)

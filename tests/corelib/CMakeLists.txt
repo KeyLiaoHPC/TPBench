@@ -130,6 +130,7 @@ tpb_add_subcase(A6 A6.5  tpbe_lists_capsule     test-capsule corelib)
 tpb_add_subcase(A6 A6.6  append_once            test-capsule corelib)
 tpb_add_subcase(A6 A6.7  append_multi           test-capsule corelib)
 tpb_add_subcase(A6 A6.8  subprocess_append      test-capsule corelib)
+tpb_add_subcase(A6 A6.9  sync_capsule_task        test-capsule corelib)
 
 # --- kernel record tests (Pack A7) ---
 add_executable(test-kernel-record EXCLUDE_FROM_ALL

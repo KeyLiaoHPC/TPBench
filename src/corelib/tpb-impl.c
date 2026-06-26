@@ -4,8 +4,6 @@
  */
 
 #include <stdlib.h>
-#include <ctype.h>
-#include <errno.h>
 #include "tpb-impl.h"
 #include "tpb-types.h"
 #include "../include/tpb-public.h"
@@ -86,74 +84,4 @@ tpb_exit_on_error(int err, const char *context)
     if (tpb_get_err_exit_flag(err) == TPBE_FAIL) {
         exit(err);
     }
-}
-
-int
-tpb_char_is_legal_int(int64_t lower, int64_t upper, char *str)
-{
-    char *endptr;
-    long long val;
-
-    if (str == NULL) {
-        return 0;
-    }
-    while (isspace((unsigned char)*str)) {
-        str++;
-    }
-    if (*str == '\0') {
-        return 0;
-    }
-    errno = 0;
-    val = strtoll(str, &endptr, 10);
-    if (errno == ERANGE) {
-        return 0;
-    }
-    if (str == endptr) {
-        return 0;
-    }
-    while (*endptr != '\0') {
-        if (!isspace((unsigned char)*endptr)) {
-            return 0;
-        }
-        endptr++;
-    }
-    if (val < lower || val > upper) {
-        return 0;
-    }
-    return 1;
-}
-
-int
-tpb_char_is_legal_fp(double lower, double upper, char *str)
-{
-    char *endptr;
-    double val;
-
-    if (str == NULL) {
-        return 0;
-    }
-    while (isspace((unsigned char)*str)) {
-        str++;
-    }
-    if (*str == '\0') {
-        return 0;
-    }
-    errno = 0;
-    val = strtod(str, &endptr);
-    if (errno == ERANGE) {
-        return 0;
-    }
-    if (str == endptr) {
-        return 0;
-    }
-    while (*endptr != '\0') {
-        if (!isspace((unsigned char)*endptr)) {
-            return 0;
-        }
-        endptr++;
-    }
-    if (val < lower || val > upper) {
-        return 0;
-    }
-    return 1;
 }

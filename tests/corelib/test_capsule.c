@@ -601,6 +601,58 @@ test_subprocess_workers_append(void)
     return 0;
 }
 
+/* A6.9 */
+static int
+test_sync_capsule_task(void)
+{
+    unsigned char tid[20], cap[20], synced[20];
+    unsigned char kid[20];
+    int err;
+
+    setup_env_workspace();
+    err = tpb_raf_init_workspace(g_test_dir);
+    if (err != 0) {
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    if (tpb_raf_hex_to_id(
+            "f1e2d3c4b5a6f1e2d3c4b5a6f1e2d3c4b5a6f1e2", kid) != 0) {
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    err = write_min_task(tid);
+    if (err != 0) {
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    err = tpb_k_create_capsule_task(tid, cap);
+    if (err != 0) {
+        unlink_test_capsule_shm();
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    err = tpb_k_sync_capsule_task(kid, 0, synced);
+    if (err != 0) {
+        unlink_test_capsule_shm();
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    if (memcmp(cap, synced, 20) != 0) {
+        unlink_test_capsule_shm();
+        cleanup_env_workspace();
+        return 1;
+    }
+
+    unlink_test_capsule_shm();
+    cleanup_env_workspace();
+    return 0;
+}
+
 static int
 capsule_append_submain(int argc, char **argv)
 {
@@ -641,6 +693,7 @@ main(int argc, char **argv)
         { "A6.6", "append once", test_append_once },
         { "A6.7", "append multi", test_append_multi },
         { "A6.8", "subprocess append", test_subprocess_workers_append },
+        { "A6.9", "sync_capsule_task", test_sync_capsule_task },
     };
 
     fail = run_pack("A6", cases, (int)(sizeof(cases) / sizeof(cases[0])),

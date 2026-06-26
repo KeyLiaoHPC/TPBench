@@ -719,18 +719,3 @@ tpb_dl_is_complete(const char *kernel_name)
 
     return dyn_kernels[idx].complete;
 }
-
-TPB_K_CTRL
-tpb_dl_get_ktype(const char *kernel_name)
-{
-    if (kernel_name == NULL) {
-        return 0;
-    }
-
-    int idx = _sf_find_dyn_kernel(kernel_name);
-    if (idx < 0) {
-        return 0;
-    }
-
-    return dyn_kernels[idx].ktype;
-}
