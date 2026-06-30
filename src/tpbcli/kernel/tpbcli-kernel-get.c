@@ -14,75 +14,151 @@
 
 #include "tpb-public.h"
 #include "tpbcli-kernel-get.h"
+#include "tpbcli-print-kernel-help.h"
+
+/* Local Function Prototypes */
+
+static int _sf_get_header_payload(const kernel_attr_t *attr,
+                                  const void *data, const char *hdr_name,
+                                  char *buf, size_t bufsz);
+static void _sf_variation_summary(const char *payload, char *out,
+                                  size_t outlen);
+static void _sf_print_kernel_versions(FILE *out, const char *workspace,
+                                      const kernel_entry_t *entries, int n,
+                                      const char *kernel_name);
+static int _sf_pick_latest_entry(const kernel_entry_t *entries, int n,
+                                 const char *kernel_name, int *out_idx);
+static int _sf_find_entry_by_id(const kernel_entry_t *entries, int n,
+                                const unsigned char kernel_id[20],
+                                int *out_idx);
+static void _sf_print_get_usage(void);
+
+/* Local Function Implementations */
 
 static void
-_sf_print_meta_payload(const char *label, const kernel_attr_t *attr,
-                       const void *data, const char *hdr_name)
+_sf_print_get_usage(void)
+{
+    fprintf(stderr,
+            "Usage: tpbcli kernel get [-v] (--kernel <name>|--id <hex>)\n");
+}
+
+static int
+_sf_get_header_payload(const kernel_attr_t *attr, const void *data,
+                       const char *hdr_name, char *buf, size_t bufsz)
 {
     int idx;
-    char val[4096];
     uint64_t off = 0;
     uint32_t j;
+    const char *payload;
+
+    if (buf == NULL || bufsz == 0) {
+        return TPBE_NULLPTR_ARG;
+    }
+    buf[0] = '\0';
+    if (attr == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
 
     idx = tpb_raf_kernel_find_header(attr, hdr_name);
     if (idx < 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s: (missing)\n", label);
-        return;
+        return TPBE_LIST_NOT_FOUND;
     }
-
     for (j = 0; j < (uint32_t)idx; j++) {
         off += attr->headers[j].data_size;
     }
+    if (data == NULL || attr->headers[idx].data_size == 0) {
+        return TPBE_SUCCESS;
+    }
+    payload = (const char *)((const uint8_t *)data + off);
+    snprintf(buf, bufsz, "%s", payload);
+    return TPBE_SUCCESS;
+}
 
-    if (data != NULL && attr->headers[idx].data_size > 0) {
-        const char *payload = (const char *)((const uint8_t *)data + off);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s:\n%s\n", label, payload);
-        (void)tpb_raf_kernel_meta_kv_get(payload, "active", val, sizeof(val));
-    } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s: (empty)\n", label);
+static void
+_sf_variation_summary(const char *payload, char *out, size_t outlen)
+{
+    const char *line;
+    const char *p;
+
+    if (out == NULL || outlen == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (payload == NULL || payload[0] == '\0') {
+        return;
+    }
+
+    line = payload;
+    while (*line != '\0') {
+        while (*line == '\n' || *line == '\r') {
+            line++;
+        }
+        if (line[0] == '\0') {
+            break;
+        }
+        if (strncmp(line, "format=", 7) == 0 ||
+            strncmp(line, "section=", 8) == 0) {
+            p = strchr(line, '\n');
+            line = (p != NULL) ? p + 1 : line + strlen(line);
+            continue;
+        }
+        p = strchr(line, '\n');
+        if (p != NULL) {
+            size_t n = (size_t)(p - line);
+            if (n >= outlen) {
+                n = outlen - 1;
+            }
+            memcpy(out, line, n);
+            out[n] = '\0';
+        } else {
+            snprintf(out, outlen, "%s", line);
+        }
+        return;
     }
 }
 
 static void
-_sf_print_kernel_detail(const char *workspace,
-                        const kernel_entry_t *ent)
+_sf_print_kernel_versions(FILE *out, const char *workspace,
+                          const kernel_entry_t *entries, int n,
+                          const char *kernel_name)
 {
+    char kid_hex[41];
+    char payload[4096];
+    char variation[512];
     kernel_attr_t attr;
     void *data = NULL;
     uint64_t datasize = 0;
-    char kid_hex[41];
-    uint32_t i;
     int err;
+    int i;
 
-    tpb_raf_id_to_hex(ent->kernel_id, kid_hex);
-    tpb_printf(TPBM_PRTN_M_DIRECT,
-               "KernelID: %s\nName: %s\nActive: %u\nnparm: %u nmetric: %u\n",
-               kid_hex, ent->kernel_name, ent->active,
-               ent->nparm, ent->nmetric);
+    fprintf(out, "Kernel Versions:\n");
+    fprintf(out, "%-40s %s\n", "ID", "Variation");
 
-    memset(&attr, 0, sizeof(attr));
-    err = tpb_raf_record_read_kernel(workspace, ent->kernel_id,
-                                     &attr, &data, &datasize);
-    if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "(record read failed: %d)\n", err);
-        return;
+    for (i = n - 1; i >= 0; i--) {
+        if (strcmp(entries[i].kernel_name, kernel_name) != 0) {
+            continue;
+        }
+        tpb_raf_id_to_hex(entries[i].kernel_id, kid_hex);
+        variation[0] = '\0';
+        memset(&attr, 0, sizeof(attr));
+        err = tpb_raf_record_read_kernel(workspace, entries[i].kernel_id,
+                                         &attr, &data, &datasize);
+        if (err == TPBE_SUCCESS) {
+            if (_sf_get_header_payload(&attr, data,
+                                       TPB_RAF_KERNEL_HDR_VARIATION,
+                                       payload, sizeof(payload)) ==
+                TPBE_SUCCESS) {
+                _sf_variation_summary(payload, variation, sizeof(variation));
+            }
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            data = NULL;
+        }
+        if (variation[0] == '\0') {
+            snprintf(variation, sizeof(variation), "-");
+        }
+        fprintf(out, "%-40s %s\n", kid_hex, variation);
     }
-
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Headers: %u\n", attr.nheader);
-    for (i = 0; i < attr.nheader; i++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "  [%u] %s\n", i, attr.headers[i].name);
-    }
-
-    _sf_print_meta_payload("variation", &attr, data,
-                           TPB_RAF_KERNEL_HDR_VARIATION);
-    _sf_print_meta_payload("compilation", &attr, data,
-                           TPB_RAF_KERNEL_HDR_COMPILATION);
-    _sf_print_meta_payload("dependency", &attr, data,
-                           TPB_RAF_KERNEL_HDR_DEPENDENCY);
-
-    tpb_raf_free_headers(attr.headers, attr.nheader);
-    free(data);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "----\n");
 }
 
 static int
@@ -111,32 +187,54 @@ _sf_pick_latest_entry(const kernel_entry_t *entries, int n,
     return TPBE_LIST_NOT_FOUND;
 }
 
+static int
+_sf_find_entry_by_id(const kernel_entry_t *entries, int n,
+                     const unsigned char kernel_id[20], int *out_idx)
+{
+    int i;
+
+    for (i = 0; i < n; i++) {
+        if (memcmp(entries[i].kernel_id, kernel_id, 20) == 0) {
+            *out_idx = i;
+            return TPBE_SUCCESS;
+        }
+    }
+    return TPBE_LIST_NOT_FOUND;
+}
+
 int
 tpbcli_kernel_get(int argc, char **argv)
 {
     const char *kernel_name = NULL;
+    const char *kernel_id_hex = NULL;
     char workspace[PATH_MAX];
     kernel_entry_t *entries = NULL;
+    kernel_attr_t attr;
+    void *data = NULL;
+    uint64_t datasize = 0;
+    unsigned char kernel_id[20];
     int n = 0;
     int verbose = 0;
     int err;
     int i;
+    int idx;
 
     for (i = 3; i < argc; i++) {
-        if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
+        if (strcmp(argv[i], "-v") == 0) {
             verbose = 1;
         } else if (strcmp(argv[i], "--kernel") == 0 && i + 1 < argc) {
             kernel_name = argv[++i];
+        } else if (strcmp(argv[i], "--id") == 0 && i + 1 < argc) {
+            kernel_id_hex = argv[++i];
         } else {
-            fprintf(stderr,
-                    "Usage: tpbcli kernel get [--verbose|-v] --kernel <name>\n");
+            _sf_print_get_usage();
             return TPBE_CLI_FAIL;
         }
     }
 
-    if (kernel_name == NULL) {
-        fprintf(stderr,
-                "Usage: tpbcli kernel get [--verbose|-v] --kernel <name>\n");
+    if ((kernel_name == NULL && kernel_id_hex == NULL) ||
+        (kernel_name != NULL && kernel_id_hex != NULL)) {
+        _sf_print_get_usage();
         return TPBE_CLI_FAIL;
     }
 
@@ -150,25 +248,23 @@ tpbcli_kernel_get(int argc, char **argv)
         return err;
     }
 
-    if (verbose) {
-        int shown = 0;
-
-        for (i = n - 1; i >= 0; i--) {
-            if (strcmp(entries[i].kernel_name, kernel_name) != 0) {
-                continue;
-            }
-            _sf_print_kernel_detail(workspace, &entries[i]);
-            shown++;
-        }
-        if (shown == 0) {
+    if (kernel_id_hex != NULL) {
+        err = tpb_raf_hex_to_id(kernel_id_hex, kernel_id);
+        if (err != TPBE_SUCCESS) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
-                       "No kernel records for '%s'.\n", kernel_name);
+                       "Invalid kernel id '%s'.\n", kernel_id_hex);
             free(entries);
-            return TPBE_LIST_NOT_FOUND;
+            return err;
         }
+        err = _sf_find_entry_by_id(entries, n, kernel_id, &idx);
+        if (err != TPBE_SUCCESS) {
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "No kernel record for id '%s'.\n", kernel_id_hex);
+            free(entries);
+            return err;
+        }
+        kernel_name = entries[idx].kernel_name;
     } else {
-        int idx;
-
         err = _sf_pick_latest_entry(entries, n, kernel_name, &idx);
         if (err != TPBE_SUCCESS) {
             tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
@@ -176,9 +272,27 @@ tpbcli_kernel_get(int argc, char **argv)
             free(entries);
             return err;
         }
-        _sf_print_kernel_detail(workspace, &entries[idx]);
     }
 
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_kernel(workspace, entries[idx].kernel_id,
+                                     &attr, &data, &datasize);
+    if (err != TPBE_SUCCESS) {
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                   "Failed to read kernel record (%d).\n", err);
+        free(entries);
+        return err;
+    }
+
+    if (verbose) {
+        tpbcli_print_kernel_help_from_attr(stdout, &attr, data, datasize);
+        _sf_print_kernel_versions(stdout, workspace, entries, n, kernel_name);
+    } else {
+        tpbcli_print_kernel_names_from_attr(&attr);
+    }
+
+    tpb_raf_free_headers(attr.headers, attr.nheader);
+    free(data);
     free(entries);
     return TPBE_SUCCESS;
 }

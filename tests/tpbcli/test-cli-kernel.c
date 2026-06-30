@@ -145,8 +145,9 @@ test_b5_2_get_no_register_side_effect(void)
         FAIL("B5.2 get changed kernel.tpbe entry count");
         return 1;
     }
-    if (strstr(buf, "KernelID:") == NULL) {
-        FAIL("B5.2 missing KernelID output");
+    if (strstr(buf, "ntest") == NULL &&
+        strstr(buf, "stream_array_size") == NULL) {
+        FAIL("B5.2 missing parameter names");
         return 1;
     }
     PASS();
@@ -185,11 +186,28 @@ test_b5_3_set_and_get_metadata(void)
 
     snprintf(cmd, sizeof(cmd),
              "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
-             "\" kernel get --kernel stream",
+             "\" kernel get -v --kernel stream",
              TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0 || strstr(buf, "kernel_cflags=-O2") == NULL) {
-        FAIL("B5.3 get missing metadata");
+    if (code != 0 || strstr(buf, "Kernel: stream") == NULL ||
+        strstr(buf, "Parameters::CLI") == NULL) {
+        FAIL("B5.3 get verbose missing kernel info");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Type/Description") == NULL ||
+        strstr(buf, "Tags/Unit/Description") == NULL) {
+        FAIL("B5.3 get verbose missing column headers");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "(/type:") != NULL) {
+        FAIL("B5.3 get verbose still uses old type wrapper");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Data throughput (e.g. MB/s, GB/s)") == NULL) {
+        FAIL("B5.3 get verbose missing unit category description");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
@@ -291,11 +309,21 @@ test_b5_5_init_and_build_template(void)
 
     snprintf(cmd, sizeof(cmd),
              "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
-             "\" kernel get --kernel tmpltest",
+             "\" kernel get -v --kernel tmpltest",
              TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0 || strstr(buf, "kernel_cflags=-O2") == NULL) {
-        FAIL("B5.5 get missing compile metadata");
+    if (code != 0 || strstr(buf, "Kernel: tmpltest") == NULL ||
+        strstr(buf, "Kernel Versions:") == NULL ||
+        strstr(buf, "Parameters::CLI") == NULL) {
+        FAIL("B5.5 get verbose missing kernel info");
+        return 1;
+    }
+    if (strstr(buf, "Tags/Unit/Description") == NULL) {
+        FAIL("B5.5 get verbose missing metric column header");
+        return 1;
+    }
+    if (strstr(buf, "Unspecified unit") == NULL) {
+        FAIL("B5.5 get verbose missing unspecified unit category");
         return 1;
     }
 

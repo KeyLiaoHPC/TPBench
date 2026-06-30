@@ -15,6 +15,10 @@ count_active_entries() {
     grep -c '^Active: 1$' || true
 }
 
+count_version_rows() {
+    awk '/^Kernel Versions:/{found=1; next} found && /^[0-9a-f]{40} /{c++} END{print c+0}'
+}
+
 rm -rf "${WS}" "${DIR_A}" "${DIR_B}"
 mkdir -p "${WS}"
 
@@ -32,8 +36,7 @@ out_a="$(TPB_HOME="${TPB_HOME}" TPB_WORKSPACE="${WS}" \
     "${TPBCLI}" kernel get -v --kernel "${KERNEL}" 2>&1)"
 echo "${out_a}"
 test "$(echo "${out_a}" | count_active_entries)" -eq 1
-echo "${out_a}" | grep -q 'kernel_cflags=-O2'
-echo "${out_a}" | grep -q "${DIR_A}"
+test "$(echo "${out_a}" | count_version_rows)" -eq 1
 
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel build --dir "${DIR_B}" --kernel "${KERNEL}" \
     --cflags "-O3 -DTMPL_VARIANT=2"
@@ -43,9 +46,7 @@ out_b="$(TPB_HOME="${TPB_HOME}" TPB_WORKSPACE="${WS}" \
     "${TPBCLI}" kernel get -v --kernel "${KERNEL}" 2>&1)"
 echo "${out_b}"
 test "$(echo "${out_b}" | count_active_entries)" -eq 1
-echo "${out_b}" | grep -q 'kernel_cflags=-O2'
-echo "${out_b}" | grep -q 'kernel_cflags=-O3'
-echo "${out_b}" | grep -q "${DIR_B}"
+test "$(echo "${out_b}" | count_version_rows)" -eq 2
 
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel build --dir "${DIR_A}" --kernel "${KERNEL}" \
     --cflags "-O2 -DTMPL_VARIANT=1"
@@ -55,10 +56,7 @@ out_final="$(TPB_HOME="${TPB_HOME}" TPB_WORKSPACE="${WS}" \
     "${TPBCLI}" kernel get -v --kernel "${KERNEL}" 2>&1)"
 echo "${out_final}"
 test "$(echo "${out_final}" | count_active_entries)" -eq 1
-echo "${out_final}" | grep -q 'kernel_cflags=-O2'
-echo "${out_final}" | grep -q 'kernel_cflags=-O3'
-echo "${out_final}" | grep -q "${DIR_A}"
-echo "${out_final}" | grep -q "${DIR_B}"
+test "$(echo "${out_final}" | count_version_rows)" -eq 2
 
 test -d "${TPB_HOME}/lib/inactive"
 

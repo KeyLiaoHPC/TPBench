@@ -77,7 +77,7 @@ tpbcli run <tpbench_options> \
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
 - `-d` / `--dry-run`: Parse arguments, expand dimensions, print `Exec:` lines for each handle, but do not fork the kernel or write auto-record batches.
-- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints kernel-specific help (see below).
+- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints detailed kernel help (parameters, metrics, version/variation when recorded) in the same layout as **`tpbcli kernel get -v`**.
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
     - `sigbit_trim=<x>`: Limit the number of significant digits in output data. Integer parts exceeding the number of digits will be represented in scientific notation.
@@ -364,10 +364,12 @@ Scans `lib/libtpbk_*.so`, registers any new KernelID, and prints available kerne
 
 ```bash
 tpbcli kernel get --kernel <name>
-tpbcli kernel get -v --kernel <name>    # all variants, newest first
+tpbcli kernel get --id <40-char-hex-kernel-id>
+tpbcli kernel get -v --kernel <name>    # detailed active/latest record + versions
+tpbcli kernel get -v --id <hex>         # detailed record by KernelID + versions
 ```
 
-**`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it shows the latest **active** record for the given name; if none are active, it shows the newest record and marks it inactive.
+**`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it prints only parameter and metric names for the active record (or the newest if none are active). With **`-v`**, it prints the full kernel help layout and a **`Kernel Versions:`** table listing all known IDs and variation tags for that kernel name.
 
 ### 2.4.3 Set compile metadata
 

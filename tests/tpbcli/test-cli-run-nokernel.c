@@ -314,8 +314,14 @@ test_bad_kernel_name(void)
         return 1;
     }
     if (strstr(buf, "requires a legal kernel name") == NULL &&
+        strstr(buf, "Kernel nonexistent_kern not found") == NULL &&
         strstr(buf, "Failed to scan kernel nonexistent_kern") == NULL) {
         FAIL("B2.11: missing hint");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Available kernels:") == NULL) {
+        FAIL("B2.11: missing available kernel list");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
@@ -369,9 +375,39 @@ test_help_kernel_specific(void)
         fprintf(stderr, "    exit %d\n", code);
         return 1;
     }
-    if (strstr(buf, "Parameters:") == NULL
-        && strstr(buf, "Outputs:") == NULL) {
+    if (strstr(buf, "Kernel: stream") == NULL ||
+        strstr(buf, "Parameters::CLI") == NULL ||
+        strstr(buf, "Metrics") == NULL) {
         FAIL("B2.13: missing kernel info");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Type/Description") == NULL ||
+        strstr(buf, "Tags/Unit/Description") == NULL) {
+        FAIL("B2.13: missing column headers");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "(/type:") != NULL) {
+        FAIL("B2.13: old parameter type wrapper still present");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "long int") == NULL ||
+        strstr(buf, "unsigned int") == NULL) {
+        FAIL("B2.13: missing parameter type strings");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Allocated memory size") == NULL ||
+        strstr(buf, "INPARM::Allocated memory size") != NULL) {
+        FAIL("B2.13: metric name/tag split incorrect");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "INPARM") == NULL ||
+        strstr(buf, "Data size (e.g. B, MB, GB)") == NULL) {
+        FAIL("B2.13: missing metric tag or unit category");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }

@@ -19,6 +19,7 @@
 #include "tpbcli-run.h"
 #include "tpbcli-run-dim.h"
 #include "tpbcli-argp.h"
+#include "tpbcli-print-kernel-help.h"
 
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16
@@ -710,7 +711,6 @@ static void
 _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
 {
     tpb_kernel_t *kernel = NULL;
-    int i;
 
     if (g_kernel_parsed_for_help) {
         g_kernel_parsed_for_help = 0;
@@ -718,28 +718,10 @@ _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
         if (kernel == NULL) {
             fprintf(out, "Kernel '%s' info not available.\n",
                     g_pending_kernel_name);
+            _sf_print_kernel_list(out);
             return;
         }
-        fprintf(out, "Kernel: %s\n", kernel->info.name);
-        fprintf(out, "  %s\n\n", kernel->info.note);
-
-        if (kernel->info.nparms > 0) {
-            fprintf(out, "Parameters:\n");
-            for (i = 0; i < kernel->info.nparms; i++) {
-                tpb_rt_parm_t *p = &kernel->info.parms[i];
-                fprintf(out, "  %-20s %s\n", p->name, p->note);
-            }
-            fprintf(out, "\n");
-        }
-
-        if (kernel->info.nouts > 0) {
-            fprintf(out, "Outputs:\n");
-            for (i = 0; i < kernel->info.nouts; i++) {
-                tpb_k_output_t *o = &kernel->info.outs[i];
-                fprintf(out, "  %-20s %s\n", o->name, o->note);
-            }
-        }
-
+        tpbcli_print_kernel_help_from_kernel(out, kernel, NULL, 1);
         tpb_free_kernel(kernel);
         free(kernel);
         return;
@@ -790,11 +772,8 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
 
     err = tpb_driver_add_handle(value);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "--kernel option requires a legal kernel name.\n");
+        fprintf(stderr, "Kernel %s not found\n", value);
         _sf_print_kernel_list(stderr);
-        fprintf(stderr, "\n");
-        tpbcli_default_help(node, stderr);
         return err;
     }
 
@@ -949,10 +928,27 @@ tpbcli_run(int argc, char **argv)
 
     if (n_run_kernels > 0) {
         err = tpb_register_kernels(n_run_kernels, run_kernel_ptrs);
+        if (err != 0) {
+            (void)tpb_register_kernel();
+            for (i = 0; i < n_run_kernels; i++) {
+                tpb_kernel_t *probe = NULL;
+
+                tpb_query_kernel(-1, run_kernel_ptrs[i], &probe);
+                if (probe == NULL) {
+                    fprintf(stderr, "Kernel %s not found\n",
+                            run_kernel_ptrs[i]);
+                } else {
+                    tpb_free_kernel(probe);
+                    free(probe);
+                }
+            }
+            _sf_print_kernel_list(stderr);
+            return err;
+        }
     } else {
         err = tpb_register_kernel();
+        TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernel");
     }
-    TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernels");
 
     tree = tpbcli_argtree_create(
         (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",

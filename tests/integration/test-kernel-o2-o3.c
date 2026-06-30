@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include <sys/wait.h>
 
 #ifndef TPB_TEST_TPBCLI_STR
@@ -46,14 +47,52 @@ run_cmd_capture(const char *cmd, char *outbuf, size_t outbuf_sz)
     }
 }
 
+static int
+count_kernel_version_rows(const char *buf)
+{
+    const char *sec;
+    const char *line;
+    int count = 0;
+    int i;
+
+    sec = strstr(buf, "Kernel Versions:");
+    if (sec == NULL) {
+        return 0;
+    }
+    line = strchr(sec, '\n');
+    if (line == NULL) {
+        return 0;
+    }
+    line = strchr(line + 1, '\n');
+    if (line == NULL) {
+        return 0;
+    }
+
+    while (line != NULL && line[1] != '\0') {
+        line++;
+        if (strlen(line) < 40) {
+            break;
+        }
+        for (i = 0; i < 40; i++) {
+            if (!isxdigit((unsigned char)line[i])) {
+                break;
+            }
+        }
+        if (i == 40 && (line[40] == ' ' || line[40] == '\t')) {
+            count++;
+        }
+        line = strchr(line, '\n');
+    }
+    return count;
+}
+
 int
 main(int argc, char **argv)
 {
     char cmd[4096];
     char buf[16384];
     int code;
-    int has_o2 = 0;
-    int has_o3 = 0;
+    int n_versions;
     (void)argc;
     (void)argv;
 
@@ -67,23 +106,15 @@ main(int argc, char **argv)
         return 1;
     }
 
-    if (strstr(buf, "kernel_cflags=-O2") != NULL ||
-        strstr(buf, "kernel_cflags= -O2") != NULL ||
-        strstr(buf, "c_flags=") != NULL) {
-        has_o2 = 1;
-    }
-    if (strstr(buf, "kernel_cflags=-O3") != NULL ||
-        strstr(buf, "kernel_cflags= -O3") != NULL) {
-        has_o3 = 1;
-    }
-
-    if (!has_o2 || !has_o3) {
-        fprintf(stderr, "C3.1 FAIL: expected O2 and O3 metadata (o2=%d o3=%d)\n",
-                has_o2, has_o3);
+    n_versions = count_kernel_version_rows(buf);
+    if (n_versions < 2) {
+        fprintf(stderr,
+                "C3.1 FAIL: expected at least 2 kernel version rows (got %d)\n",
+                n_versions);
         fprintf(stderr, "output: %.800s\n", buf);
         return 1;
     }
 
-    printf("C3.1 PASS: found O2 and O3 stream variants\n");
+    printf("C3.1 PASS: found %d stream kernel version rows\n", n_versions);
     return 0;
 }
