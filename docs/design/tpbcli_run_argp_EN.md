@@ -8,11 +8,11 @@ This document analyzes the argument parsing workflow of the `tpbcli run` subcomm
 tpbcli_run()
   ├── tpb_register_kernel()          // Register _tpb_common metadata + scan .so (no handle created)
   ├── parse_run()                    // Parse CLI arguments
-  │   ├── --kernel                   // Create new handle (first becomes handle_list[0])
-  │   ├── --kargs …                  // Must follow --kernel; sets current handle
-  │   ├── --kargs-dim …              // Must follow --kernel; deferred expansion
-  │   ├── --kenvs / --kenvs-dim      // Must follow --kernel
-  │   ├── --kmpiargs / --kmpiargs-dim // Must follow --kernel
+  │   ├── --wrapper / --wrapper-args   // Global before first --kernel; local after --kernel
+  │   ├── --kernel [-og]               // Create new handle; bind wrappers on transition
+  │   ├── --kargs …                    // Must follow --kernel; sets current handle
+  │   ├── --kargs-dim …                // Must follow --kernel; deferred expansion
+  │   ├── --kenvs / --kenvs-dim        // Must follow --kernel
   │   ├── --timer                    // Timer backend
   │   └── --outargs                  // Output formatting
   └── tpb_driver_run_all()           // Execute handle_list[0..nhdl-1]
@@ -57,7 +57,7 @@ tpb_register_kernel()
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
 
-`_tpb_common` still describes a set of "documentation/merge-purpose" common parameter names, but **no longer** corresponds to a runtime pseudo-handle. The CLI disallows any `--kargs*` / `--kenvs*` / `--kmpiargs*` before the first `--kernel`.
+`_tpb_common` still describes a set of "documentation/merge-purpose" common parameter names, but **no longer** corresponds to a runtime pseudo-handle. The CLI disallows `--kargs*` / `--kenvs*` before the first `--kernel`. Global `--wrapper` links are allowed before the first `--kernel`.
 
 Common parameters (`kernel_common`) default values (metadata only; unrelated to whether a specific kernel implements same-named parameters):
 
@@ -87,8 +87,9 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // Current kernel name
 | `--kargs-dim 'parm=spec'` | Requires `pending_kernel_name`; parsed and chained into `pending_dim_cfg`, **deferred expansion** | **Deferred** |
 | `--kenvs K=V,K=V` | Requires `pending_kernel_name`; `parse_kenvs_tokstr()` | Immediate |
 | `--kenvs-dim '...'` | Requires `pending_kernel_name`; parsed then **immediately** `expand_env_dim_handles()` | Immediate |
-| `--kmpiargs '...'` | Requires `pending_kernel_name`; `parse_kmpiargs_quoted()` → **append** (multiple calls concatenate) | Immediate |
-| `--kmpiargs-dim '[...]'` | Requires `pending_kernel_name`; `expand_kmpiargs_dim()` **immediately expands** | Immediate |
+| `--wrapper <app>` | Before first `--kernel`: append to global chain; after a kernel: append to segment chain for that kernel | Immediate |
+| `--wrapper-args '...'` | Child of `--wrapper`; append args to most recent link in the active chain | Immediate |
+| `-og` / `--override-global` | Kernel child; skip global chain when binding wrappers to this kernel | Immediate |
 | `--timer <name>` | Set timer backend (clock_gettime / tsc_asym) | Immediate |
 | `--outargs ...` | Set output formatting (unit_cast, sigbit_trim) | Immediate |
 
@@ -319,7 +320,20 @@ apply_dim_value(dim_val, index)
 4. Perform range validation (`TPB_PARM_RANGE`) or list validation (`TPB_PARM_LIST`)
 5. Update `parm->value`
 
-## 7. Differential Handling of `--kenvs-dim` and `--kmpiargs-dim`
+## 7. Wrapper Binding on Kernel Transitions
+
+When `_sf_parse_kernel()` sees a new `--kernel`, it binds the effective wrapper chain to the **previous** handle before creating the new one. After parsing completes, the last handle is bound as well.
+
+| Phase | Global chain | Segment chain | `-og` | Effective chain |
+|-------|--------------|---------------|-------|-----------------|
+| Before first `--kernel` | appended by `--wrapper` | — | — | global only (when bound) |
+| After `--kernel` | unchanged | appended by `--wrapper` | set by kernel child | global + segment, or segment only if `-og` |
+
+`tpb_driver_set_hdl_wrappers_idx()` deep-copies the effective chain into `handle_list[i].wrapperpack`.
+
+## 8. (Legacy removed) `--kmpiargs-dim`
+
+`--kmpiargs` / `--kmpiargs-dim` have been removed. Use `--wrapper mpirun --wrapper-args '...'` instead. Dimension sweeps over MPI settings are not built into the CLI; use multiple handles via `--kargs-dim` / manual wrapper segments or benchmark YAML.
 
 | Dimension Type | Expansion Timing | Expansion Method |
 |----------------|------------------|------------------|
@@ -363,7 +377,7 @@ tpb_driver_add_handle(kernel_name)
   ├── Copy kernel info
   ├── Build argpack: copy default values from kernel->info.parms (no pseudo-handle override)
   ├── envpack cleared (empty)
-  └── mpipack cleared (empty)
+  └── wrapperpack cleared (empty)
 ```
 
 ### 8.2 `tpb_driver_copy_hdl_from()` — Copying Existing Configuration
@@ -376,7 +390,7 @@ Used when `--kenvs-dim` and `--kmpiargs-dim` expansion creates new handles:
 tpb_driver_copy_hdl_from(src_idx)
   ├── Copy argpack values for same-named parameters
   ├── Copy envpack (full replacement)
-  └── Copy mpipack (full replacement)
+  └── Copy wrapperpack (deep copy)
 ```
 
 Note: `--kargs-dim` expansion does **not** use `copy_hdl_from`: the first combination modifies the current handle in-place; subsequent combinations `add_handle` and carry only **kernel-registered defaults**, then apply each dimension's value (they do not automatically copy parameters modified via `--kargs` on a previous combination).
@@ -444,8 +458,8 @@ Each handle (tpb_k_rthdl_t) contains:
   │   └── args[]: tpb_rt_parm_t { name, value, ctrlbits, plims, nlims }
   ├── envpack:    Environment variables (set by --kenvs/--kenvs-dim)
   │   └── envs[]: tpb_env_entry_t { name, value }
-  ├── mpipack:    MPI arguments (set by --kmpiargs/--kmpiargs-dim)
-  │   └── mpiargs: char* (e.g. "-np 2 --bind-to core")
+  ├── wrapperpack: ordered PLI wrapper chain (set by --wrapper/--wrapper-args binding)
+  │   └── links[]: {app, args} ordered wrapper chain
   └── respack:    Runtime outputs (populated during kernel execution)
       └── outputs[]: tpb_k_output_t { name, dtype, unit, n, p }
 ```

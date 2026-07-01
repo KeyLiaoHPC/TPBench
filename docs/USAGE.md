@@ -63,15 +63,19 @@ Output results on screen are also written to the log directory.
 
 ### 2.2.1 Basic Format
 
-Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` options, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim`, `--kenvs-dim`, and `--kmpiargs-dim`, the options need to be quoted.
+Command-line format for `tpbcli run` shown below. By combining `kargs[_dim]`/`kenvs[_dim]` with optional `--wrapper` chains, run multiple kernel evaluations. Create different parameter combinations for different kernels. Use one command to run multi-dimensional variable parameter tests for multiple kernels. In the command format below, all angle bracket `<>` options must be replaced with actual option names. Note that when using `--kargs-dim` and `--kenvs-dim`, the options need to be quoted.
 
 ```bash
 tpbcli run <tpbench_options> \
-[--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
+[--wrapper <app> [--wrapper-args '<args>']]... \
+[--kernel <kernel_name> [-og] \
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts>] \
+[--wrapper <app> [--wrapper-args '<args>']]...]...
 ```
 
-**Rule:** Every `--kargs`, `--kargs-dim`, `--kenvs`, `--kenvs-dim`, `--kmpiargs`, and `--kmpiargs-dim` must appear **after** a `--kernel` that it applies to (the most recent `--kernel` on the command line). There is no separate “default” handle for settings before the first `--kernel`.
+**Rule:** Every `--kargs`, `--kargs-dim`, `--kenvs`, and `--kenvs-dim` must appear **after** a `--kernel` that it applies to (the most recent `--kernel` on the command line). There is no separate “default” handle for settings before the first `--kernel`.
+
+**Wrapper rule:** `--wrapper` / `--wrapper-args` before the first `--kernel` form a **global** chain prepended to every kernel unless that kernel group uses `-og` / `--override-global`. Wrappers after a `--kernel` (and before the next `--kernel`) belong to that kernel only. Wrappers chain in order; later wrappers do not replace earlier ones.
 
 `<tpbench_options>` supported options include:
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
@@ -90,9 +94,9 @@ tpbcli run <tpbench_options> \
 
 Syntax: `--kernel <kernel_name> --kargs <key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...`
 
-For one `--kernel` block, `--kargs`, `--kenvs`, and `--kmpiargs` can appear multiple times, but options with suffix `_dim` follow the limits in section 2.2.3. When the same parameter name is set more than once in the same block, the last occurrence wins.
+For one `--kernel` block, `--kargs` and `--kenvs` can appear multiple times, but options with suffix `_dim` follow the limits in section 2.2.3. When the same parameter name is set more than once in the same block, the last occurrence wins.
 
-Parameter options (`--kargs`, `--kenvs`, and `--kmpiargs`) accept a comma-separated list of `<key>=<value>` entries. TPBench checks names and types against that kernel’s registered parameters. If multiple settings apply to the same parameter for one handle, the priority is: values from `--kargs-dim` / `--kenvs-dim` / `--kmpiargs-dim` expansion (where applicable) override plain `--kargs` / `--kenvs` / `--kmpiargs`, and later options override earlier ones in the same block.
+Parameter options (`--kargs` and `--kenvs`) accept a comma-separated list of `<key>=<value>` entries. TPBench checks names and types against that kernel’s registered parameters. If multiple settings apply to the same parameter for one handle, the priority is: values from `--kargs-dim` / `--kenvs-dim` expansion (where applicable) override plain `--kargs` / `--kenvs`, and later options override earlier ones in the same block.
 
 Note: Registered defaults may not match what the kernel finally uses after its own logic (e.g. alignment). For example, `total_memsize=128` KiB with double precision triad (`a_i=b_i+s*c_i`) may yield **131064** bytes per array, not 131072. After each run, the kernel prints the parameters it actually used.
 
@@ -226,53 +230,54 @@ Example: Run triad. Loop 100 times. Memory size 128KiB. Use 16 OpenMP threads. G
 $ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THREADS=16,OMP_PLACES="{0:4}:4:4"
 ```
 
-### 2.2.7 Set MPI Runtime Parameters
+### 2.2.7 PLI Wrapper Chain
 
-**1) Set MPI Arguments**
+Use `--wrapper` and `--wrapper-args` to prepend an ordered chain of executables before the kernel entry command. MPI runs use `--wrapper mpirun --wrapper-args '...'` instead of a dedicated MPI CLI option.
 
-The `--kmpiargs` option accepts a string that is passed as-is to `mpirun`. The string should be enclosed in single or double quotes.
+**1) Global and per-kernel wrappers**
 
-Syntax: `--kmpiargs '<mpi_args_string>'`
+- Wrappers **before** the first `--kernel` apply to every kernel (global chain).
+- Wrappers **after** a `--kernel` apply only to that kernel (local chain), appended after the global chain.
+- `-og` / `--override-global` on a kernel group skips the global chain for that kernel; local wrappers are kept.
 
-Example: Run stream_mpi kernel with 100 test iterations, aggregate array size of 43690 elements per array across all ranks, using 2 MPI processes.
+Syntax:
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs '-np 2'
+--wrapper <app> [--wrapper-args '<args_str>']
 ```
 
-You can specify `--kmpiargs` multiple times after the same `--kernel`; each fragment is concatenated with a space.
+Example: global `numactl`, second kernel also uses `mpirun`:
 
-**2) Variable MPI Arguments**
+```bash
+$ tpbcli run --wrapper numactl --kernel stream --kernel stream_mpi \
+    --wrapper mpirun --wrapper-args '-np 20'
+```
 
-`--kmpiargs-dim` supports a single quoted list of MPI argument strings. Each list entry becomes one handle (after copying the rest of the handle from the template). To combine process counts and binding policies, put both fragments in **one** list entry (space-separated within the quoted string).
+Example: override global wrappers for the second kernel:
 
-Syntax: `--kmpiargs-dim "['opt1', 'opt2', ...]"`
+```bash
+$ tpbcli run --wrapper numactl --kernel stream --kernel stream_mpi -og \
+    --wrapper mpirun --wrapper-args '-np 20'
+```
 
-Example: Run `stream_mpi`, scanning MPI process counts 1, 2, and 4.
+Example: MPI kernel with explicit `mpirun` path:
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs '--bind-to core' \
-    --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
+    --wrapper mpirun --wrapper-args '-np 2'
 ```
 
-Example: Several full `mpirun` argument bundles in one list (each row is one handle):
+You can specify `--wrapper-args` multiple times after the same `--wrapper`; each fragment is concatenated with a space. `--wrapper-args` without a preceding `--wrapper` is rejected.
 
-```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs-dim "['-np 2 --bind-to core', '-np 2 --bind-to socket', \
-                     '-np 4 --bind-to core', '-np 4 --bind-to socket']"
-```
-
-**3) Command Line Visibility**
+**2) Command Line Visibility**
 
 When TPBench executes a PLI kernel, the full command line is printed to the terminal for debugging and analysis. The command line format is:
 
 ```
-TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <launcher> <kernel.so> <timer> <params...>
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [wrapper_app wrapper_args ...] <kernel_entry> <timer> <params...>
 ```
 
-Note: MPI arguments are passed directly to `mpirun` and are not validated by TPBench. Errors will be reported if `mpirun` subprocesses fail.
+`<kernel_entry>` is the resolved command that starts the kernel (for shared-library PLI kernels this is typically `tpbcli-pli-launcher` plus the kernel `.so` path). Wrapper failures are reported by the wrapper executable; TPBench does not validate wrapper arguments.
 
 ## 2.3 tpbcli database
 

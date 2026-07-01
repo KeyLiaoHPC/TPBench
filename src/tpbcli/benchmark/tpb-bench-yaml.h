@@ -31,7 +31,8 @@ typedef struct tpb_bench_batch {
     char kernel[64];          /**< Kernel name */
     char kargs[2048];         /**< Formatted as key=val:key=val */
     char kenvs[1024];         /**< Environment variables string */
-    char kmpiargs[1024];      /**< MPI arguments string */
+    char wrapper[256];        /**< Wrapper executable (e.g. mpirun) */
+    char wrapper_args[1024];  /**< Wrapper arguments string */
     int nvspecs;              /**< Number of value specifications */
     tpb_bench_vspec_t vspecs[TPB_BENCH_MAX_VSPECS];
     double vresults[TPB_BENCH_MAX_VSPECS];  /**< Parsed results from log */

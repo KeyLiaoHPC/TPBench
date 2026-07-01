@@ -82,27 +82,26 @@ int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
 int tpb_driver_set_hdl_env(const char *env_name, const char *env_value);
 
 /**
- * @brief Set MPI arguments string for current handle (replaces existing).
- * @param mpiargs_str MPI arguments string to pass to launcher as-is
+ * @brief Replace ordered wrapper chain for the current handle.
+ * @param links Array of wrapper links (deep-copied).
+ * @param nlinks Number of links (0 clears the chain).
  * @return 0 on success, error code otherwise.
  */
-int tpb_driver_set_hdl_mpiargs(const char *mpiargs_str);
+int tpb_driver_set_hdl_wrappers(const tpb_wrapper_link_t *links, int nlinks);
 
 /**
- * @brief Append MPI arguments to current handle (concatenates with space).
- * @param mpiargs_str MPI arguments string to append
+ * @brief Replace ordered wrapper chain for a handle by index.
+ * @param hdl_idx Handle index (0 .. nhdl-1).
+ * @param links Array of wrapper links (deep-copied).
+ * @param nlinks Number of links (0 clears the chain).
  * @return 0 on success, error code otherwise.
  */
-int tpb_driver_append_hdl_mpiargs(const char *mpiargs_str);
+int tpb_driver_set_hdl_wrappers_idx(int hdl_idx,
+                                    const tpb_wrapper_link_t *links,
+                                    int nlinks);
 
 /**
- * @brief Get MPI arguments string from current handle.
- * @return MPI arguments string (may be NULL), do not free.
- */
-const char *tpb_driver_get_hdl_mpiargs(void);
-
-/**
- * @brief Copy argpack, envpack, and mpipack from source handle index to current handle.
+ * @brief Copy argpack, envpack, and wrapperpack from source handle index to current handle.
  * @param src_idx Source handle index to copy from.
  * @return 0 on success, error code otherwise.
  */

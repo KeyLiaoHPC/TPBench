@@ -124,8 +124,9 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 | `--kargs-dim <spec>`      | 对 kernel 参数做维度扫描；多个 flag 做笛卡尔积（最多 16 个）。                           |
 | `--kenvs <KEY=VAL,...>`   | 传给 kernel 进程的 per-handle 环境变量。                                     |
 | `--kenvs-dim <spec>`      | 对环境变量做维度扫描。                                                        |
-| `--kmpiargs '<args>'`     | 追加 MPI launcher 参数（引号字符串；MPI kernel）。                              |
-| `--kmpiargs-dim '[...]'`  | 对 MPI 参数列表做维度扫描（`['arg1','arg2',…]`）。                              |
+| `--wrapper <app>` | 启动 PLI wrapper 链（按顺序链接；第一个 `--kernel` 之前为全局，之后为当前 kernel 局部）。 |
+| `--wrapper-args '<args>'` | 追加到最近一个 `--wrapper` 的参数（引号字符串）。 |
+| `-og` / `--override-global` | 当前 kernel 忽略全局 wrapper 链（保留局部 wrapper）。 |
 | `--timer <name>`          | 计时后端；预设默认 `clock_gettime`。候选：`clock_gettime`；`tsc_asym`（仅 x86_64）。 |
 | `--outargs <key=val,...>` | 输出格式：`unit_cast=<int>`、`sigbit_trim=<int>`（默认 0 和 5）。              |
 | `--dry-run` / `-d`        | 校验参数并打印命令，不实际执行 kernel。                                            |
@@ -136,7 +137,7 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 
 ```bash
 ./build/bin/tpbcli run --kernel stream --kargs stream_array_size=524288,ntest=100
-./build/bin/tpbcli r -k stream_mpi --kargs ntest=100 --kmpiargs '-np 4'
+./build/bin/tpbcli r -k stream_mpi --kargs ntest=100 --wrapper mpirun --wrapper-args '-np 4'
 ```
 
 ### 环境变量

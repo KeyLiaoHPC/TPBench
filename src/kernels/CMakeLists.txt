@@ -112,3 +112,6 @@ if(NOT "${_skipped_str}" STREQUAL "")
     message(STATUS "  Skipped: ${_skipped_str}")
 endif()
 message(STATUS "  (Use -DTPB_KERNELS=all or -DTPB_KERNEL_TAGS=... to enable more)")
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/
+        DESTINATION src/kernels)

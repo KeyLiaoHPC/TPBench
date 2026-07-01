@@ -124,8 +124,9 @@ Workspace resolution order: `--workspace` → `$TPB_WORKSPACE` → `$HOME/.tpben
 | `--kargs-dim <spec>` | Dimension sweep on kernel args; multiple flags form a Cartesian product (max 16). |
 | `--kenvs <KEY=VAL,...>` | Per-handle environment variables passed to the kernel process. |
 | `--kenvs-dim <spec>` | Dimension sweep on environment variables. |
-| `--kmpiargs '<args>'` | Append MPI launcher arguments (quoted string; MPI kernels). |
-| `--kmpiargs-dim '[...]'` | Dimension sweep on MPI arg lists (`['arg1','arg2',…]`). |
+| `--wrapper <app>` | Start a PLI wrapper link (chains in order; global before first `--kernel`, local after `--kernel`). |
+| `--wrapper-args '<args>'` | Arguments for the most recent `--wrapper` (quoted string). |
+| `-og` / `--override-global` | Skip global wrapper chain for the current kernel (keep local wrappers). |
 | `--timer <name>` | Timer backend; preset default `clock_gettime`. Candidates: `clock_gettime`; `tsc_asym` (x86_64 only). |
 | `--outargs <key=val,...>` | Output format: `unit_cast=<int>`, `sigbit_trim=<int>` (defaults 0 and 5). |
 | `--dry-run` / `-d` | Validate arguments and print commands without executing kernels. |
@@ -136,7 +137,7 @@ Workspace resolution order: `--workspace` → `$TPB_WORKSPACE` → `$HOME/.tpben
 
 ```bash
 ./build/bin/tpbcli run --kernel stream --kargs stream_array_size=524288,ntest=100
-./build/bin/tpbcli r -k stream_mpi --kargs ntest=100 --kmpiargs '-np 4'
+./build/bin/tpbcli r -k stream_mpi --kargs ntest=100 --wrapper mpirun --wrapper-args '-np 4'
 ```
 
 ### Environment variables

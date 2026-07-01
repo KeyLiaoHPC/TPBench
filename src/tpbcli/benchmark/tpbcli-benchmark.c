@@ -223,8 +223,12 @@ run_batch(tpb_bench_batch_t *batch)
     if (batch->kargs[0] != '\0') {
         tpb_printf(TPBM_PRTN_M_DIRECT, ":%s", batch->kargs);
     }
-    if (batch->kmpiargs[0] != '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT, " --kmpiargs \"%s\"", batch->kmpiargs);
+    if (batch->wrapper[0] != '\0') {
+        tpb_printf(TPBM_PRTN_M_DIRECT, " --wrapper %s", batch->wrapper);
+        if (batch->wrapper_args[0] != '\0') {
+            tpb_printf(TPBM_PRTN_M_DIRECT, " --wrapper-args '%s'",
+                       batch->wrapper_args);
+        }
     }
     if (batch->kenvs[0] != '\0') {
         tpb_printf(TPBM_PRTN_M_DIRECT, " --kenvs \"%s\"", batch->kenvs);
@@ -264,12 +268,19 @@ run_batch(tpb_bench_batch_t *batch)
         }
     }
     
-    /* Set MPI arguments */
-    if (batch->kmpiargs[0] != '\0') {
-        err = tpb_driver_set_hdl_mpiargs(batch->kmpiargs);
+    /* Set wrapper chain */
+    if (batch->wrapper[0] != '\0') {
+        tpb_wrapper_link_t link;
+
+        memset(&link, 0, sizeof(link));
+        snprintf(link.app, TPBM_NAME_STR_MAX_LEN, "%s", batch->wrapper);
+        if (batch->wrapper_args[0] != '\0') {
+            link.args = batch->wrapper_args;
+        }
+        err = tpb_driver_set_hdl_wrappers(&link, 1);
         if (err != 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
-                       "Failed to set mpiargs: %s\n", batch->kmpiargs);
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                       "Failed to set wrapper: %s\n", batch->wrapper);
         }
     }
     

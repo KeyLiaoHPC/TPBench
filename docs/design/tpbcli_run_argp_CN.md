@@ -8,11 +8,11 @@
 tpbcli_run()
   ├── tpb_register_kernel()          // 注册 _tpb_common 元数据 + 扫描 .so（不创建 handle）
   ├── parse_run()                    // 解析命令行参数
-  │   ├── --kernel                   // 创建新 handle（首个为 handle_list[0]）
+  │   ├── --wrapper / --wrapper-args   // 第一个 --kernel 之前为全局；之后为当前 kernel 局部
+  │   ├── --kernel [-og]               // 创建新 handle；切换 kernel 时绑定 wrapper
   │   ├── --kargs …                  // 须在 --kernel 之后；设置当前 handle
   │   ├── --kargs-dim …              // 须在 --kernel 之后；延迟展开
   │   ├── --kenvs / --kenvs-dim      // 须在 --kernel 之后
-  │   ├── --kmpiargs / --kmpiargs-dim // 须在 --kernel 之后
   │   ├── --timer                    // 定时器
   │   └── --outargs                  // 输出格式
   └── tpb_driver_run_all()           // 执行 handle_list[0..nhdl-1]
@@ -57,7 +57,7 @@ tpb_register_kernel()
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
 
-`_tpb_common` 仍描述一组"文档/合并用"的公共参数名，但**不再**对应运行时的伪 handle。CLI 在第一个 `--kernel` 之前不允许使用任何 `--kargs*` / `--kenvs*` / `--kmpiargs*`。
+`_tpb_common` 仍描述一组"文档/合并用"的公共参数名，但**不再**对应运行时的伪 handle。CLI 在第一个 `--kernel` 之前不允许使用 `--kargs*` / `--kenvs*`。第一个 `--kernel` 之前允许全局 `--wrapper` 链。
 
 公共参数（`kernel_common`）默认值（仅元数据，与具体内核是否实现同名参数无关）：
 
@@ -87,8 +87,9 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // 当前内核名
 | `--kargs-dim 'parm=spec'` | 须已有 `pending_kernel_name`；解析后链入 `pending_dim_cfg`，**延迟展开** | **延迟** |
 | `--kenvs K=V,K=V` | 须已有 `pending_kernel_name`；`parse_kenvs_tokstr()` | 立即 |
 | `--kenvs-dim '...'` | 须已有 `pending_kernel_name`；解析后**立即** `expand_env_dim_handles()` | 立即 |
-| `--kmpiargs '...'` | 须已有 `pending_kernel_name`；`parse_kmpiargs_quoted()` → **append**（多次拼接） | 立即 |
-| `--kmpiargs-dim '[...]'` | 须已有 `pending_kernel_name`；`expand_kmpiargs_dim()` **立即展开** | 立即 |
+| `--wrapper <app>` | 第一个 `--kernel` 前：追加到全局链；某 `--kernel` 后：追加到该 kernel 的局部链 | 立即 |
+| `--wrapper-args '...'` | `--wrapper` 子选项；向当前链中最近的 wrapper 追加参数 | 立即 |
+| `-og` / `--override-global` | `--kernel` 子选项；绑定 wrapper 时跳过全局链 | 立即 |
 | `--timer <name>` | 设置定时器类型（clock_gettime / tsc_asym） | 立即 |
 | `--outargs ...` | 设置输出格式（unit_cast, sigbit_trim） | 立即 |
 
@@ -319,7 +320,20 @@ apply_dim_value(dim_val, index)
 4. 执行范围校验（`TPB_PARM_RANGE`）或列表校验（`TPB_PARM_LIST`）
 5. 更新 `parm->value`
 
-## 7. `--kenvs-dim` 和 `--kmpiargs-dim` 的差异化处理
+## 7. Wrapper 绑定时机
+
+`_sf_parse_kernel()` 遇到新的 `--kernel` 时，先将有效 wrapper 链绑定到**上一个** handle，再创建新 handle。解析结束后绑定最后一个 handle。
+
+| 阶段 | 全局链 | 局部链 | `-og` | 有效链 |
+|------|--------|--------|-------|--------|
+| 第一个 `--kernel` 之前 | `--wrapper` 追加 | — | — | 绑定时仅全局 |
+| 某个 `--kernel` 之后 | 不变 | `--wrapper` 追加 | kernel 子选项 | 全局+局部，或 `-og` 时仅局部 |
+
+`tpb_driver_set_hdl_wrappers_idx()` 将有效链深拷贝到 `handle_list[i].wrapperpack`。
+
+## 8. （已移除）`--kmpiargs-dim`
+
+`--kmpiargs` / `--kmpiargs-dim` 已移除。请使用 `--wrapper mpirun --wrapper-args '...'`。MPI 参数的维度扫描不再内置于 CLI。
 
 | 维度类型 | 展开时机 | 展开方式 |
 |---------|---------|---------|
@@ -363,7 +377,7 @@ tpb_driver_add_handle(kernel_name)
   ├── 复制 kernel info
   ├── 构建 argpack: 从 kernel->info.parms 复制默认值（无伪 handle 覆盖）
   ├── envpack 置空
-  └── mpipack 置空
+  └── wrapperpack 置空
 ```
 
 ### 8.2 `tpb_driver_copy_hdl_from()` — 复制已有配置
@@ -376,7 +390,7 @@ tpb_driver_add_handle(kernel_name)
 tpb_driver_copy_hdl_from(src_idx)
   ├── 复制 argpack 中同名参数的 value
   ├── 复制 envpack（完整替换）
-  └── 复制 mpipack（完整替换）
+  └── 复制 wrapperpack（深拷贝）
 ```
 
 注意：`--kargs-dim` 展开时**不使用** `copy_hdl_from`：第一个组合改当前 handle，后续组合 `add_handle` 后仅带 **内核注册默认值**，再应用各维度的值（不会自动复制上一组合在 `--kargs` 里改过的参数）。
@@ -444,8 +458,8 @@ handle_list[1]  → 第二个组合或第二个 --kernel …
   │   └── args[]: tpb_rt_parm_t { name, value, ctrlbits, plims, nlims }
   ├── envpack:    环境变量 (被--kenvs/--kenvs-dim 设置)
   │   └── envs[]: tpb_env_entry_t { name, value }
-  ├── mpipack:    MPI 参数 (被--kmpiargs/--kmpiargs-dim 设置)
-  │   └── mpiargs: char* (如 "-np 2 --bind-to core")
+  ├── wrapperpack: 有序 PLI wrapper 链（由 --wrapper/--wrapper-args 绑定）
+  │   └── links[]: {app, args} 有序 wrapper 链
   └── respack:    运行时输出 (内核执行时填充)
       └── outputs[]: tpb_k_output_t { name, dtype, unit, n, p }
 ```

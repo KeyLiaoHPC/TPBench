@@ -56,7 +56,7 @@ Workload represents the *configurable* aspects of a benchmark execution. Hardwar
 
 ---
 
-**Argument**: An argument is the concrete value (number, string, or data reference) supplied to a parameter during workload execution. Arguments are provided via CLI options (`--kargs`, `--kenvs`, `--kmpiargs`) or configuration files.
+**Argument**: An argument is the concrete value (number, string, or data reference) supplied to a parameter during workload execution. Arguments are provided via CLI options (`--kargs`, `--kenvs`, `--wrapper`) or configuration files.
 
 ---
 

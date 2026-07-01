@@ -1,6 +1,6 @@
 /*
  * test-cli-run-nokernel.c
- * Test pack B2: `tpbcli run` rejects kargs/kenvs/kmpiargs and *-dim variants before --kernel.
+ * Test pack B2: `tpbcli run` rejects kargs/kenvs before --kernel; wrapper-args needs --wrapper.
  */
 
 #include <stdio.h>
@@ -37,9 +37,8 @@ static int run_cmd_capture(const char *cmd, char *errbuf, size_t errbuf_sz);
 static int test_kargs_before_kernel(void);
 static int test_kargs_dim_before_kernel(void);
 static int test_kenvs_before_kernel(void);
-static int test_kmpiargs_before_kernel(void);
+static int test_wrapper_args_without_wrapper(void);
 static int test_kenvs_dim_before_kernel(void);
-static int test_kmpiargs_dim_before_kernel(void);
 static int test_normal_with_kernel(void);
 static int test_dry_run_basic(void);
 static int test_help_run_level(void);
@@ -151,12 +150,29 @@ test_kenvs_before_kernel(void)
 }
 
 static int
-test_kmpiargs_before_kernel(void)
+test_wrapper_args_without_wrapper(void)
 {
     char cmd[4096];
+    char buf[4096];
+    int code;
+
     build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kmpiargs '-np 2' --kernel stream");
-    return expect_fail_with_hint("B2.4 kmpiargs_before_kernel", cmd);
+                     "run --wrapper-args '-np 2' --kernel stream");
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code == 0) {
+        FAIL("B2.4 wrapper_args_without_wrapper");
+        fprintf(stderr, "    expected nonzero exit, got 0\n");
+        return 1;
+    }
+    if (strstr(buf, "wrapper-args requires a preceding --wrapper") == NULL &&
+        strstr(buf, "unknown argument") == NULL) {
+        FAIL("B2.4 wrapper_args_without_wrapper");
+        fprintf(stderr, "    stderr missing expected error\n");
+        fprintf(stderr, "    output (truncated): %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
 }
 
 static int
@@ -166,15 +182,6 @@ test_kenvs_dim_before_kernel(void)
     build_tpbcli_cmd(cmd, sizeof(cmd),
                      "run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream");
     return expect_fail_with_hint("B2.6 kenvs_dim_before_kernel", cmd);
-}
-
-static int
-test_kmpiargs_dim_before_kernel(void)
-{
-    char cmd[4096];
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kmpiargs-dim 'np=[1,2]' --kernel stream");
-    return expect_fail_with_hint("B2.7 kmpiargs_dim_before_kernel", cmd);
 }
 
 static int
@@ -433,16 +440,13 @@ main(int argc, char **argv)
         return test_kenvs_before_kernel();
     }
     if (strcmp(id, "B2.4") == 0) {
-        return test_kmpiargs_before_kernel();
+        return test_wrapper_args_without_wrapper();
     }
     if (strcmp(id, "B2.5") == 0) {
         return test_normal_with_kernel();
     }
     if (strcmp(id, "B2.6") == 0) {
         return test_kenvs_dim_before_kernel();
-    }
-    if (strcmp(id, "B2.7") == 0) {
-        return test_kmpiargs_dim_before_kernel();
     }
     if (strcmp(id, "B2.8") == 0) {
         return test_dry_run_basic();

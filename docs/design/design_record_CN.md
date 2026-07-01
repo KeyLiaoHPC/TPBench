@@ -56,7 +56,7 @@ SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>
 
 ---
 
-**参数值 (Argument)**: 参数值是在工作负载执行期间提供给参数的具体值（数字、字符串或数据引用）。参数值通过 CLI 选项（`--kargs`、`--kenvs`、`--kmpiargs`）或配置文件提供。
+**参数值 (Argument)**: 参数值是在工作负载执行期间提供给参数的具体值（数字、字符串或数据引用）。参数值通过 CLI 选项（`--kargs`、`--kenvs`、`--wrapper`）或配置文件提供。
 
 ---
 

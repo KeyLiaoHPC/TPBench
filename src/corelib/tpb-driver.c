@@ -994,11 +994,18 @@ tpb_driver_clean_handle(tpb_k_rthdl_t *hdl)
     }
     hdl->envpack.n = 0;
 
-    /* Free mpipack.mpiargs */
-    if (hdl->mpipack.mpiargs != NULL) {
-        free(hdl->mpipack.mpiargs);
-        hdl->mpipack.mpiargs = NULL;
+    /* Free wrapperpack.links */
+    if (hdl->wrapperpack.links != NULL) {
+        for (int i = 0; i < hdl->wrapperpack.nlinks; i++) {
+            if (hdl->wrapperpack.links[i].args != NULL) {
+                free(hdl->wrapperpack.links[i].args);
+                hdl->wrapperpack.links[i].args = NULL;
+            }
+        }
+        free(hdl->wrapperpack.links);
+        hdl->wrapperpack.links = NULL;
     }
+    hdl->wrapperpack.nlinks = 0;
 
     return 0;
 }
@@ -1070,7 +1077,8 @@ tpb_driver_add_handle(const char *kernel_name)
     hdl->envpack.n = 0;
     hdl->envpack.envs = NULL;
 
-    hdl->mpipack.mpiargs = NULL;
+    hdl->wrapperpack.nlinks = 0;
+    hdl->wrapperpack.links = NULL;
 
     /* Set ihdl = nhdl, then increment nhdl */
     ihdl = nhdl;
@@ -1260,80 +1268,132 @@ tpb_driver_set_hdl_env(const char *env_name, const char *env_value)
     return 0;
 }
 
-int
-tpb_driver_set_hdl_mpiargs(const char *mpiargs_str)
+static int
+_sf_wrapperpack_free(tpb_wrapperpack_t *pack)
 {
-    if (mpiargs_str == NULL) {
+    if (pack == NULL) {
         return TPBE_NULLPTR_ARG;
     }
 
-    if (handle_list == NULL || current_rthdl == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "In tpb_driver_set_hdl_mpiargs: Empty kernel running list.\n");
-        return TPBE_ILLEGAL_CALL;
+    if (pack->links != NULL) {
+        for (int i = 0; i < pack->nlinks; i++) {
+            if (pack->links[i].args != NULL) {
+                free(pack->links[i].args);
+                pack->links[i].args = NULL;
+            }
+        }
+        free(pack->links);
+        pack->links = NULL;
+    }
+    pack->nlinks = 0;
+    return 0;
+}
+
+static int
+_sf_wrapperpack_copy(tpb_wrapperpack_t *dst, const tpb_wrapperpack_t *src)
+{
+    if (dst == NULL || src == NULL) {
+        return TPBE_NULLPTR_ARG;
     }
 
-    /* Free existing mpiargs if any */
-    if (current_rthdl->mpipack.mpiargs != NULL) {
-        free(current_rthdl->mpipack.mpiargs);
+    (void)_sf_wrapperpack_free(dst);
+
+    if (src->nlinks <= 0 || src->links == NULL) {
+        return 0;
     }
 
-    /* Set new mpiargs string */
-    current_rthdl->mpipack.mpiargs = strdup(mpiargs_str);
-    if (current_rthdl->mpipack.mpiargs == NULL) {
+    dst->links = (tpb_wrapper_link_t *)calloc((size_t)src->nlinks,
+                                              sizeof(tpb_wrapper_link_t));
+    if (dst->links == NULL) {
         return TPBE_MALLOC_FAIL;
     }
+    dst->nlinks = src->nlinks;
 
+    for (int i = 0; i < src->nlinks; i++) {
+        snprintf(dst->links[i].app, TPBM_NAME_STR_MAX_LEN, "%s",
+                 src->links[i].app);
+        if (src->links[i].args != NULL) {
+            dst->links[i].args = strdup(src->links[i].args);
+            if (dst->links[i].args == NULL) {
+                (void)_sf_wrapperpack_free(dst);
+                return TPBE_MALLOC_FAIL;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static int
+_sf_set_hdl_wrappers_on(tpb_k_rthdl_t *hdl,
+                        const tpb_wrapper_link_t *links, int nlinks)
+{
+    tpb_wrapperpack_t new_pack;
+
+    if (hdl == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    memset(&new_pack, 0, sizeof(new_pack));
+
+    if (nlinks > 0 && links != NULL) {
+        new_pack.links = (tpb_wrapper_link_t *)calloc((size_t)nlinks,
+                                                        sizeof(tpb_wrapper_link_t));
+        if (new_pack.links == NULL) {
+            return TPBE_MALLOC_FAIL;
+        }
+        new_pack.nlinks = nlinks;
+
+        for (int i = 0; i < nlinks; i++) {
+            snprintf(new_pack.links[i].app, TPBM_NAME_STR_MAX_LEN, "%s",
+                     links[i].app);
+            if (links[i].args != NULL && links[i].args[0] != '\0') {
+                new_pack.links[i].args = strdup(links[i].args);
+                if (new_pack.links[i].args == NULL) {
+                    (void)_sf_wrapperpack_free(&new_pack);
+                    return TPBE_MALLOC_FAIL;
+                }
+            }
+        }
+    }
+
+    (void)_sf_wrapperpack_free(&hdl->wrapperpack);
+    hdl->wrapperpack = new_pack;
     return 0;
 }
 
 int
-tpb_driver_append_hdl_mpiargs(const char *mpiargs_str)
+tpb_driver_set_hdl_wrappers(const tpb_wrapper_link_t *links, int nlinks)
 {
-    if (mpiargs_str == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
     if (handle_list == NULL || current_rthdl == NULL) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "In tpb_driver_append_hdl_mpiargs: Empty kernel running list.\n");
+                   "In tpb_driver_set_hdl_wrappers: Empty kernel running list.\n");
         return TPBE_ILLEGAL_CALL;
     }
 
-    if (current_rthdl->mpipack.mpiargs == NULL) {
-        /* No existing mpiargs, just set */
-        current_rthdl->mpipack.mpiargs = strdup(mpiargs_str);
-        if (current_rthdl->mpipack.mpiargs == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-    } else {
-        /* Concatenate with space separator */
-        size_t old_len = strlen(current_rthdl->mpipack.mpiargs);
-        size_t new_len = strlen(mpiargs_str);
-        char *new_str = (char *)malloc(old_len + 1 + new_len + 1);
-        if (new_str == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
-        sprintf(new_str, "%s %s", current_rthdl->mpipack.mpiargs, mpiargs_str);
-        free(current_rthdl->mpipack.mpiargs);
-        current_rthdl->mpipack.mpiargs = new_str;
-    }
-
-    return 0;
+    return _sf_set_hdl_wrappers_on(current_rthdl, links, nlinks);
 }
 
-const char *
-tpb_driver_get_hdl_mpiargs(void)
+int
+tpb_driver_set_hdl_wrappers_idx(int hdl_idx,
+                                const tpb_wrapper_link_t *links, int nlinks)
 {
-    if (handle_list == NULL || current_rthdl == NULL) {
-        return NULL;
+    if (handle_list == NULL) {
+        return TPBE_ILLEGAL_CALL;
     }
-    return current_rthdl->mpipack.mpiargs;
+
+    if (hdl_idx < 0 || hdl_idx >= nhdl) {
+        return TPBE_KERN_ARG_FAIL;
+    }
+
+    return _sf_set_hdl_wrappers_on(&handle_list[hdl_idx], links, nlinks);
 }
 
 int
 tpb_driver_copy_hdl_from(int src_idx)
 {
+    int err;
+
     if (handle_list == NULL || current_rthdl == NULL) {
         return TPBE_ILLEGAL_CALL;
     }
@@ -1376,17 +1436,10 @@ tpb_driver_copy_hdl_from(int src_idx)
         }
     }
 
-    /* Copy mpipack */
-    if (src->mpipack.mpiargs != NULL) {
-        /* Free existing mpipack if any */
-        if (current_rthdl->mpipack.mpiargs != NULL) {
-            free(current_rthdl->mpipack.mpiargs);
-        }
-
-        current_rthdl->mpipack.mpiargs = strdup(src->mpipack.mpiargs);
-        if (current_rthdl->mpipack.mpiargs == NULL) {
-            return TPBE_MALLOC_FAIL;
-        }
+    /* Copy wrapperpack */
+    err = _sf_wrapperpack_copy(&current_rthdl->wrapperpack, &src->wrapperpack);
+    if (err != 0) {
+        return err;
     }
 
     return 0;
@@ -1472,7 +1525,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         }
     }
 
-    /* Build full command: [ENV=val ...] [mpirun <mpiargs>] <launcher> <so> <timer> <params...> */
+    /* Build full command: [ENV=val ...] [wrapper chain] <kernel_entry> <timer> <params...> */
     {
         char value_buf[256];
         size_t cmd_size = 8192;
@@ -1506,8 +1559,15 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
                             hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
         }
 
-        if (hdl->mpipack.mpiargs != NULL && hdl->mpipack.mpiargs[0] != '\0') {
-            pos += snprintf(full_cmd + pos, cmd_size - pos, "mpirun %s ", hdl->mpipack.mpiargs);
+        for (int i = 0; i < hdl->wrapperpack.nlinks; i++) {
+            pos += snprintf(full_cmd + pos, cmd_size - pos, "%s",
+                            hdl->wrapperpack.links[i].app);
+            if (hdl->wrapperpack.links[i].args != NULL &&
+                hdl->wrapperpack.links[i].args[0] != '\0') {
+                pos += snprintf(full_cmd + pos, cmd_size - pos, " %s",
+                                hdl->wrapperpack.links[i].args);
+            }
+            pos += snprintf(full_cmd + pos, cmd_size - pos, " ");
         }
 
         if (launch_path != NULL && strstr(exec_path, ".so") != NULL) {
@@ -1569,7 +1629,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     }
 
     if (pid == 0) {
-        /* Execute via shell to handle env vars and mpiargs correctly */
+        /* Execute via shell to handle env vars and wrapper chain correctly */
         execl("/bin/sh", "sh", "-c", full_cmd, (char *)NULL);
         fprintf(stderr, "execl failed for /bin/sh\n");
         _exit(127);

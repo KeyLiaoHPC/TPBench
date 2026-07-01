@@ -60,14 +60,18 @@ tpbcli <subcommand> <options>
 
 ### 2.2.1 基础格式
 
-`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]`/`kmpiargs[_dim]` 选项，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用`--kargs-dim`、`--kenvs-dim`和`--kmpiargs-dim`时，选项需要用一对单引号或双引号包围。
+`tpbcli run` 的命令行格式如下所示，通过搭配 `kargs[_dim]`/`kenvs[_dim]` 与可选的 `--wrapper` 链，可以运行多个评测内核的评测，并为不同评测内核创建不同的参数组合，从而使用一条命令运行多个评测内核的多维度可变参数测试。在下方命令格式中，所有尖括号“\<\>”选项均需要被实际使用的选项名称替换。注意，使用 `--kargs-dim` 和 `--kenvs-dim` 时，选项需要用一对单引号或双引号包围。
 ``` bash
 tpbcli run <tpbench_options> \
-[--kernel <kernel_name> \
-[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts> | --kmpiargs/--kmpiargs-dim <opts>]]
+[--wrapper <app> [--wrapper-args '<args>']]... \
+[--kernel <kernel_name> [-og] \
+[--kargs/--kargs-dim <opts> | --kenvs/--kenvs-dim <opts>] \
+[--wrapper <app> [--wrapper-args '<args>']]...]...
 ```
 
-**规则：** `--kargs`、`--kargs-dim`、`--kenvs`、`--kenvs-dim`、`--kmpiargs`、`--kmpiargs-dim` 均必须出现在其所作用的 **`--kernel` 之后**（作用于命令行上最近一个 `--kernel`）。命令行上不再支持在第一个 `--kernel` 之前设置“默认”参数。
+**规则：** `--kargs`、`--kargs-dim`、`--kenvs`、`--kenvs-dim` 均必须出现在其所作用的 **`--kernel` 之后**（作用于命令行上最近一个 `--kernel`）。命令行上不再支持在第一个 `--kernel` 之前设置“默认”参数。
+
+**Wrapper 规则：** 第一个 `--kernel` 之前的 `--wrapper` / `--wrapper-args` 组成**全局**链，默认加在每个 kernel 前；某 kernel 组使用 `-og` / `--override-global` 时跳过全局链，保留该 kernel 的局部 wrapper。Wrapper 按顺序链接，后面的不会替换前面的。
 \<tpbench_options\>支持的选项包括：
 - `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。
@@ -83,9 +87,9 @@ tpbcli run <tpbench_options> \
 
 语法：`--kernel <kernel_name> --kargs '<key1>=<value1>,<key2>=<value2>,<key3>="<v3>,<with>,<complex>,<section>",...'`
 
-在同一 `--kernel` 段内，`--kargs`、`--kenvs`、`--kmpiargs` 可出现多次；带 `_dim` 的选项限制见 2.2.3。同一参数名多次出现时，以最后一次为准。
+在同一 `--kernel` 段内，`--kargs`、`--kenvs` 可出现多次；带 `_dim` 的选项限制见 2.2.3。同一参数名多次出现时，以最后一次为准。
 
-`--kargs` / `--kenvs` / `--kmpiargs` 的每项为 `<key>=<value>`。TPBench 按该内核注册的参数做合法性检查。对同一句柄，若有 `--kargs-dim` / `--kenvs-dim` / `--kmpiargs-dim` 展开，其值覆盖同段的普通 `--kargs` / `--kenvs` / `--kmpiargs`；同段内靠后的选项覆盖靠前的。
+`--kargs` / `--kenvs` 的每项为 `<key>=<value>`。TPBench 按该内核注册的参数做合法性检查。对同一句柄，若有 `--kargs-dim` / `--kenvs-dim` 展开，其值覆盖同段的普通 `--kargs` / `--kenvs`；同段内靠后的选项覆盖靠前的。
 
 注意：内核内部可能对参数再加工（如对齐），注册默认值与最终使用值可能不一致。例如 `total_memsize=128` KiB、double 精度 triad 下，每数组可能为 **131064** 字节而非 131072。每轮结束后终端会打印内核实际使用的参数。
 
@@ -173,59 +177,54 @@ $ tpbcli --kernel triad --kargs ntest=100,total_memsize=128 --kenvs OMP_NUM_THRE
 ```
 
 
-### 2.2.6 设置 MPI 运行参数
+### 2.2.6 PLI Wrapper 链
 
-**1) 设置 MPI 参数**
+使用 `--wrapper` 和 `--wrapper-args` 在内核入口命令前按顺序插入可执行 wrapper。MPI 运行使用 `--wrapper mpirun --wrapper-args '...'`，不再使用专用 MPI CLI 选项。
 
-`--kmpiargs` 选项接受一个字符串，该字符串将原样传递给 `mpirun`。字符串应当用单引号或双引号包裹。
+**1) 全局与 per-kernel wrapper**
 
-语法：`--kmpiargs '<mpi_args_string>'`
+- 第一个 `--kernel` **之前**的 wrapper 作用于所有 kernel（全局链）。
+- 某个 `--kernel` **之后**的 wrapper 仅作用于该 kernel（局部链），接在全局链之后。
+- 在某 kernel 组使用 `-og` / `--override-global` 可跳过全局链，保留局部 wrapper。
 
-示例：运行 stream_mpi 内核，测试 100 次迭代，所有 rank 的聚合数组大小为 43690 个元素，使用 2 个 MPI 进程。
+语法：
 
 ```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 --kmpiargs ' -np 2'
+--wrapper <app> [--wrapper-args '<args_str>']
 ```
 
-在同一 `--kernel` 之后可多次指定 `--kmpiargs`，各段用空格拼接。
+示例：全局 `numactl`，第二个 kernel 再使用 `mpirun`：
 
-**2) 可变 MPI 参数**
+```bash
+$ tpbcli run --wrapper numactl --kernel stream --kernel stream_mpi \
+    --wrapper mpirun --wrapper-args '-np 20'
+```
 
-`--kmpiargs-dim` 支持显式列表和嵌套列表格式，用于扫描不同的 MPI 配置。
+示例：第二个 kernel 忽略全局 wrapper：
 
-语法：`--kmpiargs-dim "['opt1', 'opt2', ...]{['opta', 'optb', ...]}"`
+```bash
+$ tpbcli run --wrapper numactl --kernel stream --kernel stream_mpi -og \
+    --wrapper mpirun --wrapper-args '-np 20'
+```
 
-示例1：运行 stream_mpi 内核，扫描 MPI 进程数从 1 到 4。
+示例：MPI kernel：
 
 ```bash
 $ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs '--bind-to core' \
-    --kmpiargs-dim "['-np 1', '-np 2', '-np 4']"
+    --wrapper mpirun --wrapper-args '-np 2'
 ```
 
-示例2：使用嵌套列表扫描进程数和绑定策略。
+同一 `--wrapper` 后可多次指定 `--wrapper-args`，各段用空格拼接。未先指定 `--wrapper` 时使用 `--wrapper-args` 会被拒绝。
 
-```bash
-$ tpbcli run --kernel stream_mpi --kargs ntest=100,stream_array_size=43690 \
-    --kmpiargs '--bind-to core' \
-    --kmpiargs-dim "['-np 2', '-np 4']{'--bind-to core', '--bind-to socket'}"
-```
-
-上述命令将生成 4 种组合：
-- `-np 2 --bind-to core`
-- `-np 2 --bind-to socket`
-- `-np 4 --bind-to core`
-- `-np 4 --bind-to socket`
-
-**3) 命令行分析**
+**2) 命令行分析**
 
 TPBench 执行 PLI 内核时，将完整命令行打印至终端，便于调试和分析。命令行格式为：
 
 ```
-TPBENCH_TIMER=<timer> [ENV=VAL ...] [mpirun <mpiargs>] <launcher> <kernel.so> <timer> <params...>
+TPBENCH_TIMER=<timer> [ENV=VAL ...] [wrapper_app wrapper_args ...] <kernel_entry> <timer> <params...>
 ```
 
-注意：MPI 参数直接传递给 `mpirun`，TPBench 不进行验证。如果 `mpirun` 子进程失败，将报告错误。
+`<kernel_entry>` 为启动内核的解析后命令（共享库 PLI 内核通常为 `tpbcli-pli-launcher` 加 kernel `.so` 路径）。Wrapper 参数由 wrapper 可执行文件解释，TPBench 不验证。
 
 ## 2.3 tpbcli database
 

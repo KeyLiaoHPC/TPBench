@@ -23,6 +23,12 @@
 
 /* Maximum number of dimension configs per kernel */
 #define MAX_DIM_CONFIGS 16
+#define MAX_WRAPPER_LINKS 32
+
+typedef struct {
+    char app[TPBM_NAME_STR_MAX_LEN];
+    char args[TPBM_CLI_STR_MAX_LEN];
+} local_wrapper_t;
 
 /* Argp migration: run-subcommand state */
 static int g_dry_run;
@@ -30,6 +36,14 @@ static int g_kernel_parsed_for_help;
 static tpb_dim_config_t *g_pending_dim_cfgs[MAX_DIM_CONFIGS];
 static int g_n_pending_dims;
 static char g_pending_kernel_name[TPBM_NAME_STR_MAX_LEN];
+static local_wrapper_t g_global_wrappers[MAX_WRAPPER_LINKS];
+static int g_global_nwrappers;
+static int g_global_has_open_wrapper;
+static local_wrapper_t g_segment_wrappers[MAX_WRAPPER_LINKS];
+static int g_segment_nwrappers;
+static int g_segment_has_open_wrapper;
+static int g_seen_first_kernel;
+static int g_pending_override_global;
 
 /* Local Function Prototypes */
 
@@ -39,13 +53,12 @@ static int expand_dim_handles(tpb_dim_config_t *dim_cfg,
                               const char *kernel_name);
 static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg,
                                   const char *kernel_name);
-static int expand_kmpiargs_dim(const char *arg, const char *kernel_name);
+static int expand_env_dim_handles(tpb_dim_config_t *dim_cfg,
+                                  const char *kernel_name);
 static int parse_kenvs_tokstr(const char *tokstr);
-static char *parse_kmpiargs_list_item(const char *str, const char **pos);
-static int parse_kmpiargs_list(const char *str, const char **pos,
-                               char ***out_items, int *out_count);
-static int parse_kmpiargs_quoted(const char *arg);
 static int parse_outargs_string(const char *outargs_str);
+static int _sf_bind_wrappers_to_handle(int hdl_idx);
+static const char *_sf_unquote_argstr(const char *arg, char **allocated_out);
 
 static int _sf_collect_run_kernel_names(int argc, char **argv,
                                         char names[][TPBM_NAME_STR_MAX_LEN],
@@ -59,13 +72,190 @@ static int _sf_parse_kargs_dim(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_kenvs(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_kenvs_dim(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_kernel(tpbcli_argnode_t *node, const char *value);
-static int _sf_parse_kmpiargs(tpbcli_argnode_t *node, const char *value);
-static int _sf_parse_kmpiargs_dim(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_override_global(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_outargs(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_timer(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_wrapper(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_wrapper_args(tpbcli_argnode_t *node, const char *value);
 static void _sf_print_kernel_list(FILE *out);
 
 /* Local Function Implementations */
+
+static const char *
+_sf_unquote_argstr(const char *arg, char **allocated_out)
+{
+    const char *content = arg;
+    size_t content_len;
+    char *allocated_content = NULL;
+
+    if (allocated_out != NULL) {
+        *allocated_out = NULL;
+    }
+
+    if (arg == NULL) {
+        return NULL;
+    }
+
+    content_len = strlen(arg);
+    if (content_len == 0) {
+        return arg;
+    }
+
+    char quote_char = arg[0];
+    if ((quote_char == '\'' || quote_char == '"') && content_len >= 2 &&
+        arg[content_len - 1] == quote_char) {
+        content_len -= 2;
+        allocated_content = (char *)malloc(content_len + 1);
+        if (allocated_content == NULL) {
+            return NULL;
+        }
+        memcpy(allocated_content, arg + 1, content_len);
+        allocated_content[content_len] = '\0';
+        content = allocated_content;
+        if (allocated_out != NULL) {
+            *allocated_out = allocated_content;
+        }
+    }
+
+    return content;
+}
+
+static int
+_sf_bind_wrappers_to_handle(int hdl_idx)
+{
+    tpb_wrapper_link_t links[MAX_WRAPPER_LINKS];
+    int nlinks = 0;
+    int err;
+    int i;
+
+    if (!g_pending_override_global) {
+        for (i = 0; i < g_global_nwrappers; i++) {
+            snprintf(links[nlinks].app, TPBM_NAME_STR_MAX_LEN, "%s",
+                     g_global_wrappers[i].app);
+            links[nlinks].args =
+                (g_global_wrappers[i].args[0] != '\0')
+                    ? g_global_wrappers[i].args
+                    : NULL;
+            nlinks++;
+        }
+    }
+
+    for (i = 0; i < g_segment_nwrappers; i++) {
+        snprintf(links[nlinks].app, TPBM_NAME_STR_MAX_LEN, "%s",
+                 g_segment_wrappers[i].app);
+        links[nlinks].args =
+            (g_segment_wrappers[i].args[0] != '\0')
+                ? g_segment_wrappers[i].args
+                : NULL;
+        nlinks++;
+    }
+
+    err = tpb_driver_set_hdl_wrappers_idx(hdl_idx, links, nlinks);
+    if (err != 0) {
+        return err;
+    }
+
+    g_segment_nwrappers = 0;
+    g_segment_has_open_wrapper = 0;
+    g_pending_override_global = 0;
+    return 0;
+}
+
+static int
+_sf_parse_wrapper(tpbcli_argnode_t *node, const char *value)
+{
+    local_wrapper_t *chain;
+    int *nlinks;
+    int *has_open;
+
+    (void)node;
+
+    if (value == NULL || value[0] == '\0') {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "--wrapper requires an application name.\n");
+        return TPBE_CLI_FAIL;
+    }
+
+    if (!g_seen_first_kernel) {
+        chain = g_global_wrappers;
+        nlinks = &g_global_nwrappers;
+        has_open = &g_global_has_open_wrapper;
+    } else {
+        chain = g_segment_wrappers;
+        nlinks = &g_segment_nwrappers;
+        has_open = &g_segment_has_open_wrapper;
+    }
+
+    if (*nlinks >= MAX_WRAPPER_LINKS) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "Too many --wrapper links (max %d)\n", MAX_WRAPPER_LINKS);
+        return TPBE_CLI_FAIL;
+    }
+
+    snprintf(chain[*nlinks].app, TPBM_NAME_STR_MAX_LEN, "%s", value);
+    chain[*nlinks].args[0] = '\0';
+    (*nlinks)++;
+    *has_open = 1;
+    return 0;
+}
+
+static int
+_sf_parse_wrapper_args(tpbcli_argnode_t *node, const char *value)
+{
+    local_wrapper_t *chain;
+    int *nlinks;
+    int *has_open;
+    char *allocated = NULL;
+    const char *content;
+    local_wrapper_t *last;
+    size_t cur_len;
+
+    (void)node;
+
+    if (!g_seen_first_kernel) {
+        chain = g_global_wrappers;
+        nlinks = &g_global_nwrappers;
+        has_open = &g_global_has_open_wrapper;
+    } else {
+        chain = g_segment_wrappers;
+        nlinks = &g_segment_nwrappers;
+        has_open = &g_segment_has_open_wrapper;
+    }
+
+    if (*nlinks <= 0 || !(*has_open)) {
+        tpb_printf(TPBM_PRTN_M_DIRECT,
+                   "--wrapper-args requires a preceding --wrapper.\n");
+        return TPBE_CLI_FAIL;
+    }
+
+    content = _sf_unquote_argstr(value, &allocated);
+    if (content == NULL) {
+        return TPBE_MALLOC_FAIL;
+    }
+
+    last = &chain[*nlinks - 1];
+    if (last->args[0] == '\0') {
+        snprintf(last->args, TPBM_CLI_STR_MAX_LEN, "%s", content);
+    } else {
+        cur_len = strlen(last->args);
+        snprintf(last->args + cur_len, TPBM_CLI_STR_MAX_LEN - cur_len,
+                 " %s", content);
+    }
+
+    if (allocated != NULL) {
+        free(allocated);
+    }
+    return 0;
+}
+
+static int
+_sf_parse_override_global(tpbcli_argnode_t *node, const char *value)
+{
+    (void)node;
+    (void)value;
+    g_pending_override_global = 1;
+    return 0;
+}
 
 static int
 parse_outargs_string(const char *outargs_str)
@@ -455,232 +645,6 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     return 0;
 }
 
-static int
-parse_kmpiargs_quoted(const char *arg)
-{
-    if (arg == NULL || arg[0] == '\0') {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    const char *content = arg;
-    size_t content_len = strlen(arg);
-    char *allocated_content = NULL;
-
-    /* Check if the string is quoted (in case quotes survived shell parsing) */
-    char quote_char = arg[0];
-    if ((quote_char == '\'' || quote_char == '"') && content_len >= 2) {
-        /* Check for closing quote */
-        if (arg[content_len - 1] == quote_char) {
-            /* Extract content between quotes */
-            content_len = content_len - 2;
-            allocated_content = (char *)malloc(content_len + 1);
-            if (allocated_content == NULL) {
-                return TPBE_MALLOC_FAIL;
-            }
-            memcpy(allocated_content, arg + 1, content_len);
-            allocated_content[content_len] = '\0';
-            content = allocated_content;
-        }
-    }
-
-    int err = tpb_driver_append_hdl_mpiargs(content);
-
-    if (allocated_content != NULL) {
-        free(allocated_content);
-    }
-    return err;
-}
-
-static char *
-parse_kmpiargs_list_item(const char *str, const char **pos)
-{
-    (void)str;
-
-    /* Skip leading whitespace */
-    while (**pos == ' ' || **pos == '\t' || **pos == ',') {
-        (*pos)++;
-    }
-
-    if (**pos == '\0' || **pos == ']') {
-        return NULL;
-    }
-
-    char quote_char = **pos;
-    if (quote_char != '\'' && quote_char != '"') {
-        return NULL;
-    }
-
-    (*pos)++;  /* Skip opening quote */
-    const char *start = *pos;
-
-    /* Find closing quote */
-    const char *end = strchr(*pos, quote_char);
-    if (end == NULL) {
-        return NULL;
-    }
-
-    size_t len = end - start;
-    char *item = (char *)malloc(len + 1);
-    if (item == NULL) {
-        return NULL;
-    }
-    memcpy(item, start, len);
-    item[len] = '\0';
-
-    *pos = end + 1;  /* Move past closing quote */
-    return item;
-}
-
-static int
-parse_kmpiargs_list(const char *str, const char **pos, char ***out_items,
-                    int *out_count)
-{
-    /* Skip leading whitespace */
-    while (**pos == ' ' || **pos == '\t') {
-        (*pos)++;
-    }
-
-    if (**pos != '[') {
-        return TPBE_CLI_FAIL;
-    }
-    (*pos)++;  /* Skip '[' */
-
-    char **items = NULL;
-    int count = 0;
-    int capacity = 8;
-
-    items = (char **)malloc(sizeof(char *) * capacity);
-    if (items == NULL) {
-        return TPBE_MALLOC_FAIL;
-    }
-
-    while (**pos != '\0' && **pos != ']') {
-        char *item = parse_kmpiargs_list_item(str, pos);
-        if (item == NULL) {
-            /* Skip whitespace/commas and check for end */
-            while (**pos == ' ' || **pos == '\t' || **pos == ',') {
-                (*pos)++;
-            }
-            if (**pos == ']' || **pos == '\0') {
-                break;
-            }
-            for (int i = 0; i < count; i++) {
-                free(items[i]);
-            }
-            free(items);
-            return TPBE_CLI_FAIL;
-        }
-
-        if (count >= capacity) {
-            capacity *= 2;
-            char **new_items = (char **)realloc(items, sizeof(char *) * capacity);
-            if (new_items == NULL) {
-                free(item);
-                for (int i = 0; i < count; i++) {
-                    free(items[i]);
-                }
-                free(items);
-                return TPBE_MALLOC_FAIL;
-            }
-            items = new_items;
-        }
-        items[count++] = item;
-    }
-
-    if (**pos == ']') {
-        (*pos)++;  /* Skip ']' */
-    }
-
-    *out_items = items;
-    *out_count = count;
-    return 0;
-}
-
-static int
-expand_kmpiargs_dim(const char *arg, const char *kernel_name)
-{
-    if (arg == NULL || kernel_name == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    const char *pos = arg;
-    char **items = NULL;
-    int count = 0;
-    int err;
-
-    err = parse_kmpiargs_list(arg, &pos, &items, &count);
-    if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
-                   "Failed to parse --kmpiargs-dim list: %s\n", arg);
-        return err;
-    }
-
-    if (count == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "--kmpiargs-dim: empty list.\n");
-        free(items);
-        return TPBE_CLI_FAIL;
-    }
-
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
-               "Expanding %d kmpiargs-dim values for kernel '%s'\n",
-               count, kernel_name);
-
-    int orig_hdl_idx = tpb_driver_get_current_hdl_idx();
-    const char *base_mpiargs = tpb_driver_get_hdl_mpiargs();
-    char *saved_base = (base_mpiargs != NULL) ? strdup(base_mpiargs) : NULL;
-
-    for (int i = 0; i < count; i++) {
-        if (i == 0) {
-            if (saved_base != NULL) {
-                err = tpb_driver_set_hdl_mpiargs(saved_base);
-            } else {
-                err = tpb_driver_set_hdl_mpiargs("");
-            }
-            if (err != 0) {
-                free(saved_base);
-                goto cleanup;
-            }
-            err = tpb_driver_append_hdl_mpiargs(items[i]);
-        } else {
-            err = tpb_driver_add_handle(kernel_name);
-            if (err != 0) {
-                free(saved_base);
-                goto cleanup;
-            }
-            err = tpb_driver_copy_hdl_from(orig_hdl_idx);
-            if (err != 0) {
-                free(saved_base);
-                goto cleanup;
-            }
-            if (saved_base != NULL) {
-                err = tpb_driver_set_hdl_mpiargs(saved_base);
-            } else {
-                err = tpb_driver_set_hdl_mpiargs("");
-            }
-            if (err != 0) {
-                free(saved_base);
-                goto cleanup;
-            }
-            err = tpb_driver_append_hdl_mpiargs(items[i]);
-        }
-        if (err != 0) {
-            free(saved_base);
-            goto cleanup;
-        }
-    }
-
-    free(saved_base);
-    err = 0;
-
-cleanup:
-    for (int i = 0; i < count; i++) {
-        free(items[i]);
-    }
-    free(items);
-
-    return err;
-}
-
 static void
 _sf_print_kernel_list(FILE *out)
 {
@@ -767,6 +731,17 @@ static int
 _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
 {
     int err;
+    int nhdl;
+
+    (void)node;
+
+    nhdl = tpb_get_nhdl();
+    if (nhdl > 0) {
+        err = _sf_bind_wrappers_to_handle(nhdl - 1);
+        if (err != 0) {
+            return err;
+        }
+    }
 
     _sf_flush_pending_dims();
 
@@ -779,6 +754,7 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
 
     snprintf(g_pending_kernel_name, TPBM_NAME_STR_MAX_LEN, "%s", value);
     g_kernel_parsed_for_help = 1;
+    g_seen_first_kernel = 1;
 
     return 0;
 }
@@ -844,20 +820,6 @@ _sf_parse_kenvs_dim(tpbcli_argnode_t *node, const char *value)
 }
 
 static int
-_sf_parse_kmpiargs(tpbcli_argnode_t *node, const char *value)
-{
-    (void)node;
-    return parse_kmpiargs_quoted(value);
-}
-
-static int
-_sf_parse_kmpiargs_dim(tpbcli_argnode_t *node, const char *value)
-{
-    (void)node;
-    return expand_kmpiargs_dim(value, g_pending_kernel_name);
-}
-
-static int
 _sf_parse_timer(tpbcli_argnode_t *node, const char *value)
 {
     int err;
@@ -896,6 +858,7 @@ tpbcli_run(int argc, char **argv)
     tpbcli_argnode_t *root;
     tpbcli_argnode_t *run_cmd;
     tpbcli_argnode_t *kernel;
+    tpbcli_argnode_t *wrapper;
     int nhdl;
     int rec_err;
     int i;
@@ -907,6 +870,12 @@ tpbcli_run(int argc, char **argv)
     g_kernel_parsed_for_help = 0;
     g_n_pending_dims = 0;
     g_pending_kernel_name[0] = '\0';
+    g_global_nwrappers = 0;
+    g_global_has_open_wrapper = 0;
+    g_segment_nwrappers = 0;
+    g_segment_has_open_wrapper = 0;
+    g_seen_first_kernel = 0;
+    g_pending_override_global = 0;
 
     err = tpb_argp_set_timer("clock_gettime");
     if (err != 0) {
@@ -1014,18 +983,12 @@ tpbcli_run(int argc, char **argv)
         .parse_fn = _sf_parse_kenvs_dim,
     });
     tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
-        .name = "--kmpiargs",
-        .desc = "MPI runtime arguments",
-        .type = TPBCLI_ARG_OPT,
-        .max_chosen = -1,
-        .parse_fn = _sf_parse_kmpiargs,
-    });
-    tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
-        .name = "--kmpiargs-dim",
-        .desc = "Dimension sweep for MPI args",
-        .type = TPBCLI_ARG_OPT,
-        .max_chosen = -1,
-        .parse_fn = _sf_parse_kmpiargs_dim,
+        .name = "--override-global",
+        .short_name = "-og",
+        .desc = "Ignore global wrapper chain for this kernel",
+        .type = TPBCLI_ARG_FLAG,
+        .max_chosen = 1,
+        .parse_fn = _sf_parse_override_global,
     });
     tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
         .name = "--help",
@@ -1034,6 +997,25 @@ tpbcli_run(int argc, char **argv)
         .type = TPBCLI_ARG_FLAG,
         .max_chosen = 0,
         .help_fn = _sf_help_kernel_children,
+    });
+
+    wrapper = tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
+        .name = "--wrapper",
+        .desc = "PLI wrapper executable (chains in order)",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_wrapper,
+    });
+    if (wrapper == NULL) {
+        tpbcli_argtree_destroy(tree);
+        return TPBE_MALLOC_FAIL;
+    }
+    tpbcli_add_arg(wrapper, &(tpbcli_argconf_t){
+        .name = "--wrapper-args",
+        .desc = "Arguments for the most recent --wrapper",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = -1,
+        .parse_fn = _sf_parse_wrapper_args,
     });
 
     tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
@@ -1084,6 +1066,13 @@ tpbcli_run(int argc, char **argv)
     _sf_flush_pending_dims();
 
     nhdl = tpb_get_nhdl();
+    if (nhdl > 0) {
+        err = _sf_bind_wrappers_to_handle(nhdl - 1);
+        if (err != 0) {
+            return err;
+        }
+    }
+
     if (nhdl > 0) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                    "Number of kernels to run: %d\n", nhdl);

@@ -161,7 +161,7 @@ cmake --build build --target tpb_build_kernel  \
 -DTPB_KERNELS=stream_mpi -DTPB_ENABLE_OPENMP=ON -DTPB_MPI_PATH=/path/to/mpi/library
 # Install and run the kernel. Here you can use 'r' for 'run'.
 cmake --build build --target tpb_install_kernel
-tpbcli r --kernel stream --kargs ntest=10,stream_array_size=67108864 --kenvs 'OMP_NUM_THREADS=2' --kmpiargs '-np 2'
+tpbcli r --kernel stream --kargs ntest=10,stream_array_size=67108864 --kenvs 'OMP_NUM_THREADS=2' --wrapper numactl
 ```
 
 

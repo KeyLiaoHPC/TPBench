@@ -280,16 +280,23 @@ typedef struct tpb_envpack {
     tpb_env_entry_t *envs;     /**< Array of environment entries */
 } tpb_envpack_t;
 
-/** @brief MPI argument package */
-typedef struct tpb_mpipack {
-    char *mpiargs;             /**< MPI args string to pass to launcher as-is */
-} tpb_mpipack_t;
+/** @brief One link in an ordered PLI wrapper chain */
+typedef struct tpb_wrapper_link {
+    char app[TPBM_NAME_STR_MAX_LEN]; /**< Wrapper executable name or path */
+    char *args;                      /**< Wrapper arguments (may be NULL) */
+} tpb_wrapper_link_t;
+
+/** @brief Ordered wrapper chain for kernel execution */
+typedef struct tpb_wrapperpack {
+    int nlinks;                        /**< Number of wrapper links */
+    tpb_wrapper_link_t *links;         /**< Ordered wrapper links */
+} tpb_wrapperpack_t;
 
 /** @brief Runtime handle for kernel execution */
 typedef struct tpb_k_rthdl {
     tpb_argpack_t argpack;
     tpb_envpack_t envpack;     /**< Environment variables for kernel */
-    tpb_mpipack_t mpipack;     /**< MPI arguments for kernel (e.g., np=4) */
+    tpb_wrapperpack_t wrapperpack; /**< Ordered PLI wrapper chain */
     tpb_respack_t respack;
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
@@ -549,27 +556,26 @@ int tpb_driver_set_hdl_karg(const char *parm_name, void *v);
 int tpb_driver_set_hdl_env(const char *env_name, const char *env_value);
 
 /**
- * @brief Replace MPI arguments string for the current handle.
- * @param mpiargs_str MPI arguments string passed to launcher as-is.
+ * @brief Replace the ordered wrapper chain for the current handle.
+ * @param links Array of wrapper links (deep-copied).
+ * @param nlinks Number of links (0 clears the chain).
  * @return TPBE_SUCCESS or error code.
  */
-int tpb_driver_set_hdl_mpiargs(const char *mpiargs_str);
+int tpb_driver_set_hdl_wrappers(const tpb_wrapper_link_t *links, int nlinks);
 
 /**
- * @brief Append MPI arguments to the current handle.
- * @param mpiargs_str MPI arguments string to append.
+ * @brief Replace the ordered wrapper chain for a handle by index.
+ * @param hdl_idx Handle index (0 .. nhdl-1).
+ * @param links Array of wrapper links (deep-copied).
+ * @param nlinks Number of links (0 clears the chain).
  * @return TPBE_SUCCESS or error code.
  */
-int tpb_driver_append_hdl_mpiargs(const char *mpiargs_str);
+int tpb_driver_set_hdl_wrappers_idx(int hdl_idx,
+                                    const tpb_wrapper_link_t *links,
+                                    int nlinks);
 
 /**
- * @brief Get MPI arguments string from the current handle.
- * @return MPI arguments string, or NULL; do not free.
- */
-const char *tpb_driver_get_hdl_mpiargs(void);
-
-/**
- * @brief Copy argpack/envpack/mpipack from a source handle index.
+ * @brief Copy argpack/envpack/wrapperpack from a source handle index.
  * @param src_idx Source handle index.
  * @return TPBE_SUCCESS or error code.
  */

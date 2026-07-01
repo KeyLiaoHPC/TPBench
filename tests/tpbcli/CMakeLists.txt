@@ -19,13 +19,12 @@ set_target_properties(test-cli-run-nokernel PROPERTIES
 tpb_add_subcase(B2 B2.1 kargs_before_kernel       test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.2 kargs_dim_before_kernel   test-cli-run-nokernel tpbcli)
 tpb_add_subcase(B2 B2.3 kenvs_before_kernel       test-cli-run-nokernel tpbcli)
-tpb_add_subcase(B2 B2.4 kmpiargs_before_kernel    test-cli-run-nokernel tpbcli)
+tpb_add_subcase(B2 B2.4 wrapper_args_without_wrapper test-cli-run-nokernel tpbcli)
 # B2.5 runs --kernel stream; omit when TPB_KERNELS excludes stream (see integration tests).
 if(TARGET tpbk_stream)
     tpb_add_subcase(B2 B2.5 normal_with_kernel test-cli-run-nokernel tpbcli)
 endif()
 tpb_add_subcase(B2 B2.6 kenvs_dim_before_kernel   test-cli-run-nokernel tpbcli)
-tpb_add_subcase(B2 B2.7 kmpiargs_dim_before_kernel test-cli-run-nokernel tpbcli)
 
 if(TARGET tpbk_stream)
     tpb_add_subcase(B2 B2.8 dry_run_basic test-cli-run-nokernel tpbcli)
@@ -37,6 +36,30 @@ if(TARGET tpbk_stream)
     tpb_add_subcase(B2 B2.12 dry_run_cartesian test-cli-run-nokernel tpbcli)
     tpb_add_subcase(B2 B2.13 help_kernel_specific test-cli-run-nokernel tpbcli)
 endif()
+
+# --- wrapper dry-run command generation (Pack W1) ---
+add_executable(test-cli-run-wrapper EXCLUDE_FROM_ALL
+    test-cli-run-wrapper.c
+)
+target_compile_definitions(test-cli-run-wrapper PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+    "TPB_TEST_TPB_HOME=\"${CMAKE_BINARY_DIR}\""
+)
+add_dependencies(test-cli-run-wrapper tpbcli)
+if(TARGET tpbk_stream)
+    add_dependencies(test-cli-run-wrapper tpbk_stream)
+    tpb_add_subcase(W1 W1.1 no_wrapper              test-cli-run-wrapper tpbcli)
+    tpb_add_subcase(W1 W1.2 global_wrapper_only     test-cli-run-wrapper tpbcli)
+    tpb_add_subcase(W1 W1.3 global_local_chain      test-cli-run-wrapper tpbcli)
+    tpb_add_subcase(W1 W1.4 override_global         test-cli-run-wrapper tpbcli)
+    tpb_add_subcase(W1 W1.5 multiple_kernels        test-cli-run-wrapper tpbcli)
+endif()
+tpb_add_subcase(W1 W1.6 wrapper_args_without_wrapper test-cli-run-wrapper tpbcli)
+set_target_properties(test-cli-run-wrapper PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
 
 # --- dimargs test executable (Pack B1) ---
 add_executable(test-cli-run-dimargs EXCLUDE_FROM_ALL

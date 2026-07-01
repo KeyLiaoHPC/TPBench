@@ -25,7 +25,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 1"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -36,7 +37,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "1024"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 4"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -47,7 +49,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 1"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -58,7 +61,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "6144"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 4"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -69,7 +73,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 1"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -80,7 +85,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "131072"], ["ntest", "100"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 4"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -91,7 +97,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 1"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 1"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]
@@ -102,7 +109,8 @@ benchmark:
       kernel: stream_mpi
       kargs: [["array_size", "67108864"], ["ntest", "10"], ["twarm", "100"]]
       kenvs: "OMP_NUM_THREADS=1"
-      kmpiargs: "--map-by core --bind-to core -np 4"
+      wrapper: mpirun
+      wrapper_args: "--map-by core --bind-to core -np 4"
       v:
         - ["copy_bw_walltime", "mean"]
         - ["scale_bw_walltime", "mean"]

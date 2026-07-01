@@ -374,7 +374,8 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
     hdl->respack.outputs = NULL;
     hdl->envpack.n = 0;
     hdl->envpack.envs = NULL;
-    hdl->mpipack.mpiargs = NULL;
+    hdl->wrapperpack.nlinks = 0;
+    hdl->wrapperpack.links = NULL;
 
     return 0;
 }

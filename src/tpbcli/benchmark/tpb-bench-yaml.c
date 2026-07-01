@@ -419,8 +419,12 @@ tpb_bench_yaml_load(const char *path, tpb_benchmark_t *bench)
                         state = PARSE_BATCH_KARGS;
                     } else if (strcmp(key, "kenvs") == 0) {
                         strncpy(cur_batch->kenvs, value, sizeof(cur_batch->kenvs) - 1);
-                    } else if (strcmp(key, "kmpiargs") == 0) {
-                        strncpy(cur_batch->kmpiargs, value, sizeof(cur_batch->kmpiargs) - 1);
+                    } else if (strcmp(key, "wrapper") == 0) {
+                        strncpy(cur_batch->wrapper, value,
+                                sizeof(cur_batch->wrapper) - 1);
+                    } else if (strcmp(key, "wrapper_args") == 0) {
+                        strncpy(cur_batch->wrapper_args, value,
+                                sizeof(cur_batch->wrapper_args) - 1);
                     } else if (strcmp(key, "v") == 0) {
                         state = PARSE_BATCH_V;
                     }
