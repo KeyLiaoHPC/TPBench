@@ -1067,7 +1067,7 @@ const char *tpb_get_err_msg(int err);
 
 ## Task Capsule API
 
-Functions for grouping per-unit task records into a task capsule. Declared in `tpb-public.h`. MPI kernels should prefer `tpb_mpik_write_task()`; the APIs below support ad-hoc multi-thread or multi-process workflows.
+Functions for grouping per-unit task records into a task capsule. Declared in `tpb-public.h`. MPI kernels coordinate collectives locally (e.g. `MPI_Bcast`, `MPI_Gather`) and call these capsule APIs directly.
 
 ### `tpb_k_create_capsule_task`
 

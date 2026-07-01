@@ -43,7 +43,7 @@ Build outputs: `build/bin/tpbcli`, `build/bin/tpbcli-pli-launcher`, `build/lib/l
 |------|------|------|
 | CLI | `src/tpbcli/` | `run`, `db`; argp in `argp/`, YAML/scoring in `benchmark/`, launcher in `pli/` |
 | Public API | `src/include/tpb-public.h` | Only header front-end should use |
-| Corelib | `src/corelib/` | Driver, dynloader, stats, auto-record; MPI in `tpb_corelib_mpi*.c` |
+| Corelib | `src/corelib/` | Driver, dynloader, stats, auto-record |
 | Results DB | `src/corelib/rafdb/` | Run-and-forget persistent storage |
 | Kernels | `src/kernels/simple/` | Single-process CPU (`tpbk_*.c`) |
 | MPI kernels | `src/kernels/streaming_memory_access_mpi/` | MPI CPU kernels |

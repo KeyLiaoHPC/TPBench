@@ -577,7 +577,7 @@ SHA1("task" + <utc_bits> + <btime> + <hostname> + <username> + <tbatch_id> + <ke
 Notes:
 - `task_record_id` uniqueness is scoped by full hash ingredients and should be globally unique in a workspace.
 - `derive_to` points to the canonical task record when deduplication is enabled.
-- For an MPI kernel that records via `tpb_mpik_write_task`, each rank's normal task record has `derive_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
+- For an MPI kernel that finalizes a task capsule, each rank's normal task record has `derive_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
 - `inherit_from` is all-zero unless this record was derived from another task record (provenance).
 
 **Task entry point (`ntask`, CLI):** Physically, `task.tpbe` contains every appended task row. For batch metadata and `tpbcli database ls`, `ntask` counts only rows with `derive_to` all-zero (one logical invocation: a normal single-rank task or a task capsule after MPI finalize). Per-rank rows that point `derive_to` at a capsule ID are not counted. `tpbcli database dump --entry task` lists only entry-point rows and prints `(N task entry points / M total rows)`.
@@ -705,7 +705,7 @@ Magic signature:
 
 A **task capsule record** is a special task-domain `.tpbr` that does not store kernel arguments or performance outputs. It groups every per-rank or per-thread **TaskRecordID** produced by a single logical kernel invocation into one file for analysis.
 
-**Purpose:** Multi-thread or multi-process runs each produce a normal task record with a distinct TaskRecordID. A capsule provides one link record whose payload is only the list of those IDs, without merging argument/metric headers (unlike `tpb_k_merge_record_*`).
+**Purpose:** Multi-thread or multi-process runs each produce a normal task record with a distinct TaskRecordID. A capsule provides one link record whose payload is only the list of those IDs, without merging argument/metric headers.
 
 **TaskCapsuleRecordID:**
 
@@ -734,13 +734,13 @@ The capsule uses the **same** `utc_bits`, `btime`, `hostname`, `username`, `tbat
 
 **Lifecycle (kernel responsibility):**
 
-**MPI (recommended):** After `tpb_mpik_corelib_init` on the execution communicator, call `tpb_mpik_write_task(hdl, exit_code, task_id_out, tcap_id_out)` once at the end of the collective kernel. It coordinates: each rank `tpb_k_write_task`; barrier; rank 0 `tpb_k_create_capsule_task`; `MPI_Bcast` of capsule ID and status; each rank patches its own task `derive_to` to the capsule; `MPI_Gather` of all TaskRecordIDs to rank 0; rank 0 alone calls `tpb_k_append_capsule_task` for ranks 1..n-1 in MPI rank order (sub ranks do not touch the capsule file).
+**MPI (recommended):** After `MPI_Init`, each rank initializes corelib (rank 0 first with console output, sub-ranks silently), runs the kernel, then coordinates capsule finalize locally: each rank writes its task via `tpb_record_write_task` or `tpb_k_write_task`; barrier; rank 0 `tpb_k_create_capsule_task`; `MPI_Bcast` of capsule ID and status; each rank patches its own task `derive_to` to the capsule; `MPI_Gather` of all TaskRecordIDs to rank 0; rank 0 alone calls `tpb_k_append_capsule_task` for ranks 1..n-1 in MPI rank order (sub ranks do not touch the capsule file). See `tpbk_stream_mpi.c` for the reference implementation.
 
 **Ad-hoc / non-MPI multi-unit:**
 
 1. Each unit writes its normal task record via `tpb_k_write_task` and obtains its TaskRecordID (optional output pointer).
-2. The designated leader (thread 0 or rank 0 without `tpb_mpik_write_task`) calls `tpb_k_create_capsule_task(first_task_id, capsule_id_out)`, which creates the capsule `.tpbr` with the first ID in the data section and appends the capsule entry.
-3. Other units synchronize on the capsule ID (e.g. POSIX shared memory `tpb_k_sync_capsule_task`, or `MPI_Bcast` when not using `tpb_mpik_write_task`).
+2. The designated leader (thread 0 or rank 0) calls `tpb_k_create_capsule_task(first_task_id, capsule_id_out)`, which creates the capsule `.tpbr` with the first ID in the data section and appends the capsule entry.
+3. Other units synchronize on the capsule ID (e.g. POSIX shared memory `tpb_k_sync_capsule_task`, or `MPI_Bcast` in an MPI kernel).
 4. Each non-leader calls `tpb_k_append_capsule_task(capsule_id, own_task_id)`. Appends use an advisory file lock on the capsule `.tpbr`: read the header dimension and `datasize`, strip the trailing end magic, append 20 bytes, rewrite the end magic, then update `datasize` and the header's `dimsizes[0]` / `data_size`.
 
 **Magic bytes:** Same task-domain record magics as section 2.4.3 (`.tpbr` task domain).
@@ -1065,129 +1065,9 @@ Column details:
 
 When a kernel executes across multiple threads or processes, each execution unit writes its own task record independently.
 
-**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. **MPI kernels** should use `tpb_mpik_write_task` so corelib performs the collectives: rank 0 creates the capsule and appends other ranks' IDs after `MPI_Gather`; each rank's task record `derive_to` (`.tpbr` and `task.tpbe` row) points at the capsule ID. **Non-MPI or ad-hoc MPI:** the leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or `MPI_Bcast` can distribute the capsule ID when not using `tpb_mpik_write_task`.
+**Preferred grouping (task capsule):** A **task capsule record** (section 2.4.4) lists all related TaskRecordIDs in one `.tpbr` without duplicating arguments or metrics. **MPI kernels** coordinate collectives in the kernel source and use capsule APIs: rank 0 creates the capsule and appends other ranks' IDs after `MPI_Gather`; each rank's task record `derive_to` (`.tpbr` and `task.tpbe` row) points at the capsule ID. **Non-MPI multi-unit:** the leader creates the capsule after each unit has written its task record; other units append their IDs under file locking. Shared memory (`tpb_k_sync_capsule_task`) or `MPI_Bcast` can distribute the capsule ID.
 
-**Legacy merge API:** The caller may still merge per-unit task records into a single **merged task record** via `tpb_k_merge_record_thread` / `tpb_k_merge_record_process` (section 5.2). That path synthesizes combined headers and payload; it remains available for older workflows.
-
-Two merge levels exist:
-1) **Thread merge** -- merges task records from threads within one process.
-2) **Process merge** -- merges task records (or already thread-merged records) from multiple processes, potentially across nodes.
-
-A hybrid kernel (multi-process x multi-thread) may use capsules per process then a top-level capsule, or use thread merge first then process merge across intermediate results.
-
-### 5.2. Merge Procedure
-
-#### 5.2.1. Input Validation
-
-All source task records must share the same `tbatch_id` and `kernel_id`. If either differs, the merge aborts with a warning (`TPBE_MERGE_MISMATCH`) without terminating the process.
-
-#### 5.2.2. Ordering
-
-Source tasks are sorted by `tid` ascending. When thread ranks are unavailable or identical, `tid` (OS thread ID) is used as the tiebreaker.
-
-#### 5.2.3. Duration Calculation
-
-Uses `btime` (boot-time nanoseconds, `CLOCK_BOOTTIME`) for precision:
-
-```
-merged.btime    = min(source[i].btime)
-merged.duration = max(source[i].btime + source[i].duration) - merged.btime
-merged.utc_bits = utc_bits of whichever source has min(btime)
-```
-
-Assumption: all participating threads/processes share the same boot-time reference (same node for threads; same node or NTP-synced for processes).
-
-#### 5.2.4. inherit_from / derive_to Semantics
-
-Merged record:
-- `inherit_from` = `0xFF` repeated 20 bytes (multi-source sentinel)
-- `derive_to` = all zero
-
-Source records (updated after merge):
-- `derive_to` = merged task record ID (updated in both `.tpbr` and `.tpbe`)
-- `inherit_from` = unchanged (all zero)
-
-#### 5.2.5. Merge Metadata Headers
-
-The merged task record prepends special headers before the interleaved source headers:
-
-| Header | Type | Thread merge | Process merge |
-|---|---|:---:|:---:|
-| SourceTaskIDs | `unsigned char[20]` x N | yes | yes |
-| ThreadIDs | `uint32_t` x T | yes | yes |
-| ProcessIDs | `uint32_t` x P | -- | yes |
-| Hosts | `char[64]` x P | -- | yes |
-
-#### 5.2.6. Source Header Interleaving
-
-For each unique header name across all source tasks, one header entry is created per source task in tid-ascending order. If a source task lacks a header present in other tasks, an empty placeholder (`ndim=0`, `data_size=0`) is inserted at that position.
-
-Example with 3 source tasks:
-
-```
-thread0: headers = [perf]
-thread1: headers = [perf, time]
-thread2: headers = [perf, time]
-
-merged:  [SourceTaskIDs, ThreadIDs,
-          perf(t0), perf(t1), perf(t2),
-          time(t0=empty), time(t1), time(t2)]
-```
-
-#### 5.2.7. Data Layout
-
-Source data blocks are concatenated with 4-byte size prefixes:
-
-```
-[uint32_t src0_datasize][src0_data]
-[uint32_t src1_datasize][src1_data]
-...
-```
-
-#### 5.2.8. Merged Task ID
-
-Generated via `tpb_raf_gen_task_id()` with:
-- `utc_bits`, `btime` from the earliest source
-- `order` = `UINT32_MAX` (sentinel distinguishing merged records)
-- `pid`, `tid` from the calling (merging) thread
-
-### 5.3. Public API
-
-```c
-int tpb_k_merge_record_thread(const unsigned char task_ids[][20],
-                              int n_tasks,
-                              unsigned char merged_id_out[20]);
-
-int tpb_k_merge_record_process(const unsigned char task_ids[][20],
-                               int n_tasks,
-                               unsigned char merged_id_out[20]);
-```
-
-Both resolve the workspace internally, then call the core merge function `tpb_raf_merge_par()` with `is_process_merge` = 0 or 1.
-
-### 5.4. Hybrid Merge Sequence
-
-```
-┌─────────────────────────────────────────────────────┐
-│  Process 0                  Process 1               │
-│  ┌──────┐ ┌──────┐         ┌──────┐ ┌──────┐       │
-│  │ Th 0 │ │ Th 1 │         │ Th 0 │ │ Th 1 │       │
-│  │ task │ │ task │         │ task │ │ task │       │
-│  └──┬───┘ └──┬───┘         └──┬───┘ └──┬───┘       │
-│     └───┬────┘                └───┬────┘            │
-│    thread_merge              thread_merge           │
-│     merged_0                  merged_1              │
-│         └────────┬────────────┘                     │
-│            process_merge                            │
-│             final_merged                            │
-└─────────────────────────────────────────────────────┘
-```
-
-The final merged record contains:
-- ThreadIDs: `[t0_p0, t1_p0, t0_p1, t1_p1]` (flattened, P x T)
-- ProcessIDs: `[pid0, pid1]`
-- Hosts: `[host0, host1]`
-- SourceTaskIDs: `[merged_0, merged_1]`
+A hybrid kernel (multi-process x multi-thread) may use capsules per process then a top-level capsule that lists the per-process capsule IDs.
 
 ## 6. Naming Format of Headers
 

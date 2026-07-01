@@ -97,21 +97,19 @@ _sf_resolve_workspace_root(const char *override, char *out, size_t outlen)
 /*
  * Shared corelib startup: resolve workspace, rafdb layout, run log, caller tag.
  * For tpbcli only, clears TPB_LOG_FILE so a new timestamped log is always created.
- * MPI sub rank skips version/workspace/caller console lines but still initializes
- * workspace state.
+ * When silent is set, skips version/workspace/caller console lines but still
+ * initializes workspace state.
  */
 int
-_tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
+_tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
+                     int silent)
 {
     char resolved[PATH_MAX];
     int err;
-    int silent;
 
     if (_s_corelib_initialized) {
         return TPBE_ILLEGAL_CALL;
     }
-
-    silent = (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK);
 
     if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
         unsetenv(TPB_LOG_FILE_ENV);
@@ -131,8 +129,6 @@ _tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
             who = "tpbcli";
         } else if (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL) {
             who = "kernel";
-        } else if (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK) {
-            who = "MPI kernel";
         } else {
             who = "unknown";
         }
@@ -156,6 +152,12 @@ _tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
     _tpb_caller_set(caller_after);
     _s_corelib_initialized = 1;
     return TPBE_SUCCESS;
+}
+
+int
+_tpb_init_corelib(const char *tpb_workspace_path, int caller_after)
+{
+    return _tpb_init_corelib_ex(tpb_workspace_path, caller_after, 0);
 }
 
 int

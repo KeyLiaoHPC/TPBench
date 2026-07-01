@@ -123,7 +123,7 @@ if(TPB_NEED_MPI)
         set(MPI_ROOT "${TPB_MPI_PATH}")
     endif()
     find_package(MPI REQUIRED)
-    message(STATUS "MPI enabled for selected MPI kernel(s)")
+    message(STATUS "MPI enabled for selected MPI kernel target(s) only (not linked to libtpbench)")
 endif()
 
 set(TPB_ROCM_KERNEL_LIBS "")

@@ -12,7 +12,7 @@ Follow these guidelines for consistency across all `tpb-*` source files.
 
 **Public APIs for the kernel-specific behaviors**
 - For normal single kernel: `tpb_k_<do>_<something>`. E.g. `tpb_k_write_task()`.
-- Kernels with special backends (e.g., MPI, OpenMP) require special wrappers beyond single-core APIs. Use `tpb_<prefix>k_<do>_<something>` where `<prefix>` identifies the backend. For example: `tpb_mpik_write_task()` handles MPI-based multi-core task and capsule record writing.
+- Kernels with special backends (e.g., MPI, OpenMP) may use static helpers in the kernel source for collectives and then call capsule APIs (`tpb_k_create_capsule_task`, `tpb_k_append_capsule_task`, etc.). Corelib does not provide MPI-specific public wrappers.
 
 ### 1.2. Module Internal Functions
 - Single-file static functions: prefix with `_sf_`. Use minimal names for simple ops, descriptive names otherwise. E.g., `_sf_min()`, `_sf_hex_to_bin()`, `_sf_search_headers()`.

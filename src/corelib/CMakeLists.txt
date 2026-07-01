@@ -14,7 +14,6 @@ set(TPB_CORELIB_SOURCES
     rafdb/tpb-raf-entry.c
     rafdb/tpb-raf-record.c
     rafdb/tpb-raf-id.c
-    rafdb/tpb-raf-merge.c
     rafdb/tpb-raf-kernel-meta.c
     rafdb/tpb-sha1.c
     rafdb/tpb-raf-scan.c
@@ -29,11 +28,3 @@ target_include_directories(tpbench
 )
 target_link_libraries(tpbench PUBLIC m dl rt)
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")
-
-if(TARGET MPI::MPI_C)
-    target_sources(tpbench PRIVATE tpb_corelib_mpi.c)
-    target_include_directories(tpbench PRIVATE ${MPI_C_INCLUDE_DIRS})
-    target_link_libraries(tpbench PRIVATE MPI::MPI_C)
-else()
-    target_sources(tpbench PRIVATE tpb_corelib_mpi_stub.c)
-endif()

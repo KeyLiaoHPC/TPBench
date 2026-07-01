@@ -76,7 +76,7 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | ------ | ------- | ------- |
 | `-DTPB_WORKSPACE=<path>` | `$ENV{TPB_WORKSPACE}` | Workspace root; used as `CMAKE_INSTALL_PREFIX` when the prefix is still the CMake default. |
 | `-DTPB_HOME=<path>` | `<build-dir>` | Baked into `libtpbench.so` for dynloader kernel/launcher discovery (`src/corelib/tpb-dynloader.c`). |
-| `-DTPB_MPI_PATH=<path>` | *(empty)* | MPI install root when an MPI kernel is selected; empty = auto-detect. |
+| `-DTPB_MPI_PATH=<path>` | *(empty)* | MPI install root for selected MPI kernel targets only (libtpbench does not link MPI); empty = auto-detect. |
 | `-DTPB_ROCM_PATH=<path>` | *(empty)* | ROCm root when a `rocm`-tagged GPU kernel is selected; empty = auto-detect (`ROCM_PATH` env fallback). |
 | `-DBUILD_TESTING=OFF` | `ON` | Skip test targets and `enable_testing()`. |
 

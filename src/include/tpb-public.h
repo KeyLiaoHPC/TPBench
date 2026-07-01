@@ -174,9 +174,7 @@ void tpb_exit_on_error(int err, const char *context);
 /** @brief Process context that last completed corelib init in this process. */
 typedef enum {
     TPB_CORELIB_CTX_CALLER_TPBCLI = 1,
-    TPB_CORELIB_CTX_CALLER_KERNEL = 2,
-    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_MAIN_RANK = 3,
-    TPB_CORELIB_CTX_CALLER_KERNEL_MPI_SUB_RANK = 4
+    TPB_CORELIB_CTX_CALLER_KERNEL = 2
 } tpb_corelib_caller_t;
 
 /**
@@ -194,23 +192,6 @@ int tpb_corelib_init(const char *tpb_workspace_path);
  * @return Same as tpb_corelib_init.
  */
 int tpb_k_corelib_init(const char *tpb_workspace_path);
-
-/**
- * @brief Initialize TPBench corelib for an MPI kernel process after MPI_Init.
- *        Rank 0 in the given communicator runs full startup (version, workspace,
- *        rafdb, log) and broadcasts its error code; other ranks wait, then init
- *        silently if the code is TPBE_SUCCESS. Rank 0 then prints rank/PID lines
- *        and a completion line. When TPBench is built without MPI, returns
- *        TPBE_ILLEGAL_CALL immediately.
- * @param mpi_comm MPI communicator (pass your @c MPI_Comm, e.g. @c MPI_COMM_WORLD;
- *        in C you may write @c (void *)MPI_COMM_WORLD if your @c mpi.h types require
- *        a cast to @c void *). Stored for @c tpb_mpik_write_task on MPI builds.
- * @param tpb_workspace_path Same as tpb_corelib_init.
- * @return TPBE_SUCCESS, TPBE_ILLEGAL_CALL if this build has no MPI support or
- *         @a mpi_comm is NULL, TPBE_MPI_FAIL on broadcast abort (non-root) or MPI
- *         errors, or another TPBE_* code from corelib init.
- */
-int tpb_mpik_corelib_init(void *mpi_comm, const char *tpb_workspace_path);
 
 /** @brief Timer structure */
 typedef struct tpb_timer {
@@ -312,23 +293,6 @@ typedef struct tpb_k_rthdl {
     tpb_respack_t respack;
     tpb_kernel_t kernel;
 } tpb_k_rthdl_t;
-
-/**
- * @brief MPI-coordinated task write and task capsule finalize for MPI kernels.
- *        Each rank writes its task via tpb_k_write_task; rank 0 creates the
- *        capsule and broadcasts its ID; each rank patches derive_to on its task
- *        record to the capsule; rank 0 gathers all TaskRecordIDs and appends
- *        ranks 1..n-1 to the capsule. Uses the communicator stored by
- *        tpb_mpik_corelib_init. Without MPI, returns TPBE_ILLEGAL_CALL.
- * @param hdl           Runtime handle (non-NULL).
- * @param exit_code     Kernel exit code passed to tpb_k_write_task.
- * @param task_id_out   Optional 20-byte TaskRecordID output (same rank).
- * @param tcap_id_out   Optional 20-byte TaskCapsuleRecordID output.
- * @return TPBE_SUCCESS or TPBE_* from write/create/append/derive_to/MPI.
- */
-int tpb_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
-                        unsigned char *task_id_out,
-                        unsigned char *tcap_id_out);
 
 /* ===== Kernel Registration API ===== */
 
@@ -1451,43 +1415,6 @@ int tpb_raf_kernel_update_meta_key(const char *workspace,
  * @return TPBE_SUCCESS or error code.
  */
 int tpb_ts_bits_to_isoutc(tpb_dtbits_t bits, tpb_datetime_str_t *str);
-
-/* ===== Task Record Merge API ===== */
-
-/**
- * @brief Merge multiple task records from threads within one process.
- *
- * Combines per-thread task records into a single merged record.
- * Source records must share the same tbatch_id and kernel_id.
- * Adds SourceTaskIDs and ThreadIDs headers to the merged record.
- *
- * @param task_ids     Array of 20-byte source task IDs
- * @param n_tasks      Number of source tasks (must be >= 2)
- * @param merged_id_out Output: 20-byte merged task ID
- * @return TPBE_SUCCESS on success,
- *         TPBE_MERGE_MISMATCH or TPBE_MERGE_FAIL on error
- */
-int tpb_k_merge_record_thread(const unsigned char task_ids[][20],
-                              int n_tasks,
-                              unsigned char merged_id_out[20]);
-
-/**
- * @brief Merge multiple task records from processes (possibly multi-node).
- *
- * Combines per-process task records into a single merged record.
- * Source records must share the same tbatch_id and kernel_id.
- * Adds SourceTaskIDs, ThreadIDs, ProcessIDs, and Hosts headers
- * to the merged record.
- *
- * @param task_ids     Array of 20-byte source task IDs
- * @param n_tasks      Number of source tasks (must be >= 2)
- * @param merged_id_out Output: 20-byte merged task ID
- * @return TPBE_SUCCESS on success,
- *         TPBE_MERGE_MISMATCH or TPBE_MERGE_FAIL on error
- */
-int tpb_k_merge_record_process(const unsigned char task_ids[][20],
-                               int n_tasks,
-                               unsigned char merged_id_out[20]);
 
 /* ===== Kernel Query API ===== */
 

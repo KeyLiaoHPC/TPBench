@@ -14,7 +14,7 @@ set(_tpb_cmake_help_doc_lines
     "TPB_KERNEL_CFLAGS|C compile options for CPU kernels (empty = -O2 only; if set, replaces kernel C flags)"
     "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
     "TPB_KERNEL_FFLAGS|Fortran kernel compile options (reserved; empty = -O2 when Fortran kernels exist)"
-    "TPB_MPI_PATH|MPI install root when an MPI kernel is selected (empty = auto-detect)"
+    "TPB_MPI_PATH|MPI install root for selected MPI kernel targets only (libtpbench does not link MPI; empty = auto-detect)"
     "TPB_ROCM_PATH|ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)"
     "TPB_ENABLE_OPENMP|Add OpenMP to built kernel targets (does not select which kernels build)"
     "TPB_SHOW_DEBUG|Enable kernel debug logging (TPB_K_DEBUG)"
@@ -90,7 +90,7 @@ foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
     if("${_kcond}" STREQUAL "")
         set(_pre "Always")
     elseif(_kcond STREQUAL "MPI_C_FOUND")
-        set(_pre "MPI when MPI kernel selected (TPB_MPI_PATH or auto)")
+        set(_pre "MPI kernel target only (TPB_MPI_PATH or auto; not linked to libtpbench)")
     else()
         set(_pre "${_kcond}")
     endif()

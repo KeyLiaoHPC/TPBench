@@ -24,7 +24,7 @@ TPBench supports enabling SIMD instruction sets (`TPB_USE_AVX512`, `TPB_USE_AVX2
 | `-DTPB_USE_AVX2=ON` | OFF | Enable AVX2 instruction set (x86_64) |
 | `-DTPB_USE_KP_SVE=ON` | OFF | Enable ARM SVE instruction set (aarch64) |
 | `-DTPB_ENABLE_OPENMP=ON` | OFF | Add OpenMP to built kernel targets (does not select kernels) |
-| `-DTPB_MPI_PATH=</path/to/mpi>` | empty | MPI root when an MPI-conditioned kernel is selected (empty = auto-detect) |
+| `-DTPB_MPI_PATH=</path/to/mpi>` | empty | MPI root for selected MPI kernel targets only (`libtpbench` does not link MPI; empty = auto-detect) |
 
 Example: Enable AVX-512 instruction set compilation on x86_64 platform
 ```bash

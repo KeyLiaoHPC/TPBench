@@ -37,4 +37,11 @@ int _tpb_caller_get(void);
  */
 int _tpb_init_corelib(const char *tpb_workspace_path, int caller_after);
 
+/**
+ * @brief Like _tpb_init_corelib but allows suppressing version/workspace/caller lines.
+ * @param silent When non-zero, skip console startup lines (MPI sub-rank init).
+ */
+int _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
+                        int silent);
+
 #endif /* TPB_CORELIB_STATE_H */
