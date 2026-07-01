@@ -158,8 +158,30 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 
 ## tpbcli kernel / k
 
-子命令：`list`/`ls`、`get`、`set`、`backup-inactive`。不指定任何选项时，扫描 `lib/libtpbk_*.so`、注册 kernel，打印名称 / KernelID 前缀 / 描述。
+子命令：`list`/`ls`、`get`、`set`、`init`、`build`、`backup-inactive`。**`list`** 扫描已安装 `.so` 及 **`$TPB_HOME/src/kernels/kernel_list.cmake.in`**，输出 **Kernel / KernelID / Tags / Description**（未编译行 KernelID 为 **`N/A`**）。
 
+### `kernel build`
+
+#### 必选（二选一）
+
+
+| 选项 | 用途 |
+| ---- | ---- |
+| `--kernel <names>` | 逗号分隔内核名；可用 `'...'` 或 `"..."` 包裹。 |
+| `--kernel-tag <tags>` | 逗号分隔标签；与 **`--kernel`** 互斥。 |
+
+
+#### 可选
+
+
+| 选项 | 用途 |
+| ---- | ---- |
+| `--dir <path>` | 默认 **`TPB_HOME`**；默认时按 registry 解析 **`$TPB_HOME/src/kernels/<PATH>`**。 |
+| `--ldflags <flags>` | 链接选项 → **`TPB_KERNEL_LDFLAGS`** / **`compilation.kernel_ldflags`**。 |
+| `--tpb-home`、`-D`、编译器选项 | 同英文 cheatsheet。 |
+
+
+Registry：**`src/kernels/kernel_list.cmake.in`**（`NAME|TAGS|PATH`）。
 
 ### `kernel get`
 

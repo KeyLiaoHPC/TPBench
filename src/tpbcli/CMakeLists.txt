@@ -16,6 +16,8 @@ add_executable(tpbcli
     run/tpbcli-run.c
     run/tpbcli-run-dim.c
     kernel/tpbcli-kernel-list.c
+    kernel/tpbcli-kernel-registry.c
+    kernel/tpbcli-kernel-table.c
     kernel/tpbcli-kernel-set.c
     kernel/tpbcli-kernel-get.c
     kernel/tpbcli-print-kernel-help.c

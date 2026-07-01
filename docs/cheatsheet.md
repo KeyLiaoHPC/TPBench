@@ -45,7 +45,7 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | `-DTPB_KERNEL_<NAME>_TAGS=<list>` | *(per registry)* | Override default tags for one kernel (`NAME` uppercased, e.g. `TPB_KERNEL_STREAM_TAGS`). |
 
 
-**`TPB_KERNELS` candidates:** `default`, `all`, or any name from `cmake/TPBenchKernelRegistry.cmake` (e.g. `stream`, `triad`, `scale`, `axpy`, `rtriad`, `sum`, `staxpy`, `striad`, `stream_mpi`, `roofline_rocm`).
+**`TPB_KERNELS` candidates:** `default`, `all`, or any name from **`src/kernels/kernel_list.cmake.in`** (e.g. `stream`, `triad`, `scale`, `axpy`, `rtriad`, `sum`, `staxpy`, `striad`, `stream_mpi`, `roofline_rocm`).
 
 **Common tag candidates:** `default`, `bandwidth`, `stanza`, `mpi`, `gpu`, `roofline`, `rocm`.
 
@@ -61,6 +61,7 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | `-DTPB_KERNEL_CFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** CPU kernel C compile options (`src/kernels/CMakeLists.txt`). |
 | `-DTPB_KERNEL_CXXFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** ROCm/HIP kernel compile options (`cmake/TPBenchGpuKernelsRocm.cmake`). |
 | `-DTPB_KERNEL_FFLAGS="..."` | *(empty → `-O2`)* | Reserved for future Fortran kernels. |
+| `-DTPB_KERNEL_LDFLAGS="..."` | *(empty)* | Link options for CPU kernel targets and out-of-tree **`tpbench_add_kernel`**. |
 | `-DTPB_ENABLE_OPENMP=ON` | `OFF` | Add OpenMP compile/link to selected benchmark kernels. |
 | `-DTPB_USE_AVX512=ON` | `OFF` | Define `TPB_USE_AVX512` project-wide. |
 | `-DTPB_USE_AVX2=ON` | `OFF` | Define `TPB_USE_AVX2`. |
@@ -158,8 +159,32 @@ Workspace resolution order: `--workspace` → `$TPB_WORKSPACE` → `$HOME/.tpben
 
 ## tpbcli kernel / k
 
-Subcommands: `list`/`ls`, `get`, `set`, `backup-inactive`. With no subcommand options, scans `lib/libtpbk_*.so`, registers kernels, and prints name / KernelID prefix / description.
+Subcommands: `list`/`ls`, `get`, `set`, `init`, `build`, `backup-inactive`. **`list`** scans `lib/libtpbk_*.so` plus **`$TPB_HOME/src/kernels/kernel_list.cmake.in`** (and scanned entry files), registers compiled kernels, and prints **Kernel / KernelID / Tags / Description** (uncompiled rows show **`N/A`**).
 
+### `kernel build`
+
+#### Mandatory (exactly one)
+
+
+| Option | Purpose |
+| ------ | ------- |
+| `--kernel <names>` | Comma-separated kernel names; optional outer `'...'` or `"..."`. |
+| `--kernel-tag <tags>` | Comma-separated tags; expands to all registry kernels matching any tag. Mutually exclusive with `--kernel`. |
+
+
+#### Optional
+
+
+| Option | Purpose |
+| ------ | ------- |
+| `--dir <path>` | Source/project directory; defaults to **`TPB_HOME`**. When defaulted, each kernel uses **`$TPB_HOME/src/kernels/<PATH>`** from **`kernel_list.cmake.in`**. |
+| `--ldflags <flags>` | Link flags → **`-DTPB_KERNEL_LDFLAGS=...`** and **`compilation.kernel_ldflags`**. |
+| `--tpb-home <path>` | Install root for **`find_package(TPBench)`** and **`lib/`** install (only on **`build`**). |
+| `--cc`, `--cflags`, `--cxx`, `--cxxflags`, `--fc`, `--fcflags` | Compiler overrides forwarded to CMake configure. |
+| `-D<var>=<value>` | Extra CMake cache definitions (repeatable). |
+
+
+Registry file: **`src/kernels/kernel_list.cmake.in`** (`NAME|TAGS|PATH`). MPI link overrides: **`TPB_CPU_KERNEL_LINK_DEFS`** in **`cmake/TPBenchKernelRegistry.cmake`**.
 
 ### `kernel get`
 

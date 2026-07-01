@@ -46,11 +46,13 @@
     "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
     "    d, database: Read and manage TPBench database.\n" \
     "    k, kernel: Kernel management (refreshes kernel records in the workspace).\n" \
-    "        list, ls: List integrated kernels (Kernel, KernelID, Description).\n" \
+    "        list, ls: List integrated kernels (Kernel, KernelID, Tags, Description).\n" \
     "        init: Initialize out-of-tree kernel project from templates.\n" \
     "            --dir <path> --kernel <name>\n" \
-    "        build: Build out-of-tree kernel and install libtpbk_<name>.so.\n" \
-    "            --dir <path> --kernel <name> [--tpb-home <path>] [-D...] [--cc ...] [--cflags ...]\n" \
+    "        build: Build kernel(s) and install libtpbk_<name>.so.\n" \
+    "            (--kernel <names> | --kernel-tag <tags>) [--dir <path>] [--ldflags <flags>]\n" \
+    "            [--tpb-home <path>] [-D...] [--cc ...] [--cflags ...]\n" \
+    "            --dir defaults to TPB_HOME; registry paths under $TPB_HOME/src/kernels.\n" \
     "            TPB home for build: --tpb-home, then $TPB_HOME, then $HOME/.tpbench.\n" \
     "        set, get, backup-inactive: Kernel metadata and compile history.\n" \
     "    help: Print help message for an object and exit.\n"

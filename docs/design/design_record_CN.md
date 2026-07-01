@@ -35,7 +35,7 @@ SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>
 ```
 示例：`SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
-**Kernel**: kernel 是用户希望评估的程序或代码模块。kernel 位于 `${TPB_HOME}/lib` 或 `${TPB_WORKSPACE}/lib/` 目录下，命名为 `tpbk_<kernel_name>.<so|x>`。
+**Kernel**: kernel 是用户希望评估的程序或代码模块。kernel 位于 `${TPB_HOME}/lib` 或 `${TPB_WORKSPACE}/lib/` 目录下，命名为 `tpbk_<kernel_name>.<so|x>`。可编辑源 registry **`kernel_list.cmake.in`**（位于 **`src/kernels/`**）列出 CPU kernel 名称、标签与源码路径；**`tpbcli kernel list`** 对尚未编译到 **`lib/`** 的 catalog 项显示 **`N/A`**。rafdb 中的 KernelID 记录与 registry 标签相互独立。
 
 ---
 

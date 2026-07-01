@@ -35,7 +35,7 @@ SHA1("tbatch" + <utc_bits> + <btime> + <hostname> + <username> + <front_end_pid>
 ```
 Example: `SHA1("tbatch20250308T130801Z3600000000000node01testuser13249")`
 
-**Kernel**: A kernel is a program or code module that users wish to evaluate. Kernels reside in `${TPB_HOME}/lib` or `${TPB_WORKSPACE}/lib/` and are named `tpbk_<kernel_name>.<so|x>`.
+**Kernel**: A kernel is a program or code module that users wish to evaluate. Kernels reside in `${TPB_HOME}/lib` or `${TPB_WORKSPACE}/lib/` and are named `tpbk_<kernel_name>.<so|x>`. The editable source catalog **`kernel_list.cmake.in`** (under **`src/kernels/`**) lists available CPU kernel names, tags, and source paths; **`tpbcli kernel list`** may show **`N/A`** for catalog entries not yet built into **`lib/`**. Compiled KernelID records in rafdb are separate from registry tags.
 
 ---
 

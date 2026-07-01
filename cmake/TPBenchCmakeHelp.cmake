@@ -14,6 +14,7 @@ set(_tpb_cmake_help_doc_lines
     "TPB_KERNEL_CFLAGS|C compile options for CPU kernels (empty = -O2 only; if set, replaces kernel C flags)"
     "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
     "TPB_KERNEL_FFLAGS|Fortran kernel compile options (reserved; empty = -O2 when Fortran kernels exist)"
+    "TPB_KERNEL_LDFLAGS|Link options for CPU kernels (empty = none)"
     "TPB_MPI_PATH|MPI install root for selected MPI kernel targets only (libtpbench does not link MPI; empty = auto-detect)"
     "TPB_ROCM_PATH|ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)"
     "TPB_ENABLE_OPENMP|Add OpenMP to built kernel targets (does not select which kernels build)"
@@ -82,18 +83,33 @@ endforeach()
 string(APPEND _buf "\nAvailable kernels:\n")
 string(APPEND _buf "  name, tags, compile prerequisites\n")
 
-foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
-    string(REPLACE "|" ";" _parts "${_def}")
+file(STRINGS "${CMAKE_SOURCE_DIR}/src/kernels/kernel_list.cmake.in"
+     _tpb_help_kernel_lines)
+foreach(_line IN LISTS _tpb_help_kernel_lines)
+    string(STRIP "${_line}" _line)
+    if("${_line}" STREQUAL "" OR _line MATCHES "^#")
+        continue()
+    endif()
+    string(REPLACE "|" ";" _parts "${_line}")
     list(GET _parts 0 _kname)
     list(GET _parts 1 _ktags)
-    list(GET _parts 3 _kcond)
-    if("${_kcond}" STREQUAL "")
-        set(_pre "Always")
-    elseif(_kcond STREQUAL "MPI_C_FOUND")
-        set(_pre "MPI kernel target only (TPB_MPI_PATH or auto; not linked to libtpbench)")
-    else()
-        set(_pre "${_kcond}")
-    endif()
+    set(_pre "Always")
+    foreach(_ldef IN LISTS TPB_CPU_KERNEL_LINK_DEFS)
+        string(REPLACE "|" ";" _lparts "${_ldef}")
+        list(GET _lparts 0 _ln)
+        if("${_ln}" STREQUAL "${_kname}")
+            list(LENGTH _lparts _llen)
+            if(_llen GREATER 2)
+                list(GET _lparts 2 _kcond)
+                if(_kcond STREQUAL "MPI_C_FOUND")
+                    set(_pre "MPI kernel target only (TPB_MPI_PATH or auto; not linked to libtpbench)")
+                elseif(NOT "${_kcond}" STREQUAL "")
+                    set(_pre "${_kcond}")
+                endif()
+            endif()
+            break()
+        endif()
+    endforeach()
     string(APPEND _buf "  ${_kname}, ${_ktags}, ${_pre}\n")
 endforeach()
 

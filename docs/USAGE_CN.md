@@ -253,7 +253,19 @@ tpbcli kernel list
 # 别名：tpbcli kernel ls
 ```
 
-扫描 `lib/libtpbk_*.so`，注册新 KernelID 并打印可用内核名。可能创建或刷新 kernel 的 `.tpbe`/`.tpbr` 记录。
+扫描 `lib/libtpbk_*.so`，注册新 KernelID，并打印 **Kernel**、**KernelID**、**Tags**、**Description** 四列表格。已编译内核在前（加载顺序）；**`$TPB_HOME/src/kernels/kernel_list.cmake.in`**（及扫描到的 `tpbk_*.c` 入口）中尚未安装的内核，KernelID 列显示 **`N/A`**。Tags 来自 registry 文件，而非 rafdb 记录。
+
+### 2.4.1a 内核源 registry
+
+CPU 内核名称、标签与源码路径在 **`src/kernels/kernel_list.cmake.in`** 中声明（安装于 **`$TPB_HOME/src/kernels/`**）：
+
+```text
+# 格式：NAME|TAGS|PATH
+stream|default,bandwidth|simple
+stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
+```
+
+**`PATH`** 相对于 `src/kernels/`，目录内须含 **`tpbk_<NAME>.c`**。特殊链接库与构建条件（如 MPI）仍在 **`cmake/TPBenchKernelRegistry.cmake`** 的 **`TPB_CPU_KERNEL_LINK_DEFS`** 中配置。
 
 ### 2.4.2 查询 kernel 记录（只读）
 
@@ -305,3 +317,26 @@ tpbcli kernel get -v --kernel stream
 用相同编译选项重建会产生相同 KernelID；除非设置 **`TPB_K_OVERRIDE=1`**，否则不会覆盖已有 metadata。
 
 替换 `lib/libtpbk_<name>.so` 前，构建系统会将旧文件移至 **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`**，并将旧 KernelID 标为 **`active=0`**。dynloader 仅扫描 `lib/libtpbk_*.so`（非递归），备份文件不会被加载。
+
+### 2.4.5 初始化树外 kernel 工程
+
+模板位于 **`${TPB_HOME}/etc/cmake/kernel/`**。
+
+```bash
+tpbcli kernel init --dir ./mykern --kernel mykern
+```
+
+### 2.4.6 构建 kernel
+
+```bash
+# 从 registry 构建（--dir 默认为 TPB_HOME）：
+tpbcli kernel build --kernel stream
+tpbcli kernel build --kernel 'stream,triad'
+tpbcli kernel build --kernel-tag bandwidth
+
+# 树外工程（显式源码目录）：
+tpbcli kernel build --dir ./mykern --kernel mykern \
+  [--ldflags "-Wl,--as-needed"] [--cflags "-O2"]
+```
+
+**`--kernel`** 与 **`--kernel-tag`** 互斥且必须指定其一；均支持逗号分隔，可用单/双引号包裹。**`--dir`** 默认为 **`TPB_HOME`**；默认时按 **`kernel_list.cmake.in`** 解析 **`$TPB_HOME/src/kernels/<PATH>`**。多内核顺序构建，逐个输出 PASS/FAIL 及汇总。 **`--ldflags`** 映射为 **`TPB_KERNEL_LDFLAGS`** 并写入 **`compilation.kernel_ldflags`**。

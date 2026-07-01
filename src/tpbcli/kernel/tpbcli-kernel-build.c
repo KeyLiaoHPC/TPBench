@@ -9,19 +9,20 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <limits.h>
 #ifdef __linux__
 #include <linux/limits.h>
-#else
-#include <limits.h>
 #endif
 
 #include "tpb-public.h"
 #include "tpbcli-kernel-backup.h"
 #include "tpbcli-kernel-home.h"
+#include "tpbcli-kernel-registry.h"
 #include "tpbcli-kernel-set.h"
 #include "tpbcli-kernel-build.h"
 
 #define TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS  32
+#define TPBCLI_KERNEL_BUILD_MAX_KERNELS     64
 #define TPBCLI_KERNEL_BUILD_CMD_MAX         8192
 
 typedef struct {
@@ -31,16 +32,53 @@ typedef struct {
     const char *cxxflags;
     const char *fc;
     const char *fcflags;
+    const char *ldflags;
     const char *cmake_defs[TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS];
     int ncmake_defs;
 } tpbcli_kernel_build_opts_t;
+
+typedef struct {
+    const char *dir_path;
+    int dir_explicit;
+    const char *kernel_csv;
+    const char *tag_csv;
+    const char *tpb_home_opt;
+    tpbcli_kernel_build_opts_t opts;
+} tpbcli_kernel_build_args_t;
 
 /* Local Function Prototypes */
 static void _sf_print_build_usage(void);
 static int _sf_run_shell(const char *cmd);
 static int _sf_path_is_dir(const char *path);
 static int _sf_ensure_dir(const char *path);
+/*
+ * Copy a file byte-for-byte (used to stage registry CMakeLists.txt).
+ */
 static int _sf_copy_file(const char *src, const char *dst);
+static int _sf_parse_build_args(int argc, char **argv,
+                                tpbcli_kernel_build_args_t *args);
+static int _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
+                                    const char *tpb_home,
+                                    const char **names_out,
+                                    int names_max,
+                                    tpbcli_kernel_reg_list_t *reg_out);
+static int _sf_resolve_kernel_dir(const char *tpb_home,
+                                  const char *dir_path,
+                                  int dir_explicit,
+                                  const char *kernel_name,
+                                  const tpbcli_kernel_reg_list_t *reg,
+                                  char *out, size_t outlen);
+static int _sf_canonicalize_path(char *path, size_t pathlen);
+/*
+ * Ensure kernel source dir has CMakeLists.txt for out-of-tree registry build.
+ * Copies $TPB_HOME/etc/cmake/kernel/CMakeLists.registry.txt when missing.
+ */
+static int _sf_ensure_registry_cmake(const char *source_dir,
+                                      const char *tpb_home);
+static int _sf_build_one_kernel(const char *kernel_name,
+                                const char *source_dir,
+                                const char *tpb_home,
+                                const tpbcli_kernel_build_opts_t *opts);
 static int _sf_activate_installed_kernel(const char *kernel_name,
                                          const char *so_path);
 static int _sf_register_compile_meta(const char *kernel_name,
@@ -48,11 +86,16 @@ static int _sf_register_compile_meta(const char *kernel_name,
                                      const char *src_dir,
                                      const char *build_dir,
                                      const tpbcli_kernel_build_opts_t *opts);
+/*
+ * Build cmake configure or build command for one out-of-tree kernel.
+ * link_libs holds registry extras (e.g. MPI::MPI_C) passed as a -D cache var.
+ */
 static int _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
                                const char *source_dir,
                                const char *build_dir,
                                const char *tpb_home,
                                const char *kernel_name,
+                               const char *link_libs,
                                const tpbcli_kernel_build_opts_t *opts,
                                int configure);
 
@@ -60,11 +103,19 @@ static void
 _sf_print_build_usage(void)
 {
     fprintf(stderr,
-            "Usage: tpbcli kernel build --dir <path> --kernel <kernel_name> "
-            "[--tpb-home <path>] [-D<var>=<value> ...] "
+            "Usage: tpbcli kernel build [--dir <path>] "
+            "(--kernel <names> | --kernel-tag <tags>) "
+            "[--tpb-home <path>] [--ldflags <flags>] [-D<var>=<value> ...] "
             "[--cc <compiler>] [--cflags <flags>] "
             "[--cxx <compiler>] [--cxxflags <flags>] "
-            "[--fc <compiler>] [--fcflags <flags>]\n");
+            "[--fc <compiler>] [--fcflags <flags>]\n"
+            "\n"
+            "  --dir defaults to TPB_HOME; with the default, kernel source "
+            "dirs are resolved from\n"
+            "  $TPB_HOME/src/kernels/kernel_list.cmake.in.\n"
+            "  --kernel and --kernel-tag are mutually exclusive; each accepts "
+            "comma-separated values\n"
+            "  optionally wrapped in single or double quotes.\n");
 }
 
 static int
@@ -134,11 +185,165 @@ _sf_copy_file(const char *src, const char *dst)
 }
 
 static int
+_sf_parse_build_args(int argc, char **argv,
+                     tpbcli_kernel_build_args_t *args)
+{
+    int i;
+
+    memset(args, 0, sizeof(*args));
+    for (i = 3; i < argc; i++) {
+        if (strcmp(argv[i], "--dir") == 0 && i + 1 < argc) {
+            args->dir_path = argv[++i];
+            args->dir_explicit = 1;
+        } else if (strcmp(argv[i], "--kernel") == 0 && i + 1 < argc) {
+            args->kernel_csv = argv[++i];
+        } else if (strcmp(argv[i], "--kernel-tag") == 0 && i + 1 < argc) {
+            args->tag_csv = argv[++i];
+        } else if (strcmp(argv[i], "--tpb-home") == 0 && i + 1 < argc) {
+            args->tpb_home_opt = argv[++i];
+        } else if (strcmp(argv[i], "--ldflags") == 0 && i + 1 < argc) {
+            args->opts.ldflags = argv[++i];
+        } else if (strcmp(argv[i], "--cc") == 0 && i + 1 < argc) {
+            args->opts.cc = argv[++i];
+        } else if (strcmp(argv[i], "--cflags") == 0 && i + 1 < argc) {
+            args->opts.cflags = argv[++i];
+        } else if (strcmp(argv[i], "--cxx") == 0 && i + 1 < argc) {
+            args->opts.cxx = argv[++i];
+        } else if (strcmp(argv[i], "--cxxflags") == 0 && i + 1 < argc) {
+            args->opts.cxxflags = argv[++i];
+        } else if (strcmp(argv[i], "--fc") == 0 && i + 1 < argc) {
+            args->opts.fc = argv[++i];
+        } else if (strcmp(argv[i], "--fcflags") == 0 && i + 1 < argc) {
+            args->opts.fcflags = argv[++i];
+        } else if (strncmp(argv[i], "-D", 2) == 0) {
+            if (args->opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
+                fprintf(stderr, "kernel build: too many -D options.\n");
+                return TPBE_CLI_FAIL;
+            }
+            args->opts.cmake_defs[args->opts.ncmake_defs++] = argv[i] + 2;
+        } else {
+            _sf_print_build_usage();
+            return TPBE_CLI_FAIL;
+        }
+    }
+
+    if (args->kernel_csv != NULL && args->tag_csv != NULL) {
+        fprintf(stderr,
+                "kernel build: --kernel and --kernel-tag are mutually "
+                "exclusive; specify exactly one.\n");
+        return TPBE_CLI_FAIL;
+    }
+    if (args->kernel_csv == NULL && args->tag_csv == NULL) {
+        fprintf(stderr,
+                "kernel build: specify exactly one of --kernel or "
+                "--kernel-tag.\n");
+        _sf_print_build_usage();
+        return TPBE_CLI_FAIL;
+    }
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
+                         const char *tpb_home,
+                         const char **names_out,
+                         int names_max,
+                         tpbcli_kernel_reg_list_t *reg_out)
+{
+    tpbcli_kernel_reg_list_t reg;
+    char scratch[512];
+    char req_scratch[512];
+    char *tokens[TPBCLI_KERNEL_BUILD_MAX_KERNELS];
+    int n;
+    int i;
+    int err;
+
+    err = tpbcli_kernel_reg_load(tpb_home, &reg);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
+    if (reg_out != NULL) {
+        *reg_out = reg;
+    }
+
+    if (args->tag_csv != NULL) {
+        n = tpbcli_kernel_reg_expand_tags(&reg, args->tag_csv,
+                                          names_out, names_max);
+        if (n <= 0) {
+            char all_tags[512];
+
+            tpbcli_kernel_reg_all_tags(&reg, all_tags, sizeof(all_tags));
+            fprintf(stderr,
+                    "kernel build: no kernels matched --kernel-tag '%s'.\n",
+                    args->tag_csv);
+            if (all_tags[0] != '\0') {
+                fprintf(stderr, "kernel build: known tags: %s\n", all_tags);
+            }
+            return TPBE_CLI_FAIL;
+        }
+        return n;
+    }
+
+    snprintf(scratch, sizeof(scratch), "%s", args->kernel_csv);
+    n = tpbcli_kernel_reg_split_csv(scratch, tokens, names_max,
+                                    req_scratch, sizeof(req_scratch));
+    if (n <= 0) {
+        fprintf(stderr,
+                "kernel build: --kernel list is empty or invalid.\n");
+        return TPBE_CLI_FAIL;
+    }
+    for (i = 0; i < n; i++) {
+        if (!tpbcli_kernel_name_valid(tokens[i])) {
+            fprintf(stderr, "kernel build: invalid kernel name '%s'.\n",
+                    tokens[i]);
+            return TPBE_CLI_FAIL;
+        }
+        names_out[i] = tokens[i];
+    }
+    return n;
+}
+
+static int
+_sf_resolve_kernel_dir(const char *tpb_home,
+                       const char *dir_path,
+                       int dir_explicit,
+                       const char *kernel_name,
+                       const tpbcli_kernel_reg_list_t *reg,
+                       char *out, size_t outlen)
+{
+    const tpbcli_kernel_reg_entry_t *ent;
+
+    if (dir_explicit) {
+        if (snprintf(out, outlen, "%s", dir_path) >= (int)outlen) {
+            return TPBE_FILE_IO_FAIL;
+        }
+        return TPBE_SUCCESS;
+    }
+
+    ent = tpbcli_kernel_reg_find(reg, kernel_name);
+    if (ent == NULL || ent->path[0] == '\0') {
+        fprintf(stderr,
+                "kernel build: kernel '%s' not found in "
+                "%s/src/kernels/kernel_list.cmake.in.\n"
+                "kernel build: use --dir <path> for out-of-tree kernels "
+                "not listed in the registry.\n",
+                kernel_name, tpb_home);
+        return TPBE_CLI_FAIL;
+    }
+    if (snprintf(out, outlen, "%s/src/kernels/%s",
+                 tpb_home, ent->path) >= (int)outlen) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    return TPBE_SUCCESS;
+}
+
+static int
 _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
                     const char *source_dir,
                     const char *build_dir,
                     const char *tpb_home,
                     const char *kernel_name,
+                    const char *link_libs,
                     const tpbcli_kernel_build_opts_t *opts,
                     int configure)
 {
@@ -153,8 +358,9 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
             return TPBE_FILE_IO_FAIL;
         }
         n = snprintf(cmd, cmdlen,
-                     "cmake -S \"%s\" -B \"%s\" -DTPBench_DIR=\"%s\"",
-                     source_dir, build_dir, tpbench_dir);
+                     "cmake -S \"%s\" -B \"%s\" -DTPBench_DIR=\"%s\" "
+                     "-DTPB_KERNEL_NAME=\"%s\"",
+                     source_dir, build_dir, tpbench_dir, kernel_name);
         if (n < 0 || (size_t)n >= cmdlen) {
             return TPBE_FILE_IO_FAIL;
         }
@@ -196,6 +402,21 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
         if (opts->fcflags != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_FFLAGS=\"%s\"", opts->fcflags);
+            if (n < 0 || (size_t)n >= cmdlen) {
+                return TPBE_FILE_IO_FAIL;
+            }
+        }
+        if (opts->ldflags != NULL) {
+            n += snprintf(cmd + n, cmdlen - (size_t)n,
+                          " -DTPB_KERNEL_LDFLAGS=\"%s\"", opts->ldflags);
+            if (n < 0 || (size_t)n >= cmdlen) {
+                return TPBE_FILE_IO_FAIL;
+            }
+        }
+        if (link_libs != NULL && link_libs[0] != '\0') {
+            /* Registry link extras (MPI, etc.) for CMakeLists.registry.txt */
+            n += snprintf(cmd + n, cmdlen - (size_t)n,
+                          " -DTPB_KERNEL_LINK_LIBS=\"%s\"", link_libs);
             if (n < 0 || (size_t)n >= cmdlen) {
                 return TPBE_FILE_IO_FAIL;
             }
@@ -257,11 +478,12 @@ _sf_register_compile_meta(const char *kernel_name,
                           const char *build_dir,
                           const tpbcli_kernel_build_opts_t *opts)
 {
-    char *argv[32];
+    char *argv[36];
     int argc;
     int err;
     const char *cflags = (opts->cflags != NULL) ? opts->cflags : "";
     const char *cc = (opts->cc != NULL) ? opts->cc : "";
+    const char *ldflags = (opts->ldflags != NULL) ? opts->ldflags : "";
 
     argc = 0;
     argv[argc++] = "tpbcli";
@@ -285,6 +507,9 @@ _sf_register_compile_meta(const char *kernel_name,
     argv[argc++] = "compilation.kernel_cflags";
     argv[argc++] = (char *)cflags;
     argv[argc++] = "--key";
+    argv[argc++] = "compilation.kernel_ldflags";
+    argv[argc++] = (char *)ldflags;
+    argv[argc++] = "--key";
     argv[argc++] = "dependency.tpbench";
     argv[argc++] = "libtpbench.so";
     argv[argc] = NULL;
@@ -293,77 +518,93 @@ _sf_register_compile_meta(const char *kernel_name,
     return err;
 }
 
-int
-tpbcli_kernel_build(int argc, char **argv)
+static int
+_sf_canonicalize_path(char *path, size_t pathlen)
 {
-    const char *dir_path = NULL;
-    const char *kernel_name = NULL;
-    const char *tpb_home_opt = NULL;
-    tpbcli_kernel_build_opts_t opts;
-    char tpb_home[PATH_MAX];
+    char resolved[PATH_MAX];
+
+    if (path == NULL || pathlen == 0) {
+        return TPBE_NULLPTR_ARG;
+    }
+    if (realpath(path, resolved) == NULL) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (strlen(resolved) >= pathlen) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    snprintf(path, pathlen, "%s", resolved);
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_ensure_registry_cmake(const char *source_dir, const char *tpb_home)
+{
+    char cmake_path[PATH_MAX];
+    char tmpl_path[PATH_MAX];
+
+    if (snprintf(cmake_path, sizeof(cmake_path), "%s/CMakeLists.txt",
+                 source_dir) >= (int)sizeof(cmake_path)) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (access(cmake_path, R_OK) == 0) {
+        return TPBE_SUCCESS;  /* Installed or previously staged */
+    }
+
+    /* Fallback: copy shipped template into the kernel source tree */
+    if (snprintf(tmpl_path, sizeof(tmpl_path), "%s/etc/cmake/kernel/CMakeLists.registry.txt",
+                 tpb_home) >= (int)sizeof(tmpl_path)) {
+        return TPBE_FILE_IO_FAIL;
+    }
+    if (access(tmpl_path, R_OK) != 0) {
+        fprintf(stderr,
+                "kernel build: missing '%s' and template '%s'.\n"
+                "kernel build: reinstall TPBench or rebuild with a current "
+                "version that stages registry CMakeLists.txt files.\n",
+                cmake_path, tmpl_path);
+        return TPBE_CLI_FAIL;
+    }
+
+    if (_sf_copy_file(tmpl_path, cmake_path) != TPBE_SUCCESS) {
+        fprintf(stderr,
+                "kernel build: failed to install registry CMakeLists.txt "
+                "into '%s'.\n", source_dir);
+        return TPBE_FILE_IO_FAIL;
+    }
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_build_one_kernel(const char *kernel_name,
+                     const char *source_dir,
+                     const char *tpb_home,
+                     const tpbcli_kernel_build_opts_t *opts)
+{
     char build_dir[PATH_MAX];
     char tpbench_pkg[PATH_MAX];
     char source_file[PATH_MAX];
     char built_so[PATH_MAX];
     char dest_so[PATH_MAX];
     char lib_dir[PATH_MAX];
+    char link_libs[TPBCLI_KERNEL_REG_LINK_MAX];
     char cmd[TPBCLI_KERNEL_BUILD_CMD_MAX];
     char *backup_argv[8];
     int err;
-    int i;
 
-    memset(&opts, 0, sizeof(opts));
-
-    for (i = 3; i < argc; i++) {
-        if (strcmp(argv[i], "--dir") == 0 && i + 1 < argc) {
-            dir_path = argv[++i];
-        } else if (strcmp(argv[i], "--kernel") == 0 && i + 1 < argc) {
-            kernel_name = argv[++i];
-        } else if (strcmp(argv[i], "--tpb-home") == 0 && i + 1 < argc) {
-            tpb_home_opt = argv[++i];
-        } else if (strcmp(argv[i], "--cc") == 0 && i + 1 < argc) {
-            opts.cc = argv[++i];
-        } else if (strcmp(argv[i], "--cflags") == 0 && i + 1 < argc) {
-            opts.cflags = argv[++i];
-        } else if (strcmp(argv[i], "--cxx") == 0 && i + 1 < argc) {
-            opts.cxx = argv[++i];
-        } else if (strcmp(argv[i], "--cxxflags") == 0 && i + 1 < argc) {
-            opts.cxxflags = argv[++i];
-        } else if (strcmp(argv[i], "--fc") == 0 && i + 1 < argc) {
-            opts.fc = argv[++i];
-        } else if (strcmp(argv[i], "--fcflags") == 0 && i + 1 < argc) {
-            opts.fcflags = argv[++i];
-        } else if (strncmp(argv[i], "-D", 2) == 0) {
-            if (opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
-                fprintf(stderr, "kernel build: too many -D options.\n");
-                return TPBE_CLI_FAIL;
-            }
-            opts.cmake_defs[opts.ncmake_defs++] = argv[i] + 2;
-        } else {
-            _sf_print_build_usage();
-            return TPBE_CLI_FAIL;
-        }
-    }
-
-    if (dir_path == NULL || kernel_name == NULL) {
-        _sf_print_build_usage();
-        return TPBE_CLI_FAIL;
-    }
-    if (!tpbcli_kernel_name_valid(kernel_name)) {
-        fprintf(stderr, "kernel build: invalid kernel name '%s'.\n",
-                kernel_name);
-        return TPBE_CLI_FAIL;
-    }
-    if (!_sf_path_is_dir(dir_path)) {
-        fprintf(stderr, "kernel build: directory '%s' not found.\n", dir_path);
+    if (!_sf_path_is_dir(source_dir)) {
+        fprintf(stderr, "kernel build: directory '%s' not found.\n",
+                source_dir);
         return TPBE_CLI_FAIL;
     }
 
-    err = tpbcli_kernel_resolve_home(tpb_home_opt, tpb_home, sizeof(tpb_home));
+    err = _sf_ensure_registry_cmake(source_dir, tpb_home);
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel build: failed to resolve TPB_HOME.\n");
         return err;
     }
+
+    /* Optional per-kernel link libraries from kernel_link_defs.txt */
+    link_libs[0] = '\0';
+    (void)tpbcli_kernel_reg_link_libs(tpb_home, kernel_name,
+                                      link_libs, sizeof(link_libs));
 
     if (snprintf(tpbench_pkg, sizeof(tpbench_pkg), "%s/lib/cmake/TPBench",
                  tpb_home) >= (int)sizeof(tpbench_pkg)) {
@@ -377,16 +618,17 @@ tpbcli_kernel_build(int argc, char **argv)
     }
 
     if (snprintf(source_file, sizeof(source_file), "%s/tpbk_%s.c",
-                 dir_path, kernel_name) >= (int)sizeof(source_file)) {
+                 source_dir, kernel_name) >= (int)sizeof(source_file)) {
         return TPBE_FILE_IO_FAIL;
     }
     if (access(source_file, R_OK) != 0) {
-        fprintf(stderr, "kernel build: source '%s' not found.\n", source_file);
+        fprintf(stderr, "kernel build: source '%s' not found.\n",
+                source_file);
         return TPBE_CLI_FAIL;
     }
 
-    if (snprintf(build_dir, sizeof(build_dir), "%s/build", dir_path) >=
-        (int)sizeof(build_dir)) {
+    if (snprintf(build_dir, sizeof(build_dir), "%s/build_%s",
+                 source_dir, kernel_name) >= (int)sizeof(build_dir)) {
         return TPBE_FILE_IO_FAIL;
     }
     err = _sf_ensure_dir(build_dir);
@@ -394,8 +636,8 @@ tpbcli_kernel_build(int argc, char **argv)
         return err;
     }
 
-    err = _sf_build_cmake_cmd(cmd, sizeof(cmd), dir_path, build_dir, tpb_home,
-                              kernel_name, &opts, 1);
+    err = _sf_build_cmake_cmd(cmd, sizeof(cmd), source_dir, build_dir,
+                              tpb_home, kernel_name, link_libs, opts, 1);
     if (err != TPBE_SUCCESS) {
         return err;
     }
@@ -403,12 +645,13 @@ tpbcli_kernel_build(int argc, char **argv)
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "kernel build: cmake configure failed.\n");
+                   "kernel build: cmake configure failed for '%s'.\n",
+                   kernel_name);
         return err;
     }
 
-    err = _sf_build_cmake_cmd(cmd, sizeof(cmd), dir_path, build_dir, tpb_home,
-                              kernel_name, &opts, 0);
+    err = _sf_build_cmake_cmd(cmd, sizeof(cmd), source_dir, build_dir,
+                              tpb_home, kernel_name, link_libs, opts, 0);
     if (err != TPBE_SUCCESS) {
         return err;
     }
@@ -416,7 +659,8 @@ tpbcli_kernel_build(int argc, char **argv)
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
         tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
-                   "kernel build: cmake build failed.\n");
+                   "kernel build: cmake build failed for '%s'.\n",
+                   kernel_name);
         return err;
     }
 
@@ -468,8 +712,8 @@ tpbcli_kernel_build(int argc, char **argv)
         return err;
     }
 
-    err = _sf_register_compile_meta(kernel_name, dest_so, dir_path, build_dir,
-                                      &opts);
+    err = _sf_register_compile_meta(kernel_name, dest_so, source_dir,
+                                    build_dir, opts);
     if (err != TPBE_SUCCESS) {
         return err;
     }
@@ -477,4 +721,81 @@ tpbcli_kernel_build(int argc, char **argv)
     tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
                "kernel build: installed %s\n", dest_so);
     return TPBE_SUCCESS;
+}
+
+int
+tpbcli_kernel_build(int argc, char **argv)
+{
+    tpbcli_kernel_build_args_t args;
+    tpbcli_kernel_reg_list_t reg;
+    char tpb_home[PATH_MAX];
+    const char *names[TPBCLI_KERNEL_BUILD_MAX_KERNELS];
+    char source_dir[PATH_MAX];
+    char name_storage[TPBCLI_KERNEL_BUILD_MAX_KERNELS]
+                     [TPBCLI_KERNEL_REG_NAME_MAX];
+    int nkern;
+    int err;
+    int i;
+    int nfail = 0;
+    int npass = 0;
+
+    err = _sf_parse_build_args(argc, argv, &args);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
+
+    err = tpbcli_kernel_resolve_home(args.tpb_home_opt, tpb_home,
+                                     sizeof(tpb_home));
+    if (err != TPBE_SUCCESS) {
+        fprintf(stderr, "kernel build: failed to resolve TPB_HOME.\n");
+        return err;
+    }
+    (void)_sf_canonicalize_path(tpb_home, sizeof(tpb_home));
+
+    if (args.dir_path == NULL) {
+        args.dir_path = tpb_home;
+    }
+
+    nkern = _sf_resolve_kernel_names(&args, tpb_home, names,
+                                     TPBCLI_KERNEL_BUILD_MAX_KERNELS, &reg);
+    if (nkern < 0) {
+        return nkern;
+    }
+
+    for (i = 0; i < nkern; i++) {
+        if (args.kernel_csv != NULL) {
+            snprintf(name_storage[i], sizeof(name_storage[i]), "%s",
+                     names[i]);
+            names[i] = name_storage[i];
+        }
+    }
+
+    for (i = 0; i < nkern; i++) {
+        err = _sf_resolve_kernel_dir(tpb_home, args.dir_path,
+                                     args.dir_explicit, names[i], &reg,
+                                     source_dir, sizeof(source_dir));
+        if (err != TPBE_SUCCESS) {
+            nfail++;
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "kernel build: %s FAIL (resolve dir)\n", names[i]);
+            continue;
+        }
+        (void)_sf_canonicalize_path(source_dir, sizeof(source_dir));
+
+        err = _sf_build_one_kernel(names[i], source_dir, tpb_home, &args.opts);
+        if (err != TPBE_SUCCESS) {
+            nfail++;
+            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+                       "kernel build: %s FAIL\n", names[i]);
+            continue;
+        }
+        npass++;
+        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+                   "kernel build: %s PASS\n", names[i]);
+    }
+
+    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+               "kernel build: summary %d passed, %d failed (of %d)\n",
+               npass, nfail, nkern);
+    return (nfail > 0) ? TPBE_CLI_FAIL : TPBE_SUCCESS;
 }

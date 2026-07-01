@@ -15,6 +15,7 @@
 
 #include "tpb-public.h"
 #include "tpbcli-print-kernel-help.h"
+#include "tpbcli-kernel-table.h"
 
 #define TPBCLI_KERNEL_LEFT_COL_WIDTH   32
 #define TPBCLI_KERNEL_GAP              4
@@ -32,10 +33,8 @@ static void _sf_split_metric_name(const char *name, char *tags_out,
                                   size_t tags_len, char *real_out,
                                   size_t real_len);
 static void _sf_print_section_line(FILE *out);
-static void _sf_print_right_prefix(FILE *out);
 static void _sf_print_col_line(FILE *out, const char *left,
                                const char *right);
-static void _sf_print_right_wrapped(FILE *out, const char *text);
 static void _sf_print_parm_section_header(FILE *out);
 static void _sf_print_metric_section_header(FILE *out);
 static void _sf_print_parm_entry(FILE *out, const char *name,
@@ -253,82 +252,29 @@ _sf_split_metric_name(const char *name, char *tags_out, size_t tags_len,
 }
 
 static void
-_sf_print_right_prefix(FILE *out)
-{
-    fprintf(out, "%*s", TPBCLI_KERNEL_LEFT_COL_WIDTH + TPBCLI_KERNEL_GAP, "");
-}
-
-static void
 _sf_print_col_line(FILE *out, const char *left, const char *right)
 {
-    if (left == NULL) {
-        left = "";
-    }
-    if (right == NULL) {
-        right = "";
-    }
-    fprintf(out, "%-*s%*s%s\n",
-            TPBCLI_KERNEL_LEFT_COL_WIDTH, left,
-            TPBCLI_KERNEL_GAP, "",
-            right);
+    const char *cells[2];
+    int widths[2] = {TPBCLI_KERNEL_LEFT_COL_WIDTH,
+                     TPBCLI_KERNEL_RIGHT_COL_WIDTH};
+
+    cells[0] = (left != NULL) ? left : "";
+    cells[1] = (right != NULL) ? right : "";
+    tpbcli_kernel_table_print_row(out, cells, widths, 2,
+                                  TPBCLI_KERNEL_GAP);
 }
 
 static void
-_sf_print_right_wrapped(FILE *out, const char *text)
+_sf_print_wrapped_note(FILE *out, const char *text)
 {
-    size_t pos = 0;
-    size_t len;
-    int width = TPBCLI_KERNEL_RIGHT_COL_WIDTH;
+    const char *cells[2];
+    int widths[2] = {TPBCLI_KERNEL_LEFT_COL_WIDTH,
+                     TPBCLI_KERNEL_RIGHT_COL_WIDTH};
 
-    if (text == NULL || text[0] == '\0') {
-        return;
-    }
-    len = strlen(text);
-
-    while (pos < len) {
-        size_t remaining;
-        size_t chunk;
-        size_t i;
-        int found_space = 0;
-
-        while (pos < len && isspace((unsigned char)text[pos])) {
-            pos++;
-        }
-        if (pos >= len) {
-            break;
-        }
-
-        remaining = len - pos;
-        if (remaining <= (size_t)width) {
-            _sf_print_right_prefix(out);
-            fprintf(out, "%.*s\n", (int)remaining, text + pos);
-            break;
-        }
-
-        chunk = (size_t)width;
-        for (i = pos + (size_t)width; i > pos; i--) {
-            if (isspace((unsigned char)text[i - 1])) {
-                chunk = i - pos;
-                found_space = 1;
-                break;
-            }
-        }
-
-        if (!found_space) {
-            chunk = (size_t)(width - 1);
-            _sf_print_right_prefix(out);
-            fprintf(out, "%.*s-\n", (int)chunk, text + pos);
-            pos += chunk;
-            continue;
-        }
-
-        while (chunk > 0 && isspace((unsigned char)text[pos + chunk - 1])) {
-            chunk--;
-        }
-        _sf_print_right_prefix(out);
-        fprintf(out, "%.*s\n", (int)chunk, text + pos);
-        pos += chunk;
-    }
+    cells[0] = "";
+    cells[1] = (text != NULL) ? text : "";
+    tpbcli_kernel_table_print_row(out, cells, widths, 2,
+                                  TPBCLI_KERNEL_GAP);
 }
 
 static void
@@ -348,7 +294,7 @@ _sf_print_parm_entry(FILE *out, const char *name, const char *note,
                      uint32_t type_bits)
 {
     _sf_print_col_line(out, name, _sf_dtype_to_str(type_bits));
-    _sf_print_right_wrapped(out, note);
+    _sf_print_wrapped_note(out, note);
 }
 
 static void
@@ -367,9 +313,8 @@ _sf_print_metric_entry(FILE *out, const char *full_name, const char *note,
     }
     tag_line = (tags[0] != '\0') ? tags : "-";
     _sf_print_col_line(out, real_name, tag_line);
-    _sf_print_right_prefix(out);
-    fprintf(out, "%s\n", _sf_unit_category_str(uattr_bits));
-    _sf_print_right_wrapped(out, note);
+    _sf_print_wrapped_note(out, _sf_unit_category_str(uattr_bits));
+    _sf_print_wrapped_note(out, note);
 }
 
 static int

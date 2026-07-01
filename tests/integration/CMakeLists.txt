@@ -42,6 +42,14 @@ add_test(
 set_tests_properties(integration.C4.2_kernel_template_switch PROPERTIES
     LABELS "integration")
 
+# --- Integration: kernel registry list/build (Pack C5) ---
+add_test(
+    NAME integration.C5.1_kernel_list_registry
+    COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_kernel_list_registry.sh"
+)
+set_tests_properties(integration.C5.1_kernel_list_registry PROPERTIES
+    LABELS "integration")
+
 # Aggregate targets (tri-record only when stream kernel is in the build)
 set(_tpb_integration_depends "")
 if(TARGET tpbk_stream)

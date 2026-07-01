@@ -354,17 +354,39 @@ tpb_register_common()
     return 0;
 }
 
+static void
+_sf_clear_kernel_registry(void)
+{
+    int i;
+
+    if (kernel_all == NULL) {
+        nkern = 0;
+        current_kernel = NULL;
+        return;
+    }
+    for (i = 0; i < nkern; i++) {
+        tpb_free_kernel(&kernel_all[i]);
+    }
+    free(kernel_all);
+    kernel_all = NULL;
+    nkern = 0;
+    current_kernel = NULL;
+}
+
 /* Initialize kernel registry and common parameters. */
 int
 tpb_register_kernel()
 {
     int err;
 
-    if (current_rthdl || kernel_all || handle_list) {
+    if (current_rthdl || handle_list) {
         err = TPBE_ILLEGAL_CALL;
         tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
                    "Illegal call to tpb_register_kernel().\n");
         return err;
+    }
+    if (kernel_all != NULL) {
+        _sf_clear_kernel_registry();
     }
 
     nhdl = 0;
@@ -397,11 +419,14 @@ tpb_register_kernels(int n, const char *const *names)
     int err;
     int i;
 
-    if (current_rthdl || kernel_all || handle_list) {
+    if (current_rthdl || handle_list) {
         err = TPBE_ILLEGAL_CALL;
         tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
                    "Illegal call to tpb_register_kernels().\n");
         return err;
+    }
+    if (kernel_all != NULL) {
+        _sf_clear_kernel_registry();
     }
 
     nhdl = 0;

@@ -1,0 +1,18 @@
+# TPBench CPU kernel registry
+#
+# Format: NAME|TAGS|PATH
+#   NAME  - kernel name (must match tpbk_<NAME>.c)
+#   TAGS  - comma-separated tags for build selection
+#   PATH  - directory relative to this file containing tpbk_<NAME>.c
+#
+# Edit this file to add kernels in nested directories.
+
+stream|default,bandwidth|simple
+triad|default,bandwidth|simple
+scale|default,bandwidth|simple
+axpy|default,bandwidth|simple
+rtriad|default,bandwidth|simple
+sum|default,bandwidth|simple
+staxpy|bandwidth,stanza|simple
+striad|bandwidth,stanza|simple
+stream_mpi|bandwidth,mpi|streaming_memory_access_mpi

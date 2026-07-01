@@ -1,0 +1,24 @@
+# Out-of-tree kernel build via tpbcli kernel build (one kernel per configure)
+cmake_minimum_required(VERSION 3.16)
+project(tpbk_registry C)
+
+find_package(TPBench REQUIRED)
+
+if(NOT DEFINED TPB_KERNEL_NAME OR TPB_KERNEL_NAME STREQUAL "")
+    message(FATAL_ERROR "TPB_KERNEL_NAME must be set, e.g. -DTPB_KERNEL_NAME=stream")
+endif()
+
+# Optional link extras from kernel_link_defs.txt (-DTPB_KERNEL_LINK_LIBS=...)
+set(_kernel_link_libs "")
+if(DEFINED TPB_KERNEL_LINK_LIBS AND NOT "${TPB_KERNEL_LINK_LIBS}" STREQUAL "")
+    set(_kernel_link_libs ${TPB_KERNEL_LINK_LIBS})
+    if("${TPB_KERNEL_LINK_LIBS}" MATCHES "MPI")
+        find_package(MPI REQUIRED)
+    endif()
+endif()
+
+tpbench_add_kernel(
+    NAME      ${TPB_KERNEL_NAME}
+    SOURCES   tpbk_${TPB_KERNEL_NAME}.c
+    LINK_LIBS ${_kernel_link_libs}
+)

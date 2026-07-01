@@ -68,10 +68,11 @@ Supporting (rarely touched): `src/timers/`, `src/libpfc/`, `src/pmu/`, `src/util
 
 ### New CPU kernel
 
-1. Add row to `TPB_CPU_KERNEL_DEFS` in [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake): `NAME|DEFAULT_TAGS|EXTRA_LINK_LIBS|CONDITION`.
-2. Add `tpbk_<kern>.c` under any `src/kernels/<subdir>/` (convention: `simple/`).
-3. Implement `tpbk_pli_register_<kern>`, `tpbk_<kern>_entry`, runner, debug `main()` → `tpbk_<kern>_entry()`.
-4. Build rules auto-generated in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt); no per-kernel `add_library` in root CMake.
+1. Add row to [`src/kernels/kernel_list.cmake.in`](src/kernels/kernel_list.cmake.in): `NAME|TAGS|PATH` (`PATH` relative to `src/kernels/`, contains `tpbk_<NAME>.c`).
+2. If the kernel needs extra link libraries or a build condition (MPI), add a row to **`TPB_CPU_KERNEL_LINK_DEFS`** in [`cmake/TPBenchKernelRegistry.cmake`](cmake/TPBenchKernelRegistry.cmake): `NAME|EXTRA_LINK_LIBS|CONDITION`.
+3. Add `tpbk_<kern>.c` under `src/kernels/<PATH>/`.
+4. Implement `tpbk_pli_register_<kern>`, `tpbk_<kern>_entry`, runner, debug `main()` → `tpbk_<kern>_entry()`.
+5. Build rules auto-generated in [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt); no per-kernel `add_library` in root CMake.
 
 ### New MPI CPU kernel
 

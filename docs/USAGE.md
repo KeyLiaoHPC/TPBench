@@ -363,7 +363,23 @@ tpbcli kernel list
 # alias: tpbcli kernel ls
 ```
 
-Scans `lib/libtpbk_*.so`, registers any new KernelID, and prints available kernel names. This may create or refresh kernel `.tpbe`/`.tpbr` records.
+Scans `lib/libtpbk_*.so`, registers any new KernelID, and prints a table with columns **Kernel**, **KernelID**, **Tags**, and **Description**. Compiled kernels appear first (in loader order); known source kernels from **`$TPB_HOME/src/kernels/kernel_list.cmake.in`** (and any scanned `tpbk_*.c` entry files) that are not yet installed show **`N/A`** in the KernelID column. Tags come from the registry file, not from rafdb records.
+
+Long **Description** and **Tags** cells wrap with the same fixed-width hyphenation rules used by **`kernel get -v`**.
+
+### 2.4.1a Kernel source registry
+
+CPU kernel names, tags, and source locations are declared in **`src/kernels/kernel_list.cmake.in`** (installed under **`$TPB_HOME/src/kernels/`**):
+
+```text
+# Format: NAME|TAGS|PATH
+stream|default,bandwidth|simple
+stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
+```
+
+**`PATH`** is relative to `src/kernels/` and must contain **`tpbk_<NAME>.c`**. Special link libraries and build conditions (for example MPI) remain in **`cmake/TPBenchKernelRegistry.cmake`** as **`TPB_CPU_KERNEL_LINK_DEFS`**.
+
+When adding a kernel in a nested directory, add a row to **`kernel_list.cmake.in`**, place **`tpbk_<name>.c`** under that path, and (for MPI kernels) add a link-def override if needed. Reconfigure CMake or run **`tpbcli kernel build --kernel <name>`** to build from the staged registry tree.
 
 ### 2.4.2 Query kernel records (read-only)
 
@@ -429,17 +445,35 @@ tpbcli kernel init --dir ./mykern --kernel mykern
 
 Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (parameter **`n`**, metric **`FOM,COUNT::Value`**).
 
-### 2.4.6 Build out-of-tree kernel
+### 2.4.6 Build kernel(s)
 
 ```bash
+# Build one or more kernels from the registry (default --dir = TPB_HOME):
+tpbcli kernel build --kernel stream
+tpbcli kernel build --kernel 'stream,triad'
+tpbcli kernel build --kernel-tag bandwidth
+
+# Out-of-tree project (explicit source directory):
 tpbcli kernel build --dir ./mykern --kernel mykern \
   [--tpb-home /path/to/tpbench] \
+  [--ldflags "-Wl,--as-needed"] \
   [-DTPB_KERNEL_CFLAGS=-O3] [--cc gcc] [--cflags "-O3 -march=native"]
 ```
 
-**`--tpb-home`** is accepted only on **`kernel build`**. Install-root resolution priority: **`--tpb-home`**, then **`$TPB_HOME`**, then **`$HOME/.tpbench`**.
+**Selector (required, mutually exclusive):**
 
-The command configures and builds with **`find_package(TPBench)`**, backs up any prior active `.so`, installs **`libtpbk_<name>.so`** into **`<tpb-home>/lib`**, reactivates the matching KernelID, and writes compile metadata via **`kernel set`**.
+- **`--kernel <names>`** — comma-separated kernel names; optional outer single or double quotes (`'stream,triad'`).
+- **`--kernel-tag <tags>`** — comma-separated tags; expands to all registry kernels whose tag set intersects the request.
+
+**Other options:**
+
+- **`--dir <path>`** — defaults to resolved **`TPB_HOME`**. When defaulted, each kernel’s source directory is **`$TPB_HOME/src/kernels/<PATH>`** from **`kernel_list.cmake.in`**. When explicit, the same directory is used for every selected kernel (typical out-of-tree layout).
+- **`--ldflags <flags>`** — passed to CMake as **`-DTPB_KERNEL_LDFLAGS=...`** and recorded as **`compilation.kernel_ldflags`**.
+- **`--tpb-home`** — accepted only on **`kernel build`**. Priority: **`--tpb-home`**, then **`$TPB_HOME`**, then **`$HOME/.tpbench`**.
+
+Multiple kernels build sequentially; each prints **PASS** or **FAIL**, followed by a summary line. The command exits nonzero if any selected kernel failed.
+
+The command configures and builds with **`find_package(TPBench)`**, backs up any prior active `.so`, installs **`libtpbk_<name>.so`** into **`<tpb-home>/lib`**, reactivates the matching KernelID, and writes compile metadata via **`kernel set`**. Per-kernel build trees are **`build_<name>`** under the source directory (for example **`simple/build_stream`**).
 
 Runtime kernel discovery uses **`$TPB_HOME`** (then **`$HOME/.tpbench`**) to locate **`bin/`**, **`lib/`**, and **`include/`** — set these in your environment before **`tpbcli run`**. When running from a build tree without installing, point **`TPB_HOME`** at the CMake build directory (for example `export TPB_HOME=$PWD/build`).
 

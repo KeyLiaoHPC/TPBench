@@ -343,6 +343,80 @@ test_b5_6_build_missing_args(void)
         FAIL("B5.6 expected nonzero");
         return 1;
     }
+    if (strstr(buf, "--kernel") == NULL && strstr(buf, "--kernel-tag") == NULL) {
+        FAIL("B5.6 missing selector hint");
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b5_7_build_mutually_exclusive_selectors(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR
+                               "\" kernel build --kernel stream "
+                               "--kernel-tag bandwidth",
+                               buf, sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.7 expected nonzero");
+        return 1;
+    }
+    if (strstr(buf, "mutually exclusive") == NULL) {
+        FAIL("B5.7 missing mutually exclusive message");
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b5_8_list_shows_tags_column(void)
+{
+#ifndef TPB_TEST_KERNEL_WORKSPACE
+    PASS();
+    return 0;
+#else
+    char cmd[4096];
+    char buf[8192];
+    int code;
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR
+             "\" kernel list",
+             TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B5.8 list failed");
+        return 1;
+    }
+    if (strstr(buf, "Tags") == NULL) {
+        FAIL("B5.8 missing Tags column");
+        return 1;
+    }
+    PASS();
+    return 0;
+#endif
+}
+
+static int
+test_b5_9_build_unknown_tag_hint(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR
+                               "\" kernel build --kernel-tag __no_such_tag__",
+                               buf, sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.9 expected nonzero");
+        return 1;
+    }
+    if (strstr(buf, "no kernels matched") == NULL) {
+        FAIL("B5.9 missing no-match message");
+        return 1;
+    }
     PASS();
     return 0;
 }
@@ -373,6 +447,15 @@ main(int argc, char **argv)
     if (strcmp(id, "B5.6") == 0) {
         return test_b5_6_build_missing_args();
     }
+    if (strcmp(id, "B5.7") == 0) {
+        return test_b5_7_build_mutually_exclusive_selectors();
+    }
+    if (strcmp(id, "B5.8") == 0) {
+        return test_b5_8_list_shows_tags_column();
+    }
+    if (strcmp(id, "B5.9") == 0) {
+        return test_b5_9_build_unknown_tag_hint();
+    }
 
     test_b5_1_set_missing_args();
     test_b5_2_get_no_register_side_effect();
@@ -380,5 +463,8 @@ main(int argc, char **argv)
     test_b5_4_init_missing_args();
     test_b5_5_init_and_build_template();
     test_b5_6_build_missing_args();
+    test_b5_7_build_mutually_exclusive_selectors();
+    test_b5_8_list_shows_tags_column();
+    test_b5_9_build_unknown_tag_hint();
     return (g_fail > 0) ? 1 : 0;
 }

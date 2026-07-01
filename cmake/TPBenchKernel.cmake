@@ -23,6 +23,7 @@ endif()
 set(TPB_KERNEL_CFLAGS "" CACHE STRING "C compile options for out-of-tree kernels")
 set(TPB_KERNEL_CXXFLAGS "" CACHE STRING "C++/HIP compile options for out-of-tree kernels")
 set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for out-of-tree kernels")
+set(TPB_KERNEL_LDFLAGS "" CACHE STRING "Link options for out-of-tree kernels")
 
 function(_tpbench_kernel_apply_c_options _tgt)
     if("${TPB_KERNEL_CFLAGS}" STREQUAL "")
@@ -48,6 +49,13 @@ function(_tpbench_kernel_apply_fortran_options _tgt)
     else()
         separate_arguments(_tpb_kff UNIX_COMMAND "${TPB_KERNEL_FFLAGS}")
         target_compile_options(${_tgt} PRIVATE $<$<COMPILE_LANGUAGE:Fortran>:${_tpb_kff}>)
+    endif()
+endfunction()
+
+function(_tpbench_kernel_apply_ld_options _tgt)
+    if(NOT "${TPB_KERNEL_LDFLAGS}" STREQUAL "")
+        separate_arguments(_tpb_klf UNIX_COMMAND "${TPB_KERNEL_LDFLAGS}")
+        target_link_options(${_tgt} PRIVATE ${_tpb_klf})
     endif()
 endfunction()
 
@@ -81,6 +89,7 @@ function(tpbench_add_kernel)
     _tpbench_kernel_apply_c_options(${_lib_target})
     _tpbench_kernel_apply_cxx_options(${_lib_target})
     _tpbench_kernel_apply_fortran_options(${_lib_target})
+    _tpbench_kernel_apply_ld_options(${_lib_target})
 
     install(TARGETS ${_lib_target}
             LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

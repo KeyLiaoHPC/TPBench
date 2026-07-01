@@ -166,6 +166,9 @@ add_dependencies(test-cli-kernel copy_cmake_package copy_yaml_files)
 tpb_add_subcase(B5 B5.4 init_missing_args test-cli-kernel tpbcli)
 tpb_add_subcase(B5 B5.5 init_build_template test-cli-kernel tpbcli)
 tpb_add_subcase(B5 B5.6 build_missing_args test-cli-kernel tpbcli)
+tpb_add_subcase(B5 B5.7 build_exclusive_selectors test-cli-kernel tpbcli)
+tpb_add_subcase(B5 B5.8 list_tags_column test-cli-kernel tpbcli)
+tpb_add_subcase(B5 B5.9 build_unknown_tag test-cli-kernel tpbcli)
 
 # Aggregate targets
 add_custom_target(test_tpbcli

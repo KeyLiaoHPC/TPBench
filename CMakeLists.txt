@@ -95,14 +95,32 @@ string(REPLACE "," ";" _tpb_sel_names "${TPB_KERNELS}")
 string(REPLACE "," ";" _tpb_sel_tags "${TPB_KERNEL_TAGS}")
 
 set(TPB_NEED_MPI FALSE)
-foreach(_def IN LISTS TPB_CPU_KERNEL_DEFS)
-    string(REPLACE "|" ";" _parts "${_def}")
+file(STRINGS "${CMAKE_SOURCE_DIR}/src/kernels/kernel_list.cmake.in"
+     _tpb_scan_kernel_lines)
+foreach(_line IN LISTS _tpb_scan_kernel_lines)
+    string(STRIP "${_line}" _line)
+    if("${_line}" STREQUAL "" OR _line MATCHES "^#")
+        continue()
+    endif()
+    string(REPLACE "|" ";" _parts "${_line}")
     list(GET _parts 0 _scan_kname)
     list(GET _parts 1 _scan_ktags_str)
-    list(GET _parts 3 _scan_kcond)
     tpb_kernel_should_build("${_scan_kname}" "${_scan_ktags_str}" "${_tpb_sel_names}" "${_tpb_sel_tags}" _scan_match)
-    if(_scan_match AND _scan_kcond STREQUAL "MPI_C_FOUND")
-        set(TPB_NEED_MPI TRUE)
+    if(_scan_match)
+        foreach(_ldef IN LISTS TPB_CPU_KERNEL_LINK_DEFS)
+            string(REPLACE "|" ";" _lparts "${_ldef}")
+            list(GET _lparts 0 _ln)
+            if("${_ln}" STREQUAL "${_scan_kname}")
+                list(LENGTH _lparts _llen)
+                if(_llen GREATER 2)
+                    list(GET _lparts 2 _scan_kcond)
+                    if(_scan_kcond STREQUAL "MPI_C_FOUND")
+                        set(TPB_NEED_MPI TRUE)
+                    endif()
+                endif()
+                break()
+            endif()
+        endforeach()
     endif()
 endforeach()
 
@@ -291,6 +309,9 @@ add_dependencies(copy_cmake_package copy_yaml_files)
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/
         DESTINATION etc/cmake/kernel
         FILES_MATCHING PATTERN "*.in")
+# Registry template for out-of-tree builds (also copied by kernel build CLI)
+install(FILES ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/CMakeLists.registry.txt
+        DESTINATION etc/cmake/kernel)
 
 # Copy YAML and kernel templates to build/etc for build-tree testing
 add_custom_target(copy_yaml_files ALL
@@ -298,5 +319,7 @@ add_custom_target(copy_yaml_files ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/setup/yaml ${CMAKE_BINARY_DIR}/etc
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/etc/cmake/kernel
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/cmake/templates/kernel ${CMAKE_BINARY_DIR}/etc/cmake/kernel
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/CMakeLists.registry.txt
+            ${CMAKE_BINARY_DIR}/etc/cmake/kernel/CMakeLists.registry.txt
     COMMENT "Copying YAML and kernel template files to build/etc"
 )
