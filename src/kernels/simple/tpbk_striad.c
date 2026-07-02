@@ -13,7 +13,6 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
-#include "tpb-public.h"
 #include "tpbench.h"
 
 #ifdef TPB_USE_KP_SVE

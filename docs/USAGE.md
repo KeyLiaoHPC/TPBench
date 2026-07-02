@@ -458,7 +458,12 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
   [--tpb-home /path/to/tpbench] \
   [--ldflags "-Wl,--as-needed"] \
   [-DTPB_KERNEL_CFLAGS=-O3] [--cc gcc] [--cflags "-O3 -march=native"]
+
+# MPI kernel from installed registry (use MPI wrapper compiler):
+tpbcli kernel build --kernel stream_mpi --cc mpicc
 ```
+
+Kernel source files should include only the installed flat header **`#include "tpbench.h"`** (under **`$TPB_HOME/include`**). Do not include **`tpb-public.h`** or corelib private headers in kernel code.
 
 **Selector (required, mutually exclusive):**
 

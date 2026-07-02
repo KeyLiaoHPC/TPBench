@@ -18,7 +18,7 @@
 #include <limits.h>
 #endif
 
-#include "../include/tpbench.h"
+#include "../include/tpb-public.h"
 
 /** @brief Maximum number of kernels */
 #define TPBM_CLI_K_MAX 128

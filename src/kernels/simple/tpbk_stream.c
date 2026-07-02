@@ -33,7 +33,6 @@
 #include <string.h>
 #include <time.h>
 #include <float.h>
-#include "tpb-public.h"
 #include "tpbench.h"
 
 #define HLINE "-------------------------------------------------------------\n"

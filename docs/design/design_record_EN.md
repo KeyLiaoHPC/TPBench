@@ -961,7 +961,7 @@ src/corelib/rafdb/
 └── tpb-sha1.h             # SHA1 internal header
 ```
 
-All public types and function declarations are in `src/include/tpb-public.h`, exposed via `src/include/tpbench.h`.
+All public types and function declarations are in `src/include/tpb-public.h`, merged into the generated flat `include/tpbench.h` at build/install time.
 
 ### 3.2. Workspace Resolution
 

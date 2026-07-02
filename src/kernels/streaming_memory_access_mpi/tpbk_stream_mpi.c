@@ -19,10 +19,7 @@
 #include <omp.h>
 #endif
 
-#include "tpb-public.h"
 #include "tpbench.h"
-#include "corelib/tpb-autorecord.h"
-#include "corelib/tpb_corelib_state.h"
 
 #ifndef STREAM_TYPE
 #define STREAM_TYPE double
@@ -954,8 +951,7 @@ _sf_mpik_corelib_init(MPI_Comm comm, const char *tpb_workspace_path)
     }
 
     if (rank == 0) {
-        bcast_err = _tpb_init_corelib_ex(tpb_workspace_path,
-            TPB_CORELIB_CTX_CALLER_KERNEL, 0);
+        bcast_err = tpb_k_corelib_init(tpb_workspace_path);
     }
 
     merr = _sf_mpi_fail_if(MPI_Bcast(&bcast_err, 1, MPI_INT, 0, comm));
@@ -976,8 +972,7 @@ _sf_mpik_corelib_init(MPI_Comm comm, const char *tpb_workspace_path)
     if (rank == 0) {
         local_err = TPBE_SUCCESS;
     } else {
-        local_err = _tpb_init_corelib_ex(tpb_workspace_path,
-            TPB_CORELIB_CTX_CALLER_KERNEL, 1);
+        local_err = tpb_k_corelib_init(tpb_workspace_path);
     }
 
     merr = _sf_mpi_fail_if(MPI_Allreduce(&local_err, &max_err, 1, MPI_INT,
@@ -1078,7 +1073,7 @@ _sf_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     memset(my_task_id, 0, sizeof(my_task_id));
     memset(capsule_id, 0, sizeof(capsule_id));
 
-    werr = tpb_record_write_task(hdl, exit_code, my_task_id);
+    werr = tpb_k_write_task(hdl, exit_code, my_task_id);
 
     merr = _sf_mpi_fail_if(MPI_Barrier(comm));
     if (merr != TPBE_SUCCESS) {

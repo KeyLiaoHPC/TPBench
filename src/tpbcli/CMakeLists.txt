@@ -41,7 +41,9 @@ target_link_libraries(tpbcli PRIVATE tpbench m)
 tpb_set_install_rpath_tpbench_exe(tpbcli)
 
 add_executable(tpbcli-pli-launcher pli/tpbcli-pli-launcher.c)
-target_include_directories(tpbcli-pli-launcher PRIVATE ${CMAKE_SOURCE_DIR}/src/include)
+target_include_directories(tpbcli-pli-launcher PRIVATE
+    ${CMAKE_BINARY_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src/include)
 target_link_libraries(tpbcli-pli-launcher PRIVATE dl)
 target_compile_options(tpbcli-pli-launcher PRIVATE -O2)
 set_target_properties(tpbcli-pli-launcher PROPERTIES OUTPUT_NAME "tpbcli-pli-launcher")

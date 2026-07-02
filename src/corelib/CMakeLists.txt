@@ -22,8 +22,9 @@ set(TPB_CORELIB_SOURCES
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})
 target_compile_options(tpbench PRIVATE -O2)
 target_include_directories(tpbench
-    PUBLIC  ${CMAKE_SOURCE_DIR}/src/include
-    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+    PUBLIC  ${CMAKE_BINARY_DIR}/include
+    PRIVATE ${CMAKE_SOURCE_DIR}/src/include
+            ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/rafdb
 )
 target_link_libraries(tpbench PUBLIC m dl rt)

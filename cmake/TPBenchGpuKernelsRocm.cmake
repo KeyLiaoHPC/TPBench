@@ -44,7 +44,6 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
     set(_entry_path "${CMAKE_SOURCE_DIR}/${_rk_entry_src}")
 
     add_library(${_lib_target} SHARED "${_hip_path}" "${_entry_path}")
-    target_include_directories(${_lib_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_link_libraries(${_lib_target} PRIVATE tpbench hip::device hip::host m)
     tpb_kernel_apply_rocm_compile_options(${_lib_target})
     if(TPB_ENABLE_OPENMP AND OpenMP_CXX_FOUND)

@@ -20,26 +20,12 @@
 get_filename_component(_TPBENCH_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(TPBENCH_INCLUDE_DIR "${_TPBENCH_PREFIX}/include")
 set(TPBENCH_LIB_DIR     "${_TPBENCH_PREFIX}/lib")
-set(TPBENCH_DEV_INCLUDE_DIR "")
-
-if(EXISTS "${_TPBENCH_PREFIX}/src/include/tpb-public.h")
-    set(TPBENCH_DEV_INCLUDE_DIR "${_TPBENCH_PREFIX}/src/include")
-else()
-    get_filename_component(_TPBENCH_PARENT "${_TPBENCH_PREFIX}" DIRECTORY)
-    if(EXISTS "${_TPBENCH_PARENT}/src/include/tpb-public.h")
-        set(TPBENCH_DEV_INCLUDE_DIR "${_TPBENCH_PARENT}/src/include")
-    endif()
-endif()
 
 if(NOT TARGET tpbench)
     add_library(tpbench SHARED IMPORTED)
-    set(_tpb_iface_includes "${TPBENCH_INCLUDE_DIR}")
-    if(NOT "${TPBENCH_DEV_INCLUDE_DIR}" STREQUAL "")
-        list(APPEND _tpb_iface_includes "${TPBENCH_DEV_INCLUDE_DIR}")
-    endif()
     set_target_properties(tpbench PROPERTIES
         IMPORTED_LOCATION "${TPBENCH_LIB_DIR}/libtpbench.so"
-        INTERFACE_INCLUDE_DIRECTORIES "${_tpb_iface_includes}"
+        INTERFACE_INCLUDE_DIRECTORIES "${TPBENCH_INCLUDE_DIR}"
     )
 endif()
 

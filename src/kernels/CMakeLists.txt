@@ -144,7 +144,6 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
     set(_so_target "tpbk_${_kname}")
 
     add_library(${_so_target} SHARED "${_kernel_source}")
-    target_include_directories(${_so_target} PRIVATE "${CMAKE_SOURCE_DIR}/src")
     target_link_libraries(${_so_target} PRIVATE tpbench m)
     set_target_properties(${_so_target} PROPERTIES
         OUTPUT_NAME "tpbk_${_kname}"

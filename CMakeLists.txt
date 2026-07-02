@@ -187,6 +187,20 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
     list(APPEND TPB_TIMER_SOURCES ${CMAKE_SOURCE_DIR}/src/timers/tsc_asym.c)
 endif()
 
+# ============================================================================
+# Generate Flat tpbench.h (before corelib/kernels so PUBLIC include resolves)
+# ============================================================================
+file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-unitdefs.h UNITDEFS_CONTENT)
+file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-public.h PUBLIC_CONTENT)
+string(REPLACE "#include \"tpb-unitdefs.h\"\n" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
+string(REPLACE "#include \"tpb-unitdefs.h\"" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/include/tpbench.h.in
+    ${CMAKE_BINARY_DIR}/include/tpbench.h
+    @ONLY
+)
+
 # Core library (libtpbench.so) defined in sub-CMakeLists
 add_subdirectory(src/corelib)
 
@@ -260,26 +274,8 @@ install(TARGETS tpbench
 # ROCm kernel install rules are in cmake/TPBenchGpuKernelsRocm.cmake
 
 # ============================================================================
-# Generate and Install Flat tpbench.h for End-User Distribution
+# Install Flat tpbench.h for End-User Distribution
 # ============================================================================
-
-# Read source header files
-file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-unitdefs.h UNITDEFS_CONTENT)
-file(READ ${CMAKE_SOURCE_DIR}/src/include/tpb-public.h PUBLIC_CONTENT)
-
-# Remove the #include "tpb-unitdefs.h" line from tpb-public.h content
-string(REPLACE "#include \"tpb-unitdefs.h\"\n" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
-string(REPLACE "#include \"tpb-unitdefs.h\"" "" PUBLIC_CONTENT "${PUBLIC_CONTENT}")
-
-# Create output directory for generated headers
-file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include)
-
-# Generate the merged flat header using configure_file with @ONLY
-configure_file(
-    ${CMAKE_SOURCE_DIR}/src/include/tpbench.h.in
-    ${CMAKE_BINARY_DIR}/include/tpbench.h
-    @ONLY
-)
 
 # Install only the generated flat tpbench.h (not separate tpb-unitdefs.h or tpb-public.h)
 install(FILES ${CMAKE_BINARY_DIR}/include/tpbench.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

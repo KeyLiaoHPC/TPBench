@@ -853,7 +853,7 @@ src/corelib/rafdb/
 └── tpb-sha1.h             # SHA1 内部头文件
 ```
 
-所有公共类型和函数声明都在 `src/include/tpb-public.h` 中，通过 `src/include/tpbench.h` 公开。
+所有公共类型和函数声明都在 `src/include/tpb-public.h` 中，构建/安装时合并为生成的 flat 头文件 `include/tpbench.h`。
 
 ### 3.2. 工作空间解析
 
