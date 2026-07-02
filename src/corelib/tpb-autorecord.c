@@ -236,7 +236,7 @@ tpb_record_begin_batch(uint32_t batch_type)
 
     err = tpb_raf_resolve_workspace(s_workspace, sizeof(s_workspace));
     if (err) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: failed to resolve workspace (%d)\n", err);
         return err;
     }
@@ -291,7 +291,7 @@ tpb_record_begin_batch(uint32_t batch_type)
         skel.headers = h2;
         err = tpb_raf_record_write_tbatch(s_workspace, &skel, NULL, 0);
         if (err) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Auto-record: failed to write skeleton tbatch record "
                        "(%d)\n",
                        err);
@@ -301,7 +301,7 @@ tpb_record_begin_batch(uint32_t batch_type)
 
     s_batch_active = 1;
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Auto-record: batch started, TBatchID=%s\n", s_tbatch_id_hex);
     return 0;
 }
@@ -344,7 +344,7 @@ tpb_record_end_batch(int ntask)
     err = _sf_scan_batch(s_workspace, s_tbatch_id, s_batch_utc_bits,
                          &matched, &nkernel);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: tbatch scan failed (%d)\n", err);
         s_batch_active = 0;
         return err;
@@ -353,7 +353,7 @@ tpb_record_end_batch(int ntask)
     err = tpb_raf_record_patch_tbatch_counters(s_workspace, s_tbatch_id,
             duration, (uint32_t)nkernel, (uint32_t)matched);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: failed to patch tbatch record (%d)\n", err);
         s_batch_active = 0;
         return err;
@@ -375,12 +375,12 @@ tpb_record_end_batch(int ntask)
 
         err = tpb_raf_entry_append_tbatch(s_workspace, &entry);
         if (err) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Auto-record: failed to append tbatch entry (%d)\n", err);
         }
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Auto-record: batch ended, %d tasks recorded.\n", matched);
 
     s_batch_active = 0;
@@ -430,11 +430,11 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     if (env_kid != NULL && strlen(env_kid) == 40) {
         if (_sf_hex_to_id(env_kid, kernel_id) != 0) {
             memset(kernel_id, 0, 20);
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Auto-record: invalid TPB_KERNEL_ID, fallback to zero.\n");
         }
     } else if (env_kid != NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: TPB_KERNEL_ID must be 40 hex chars.\n");
     }
 
@@ -524,7 +524,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                 }
 
                 if (tpb_dtype_elem_size(out->dtype, &esz) != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                    tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                                "Auto-record: unsupported dtype 0x%08llx for output '%s', skipping data.\n",
                                (unsigned long long)out->dtype, out->name);
                     esz = 0;
@@ -587,7 +587,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     /* Write task record (.tpbr) */
     err = tpb_raf_record_write_task(workspace, &attr, rec_data, rec_datasize);
     if (err) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: failed to write task record (%d)\n", err);
         free(headers);
         free(rec_data);
@@ -611,7 +611,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     err = tpb_raf_entry_append_task(workspace, &entry);
     if (err) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Auto-record: failed to append task entry (%d)\n", err);
     }
 
@@ -636,7 +636,7 @@ tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         char task_hex[41];
 
         tpb_raf_id_to_hex(id_ptr, task_hex);
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "Task recorded. Task ID = %s\n", task_hex);
     }
     return err;

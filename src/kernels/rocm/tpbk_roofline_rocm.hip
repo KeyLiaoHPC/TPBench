@@ -2787,7 +2787,8 @@ _tpbk_register_roofline_rocm(void)
     DBG_LOG("hipGetDeviceCount returned: %d, device_count=%d",
             (int)hip_init_err, device_count);
     if (hip_init_err != hipSuccess) {
-        fprintf(stderr, "HIP init failed: %s\n", hipGetErrorString(hip_init_err));
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "HIP init failed: %s\n", hipGetErrorString(hip_init_err));
         fflush(stderr);
     }
 
@@ -3129,10 +3130,10 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
             props.totalGlobalMem / (1024.0 * 1024.0 * 1024.0));
     DBG_LOG("  sharedMemPerBlock: %zu", props.sharedMemPerBlock);
     DBG_LOG("  regsPerBlock: %d", props.regsPerBlock);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Using GPU: %s\n", props.name);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Compute capability: %d.%d\n",
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Using GPU: %s\n", props.name);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Compute capability: %d.%d\n",
                props.major, props.minor);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Total memory: %.2f GB\n",
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Total memory: %.2f GB\n",
                props.totalGlobalMem / (1024.0 * 1024.0 * 1024.0));
 
     /* Calculate array size based on memory size and data type */
@@ -3163,14 +3164,14 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     DBG_LOG("Array config: type=%s, elem_size=%zu, n_elements=%zu, total_bytes=%zu",
             type_name, elem_size, n_elements, n_elements * elem_size);
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Configuration:\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Data type: %s\n", type_name);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Operation: %s\n",
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Configuration:\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Data type: %s\n", type_name);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Operation: %s\n",
                op_code == 0 ? "vector" : "tensor");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Elements: %zu\n", n_elements);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Memory: %.2f KiB\n",
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Elements: %zu\n", n_elements);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Memory: %.2f KiB\n",
                (double)(n_elements * elem_size) / 1024.0);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "  Iterations: %" PRId64 "\n", ntest);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  Iterations: %" PRId64 "\n", ntest);
 
     /* Allocate device memory */
     DBG_LOG("Allocating device memory: %zu bytes...", n_elements * elem_size);
@@ -3212,7 +3213,7 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
 
     /* Warm-up phase */
     DBG_LOG("=== WARM-UP PHASE START (%" PRId64 " ms) ===", twarm_ms);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Warming up for %" PRId64 " ms...\n", twarm_ms);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Warming up for %" PRId64 " ms...\n", twarm_ms);
     
     struct timespec wts;
     uint64_t wns0, wns1;
@@ -3266,7 +3267,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
         if (sync_err != hipSuccess) {
             DBG_LOG("WARM-UP SYNC FAILED at iteration %d: %s (code=%d)",
                     warmup_count, hipGetErrorString(sync_err), (int)sync_err);
-            fprintf(stderr, "HIP error at warmup sync: %s\n", hipGetErrorString(sync_err));
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                            "HIP error at warmup sync: %s\n",
+                            hipGetErrorString(sync_err));
             fflush(stderr);
             return TPBE_KERN_ARG_FAIL;
         }
@@ -3281,9 +3284,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
 
     /* Measure each arithmetic intensity point */
     DBG_LOG("=== MEASUREMENT PHASE START ===");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\nMeasuring roofline points...\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%-8s %15s %15s\n", "AI", "Time (ms)", "GFLOP/s");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "-------- --------------- ---------------\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\nMeasuring roofline points...\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%-8s %15s %15s\n", "AI", "Time (ms)", "GFLOP/s");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "-------- --------------- ---------------\n");
 
     for (int ai_idx = 0; ai_idx < N_AI_POINTS; ai_idx++) {
         float elapsed_ms = 0.0f;
@@ -3375,7 +3378,9 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
         if (sync_err != hipSuccess) {
             DBG_LOG("MEASUREMENT SYNC FAILED at ai_idx=%d: %s (code=%d)",
                     ai_idx, hipGetErrorString(sync_err), (int)sync_err);
-            fprintf(stderr, "HIP error at measurement sync: %s\n", hipGetErrorString(sync_err));
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                            "HIP error at measurement sync: %s\n",
+                            hipGetErrorString(sync_err));
             fflush(stderr);
             return TPBE_KERN_ARG_FAIL;
         }
@@ -3411,7 +3416,7 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
         double flops_per_sec = (double)total_flops / elapsed_sec;
         flops_out[ai_idx] = flops_per_sec;
 
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%-8.2f %15.3f %15.3f\n",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%-8.2f %15.3f %15.3f\n",
                    ai_values[ai_idx], elapsed_ms, flops_per_sec / 1e9);
     }
 
@@ -3424,7 +3429,7 @@ d_roofline_rocm(tpb_timer_t *timer, int64_t type_code, int64_t op_code,
     HIP_CHECK(hipFree(d_data));
     DBG_LOG("Cleanup complete");
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\nRoofline measurement completed.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\nRoofline measurement completed.\n");
 
     DBG_LOG("=== d_roofline_rocm() END (success) ===");
     return 0;

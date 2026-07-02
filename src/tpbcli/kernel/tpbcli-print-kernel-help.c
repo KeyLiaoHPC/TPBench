@@ -15,7 +15,6 @@
 
 #include "tpb-public.h"
 #include "tpbcli-print-kernel-help.h"
-#include "tpbcli-kernel-table.h"
 
 #define TPBCLI_KERNEL_LEFT_COL_WIDTH   32
 #define TPBCLI_KERNEL_GAP              4
@@ -23,6 +22,11 @@
 #define TPBCLI_KERNEL_TABLE_WIDTH \
     (TPBCLI_KERNEL_LEFT_COL_WIDTH + TPBCLI_KERNEL_GAP + \
      TPBCLI_KERNEL_RIGHT_COL_WIDTH)
+
+static const float s_col_ratios[] = {
+    (float)TPBCLI_KERNEL_LEFT_COL_WIDTH,
+    (float)TPBCLI_KERNEL_RIGHT_COL_WIDTH
+};
 
 /* Local Function Prototypes */
 
@@ -32,48 +36,45 @@ static const char *_sf_unit_category_str(uint64_t uattr_bits);
 static void _sf_split_metric_name(const char *name, char *tags_out,
                                   size_t tags_len, char *real_out,
                                   size_t real_len);
-static void _sf_print_section_line(FILE *out);
-static void _sf_print_col_line(FILE *out, const char *left,
-                               const char *right);
-static void _sf_print_parm_section_header(FILE *out);
-static void _sf_print_metric_section_header(FILE *out);
-static void _sf_print_parm_entry(FILE *out, const char *name,
-                                 const char *note, uint32_t type_bits);
-static void _sf_print_metric_entry(FILE *out, const char *full_name,
-                                   const char *note, uint64_t uattr_bits);
+static void _sf_print_section_line(void);
+static void _sf_print_col_line(const char *left, const char *right);
+static void _sf_print_parm_section_header(void);
+static void _sf_print_metric_section_header(void);
+static void _sf_print_parm_entry(const char *name, const char *note,
+                                 uint32_t type_bits);
+static void _sf_print_metric_entry(const char *full_name, const char *note,
+                                   uint64_t uattr_bits);
 static int _sf_get_header_payload(const kernel_attr_t *attr,
                                   const void *data, const char *hdr_name,
                                   char *buf, size_t bufsz);
 static void _sf_variation_summary(const char *payload, char *out,
                                   size_t outlen);
-static void _sf_print_parm_sections_from_bits(FILE *out,
-                                              const tpb_meta_header_t *headers,
+static void _sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
                                               uint32_t nparm);
-static void _sf_print_parm_sections_from_kernel(FILE *out,
-                                                const tpb_kernel_t *kernel);
-static void _sf_print_metrics_from_headers(FILE *out,
-                                           const tpb_meta_header_t *headers,
+static void _sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel);
+static void _sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
                                            uint32_t nparm, uint32_t nmetric,
                                            int verbose);
-static void _sf_print_metrics_from_kernel(FILE *out,
-                                          const tpb_kernel_t *kernel,
+static void _sf_print_metrics_from_kernel(const tpb_kernel_t *kernel,
                                           int verbose);
-static void _sf_print_kernel_header(FILE *out, const char *name,
-                                    const char *kernel_id_hex, int active,
-                                    const char *version, const char *notes,
-                                    const char *variation);
+static void _sf_print_kernel_header(const char *name, const char *kernel_id_hex,
+                                    int active, const char *version,
+                                    const char *notes, const char *variation);
 
 /* Local Function Implementations */
 
 static void
-_sf_print_section_line(FILE *out)
+_sf_print_section_line(void)
 {
+    char line[TPBCLI_KERNEL_TABLE_WIDTH + 2];
     int i;
 
     for (i = 0; i < TPBCLI_KERNEL_TABLE_WIDTH; i++) {
-        fputc('-', out);
+        line[i] = '-';
     }
-    fputc('\n', out);
+    line[i] = '\0';
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "%s\n", line);
 }
 
 static const char *
@@ -252,53 +253,46 @@ _sf_split_metric_name(const char *name, char *tags_out, size_t tags_len,
 }
 
 static void
-_sf_print_col_line(FILE *out, const char *left, const char *right)
+_sf_print_col_line(const char *left, const char *right)
 {
     const char *cells[2];
-    int widths[2] = {TPBCLI_KERNEL_LEFT_COL_WIDTH,
-                     TPBCLI_KERNEL_RIGHT_COL_WIDTH};
 
     cells[0] = (left != NULL) ? left : "";
     cells[1] = (right != NULL) ? right : "";
-    tpbcli_kernel_table_print_row(out, cells, widths, 2,
-                                  TPBCLI_KERNEL_GAP);
+    tpblog_printf_c(s_col_ratios, 2, TPBCLI_KERNEL_GAP, cells);
 }
 
 static void
-_sf_print_wrapped_note(FILE *out, const char *text)
+_sf_print_wrapped_note(const char *text)
 {
     const char *cells[2];
-    int widths[2] = {TPBCLI_KERNEL_LEFT_COL_WIDTH,
-                     TPBCLI_KERNEL_RIGHT_COL_WIDTH};
 
     cells[0] = "";
     cells[1] = (text != NULL) ? text : "";
-    tpbcli_kernel_table_print_row(out, cells, widths, 2,
-                                  TPBCLI_KERNEL_GAP);
+    tpblog_printf_c(s_col_ratios, 2, TPBCLI_KERNEL_GAP, cells);
 }
 
 static void
-_sf_print_parm_section_header(FILE *out)
+_sf_print_parm_section_header(void)
 {
-    _sf_print_col_line(out, "Name", "Type/Description");
+    _sf_print_col_line("Name", "Type/Description");
 }
 
 static void
-_sf_print_metric_section_header(FILE *out)
+_sf_print_metric_section_header(void)
 {
-    _sf_print_col_line(out, "Name", "Tags/Unit/Description");
+    _sf_print_col_line("Name", "Tags/Unit/Description");
 }
 
 static void
-_sf_print_parm_entry(FILE *out, const char *name, const char *note,
-                     uint32_t type_bits)
+_sf_print_parm_entry(const char *name, const char *note, uint32_t type_bits)
 {
-    _sf_print_col_line(out, name, _sf_dtype_to_str(type_bits));
-    _sf_print_wrapped_note(out, note);
+    _sf_print_col_line(name, _sf_dtype_to_str(type_bits));
+    _sf_print_wrapped_note(note);
 }
 
 static void
-_sf_print_metric_entry(FILE *out, const char *full_name, const char *note,
+_sf_print_metric_entry(const char *full_name, const char *note,
                        uint64_t uattr_bits)
 {
     char tags[TPBM_NAME_STR_MAX_LEN];
@@ -312,9 +306,9 @@ _sf_print_metric_entry(FILE *out, const char *full_name, const char *note,
                  (full_name != NULL) ? full_name : "");
     }
     tag_line = (tags[0] != '\0') ? tags : "-";
-    _sf_print_col_line(out, real_name, tag_line);
-    _sf_print_wrapped_note(out, _sf_unit_category_str(uattr_bits));
-    _sf_print_wrapped_note(out, note);
+    _sf_print_col_line(real_name, tag_line);
+    _sf_print_wrapped_note(_sf_unit_category_str(uattr_bits));
+    _sf_print_wrapped_note(note);
 }
 
 static int
@@ -393,8 +387,7 @@ _sf_variation_summary(const char *payload, char *out, size_t outlen)
 }
 
 static void
-_sf_print_kernel_header(FILE *out, const char *name,
-                        const char *kernel_id_hex, int active,
+_sf_print_kernel_header(const char *name, const char *kernel_id_hex, int active,
                         const char *version, const char *notes,
                         const char *variation)
 {
@@ -408,18 +401,22 @@ _sf_print_kernel_header(FILE *out, const char *name,
         variation = "-";
     }
 
-    fprintf(out, "Kernel: %s (%s)\n", name, kernel_id_hex);
-    _sf_print_section_line(out);
-    fprintf(out, "Active: %d\n", active);
-    fprintf(out, "Version: %s\n", version);
-    fprintf(out, "Notes: %s\n", notes);
-    fprintf(out, "Variation: %s\n", variation);
-    _sf_print_section_line(out);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "Kernel: %s (%s)\n", name, kernel_id_hex);
+    _sf_print_section_line();
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "Active: %d\n", active);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "Version: %s\n", version);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "Notes: %s\n", notes);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "Variation: %s\n", variation);
+    _sf_print_section_line();
 }
 
 static void
-_sf_print_parm_sections_from_bits(FILE *out,
-                                  const tpb_meta_header_t *headers,
+_sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
                                   uint32_t nparm)
 {
     static const char *order[] = {
@@ -442,22 +439,23 @@ _sf_print_parm_sections_from_bits(FILE *out,
                 continue;
             }
             if (!has_any) {
-                fprintf(out, "Parameters::%s\n", order[s]);
-                fprintf(out, "---\n");
-                _sf_print_parm_section_header(out);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                                TPBLOG_FLAG_DIRECT,
+                                "Parameters::%s\n---\n", order[s]);
+                _sf_print_parm_section_header();
                 has_any = 1;
             }
-            _sf_print_parm_entry(out, headers[i].name, headers[i].note,
+            _sf_print_parm_entry(headers[i].name, headers[i].note,
                                  headers[i].type_bits);
         }
         if (has_any) {
-            _sf_print_section_line(out);
+            _sf_print_section_line();
         }
     }
 }
 
 static void
-_sf_print_parm_sections_from_kernel(FILE *out, const tpb_kernel_t *kernel)
+_sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel)
 {
     static const char *order[] = {
         "CLI",
@@ -483,23 +481,22 @@ _sf_print_parm_sections_from_kernel(FILE *out, const tpb_kernel_t *kernel)
                 continue;
             }
             if (!has_any) {
-                fprintf(out, "Parameters::%s\n", order[s]);
-                fprintf(out, "---\n");
-                _sf_print_parm_section_header(out);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                                TPBLOG_FLAG_DIRECT,
+                                "Parameters::%s\n---\n", order[s]);
+                _sf_print_parm_section_header();
                 has_any = 1;
             }
-            _sf_print_parm_entry(out, p->name, p->note,
-                                 (uint32_t)p->ctrlbits);
+            _sf_print_parm_entry(p->name, p->note, (uint32_t)p->ctrlbits);
         }
         if (has_any) {
-            _sf_print_section_line(out);
+            _sf_print_section_line();
         }
     }
 }
 
 static void
-_sf_print_metrics_from_headers(FILE *out,
-                               const tpb_meta_header_t *headers,
+_sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
                                uint32_t nparm, uint32_t nmetric,
                                int verbose)
 {
@@ -509,26 +506,26 @@ _sf_print_metrics_from_headers(FILE *out,
         return;
     }
     if (verbose) {
-        fprintf(out, "Metrics\n");
-        fprintf(out, "---\n");
-        _sf_print_metric_section_header(out);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                        "Metrics\n---\n");
+        _sf_print_metric_section_header();
         for (i = 0; i < nmetric; i++) {
-            _sf_print_metric_entry(out, headers[nparm + i].name,
+            _sf_print_metric_entry(headers[nparm + i].name,
                                    headers[nparm + i].note,
                                    headers[nparm + i].uattr_bits);
         }
-        _sf_print_section_line(out);
+        _sf_print_section_line();
         return;
     }
 
     for (i = 0; i < nmetric; i++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s\n", headers[nparm + i].name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                        "%s\n", headers[nparm + i].name);
     }
 }
 
 static void
-_sf_print_metrics_from_kernel(FILE *out, const tpb_kernel_t *kernel,
-                              int verbose)
+_sf_print_metrics_from_kernel(const tpb_kernel_t *kernel, int verbose)
 {
     int i;
 
@@ -536,19 +533,20 @@ _sf_print_metrics_from_kernel(FILE *out, const tpb_kernel_t *kernel,
         return;
     }
     if (verbose) {
-        fprintf(out, "Metrics\n");
-        fprintf(out, "---\n");
-        _sf_print_metric_section_header(out);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                        "Metrics\n---\n");
+        _sf_print_metric_section_header();
         for (i = 0; i < kernel->info.nouts; i++) {
             tpb_k_output_t *o = &kernel->info.outs[i];
-            _sf_print_metric_entry(out, o->name, o->note, (uint64_t)o->unit);
+            _sf_print_metric_entry(o->name, o->note, (uint64_t)o->unit);
         }
-        _sf_print_section_line(out);
+        _sf_print_section_line();
         return;
     }
 
     for (i = 0; i < kernel->info.nouts; i++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s\n", kernel->info.outs[i].name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                        "%s\n", kernel->info.outs[i].name);
     }
 }
 
@@ -566,9 +564,10 @@ tpbcli_print_kernel_help_from_kernel(FILE *out, const tpb_kernel_t *kernel,
     const char *version = "-";
     const char *notes = "";
 
-    if (out == NULL || kernel == NULL) {
+    if (kernel == NULL) {
         return;
     }
+    (void)out;
 
     if (kernel_id_hex != NULL && kernel_id_hex[0] != '\0') {
         snprintf(kid_hex, sizeof(kid_hex), "%s", kernel_id_hex);
@@ -601,10 +600,10 @@ tpbcli_print_kernel_help_from_kernel(FILE *out, const tpb_kernel_t *kernel,
         }
     }
 
-    _sf_print_kernel_header(out, kernel->info.name, kid_hex, active,
+    _sf_print_kernel_header(kernel->info.name, kid_hex, active,
                             version, notes, variation);
-    _sf_print_parm_sections_from_kernel(out, kernel);
-    _sf_print_metrics_from_kernel(out, kernel, 1);
+    _sf_print_parm_sections_from_kernel(kernel);
+    _sf_print_metrics_from_kernel(kernel, 1);
 }
 
 void
@@ -615,9 +614,10 @@ tpbcli_print_kernel_help_from_attr(FILE *out, const kernel_attr_t *attr,
     char payload[4096];
     char variation[512];
 
-    if (out == NULL || attr == NULL) {
+    if (attr == NULL) {
         return;
     }
+    (void)out;
 
     tpb_raf_id_to_hex(attr->kernel_id, kid_hex);
     variation[0] = '\0';
@@ -626,11 +626,10 @@ tpbcli_print_kernel_help_from_attr(FILE *out, const kernel_attr_t *attr,
         _sf_variation_summary(payload, variation, sizeof(variation));
     }
 
-    _sf_print_kernel_header(out, attr->kernel_name, kid_hex,
-                            (int)attr->active,
+    _sf_print_kernel_header(attr->kernel_name, kid_hex, (int)attr->active,
                             attr->version, attr->description, variation);
-    _sf_print_parm_sections_from_bits(out, attr->headers, attr->nparm);
-    _sf_print_metrics_from_headers(out, attr->headers, attr->nparm,
+    _sf_print_parm_sections_from_bits(attr->headers, attr->nparm);
+    _sf_print_metrics_from_headers(attr->headers, attr->nparm,
                                    attr->nmetric, 1);
     (void)datasize;
 }
@@ -644,8 +643,9 @@ tpbcli_print_kernel_names_from_attr(const kernel_attr_t *attr)
         return;
     }
     for (i = 0; i < attr->nparm; i++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s\n", attr->headers[i].name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                        "%s\n", attr->headers[i].name);
     }
-    _sf_print_metrics_from_headers(stdout, attr->headers, attr->nparm,
+    _sf_print_metrics_from_headers(attr->headers, attr->nparm,
                                    attr->nmetric, 0);
 }

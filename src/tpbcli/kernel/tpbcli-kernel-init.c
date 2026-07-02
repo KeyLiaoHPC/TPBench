@@ -33,8 +33,7 @@ static int _sf_write_new_file(const char *path, const char *content);
 static void
 _sf_print_init_usage(void)
 {
-    fprintf(stderr,
-            "Usage: tpbcli kernel init --dir <path> --kernel <kernel_name>\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel init --dir <path> --kernel <kernel_name>\n");
 }
 
 static int
@@ -170,14 +169,15 @@ tpbcli_kernel_init(int argc, char **argv)
         return TPBE_CLI_FAIL;
     }
     if (!tpbcli_kernel_name_valid(kernel_name)) {
-        fprintf(stderr, "kernel init: invalid kernel name '%s'.\n",
-                kernel_name);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel init: invalid kernel name '%s'.\n",
+                        kernel_name);
         return TPBE_CLI_FAIL;
     }
 
     tpb_home = tpb_dl_get_tpb_home();
     if (tpb_home == NULL || tpb_home[0] == '\0') {
-        fprintf(stderr, "kernel init: TPB_HOME not resolved.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel init: TPB_HOME not resolved.\n");
         return TPBE_FILE_IO_FAIL;
     }
 
@@ -195,8 +195,9 @@ tpbcli_kernel_init(int argc, char **argv)
     }
 
     if (mkdir(dir_path, 0755) != 0 && access(dir_path, F_OK) != 0) {
-        fprintf(stderr, "kernel init: cannot create directory '%s'.\n",
-                dir_path);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel init: cannot create directory '%s'.\n",
+                        dir_path);
         return TPBE_FILE_IO_FAIL;
     }
 
@@ -211,7 +212,7 @@ tpbcli_kernel_init(int argc, char **argv)
 
     err = _sf_read_template(cmake_tmpl, &raw, &raw_len);
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel init: missing template '%s'.\n", cmake_tmpl);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel init: missing template '%s'.\n", cmake_tmpl);
         return err;
     }
     err = _sf_subst_kernel_name(raw, raw_len, kernel_name,
@@ -225,14 +226,15 @@ tpbcli_kernel_init(int argc, char **argv)
     free(rendered);
     rendered = NULL;
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel init: '%s' already exists or write failed.\n",
-                cmake_out);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel init: '%s' already exists or write failed.\n",
+                        cmake_out);
         return err;
     }
 
     err = _sf_read_template(source_tmpl, &raw, &raw_len);
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel init: missing template '%s'.\n", source_tmpl);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel init: missing template '%s'.\n", source_tmpl);
         return err;
     }
     err = _sf_subst_kernel_name(raw, raw_len, kernel_name,
@@ -244,12 +246,13 @@ tpbcli_kernel_init(int argc, char **argv)
     err = _sf_write_new_file(source_out, rendered);
     free(rendered);
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel init: '%s' already exists or write failed.\n",
-                source_out);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel init: '%s' already exists or write failed.\n",
+                        source_out);
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "kernel init: created %s and %s\n", cmake_out, source_out);
     return TPBE_SUCCESS;
 }

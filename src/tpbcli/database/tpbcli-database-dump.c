@@ -69,7 +69,7 @@ static int scan_tpbr_prefix_matches(const char *workspace,
 /*
  * When: More than one .tpbr shares the same id prefix; tell user full ids.
  * Input: prefix shown to user; matches array and count; workspace for metadata.
- * Output: Prints CSV header + rows to stdout via tpb_printf; no return value.
+ * Output: Prints CSV header + rows to stdout via tpblog_printf_f; no return value.
  */
 static void print_ambiguous_id_table(const char *prefix,
                                      tpb_raf_id_match_t *matches, int nmatch,
@@ -201,19 +201,19 @@ static int dump_file_path(const char *workspace, const char *filepath);
 static void
 dump_print_kv_u64(const char *key, uint64_t v)
 {
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %" PRIu64 "\n", key, v);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRIu64 "\n", key, v);
 }
 
 static void
 dump_print_kv_u32(const char *key, uint32_t v)
 {
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %" PRIu32 "\n", key, v);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRIu32 "\n", key, v);
 }
 
 static void
 dump_print_kv_str(const char *key, const char *val)
 {
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %s\n", key, val ? val : "");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %s\n", key, val ? val : "");
 }
 
 static void
@@ -221,7 +221,7 @@ dump_print_kv_hex20(const char *key, const unsigned char id[20])
 {
     char hex[41];
     tpb_raf_id_to_hex(id, hex);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "%s, %s\n", key, hex);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %s\n", key, hex);
 }
 
 static int
@@ -328,11 +328,11 @@ print_ambiguous_id_table(const char *prefix, tpb_raf_id_match_t *matches,
 {
     int i;
 
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                "The ID %s maps following records, use longer ID for "
                "precise searching:\n",
                prefix);
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                "FullID, Domain, Start UTC, Duration\n");
 
     for (i = 0; i < nmatch; i++) {
@@ -384,11 +384,11 @@ print_ambiguous_id_table(const char *prefix, tpb_raf_id_match_t *matches,
                 (matches[i].domain == TPB_RAF_DOM_KERNEL) ? "kernel" : "task";
 
             if (have_dur) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "%s, %s, %s, %.3f\n",
                            matches[i].id_hex, dname, utc_col, dur_sec);
             } else {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "%s, %s, %s, N/A\n",
                            matches[i].id_hex, dname, utc_col);
             }
@@ -421,7 +421,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
     int err;
 
     if (parse_id_hex_arg(arg, norm, sizeof(norm), &plen) != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid id (need 4-40 hex digits, no 0x): %s\n", arg);
         return TPBE_CLI_FAIL;
     }
@@ -450,7 +450,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
         if (t == DUMP_T_ID_GLOBAL) {
             err = tpb_raf_find_record(workspace, id, &dom);
             if (err != TPBE_SUCCESS) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "No .tpbr found for id in workspace.\n");
                 return err;
             }
@@ -472,7 +472,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
 
         if (nmatch == 0) {
             tpb_raf_free_id_matches(matches);
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "No .tpbr matches id prefix %s in workspace.\n", norm);
             return TPBE_FILE_IO_FAIL;
         }
@@ -508,7 +508,7 @@ dump_headers(const tpb_meta_header_t *hdrs, uint32_t n)
         snprintf(key, sizeof(key), "header[%" PRIu32 "].data_size", i);
         dump_print_kv_u64(key, h->data_size);
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits", i);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s, 0x%08" PRIx32 "\n",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, 0x%08" PRIx32 "\n",
                    key, h->type_bits);
         snprintf(key, sizeof(key), "header[%" PRIu32 "]._reserve", i);
         dump_print_kv_u32(key, h->_reserve);
@@ -558,20 +558,20 @@ dump_header_record_lines(const tpb_meta_header_t *h, const uint8_t *blob,
         for (k = 1; k < nd; k++) {
             fix += idx[k] * mult[k];
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s", h->name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s", h->name);
         for (k = nd; k-- > 1u; ) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "[%" PRIu64 "]", idx[k]);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "[%" PRIu64 "]", idx[k]);
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "[], ");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "[], ");
         for (i0 = 0; i0 < h->dimsizes[0]; i0++) {
             uint64_t L = fix + i0;
             if (i0 > 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ", ");
             }
             print_elem_csv(blob + (size_t)(L * elem_size),
                            h->type_bits, elem_size);
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
         return;
     }
     {
@@ -593,7 +593,7 @@ print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
     if (elem_size == 20u) {
         char hx[41];
         tpb_raf_id_to_hex(p, hx);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s", hx);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s", hx);
         return;
     }
 
@@ -604,17 +604,17 @@ print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
     case TPB_UNSIGNED_CHAR_T:
     case TPB_SIGNED_CHAR_T:
     case TPB_BYTE_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%d", (int)*p);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*p);
         break;
     case TPB_INT16_T:
     case TPB_UINT16_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%d", (int)*(const int16_t *)(const void *)p);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*(const int16_t *)(const void *)p);
         break;
     case TPB_INT32_T:
     case TPB_UINT32_T:
     case TPB_INT_T:
     case TPB_UNSIGNED_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%d", (int)*(const int32_t *)(const void *)p);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*(const int32_t *)(const void *)p);
         break;
     case TPB_INT64_T:
     case TPB_UINT64_T:
@@ -622,30 +622,30 @@ print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
     case TPB_UNSIGNED_LONG_T:
     case TPB_LONG_LONG_T:
     case TPB_UNSIGNED_LONG_LONG_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%" PRId64,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%" PRId64,
                    (int64_t)*(const int64_t *)(const void *)p);
         break;
     case TPB_FLOAT_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%.8g",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.8g",
                    (double)*(const float *)(const void *)p);
         break;
     case TPB_DOUBLE_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%.16g",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.16g",
                    *(const double *)(const void *)p);
         break;
     case TPB_LONG_DOUBLE_T:
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%.16Lg",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.16Lg",
                    (long double)*(const long double *)(const void *)p);
         break;
     default:
         if (elem_size > 0) {
             size_t k;
             for (k = 0; k < elem_size; k++) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "%s%02x",
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s%02x",
                            k ? "" : "0x", (unsigned)p[k]);
             }
         } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "0");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "0");
         }
         break;
     }
@@ -659,7 +659,7 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
     uint64_t off = 0;
     uint32_t hi;
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Record Data\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Record Data\n");
 
     for (hi = 0; hi < nheader; hi++) {
         const tpb_meta_header_t *h = &hdrs[hi];
@@ -714,15 +714,15 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
         if (nd <= 1) {
             uint64_t d0 = nd == 0 ? 1u : h->dimsizes[0];
             uint64_t i0;
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s[], ", h->name);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s[], ", h->name);
             for (i0 = 0; i0 < d0; i0++) {
                 if (i0 > 0) {
-                    tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ", ");
                 }
                 print_elem_csv(blob + (size_t)(i0 * elem_size),
                                h->type_bits, elem_size);
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
             continue;
         }
 
@@ -751,7 +751,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -794,7 +794,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -831,7 +831,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("task_record_id", attr.task_record_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -876,7 +876,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
         fname = "task_batch.tpbe";
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Entry File: %s\n", fname);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Entry File: %s\n", fname);
 
     if (domain == TPB_RAF_DOM_TBATCH) {
         tbatch_entry_t *e = NULL;
@@ -884,7 +884,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
         if (err != TPBE_SUCCESS) {
             return err;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "(%d entries)\n", n);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
         for (i = 0; i < n; i++) {
             char p[80];
             tpb_datetime_str_t ts;
@@ -922,7 +922,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
         if (err != TPBE_SUCCESS) {
             return err;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "(%d entries)\n", n);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
         for (i = 0; i < n; i++) {
             char p[80];
             snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
@@ -958,7 +958,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
                 nvis++;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "(%d task entry points / %d total rows)\n", nvis, n);
         k = 0;
         for (i = 0; i < n; i++) {
@@ -1124,7 +1124,7 @@ tpbcli_database_dump_resolved(const char *workspace,
     }
 
     if (t == DUMP_T_NONE) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Usage: tpbcli database dump "
                    "[--id <hex>|--tbatch-id <hex>|--kernel-id <hex>|"
                    "--task-id <hex>|--score-id <hex>|--file <path>|"
@@ -1135,7 +1135,7 @@ tpbcli_database_dump_resolved(const char *workspace,
 
     if (t == DUMP_T_SCORE_ID) {
         (void)buf;
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "Score records are not implemented in rafdb yet.\n");
         return TPBE_SUCCESS;
     }
@@ -1146,7 +1146,7 @@ tpbcli_database_dump_resolved(const char *workspace,
             return TPBE_CLI_FAIL;
         }
         if (entry_name_to_domain(norm, &dom) != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Unknown entry name \"%s\". Try: task_batch, kernel, task\n",
                        entrybuf);
             return TPBE_CLI_FAIL;

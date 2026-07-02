@@ -119,7 +119,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
 
     /* Check for opening bracket */
     if (*p != '[') {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid list sequence: expected '[' at start of '%s'\n", spec);
         return TPBE_CLI_FAIL;
     }
@@ -128,7 +128,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     /* Find closing bracket */
     end = find_matching_bracket(p, '[', ']');
     if (end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid list sequence: missing ']' in '%s'\n", spec);
         return TPBE_CLI_FAIL;
     }
@@ -187,7 +187,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     if (count == 0) {
         free(str_vals);
         free(num_vals);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Invalid list sequence: empty list\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Invalid list sequence: empty list\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -226,14 +226,14 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     /* Find operator name (before first '(') */
     op_end = strchr(p, '(');
     if (op_end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing '(' in '%s'\n", spec);
         return TPBE_CLI_FAIL;
     }
 
     size_t op_len = op_end - p;
     if (op_len >= sizeof(op_name)) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: operator name too long\n");
         return TPBE_CLI_FAIL;
     }
@@ -252,7 +252,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     } else if (strcmp(op_name, "pow") == 0) {
         op = TPB_DIM_OP_POW;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: unknown operator '%s'\n", op_name);
         return TPBE_CLI_FAIL;
     }
@@ -261,7 +261,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     p = op_end + 1;  /* Skip '(' */
     char *first_paren_end = find_matching_bracket(p, '(', ')');
     if (first_paren_end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing ')' for operator params\n");
         return TPBE_CLI_FAIL;
     }
@@ -270,7 +270,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     /* Parse @,x - find the comma */
     char *comma = strchr(p, ',');
     if (comma == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '@,x' format\n");
         return TPBE_CLI_FAIL;
     }
@@ -280,7 +280,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     *comma = '\0';
     at_part = trim_whitespace_dim(at_part);
     if (strcmp(at_part, "@") != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '@' as first operand, got '%s'\n",
                    at_part);
         return TPBE_CLI_FAIL;
@@ -294,7 +294,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     params_start = first_paren_end + 1;
     params_start = trim_whitespace_dim(params_start);
     if (*params_start != '(') {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '(' for range params\n");
         return TPBE_CLI_FAIL;
     }
@@ -302,7 +302,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     params_end = find_matching_bracket(params_start, '(', ')');
     if (params_end == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing ')' for range params\n");
         return TPBE_CLI_FAIL;
     }
@@ -314,7 +314,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     tok = strtok_r(params_start, ",", &saveptr);
     if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing start value\n");
         return TPBE_CLI_FAIL;
     }
@@ -322,7 +322,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     tok = strtok_r(NULL, ",", &saveptr);
     if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing min value\n");
         return TPBE_CLI_FAIL;
     }
@@ -330,7 +330,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     tok = strtok_r(NULL, ",", &saveptr);
     if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing max value\n");
         return TPBE_CLI_FAIL;
     }
@@ -338,7 +338,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     tok = strtok_r(NULL, ",", &saveptr);
     if (tok == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing nlim value\n");
         return TPBE_CLI_FAIL;
     }
@@ -346,13 +346,13 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
 
     /* Validate */
     if (min > max) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: min (%g) > max (%g)\n", min, max);
         return TPBE_CLI_FAIL;
     }
 
     if (st < min || st > max) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: start (%g) not in [%g, %g]\n",
                    st, min, max);
         return TPBE_CLI_FAIL;
@@ -398,7 +398,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
 
     /* Find '=' to separate parameter name from specification */
     if (eq == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid dimension arg: expected 'parm_name=...' format in '%s'\n",
                    argstr);
         free(*cfg);
@@ -414,7 +414,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     snprintf((*cfg)->parm_name, TPBM_NAME_STR_MAX_LEN, "%s", parm_name);
 
     if (strchr(spec, '{') != NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Nested dimension syntax '{...}' is not supported. "
                    "Use multiple --kargs-dim (or --kenvs-dim) options for a "
                    "flat Cartesian product.\n");
@@ -426,7 +426,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     /* Detect sequence type based on first character */
     if (*spec == '(') {
         /* Linear sequence format has been removed */
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Error: Linear sequence format (st,en,step) has been removed.\n"
                    "Use recursive format instead: add(@,<step>)(<st>,<st>,<en>,<nlim>)\n"
                    "Example: total_memsize=(128,512,128) -> total_memsize=add(@,128)(128,128,512,4)\n");
@@ -438,7 +438,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
         /* Recursive sequence: op(@,x)(st,min,max,nlim) */
         err = tpb_argp_parse_dim_recur(spec, *cfg);
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid dimension arg: unknown format '%s'\n", spec);
         err = TPBE_CLI_FAIL;
     }

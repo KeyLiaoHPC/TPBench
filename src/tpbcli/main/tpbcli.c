@@ -48,7 +48,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
     while (i < argc) {
         if (strcmp(argv[i], "--workspace") == 0) {
             if (i + 1 >= argc) {
-                fprintf(stderr, "tpbcli: --workspace requires a path\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: --workspace requires a path\n");
                 return TPBE_CLI_FAIL;
             }
             *ws_out = argv[i + 1];
@@ -59,8 +59,9 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
             if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
                 break;
             }
-            fprintf(stderr, "tpbcli: unknown option \"%s\"\n", argv[i]);
-            fprintf(stderr, "Set \"--workspace\" or one of sub applications. \n"
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: unknown option \"%s\"\n", argv[i]);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                            "Set \"--workspace\" or one of sub applications. \n"
                             "r[un], b[enchmark], db|database, k[ernel], h[elp].\n");
             return TPBE_CLI_FAIL;
         }
@@ -252,7 +253,7 @@ main(int argc, char **argv)
     init_ws = NULL;
     if (ws_opt != NULL) {
         if (snprintf(ws_buf, sizeof(ws_buf), "%s", ws_opt) >= (int)sizeof(ws_buf)) {
-            fprintf(stderr, "tpbcli: workspace path too long\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: workspace path too long\n");
             return TPBE_CLI_FAIL;
         }
         init_ws = ws_buf;
@@ -288,7 +289,7 @@ main(int argc, char **argv)
         free(dispatch_argv);
     }
 
-    tpb_log_cleanup();
+    tpblog_cleanup();
 
     if (rc == TPBE_EXIT_ON_HELP) {
         return 0;

@@ -122,12 +122,12 @@ run_rtriad(void)
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest64);
     if (tpberr) return tpberr;
     if (ntest64 < 1) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "rtriad: ntest must be >= 1, got %" PRId64 "\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
     if (ntest64 > (int64_t)INT_MAX) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "rtriad: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -162,7 +162,7 @@ run_rtriad(void)
         tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel rtriad: unknown timer unit name %llx", tpb_uname);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "In kernel rtriad: unknown timer unit name %llx", tpb_uname);
         return TPBE_KERN_ARG_FAIL;
     }
 
@@ -257,8 +257,8 @@ d_rtriad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
         c[i] = 3.0;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Working set size: %.2f KiB\n", (double)narr * sizeof(double) * 3 / 1024.0);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Repeat factor: %ld\n", (long)repeat);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Working set size: %.2f KiB\n", (double)narr * sizeof(double) * 3 / 1024.0);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Repeat factor: %ld\n", (long)repeat);
 
     // kernel warm
     struct timespec wts;
@@ -300,7 +300,7 @@ d_rtriad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
 
     double errval;
     err = check_d_rtriad(narr, ntest, repeat, a, b, c, s, epsilon, &errval);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "rtriad error: %lf\n", errval);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "rtriad error: %lf\n", errval);
     
     free((void *)a);
     free((void *)b);
@@ -335,7 +335,7 @@ tpbk_rtriad_entry(int argc, char **argv)
 
     err = tpb_k_corelib_init(NULL);
     if (err != 0) {
-        fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: tpb_k_corelib_init failed: %d\n", err);
         return err;
     }
 
@@ -346,40 +346,40 @@ tpbk_rtriad_entry(int argc, char **argv)
         timer_name = getenv("TPBENCH_TIMER");
     }
     if (timer_name == NULL) {
-        fprintf(stderr, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         return TPBE_CLI_FAIL;
     }
 
     err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to set timer '%s'\n", timer_name);
         return err;
     }
 
     err = tpbk_pli_register_rtriad();
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to register kernel\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to register kernel\n");
         return err;
     }
 
     tpb_k_rthdl_t handle;
     err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to build handle\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to build handle\n");
         return err;
     }
 
     tpb_cliout_args(&handle);
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Kernel logs\n");
     err = run_rtriad();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel rtriad failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "Kernel rtriad failed: %d\n", err);
         return err;
     }
 
     tpb_cliout_results(&handle);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel rtriad finished successfully.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Kernel rtriad finished successfully.\n");
 
     tpb_k_write_task(&handle, 0, NULL);
 

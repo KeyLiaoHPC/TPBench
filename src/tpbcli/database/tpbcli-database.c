@@ -274,7 +274,7 @@ tpbcli_database(int argc, char **argv)
 
     tree = _sf_build_database_argtree(&cli_ctx);
     if (tree == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Failed to allocate database argument tree.\n");
         return TPBE_MALLOC_FAIL;
     }
@@ -290,14 +290,14 @@ tpbcli_database(int argc, char **argv)
     }
 
     if (!cli_ctx.want_list && !cli_ctx.want_dump) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "error: missing required subcommand: list|ls or dump\n");
         return TPBE_CLI_FAIL;
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Failed to resolve workspace.\n");
         return err;
     }

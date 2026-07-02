@@ -18,7 +18,6 @@
 #include "tpbcli-kernel-home.h"
 #include "tpbcli-kernel-registry.h"
 #include "tpbcli-kernel-registry.h"
-#include "tpbcli-kernel-table.h"
 
 #define TPBCLI_KERNEL_LIST_MAX_ROWS  (TPBCLI_KERNEL_REG_MAX + 64)
 
@@ -89,7 +88,7 @@ tpbcli_kernel_list(int argc, char **argv)
     char tpb_home[PATH_MAX];
     const char *headers[4];
     const char *cells[4];
-    int widths[4] = {15, 9, 20, 40};
+    float ratios[4] = {15.0f, 9.0f, 20.0f, 40.0f};
     int nrows = 0;
     int ncompiled = 0;
     int nkern;
@@ -112,7 +111,7 @@ tpbcli_kernel_list(int argc, char **argv)
 
     nkern = tpb_query_kernel(0, NULL, NULL);
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Listing supported kernels.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Listing supported kernels.\n");
 
     for (i = 0; i < nkern; i++) {
         tpb_kernel_t *kernel = NULL;
@@ -122,7 +121,7 @@ tpbcli_kernel_list(int argc, char **argv)
             continue;
         }
         if (!kernel->info.kernel_record_ok) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Kernel %s: workspace kernel record update failed.\n",
                        kernel->info.name);
         }
@@ -214,14 +213,14 @@ tpbcli_kernel_list(int argc, char **argv)
     headers[1] = "KernelID";
     headers[2] = "Tags";
     headers[3] = "Description";
-    tpbcli_kernel_table_print_header(stdout, headers, widths, 4, 1);
+    tpblog_printf_c(ratios, 4, 1, headers);
 
     for (i = 0; i < nrows; i++) {
         cells[0] = rows[i].name;
         cells[1] = rows[i].kid_str;
         cells[2] = rows[i].tags;
         cells[3] = rows[i].description;
-        tpbcli_kernel_table_print_row(stdout, cells, widths, 4, 1);
+        tpblog_printf_c(ratios, 4, 1, cells);
     }
 
     return 0;

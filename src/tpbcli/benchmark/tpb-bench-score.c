@@ -114,7 +114,7 @@ tpb_bench_score_resolve_ref(tpb_benchmark_t *bench, const char *ref)
     int index;
     
     if (parse_reference(ref, type, sizeof(type), id, sizeof(id), &index) != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                    "Failed to parse reference: %s\n", ref);
         return NAN;
     }
@@ -122,12 +122,12 @@ tpb_bench_score_resolve_ref(tpb_benchmark_t *bench, const char *ref)
     if (strcmp(type, "batch") == 0) {
         tpb_bench_batch_t *batch = find_batch_by_id(bench, id);
         if (batch == NULL) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                        "Batch not found: %s\n", id);
             return NAN;
         }
         if (index < 0 || index >= batch->nvspecs) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                        "Invalid vspec index %d for batch %s\n", index, id);
             return NAN;
         }
@@ -136,7 +136,7 @@ tpb_bench_score_resolve_ref(tpb_benchmark_t *bench, const char *ref)
     } else if (strcmp(type, "score") == 0) {
         int score_idx = find_score_idx_by_id(bench, id);
         if (score_idx < 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                        "Score not found: %s\n", id);
             return NAN;
         }
@@ -144,7 +144,7 @@ tpb_bench_score_resolve_ref(tpb_benchmark_t *bench, const char *ref)
         return calculate_score(bench, score_idx);
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+    tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                "Unknown reference type: %s\n", type);
     return NAN;
 }
@@ -173,7 +173,7 @@ tpb_bench_score_apply_modifier(const char *modifier, double *args, int nargs)
         double result = args[0];
         for (int i = 1; i < nargs; i++) {
             if (args[i] == 0.0) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                            "Division by zero in score calculation\n");
                 return NAN;
             }
@@ -198,7 +198,7 @@ tpb_bench_score_apply_modifier(const char *modifier, double *args, int nargs)
         return sum / nargs;
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+    tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                "Unknown modifier: %s\n", modifier);
     return NAN;
 }
@@ -222,7 +222,7 @@ calculate_score(tpb_benchmark_t *bench, int score_idx)
     for (int i = 0; i < score->nargs; i++) {
         args[i] = tpb_bench_score_resolve_ref(bench, score->args[i]);
         if (isnan(args[i])) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                        "Failed to resolve arg %d for score %s: %s\n",
                        i, score->id, score->args[i]);
             score->value = NAN;
@@ -263,20 +263,20 @@ tpb_bench_score_display(tpb_benchmark_t *bench)
 {
     if (bench == NULL) return;
     
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "=== Benchmark Scores ===\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "=== Benchmark Scores ===\n");
     
     for (int i = 0; i < bench->nscores; i++) {
         tpb_bench_score_t *score = &bench->scores[i];
         if (score->display) {
             if (isnan(score->value)) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "%-20s: N/A\n", score->id);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%-20s: N/A\n", score->id);
             } else {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "%-20s: %.6g\n", 
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%-20s: %.6g\n", 
                            score->id, score->value);
             }
         }
     }
     
-    tpb_printf(TPBM_PRTN_M_DIRECT, "========================\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "========================\n");
 }

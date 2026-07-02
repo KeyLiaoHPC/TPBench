@@ -147,17 +147,19 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
 
     x = _sf_sibling_exclusive_conflict(match);
     if (x != NULL) {
-        fprintf(out, "error: cannot use '%s' because '%s' is already selected\n",
-                match->name != NULL ? match->name : "?",
-                x->name != NULL ? x->name : "?");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "error: cannot use '%s' because '%s' is already selected\n",
+                        match->name != NULL ? match->name : "?",
+                        x->name != NULL ? x->name : "?");
         return TPBE_CLI_FAIL;
     }
 
     x = _sf_sibling_conflict_opts_hit(match);
     if (x != NULL) {
-        fprintf(out, "error: '%s' conflicts with '%s'\n",
-                match->name != NULL ? match->name : "?",
-                x->name != NULL ? x->name : "?");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "error: '%s' conflicts with '%s'\n",
+                        match->name != NULL ? match->name : "?",
+                        x->name != NULL ? x->name : "?");
         return TPBE_CLI_FAIL;
     }
 
@@ -166,14 +168,17 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
             match->help_fn(match, out);
             return TPBE_EXIT_ON_HELP;
         }
-        fprintf(out, "%s\n", match->desc != NULL ? match->desc : "deprecated option");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "%s\n",
+                        match->desc != NULL ? match->desc : "deprecated option");
         return TPBE_CLI_FAIL;
     }
 
     if (match->max_chosen > 0 && match->chosen_count >= match->max_chosen) {
-        fprintf(out, "error: '%s' can only be specified %d time(s)\n",
-                match->name != NULL ? match->name : "?",
-                match->max_chosen);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "error: '%s' can only be specified %d time(s)\n",
+                        match->name != NULL ? match->name : "?",
+                        match->max_chosen);
         return TPBE_CLI_FAIL;
     }
 
@@ -209,9 +214,9 @@ _sf_resolve_conflict_opts_validate(const tpbcli_argnode_t *node)
             if (nm == NULL)
                 break;
             if (_sf_find_child_by_name(node->parent, nm) == NULL) {
-                fprintf(stderr,
-                        "error: conflict_opts name '%s' is not a sibling of '%s'\n",
-                        nm, node->name != NULL ? node->name : "?");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                                "error: conflict_opts name '%s' is not a sibling of '%s'\n",
+                                nm, node->name != NULL ? node->name : "?");
                 return TPBE_CLI_FAIL;
             }
         }
@@ -381,8 +386,9 @@ _sf_mandatory_fail(const tpbcli_argnode_t *parent, FILE *out)
             continue;
         if ((c->flags & TPBCLI_ARGF_PRESET) != 0u)
             continue;
-        fprintf(out, "error: missing required option '%s'\n",
-                c->name != NULL ? c->name : "?");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "error: missing required option '%s'\n",
+                        c->name != NULL ? c->name : "?");
         return TPBE_CLI_FAIL;
     }
     return TPBE_SUCCESS;
@@ -552,7 +558,7 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
         match = _sf_find_child(top, tok);
 
         if (match != NULL) {
-            err = _sf_validate_pre_increment(match, stderr);
+            err = _sf_validate_pre_increment(match, stdout);
             if (err != TPBE_SUCCESS)
                 return err;
 
@@ -583,14 +589,15 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
 
             /* OPT */
             if (i + 1 >= argc) {
-                fprintf(stderr, "error: '%s' requires a value\n",
-                        match->name != NULL ? match->name : "?");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                                "error: '%s' requires a value\n",
+                                match->name != NULL ? match->name : "?");
                 return TPBE_CLI_FAIL;
             }
 
             hchild = _sf_find_max_chosen_zero_child(match, argv[i + 1]);
             if (hchild != NULL) {
-                err = _sf_validate_pre_increment(hchild, stderr);
+                err = _sf_validate_pre_increment(hchild, stdout);
                 if (err != TPBE_SUCCESS)
                     return err;
                 i += 2;
@@ -616,7 +623,7 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
 
         /* pop: reset children of popped node for reuse on rematch */
         if (stack_sz <= 1) {
-            fprintf(stderr, "error: unknown argument '%s'\n", tok);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "error: unknown argument '%s'\n", tok);
             return TPBE_CLI_FAIL;
         }
         {
@@ -633,7 +640,7 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
     }
 
 end_parse:
-    return _sf_post_loop(tree, stack, stack_sz, stderr);
+    return _sf_post_loop(tree, stack, stack_sz, stdout);
 }
 
 /**

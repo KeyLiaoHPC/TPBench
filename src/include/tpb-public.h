@@ -12,6 +12,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "tpb-unitdefs.h"
 
 typedef uint64_t TPB_DTYPE;
@@ -24,17 +25,39 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPBM_NAME_STR_MAX_LEN 256
 #define TPBM_NOTE_STR_MAX_LEN 2048
 
-/* Print modes */
-#define TPBM_PRTN_M_DIRECT 0x00
-#define TPBM_PRTN_M_TS     0x01
-#define TPBM_PRTN_M_TAG    0x02
-#define TPBM_PRTN_M_TSTAG  0x03
-
-/* Error tags */
+/* Error tags / legacy severity bits for tpblog tag mapping */
 #define TPBE_NOTE   0x00
 #define TPBE_WARN   0x10
 #define TPBE_FAIL   0x20
 #define TPBE_UNKN   0x30
+
+/** @brief tpblog verbosity threshold. Messages below the active level are suppressed. */
+typedef enum {
+    TPB_LOG_LEVEL_TRACE = 0,
+    TPB_LOG_LEVEL_DEBUG,
+    TPB_LOG_LEVEL_INFO,
+    TPB_LOG_LEVEL_WARN,
+    TPB_LOG_LEVEL_ERROR,
+    TPB_LOG_LEVEL_NONE
+} tpb_log_level_t;
+
+/** @brief tpblog print flags (timestamp and/or tag prefix). */
+#define TPBLOG_FLAG_DIRECT 0x00U
+#define TPBLOG_FLAG_TS     0x01U
+#define TPBLOG_FLAG_TAG    0x02U
+#define TPBLOG_FLAG_TSTAG  (TPBLOG_FLAG_TS | TPBLOG_FLAG_TAG)
+
+/** @brief tpblog line tag types; rendered as [INFO], [WARN], or [ERRO]. */
+#define TPBLOG_TYPE_INFO  TPBE_NOTE
+#define TPBLOG_TYPE_WARN  TPBE_WARN
+#define TPBLOG_TYPE_ERRO  TPBE_FAIL
+
+/** @brief Environment variable for deterministic column-width tests. */
+#define TPBLOG_TEST_WIDTH_ENV "TPBLOG_TEST_WIDTH"
+
+/** @brief Thin wrapper around snprintf for column cell pre-formatting. */
+#define tpblog_snprintf(buf, bufsz, fmt, ...) \
+    snprintf((buf), (bufsz), (fmt), ##__VA_ARGS__)
 
 /* Parameter source flags (bits 24-31) */
 #define TPB_PARM_SOURCE_MASK    ((TPB_MASK)0xFF000000)      // The import source of paramters
@@ -131,7 +154,7 @@ typedef enum _tpb_errno tpb_errno_t;
 /**
  * @brief Map TPBE_* code to TPBE_NOTE / TPBE_WARN / TPBE_FAIL print tag.
  * @param err Error code from tpb_errno_t.
- * @return Severity tag suitable for tpb_printf mode bits.
+ * @return Severity tag suitable for tpblog type bits.
  */
 int tpb_get_err_exit_flag(int err);
 
@@ -680,7 +703,79 @@ const char *tpb_record_get_workspace(void);
  */
 int tpb_record_end_batch(int ntask);
 
-/* ===== Host I/O API ===== */
+/* ===== TPBlog API ===== */
+
+/**
+ * @brief Open or reopen the run log for this process.
+ *
+ * When environment variable TPBLOG_FILE_ENV ("TPB_LOG_FILE") is set, opens that
+ * path in append mode without writing a session header. Otherwise creates
+ * <workspace>/rafdb/log/tpbrunlog_YYYYMMDDThhmmss_<host>.log.
+ *
+ * @return TPBE_SUCCESS on success, TPBE_FILE_IO_FAIL on failure.
+ */
+int tpblog_init(void);
+
+/**
+ * @brief Close the active run log file.
+ */
+void tpblog_cleanup(void);
+
+/**
+ * @brief Get the active run log file path.
+ * @return Path string, or NULL if no log is open.
+ */
+const char *tpblog_get_filepath(void);
+
+/**
+ * @brief Set the global tpblog verbosity threshold.
+ * @param level Minimum level to emit; TPB_LOG_LEVEL_NONE suppresses all output.
+ */
+void tpblog_set_level(tpb_log_level_t level);
+
+/**
+ * @brief Get the global tpblog verbosity threshold.
+ */
+tpb_log_level_t tpblog_get_level(void);
+
+/**
+ * @brief Formatted output to stdout and the active run log.
+ *
+ * Output prefix when flags request it:
+ * YYYY-mm-dd HH:MM:SS [INFO|WARN|ERRO] message
+ *
+ * @param level Message verbosity level; filtered by tpblog_get_level().
+ * @param log_type One of TPBLOG_TYPE_INFO, TPBLOG_TYPE_WARN, TPBLOG_TYPE_ERRO.
+ * @param flags TPBLOG_FLAG_DIRECT, TPBLOG_FLAG_TS, TPBLOG_FLAG_TAG, or TPBLOG_FLAG_TSTAG.
+ * @param fmt printf-style format string.
+ */
+void tpblog_printf(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
+                  const char *fmt, ...);
+
+/**
+ * @brief Same dual-write semantics as tpblog_printf().
+ *
+ * Provided as a distinct entry point for call sites that previously used file-backed
+ * logging helpers. Both functions write to stdout and the active run log.
+ */
+void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
+                    const char *fmt, ...);
+
+/**
+ * @brief Print fixed-width columns to stdout and the active run log.
+ *
+ * Column widths are derived from stdout terminal width (ioctl), defaulting to 85
+ * when unavailable. Widths are allocated proportionally, then reduced by one
+ * character per column for hyphenation. When any final width is below 1, each cell
+ * is printed on its own line without table layout.
+ *
+ * @param col_ratios Column width ratios; NULL selects equal ratios.
+ * @param ncol Number of columns.
+ * @param gap Spaces between columns; must be >= 0.
+ * @param cells Array of ncol pre-formatted C strings.
+ */
+void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
+                     const char *const *cells);
 
 /**
  * @brief Set output formatting arguments for CLI display.
@@ -688,17 +783,6 @@ int tpb_record_end_batch(int ntask);
  * @param sigbit_trim Significant bits for trimming (0 = no trim).
  */
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
-
-/**
- * @brief Get the current run log file path.
- * @return Path to the log file, or NULL if not initialized.
- */
-const char *tpb_log_get_filepath(void);
-
-/**
- * @brief Cleanup and close the run log file.
- */
-void tpb_log_cleanup(void);
 
 /* ===== Installation Path API ===== */
 
@@ -716,17 +800,6 @@ const char *tpb_dl_get_tpb_home(void);
 int tpb_dl_force_tpb_home(const char *path);
 
 /* ===== CLI Output Helpers ===== */
-
-/**
- * @brief TPBench formatted stdout.
- *
- * Output syntax: YYYY-mm-dd HH:MM:SS [TAG] *msg
- *
- * @param mode_bit Mode bit for message and error header type.
- * @param fmt Format string.
- * @param ... Varargs for fmt printf.
- */
-void tpb_printf(uint64_t mode_bit, char *fmt, ...);
 
 /**
  * @brief Output kernel arguments to the command-line interface.

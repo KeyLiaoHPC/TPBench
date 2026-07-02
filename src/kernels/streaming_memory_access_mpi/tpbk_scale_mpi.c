@@ -144,7 +144,7 @@ _tpbk_run_scale_mpi(void)
         tpberr = tpb_k_alloc_output("bw_phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel scale_mpi: unknown timer unit name %llx\n", 
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "In kernel scale_mpi: unknown timer unit name %llx\n", 
                    (unsigned long long)tpb_uname);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -193,12 +193,12 @@ d_scale_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     array_bytes = narr * sizeof(double);
     k = posix_memalign((void **)&a, ARRAY_ALIGNMENT, array_bytes);
     if (k != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array a failed\n", rank);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Rank %d: Allocation of array a failed\n", rank);
         return TPBE_MALLOC_FAIL;
     }
     k = posix_memalign((void **)&b, ARRAY_ALIGNMENT, array_bytes);
     if (k != 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Rank %d: Allocation of array b failed\n", rank);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Rank %d: Allocation of array b failed\n", rank);
         free(a);
         return TPBE_MALLOC_FAIL;
     }
@@ -207,14 +207,14 @@ d_scale_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
     *array_size_out = narr;
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "MPI Scale Benchmark\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Data is distributed across %d MPI ranks\n", nprocs);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Array size per rank = %u elements\n", (unsigned int)narr);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Each kernel will be executed %d times.\n", ntest);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "The SCALAR value used for this run is %f\n", s);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "-------------------------------------------------------------\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "-------------------------------------------------------------\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "MPI Scale Benchmark\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "-------------------------------------------------------------\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Data is distributed across %d MPI ranks\n", nprocs);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Array size per rank = %u elements\n", (unsigned int)narr);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Each kernel will be executed %d times.\n", ntest);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "The SCALAR value used for this run is %f\n", s);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "-------------------------------------------------------------\n");
     }
 
     local_step_time = (int64_t *)malloc(sizeof(int64_t) * ntest);
@@ -299,7 +299,7 @@ d_scale_mpi(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size,
         for (int r = 1; r < nprocs; r++) {
             if (all_errvals[r] > max_err) max_err = all_errvals[r];
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "scale_mpi max error: %.6e\n", max_err);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "scale_mpi max error: %.6e\n", max_err);
         free(all_errvals);
     }
 
@@ -350,8 +350,7 @@ tpbk_scale_mpi_entry(int argc, char **argv)
     }
     if (timer_name == NULL) {
         if (rank == 0) {
-            fprintf(stderr,
-                "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         }
         MPI_Finalize();
         return TPBE_CLI_FAIL;
@@ -360,7 +359,7 @@ tpbk_scale_mpi_entry(int argc, char **argv)
     err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to set timer '%s'\n", timer_name);
         }
         MPI_Finalize();
         return err;
@@ -369,7 +368,7 @@ tpbk_scale_mpi_entry(int argc, char **argv)
     err = tpbk_pli_register_scale_mpi();
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: Failed to register kernel\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to register kernel\n");
         }
         MPI_Finalize();
         return err;
@@ -379,7 +378,7 @@ tpbk_scale_mpi_entry(int argc, char **argv)
     err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: Failed to build handle\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to build handle\n");
         }
         MPI_Finalize();
         return err;
@@ -387,13 +386,13 @@ tpbk_scale_mpi_entry(int argc, char **argv)
 
     if (rank == 0) {
         tpb_cliout_args(&handle);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "## Kernel logs\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "## Kernel logs\n");
     }
 
     err = _tpbk_run_scale_mpi();
     if (err != 0) {
         if (rank == 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                 "Kernel scale_mpi failed: %d\n", err);
         }
         MPI_Finalize();
@@ -402,7 +401,7 @@ tpbk_scale_mpi_entry(int argc, char **argv)
 
     if (rank == 0) {
         tpb_cliout_results(&handle);
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
             "Kernel scale_mpi finished successfully.\n");
     }
 

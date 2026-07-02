@@ -16,7 +16,7 @@
 /*
  * When: Before printing the tbatch table body.
  * Input: None.
- * Output: Writes column header line to stdout via tpb_printf.
+ * Output: Writes column header line to stdout via tpblog_printf_f.
  */
 static void print_list_header(void);
 
@@ -30,7 +30,7 @@ static void print_list_row(const tbatch_entry_t *e);
 static void
 print_list_header(void)
 {
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "%-20s %-40s %-10s %5s %7s %6s %13s\n",
         "Start Time (UTC)", "TBatch ID", "Type",
         "NTask", "NKernel", "NScore", "Duration (s)");
@@ -52,7 +52,7 @@ print_list_row(const tbatch_entry_t *e)
 
     dur_sec = (double)e->duration / 1e9;
 
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "%-20s %-40s %-10s %5u %7u %6u %13.3f\n",
         ts.str, hex, type_str,
         e->ntask, e->nkernel, e->nscore, dur_sec);
@@ -71,21 +71,21 @@ tpbcli_database_ls(const char *workspace)
     int err;
     int i, start;
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "TPB_WORKSPACE: %s\n", workspace);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Reading records ... ");
 
     err = tpb_raf_entry_list_tbatch(workspace, &entries,
                                       &count);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Failed\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Failed\n");
         return err;
     }
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Done\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Done\n");
 
     if (count == 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "No tbatch records found.\n");
         return TPBE_SUCCESS;
     }
@@ -93,17 +93,17 @@ tpbcli_database_ls(const char *workspace)
     start = (count > RECORD_LIST_MAX)
           ? count - RECORD_LIST_MAX : 0;
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "List of latest %d tbatch records\n",
                count - start);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "===\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "===\n");
     print_list_header();
 
     for (i = count - 1; i >= start; i--) {
         print_list_row(&entries[i]);
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "===\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "===\n");
 
     free(entries);
     return TPBE_SUCCESS;

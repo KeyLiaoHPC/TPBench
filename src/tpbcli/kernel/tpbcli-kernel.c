@@ -23,8 +23,7 @@ tpbcli_kernel(int argc, char **argv)
     int err;
 
     if (argc < 3) {
-        fprintf(stderr,
-                "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -50,7 +49,7 @@ tpbcli_kernel(int argc, char **argv)
 
     err = tpb_register_kernel();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "tpbcli kernel: tpb_register_kernel failed (%d).\n", err);
         return err;
     }
@@ -59,7 +58,6 @@ tpbcli_kernel(int argc, char **argv)
         return tpbcli_kernel_list(argc, argv);
     }
 
-    fprintf(stderr,
-            "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel <list|ls|set|get|init|build|backup-inactive>\n");
     return TPBE_CLI_FAIL;
 }

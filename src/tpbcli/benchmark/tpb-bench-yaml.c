@@ -274,7 +274,7 @@ tpb_bench_yaml_load(const char *path, tpb_benchmark_t *bench)
     
     fp = fopen(path, "r");
     if (fp == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                    "Cannot open benchmark file: %s\n", path);
         return TPBE_FILE_IO_FAIL;
     }
@@ -453,7 +453,7 @@ tpb_bench_yaml_load(const char *path, tpb_benchmark_t *bench)
     
     fclose(fp);
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, 
                "Loaded benchmark '%s' with %d batches and %d scores.\n",
                bench->name, bench->nbatches, bench->nscores);
     

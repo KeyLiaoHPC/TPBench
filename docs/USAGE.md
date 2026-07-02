@@ -57,7 +57,7 @@ Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchm
 - **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
 
-Output results on screen are also written to the log directory.
+Output results on screen are also written to the run log under `<workspace>/rafdb/log/` via `tpblog_*` (dual-write to stdout and the log file). See [design_tpblog_CN.md](./design/design_tpblog_CN.md).
 
 ## 2.2 tpbcli run
 

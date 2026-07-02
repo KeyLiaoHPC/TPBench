@@ -119,7 +119,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         snprintf(token_buf, sizeof(token_buf), "%s", tokens[i]);
         eq = strchr(token_buf, '=');
         if (eq == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg \"%s\". Expected key=value.\n",
                        tokens[i]);
             return TPBE_KERN_ARG_FAIL;
@@ -130,7 +130,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         value = _sf_trim_whitespace(eq + 1);
 
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg. Empty key or value detected.\n");
             return TPBE_KERN_ARG_FAIL;
         }
@@ -138,7 +138,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         parm_idx = _sf_find_parm_index(rt_parms, nparms, key);
         if (parm_idx < 0) {
             if (warn_unknown) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                            "Warning: Unsupported argument '%s' for kernel '%s'. Ignoring.\n",
                            key, (kernel_name != NULL) ? kernel_name : "unknown");
             }
@@ -240,14 +240,14 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
     /* Check float/double types first (type codes overlap with uint range numerically) */
     if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
         if (value->f64 < parm->plims[0].f64 || value->f64 > parm->plims[1].f64) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %lf out of range [%lf, %lf]\n",
                        parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
             return TPBE_KERN_ARG_FAIL;
         }
     } else if (type_code == TPB_FLOAT_T) {
         if (value->f32 < parm->plims[0].f32 || value->f32 > parm->plims[1].f32) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %f out of range [%f, %f]\n",
                        parm->name, value->f32, parm->plims[0].f32, parm->plims[1].f32);
             return TPBE_KERN_ARG_FAIL;
@@ -255,7 +255,7 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
     } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
                type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
         if (value->i64 < parm->plims[0].i64 || value->i64 > parm->plims[1].i64) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
                        parm->name, value->i64, parm->plims[0].i64, parm->plims[1].i64);
             return TPBE_KERN_ARG_FAIL;
@@ -263,14 +263,14 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
     } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
                type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
         if (value->u64 < parm->plims[0].u64 || value->u64 > parm->plims[1].u64) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
                        parm->name, value->u64, parm->plims[0].u64, parm->plims[1].u64);
             return TPBE_KERN_ARG_FAIL;
         }
     } else if (type_code == TPB_CHAR_T) {
         if (value->c < parm->plims[0].c || value->c > parm->plims[1].c) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value '%c' out of range ['%c', '%c']\n",
                        parm->name, value->c, parm->plims[0].c, parm->plims[1].c);
             return TPBE_KERN_ARG_FAIL;
@@ -297,7 +297,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                 return 0;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Parameter '%s' value %lf is not in list\n", parm->name, value->f64);
     } else if (type_code == TPB_FLOAT_T) {
         for (int i = 0; i < parm->nlims; i++) {
@@ -305,7 +305,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                 return 0;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Parameter '%s' value %f is not in list\n", parm->name, value->f32);
     } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
                type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
@@ -314,7 +314,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                 return 0;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Parameter '%s' value %" PRId64 " is not in list\n", parm->name, value->i64);
     } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
                type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
@@ -323,7 +323,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                 return 0;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Parameter '%s' value %" PRIu64 " is not in list\n", parm->name, value->u64);
     } else if (type_code == TPB_CHAR_T) {
         for (int i = 0; i < parm->nlims; i++) {
@@ -331,7 +331,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                 return 0;
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Parameter '%s' value %c is not in list\n", parm->name, value->c);
     }
 
@@ -421,7 +421,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
         /* Parse key=value */
         char *eq = strchr(trimmed, '=');
         if (eq == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg \"%s\". Expected key=value.\n", trimmed);
             return TPBE_KERN_ARG_FAIL;
         }
@@ -431,7 +431,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
         char *value = _sf_trim_whitespace(eq + 1);
 
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg. Empty key or value detected.\n");
             return TPBE_KERN_ARG_FAIL;
         }

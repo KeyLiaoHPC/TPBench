@@ -81,10 +81,10 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
 static void
 _sf_print_set_usage(void)
 {
-    fprintf(stderr,
-            "Usage: tpbcli kernel set --kernel <name> "
-            "--key <section.subkey> '<value>' "
-            "[--key <section.subkey> '<value>' ...]\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                    "Usage: tpbcli kernel set --kernel <name> "
+                    "--key <section.subkey> '<value>' "
+                    "[--key <section.subkey> '<value>' ...]\n");
 }
 
 int
@@ -114,7 +114,7 @@ tpbcli_kernel_set(int argc, char **argv)
                 return TPBE_CLI_FAIL;
             }
             if (npairs >= TPBCLI_KERNEL_SET_MAX_KV) {
-                fprintf(stderr, "kernel set: too many --key pairs.\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel set: too many --key pairs.\n");
                 return TPBE_CLI_FAIL;
             }
             pairs[npairs].key = argv[++i];
@@ -138,7 +138,7 @@ tpbcli_kernel_set(int argc, char **argv)
 
     err = _sf_hash_current_kernel_so(kernel_name, kernel_id);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel set: cannot hash libtpbk_%s.so (%d).\n",
                    kernel_name, err);
         return err;
@@ -153,7 +153,7 @@ tpbcli_kernel_set(int argc, char **argv)
 
     if (exists_before && !tpb_raf_kernel_override_enabled()) {
         tpb_raf_id_to_hex(kernel_id, kid_hex);
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "KernelID %s already recorded; skip metadata update "
                    "(set %s=1 to override).\n",
                    kid_hex, TPB_K_OVERRIDE_ENV);
@@ -164,12 +164,12 @@ tpbcli_kernel_set(int argc, char **argv)
         err = tpb_raf_kernel_update_meta_key(workspace, kernel_id,
                                              pairs[i].key, pairs[i].value);
         if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "kernel set: failed to update '%s' (%d).\n",
                        pairs[i].key, err);
             return err;
         }
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "kernel set: updated %s for kernel %s.\n",
                    pairs[i].key, kernel_name);
     }

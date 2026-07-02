@@ -38,8 +38,7 @@ static void _sf_print_get_usage(void);
 static void
 _sf_print_get_usage(void)
 {
-    fprintf(stderr,
-            "Usage: tpbcli kernel get [-v] (--kernel <name>|--id <hex>)\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel get [-v] (--kernel <name>|--id <hex>)\n");
 }
 
 static int
@@ -251,14 +250,14 @@ tpbcli_kernel_get(int argc, char **argv)
     if (kernel_id_hex != NULL) {
         err = tpb_raf_hex_to_id(kernel_id_hex, kernel_id);
         if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Invalid kernel id '%s'.\n", kernel_id_hex);
             free(entries);
             return err;
         }
         err = _sf_find_entry_by_id(entries, n, kernel_id, &idx);
         if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "No kernel record for id '%s'.\n", kernel_id_hex);
             free(entries);
             return err;
@@ -267,7 +266,7 @@ tpbcli_kernel_get(int argc, char **argv)
     } else {
         err = _sf_pick_latest_entry(entries, n, kernel_name, &idx);
         if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "No kernel records for '%s'.\n", kernel_name);
             free(entries);
             return err;
@@ -278,7 +277,7 @@ tpbcli_kernel_get(int argc, char **argv)
     err = tpb_raf_record_read_kernel(workspace, entries[idx].kernel_id,
                                      &attr, &data, &datasize);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Failed to read kernel record (%d).\n", err);
         free(entries);
         return err;

@@ -102,20 +102,20 @@ static int _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
 static void
 _sf_print_build_usage(void)
 {
-    fprintf(stderr,
-            "Usage: tpbcli kernel build [--dir <path>] "
-            "(--kernel <names> | --kernel-tag <tags>) "
-            "[--tpb-home <path>] [--ldflags <flags>] [-D<var>=<value> ...] "
-            "[--cc <compiler>] [--cflags <flags>] "
-            "[--cxx <compiler>] [--cxxflags <flags>] "
-            "[--fc <compiler>] [--fcflags <flags>]\n"
-            "\n"
-            "  --dir defaults to TPB_HOME; with the default, kernel source "
-            "dirs are resolved from\n"
-            "  $TPB_HOME/src/kernels/kernel_list.cmake.in.\n"
-            "  --kernel and --kernel-tag are mutually exclusive; each accepts "
-            "comma-separated values\n"
-            "  optionally wrapped in single or double quotes.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                    "Usage: tpbcli kernel build [--dir <path>] "
+                    "(--kernel <names> | --kernel-tag <tags>) "
+                    "[--tpb-home <path>] [--ldflags <flags>] [-D<var>=<value> ...] "
+                    "[--cc <compiler>] [--cflags <flags>] "
+                    "[--cxx <compiler>] [--cxxflags <flags>] "
+                    "[--fc <compiler>] [--fcflags <flags>]\n"
+                    "\n"
+                    "  --dir defaults to TPB_HOME; with the default, kernel source "
+                    "dirs are resolved from\n"
+                    "  $TPB_HOME/src/kernels/kernel_list.cmake.in.\n"
+                    "  --kernel and --kernel-tag are mutually exclusive; each accepts "
+                    "comma-separated values\n"
+                    "  optionally wrapped in single or double quotes.\n");
 }
 
 static int
@@ -217,7 +217,7 @@ _sf_parse_build_args(int argc, char **argv,
             args->opts.fcflags = argv[++i];
         } else if (strncmp(argv[i], "-D", 2) == 0) {
             if (args->opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
-                fprintf(stderr, "kernel build: too many -D options.\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: too many -D options.\n");
                 return TPBE_CLI_FAIL;
             }
             args->opts.cmake_defs[args->opts.ncmake_defs++] = argv[i] + 2;
@@ -228,15 +228,15 @@ _sf_parse_build_args(int argc, char **argv,
     }
 
     if (args->kernel_csv != NULL && args->tag_csv != NULL) {
-        fprintf(stderr,
-                "kernel build: --kernel and --kernel-tag are mutually "
-                "exclusive; specify exactly one.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: --kernel and --kernel-tag are mutually "
+                        "exclusive; specify exactly one.\n");
         return TPBE_CLI_FAIL;
     }
     if (args->kernel_csv == NULL && args->tag_csv == NULL) {
-        fprintf(stderr,
-                "kernel build: specify exactly one of --kernel or "
-                "--kernel-tag.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: specify exactly one of --kernel or "
+                        "--kernel-tag.\n");
         _sf_print_build_usage();
         return TPBE_CLI_FAIL;
     }
@@ -273,11 +273,11 @@ _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
             char all_tags[512];
 
             tpbcli_kernel_reg_all_tags(&reg, all_tags, sizeof(all_tags));
-            fprintf(stderr,
-                    "kernel build: no kernels matched --kernel-tag '%s'.\n",
-                    args->tag_csv);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                            "kernel build: no kernels matched --kernel-tag '%s'.\n",
+                            args->tag_csv);
             if (all_tags[0] != '\0') {
-                fprintf(stderr, "kernel build: known tags: %s\n", all_tags);
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: known tags: %s\n", all_tags);
             }
             return TPBE_CLI_FAIL;
         }
@@ -288,14 +288,14 @@ _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
     n = tpbcli_kernel_reg_split_csv(scratch, tokens, names_max,
                                     req_scratch, sizeof(req_scratch));
     if (n <= 0) {
-        fprintf(stderr,
-                "kernel build: --kernel list is empty or invalid.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: --kernel list is empty or invalid.\n");
         return TPBE_CLI_FAIL;
     }
     for (i = 0; i < n; i++) {
         if (!tpbcli_kernel_name_valid(tokens[i])) {
-            fprintf(stderr, "kernel build: invalid kernel name '%s'.\n",
-                    tokens[i]);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                            "kernel build: invalid kernel name '%s'.\n",
+                            tokens[i]);
             return TPBE_CLI_FAIL;
         }
         names_out[i] = tokens[i];
@@ -322,12 +322,12 @@ _sf_resolve_kernel_dir(const char *tpb_home,
 
     ent = tpbcli_kernel_reg_find(reg, kernel_name);
     if (ent == NULL || ent->path[0] == '\0') {
-        fprintf(stderr,
-                "kernel build: kernel '%s' not found in "
-                "%s/src/kernels/kernel_list.cmake.in.\n"
-                "kernel build: use --dir <path> for out-of-tree kernels "
-                "not listed in the registry.\n",
-                kernel_name, tpb_home);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: kernel '%s' not found in "
+                        "%s/src/kernels/kernel_list.cmake.in.\n"
+                        "kernel build: use --dir <path> for out-of-tree kernels "
+                        "not listed in the registry.\n",
+                        kernel_name, tpb_home);
         return TPBE_CLI_FAIL;
     }
     if (snprintf(out, outlen, "%s/src/kernels/%s",
@@ -556,18 +556,18 @@ _sf_ensure_registry_cmake(const char *source_dir, const char *tpb_home)
         return TPBE_FILE_IO_FAIL;
     }
     if (access(tmpl_path, R_OK) != 0) {
-        fprintf(stderr,
-                "kernel build: missing '%s' and template '%s'.\n"
-                "kernel build: reinstall TPBench or rebuild with a current "
-                "version that stages registry CMakeLists.txt files.\n",
-                cmake_path, tmpl_path);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: missing '%s' and template '%s'.\n"
+                        "kernel build: reinstall TPBench or rebuild with a current "
+                        "version that stages registry CMakeLists.txt files.\n",
+                        cmake_path, tmpl_path);
         return TPBE_CLI_FAIL;
     }
 
     if (_sf_copy_file(tmpl_path, cmake_path) != TPBE_SUCCESS) {
-        fprintf(stderr,
-                "kernel build: failed to install registry CMakeLists.txt "
-                "into '%s'.\n", source_dir);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: failed to install registry CMakeLists.txt "
+                        "into '%s'.\n", source_dir);
         return TPBE_FILE_IO_FAIL;
     }
     return TPBE_SUCCESS;
@@ -591,8 +591,9 @@ _sf_build_one_kernel(const char *kernel_name,
     int err;
 
     if (!_sf_path_is_dir(source_dir)) {
-        fprintf(stderr, "kernel build: directory '%s' not found.\n",
-                source_dir);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: directory '%s' not found.\n",
+                        source_dir);
         return TPBE_CLI_FAIL;
     }
 
@@ -611,9 +612,9 @@ _sf_build_one_kernel(const char *kernel_name,
         return TPBE_FILE_IO_FAIL;
     }
     if (access(tpbench_pkg, F_OK) != 0) {
-        fprintf(stderr,
-                "kernel build: TPBench package not found at '%s'.\n",
-                tpbench_pkg);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: TPBench package not found at '%s'.\n",
+                        tpbench_pkg);
         return TPBE_CLI_FAIL;
     }
 
@@ -622,8 +623,9 @@ _sf_build_one_kernel(const char *kernel_name,
         return TPBE_FILE_IO_FAIL;
     }
     if (access(source_file, R_OK) != 0) {
-        fprintf(stderr, "kernel build: source '%s' not found.\n",
-                source_file);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: source '%s' not found.\n",
+                        source_file);
         return TPBE_CLI_FAIL;
     }
 
@@ -641,10 +643,10 @@ _sf_build_one_kernel(const char *kernel_name,
     if (err != TPBE_SUCCESS) {
         return err;
     }
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "kernel build: %s\n", cmd);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "kernel build: %s\n", cmd);
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: cmake configure failed for '%s'.\n",
                    kernel_name);
         return err;
@@ -655,10 +657,10 @@ _sf_build_one_kernel(const char *kernel_name,
     if (err != TPBE_SUCCESS) {
         return err;
     }
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "kernel build: %s\n", cmd);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "kernel build: %s\n", cmd);
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: cmake build failed for '%s'.\n",
                    kernel_name);
         return err;
@@ -669,8 +671,9 @@ _sf_build_one_kernel(const char *kernel_name,
         return TPBE_FILE_IO_FAIL;
     }
     if (access(built_so, R_OK) != 0) {
-        fprintf(stderr, "kernel build: built library '%s' not found.\n",
-                built_so);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "kernel build: built library '%s' not found.\n",
+                        built_so);
         return TPBE_CLI_FAIL;
     }
 
@@ -702,7 +705,7 @@ _sf_build_one_kernel(const char *kernel_name,
     }
     err = _sf_copy_file(built_so, dest_so);
     if (err != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: failed to install '%s'.\n", dest_so);
         return err;
     }
@@ -718,7 +721,7 @@ _sf_build_one_kernel(const char *kernel_name,
         return err;
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "kernel build: installed %s\n", dest_so);
     return TPBE_SUCCESS;
 }
@@ -747,7 +750,7 @@ tpbcli_kernel_build(int argc, char **argv)
     err = tpbcli_kernel_resolve_home(args.tpb_home_opt, tpb_home,
                                      sizeof(tpb_home));
     if (err != TPBE_SUCCESS) {
-        fprintf(stderr, "kernel build: failed to resolve TPB_HOME.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: failed to resolve TPB_HOME.\n");
         return err;
     }
     (void)_sf_canonicalize_path(tpb_home, sizeof(tpb_home));
@@ -776,7 +779,7 @@ tpbcli_kernel_build(int argc, char **argv)
                                      source_dir, sizeof(source_dir));
         if (err != TPBE_SUCCESS) {
             nfail++;
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "kernel build: %s FAIL (resolve dir)\n", names[i]);
             continue;
         }
@@ -785,16 +788,16 @@ tpbcli_kernel_build(int argc, char **argv)
         err = _sf_build_one_kernel(names[i], source_dir, tpb_home, &args.opts);
         if (err != TPBE_SUCCESS) {
             nfail++;
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "kernel build: %s FAIL\n", names[i]);
             continue;
         }
         npass++;
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "kernel build: %s PASS\n", names[i]);
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "kernel build: summary %d passed, %d failed (of %d)\n",
                npass, nfail, nkern);
     return (nfail > 0) ? TPBE_CLI_FAIL : TPBE_SUCCESS;

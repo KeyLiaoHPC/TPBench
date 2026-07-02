@@ -225,7 +225,7 @@ run_stream_mpi(void)
     {
         TPB_UNIT_T tpb_uname = timer.unit & TPB_UNAME_MASK;
         if (tpb_uname != TPB_UNAME_WALLTIME) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "Unsupported timer: %s\n"
                 "The STREAM benchmark only supports"
                 " wallclock timer.\n", timer.name);
@@ -248,12 +248,12 @@ run_stream_mpi(void)
     }
 
     if (ntest64 < 2) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "stream_mpi: ntest must be >= 2, got %" PRId64 "\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
     if (ntest64 > (int64_t)INT_MAX) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "stream_mpi: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -343,7 +343,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         "Triad:     "};
 
     if (agg_elems == 0 || (uint64_t)nprocs > agg_elems) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "stream_mpi: illegal stream_array_size %" PRIu64 " nprocs %d\n",
             agg_elems, nprocs);
         return TPBE_KERN_ARG_FAIL;
@@ -374,7 +374,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         if (b) free(b);
         if (c) free(c);
         if (times_double) free(times_double);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "FATAL: Rank %d failed at malloc stream arrays.\n", rank);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "FATAL: Rank %d failed at malloc stream arrays.\n", rank);
         MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
     }
 
@@ -396,7 +396,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         // There are 3 average error values for each rank (using STREAM_TYPE).
         AvgErrByRank = (double *) malloc(3 * sizeof(STREAM_TYPE) * nprocs);
         if (AvgErrByRank == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Ooops -- allocation of arrays to collect errors on MPI rank 0 failed\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Ooops -- allocation of arrays to collect errors on MPI rank 0 failed\n");
             MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
         }
         memset(AvgErrByRank,0,3*sizeof(STREAM_TYPE)*nprocs);
@@ -404,7 +404,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
         // There are 4*NTIMES timing values for each rank (always doubles)
         TimesByRank = (double *) malloc(4 * ntest * sizeof(double) * nprocs);
         if (TimesByRank == NULL) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Ooops -- allocation of arrays to collect timing data on MPI rank 0 failed\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Ooops -- allocation of arrays to collect timing data on MPI rank 0 failed\n");
             MPI_Abort(MPI_COMM_WORLD, TPBE_MALLOC_FAIL);
         }
         memset(TimesByRank,0,4*ntest*sizeof(double)*nprocs);
@@ -412,57 +412,57 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
 
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "STREAM version $Revision: 1.8 $ (TPBench stream_mpi)\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
         BytesPerWord = (int)sizeof(STREAM_TYPE);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "This system uses %d bytes per array element.\n", BytesPerWord);
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Total Aggregate Array size = %" PRIu64 " (elements)\n",
             agg_elems);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Total Aggregate Memory per array = %.1f MiB (= %.1f GiB).\n",
             BytesPerWord * ((double)agg_elems / 1024.0 / 1024.0),
             BytesPerWord * ((double)agg_elems / 1024.0 / 1024.0 / 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Total Aggregate memory required = %.1f MiB (= %.1f GiB).\n",
             (3.0 * BytesPerWord) * ((double)agg_elems / 1024.0 / 1024.0),
             (3.0 * BytesPerWord) * ((double)agg_elems / 1024.0 / 1024.0
                 / 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Data is distributed across %d MPI ranks\n", nprocs);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "   Array size per MPI rank = %zu (elements)\n", array_elements);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "   Memory per array per MPI rank = %.1f MiB (= %.1f GiB).\n",
             BytesPerWord * ((double)array_elements / 1024.0 / 1024.0),
             BytesPerWord * ((double)array_elements / 1024.0 / 1024.0
                 / 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "   Total memory per MPI rank = %.1f MiB (= %.1f GiB).\n",
             (3.0 * BytesPerWord) * ((double)array_elements / 1024.0 / 1024.0),
             (3.0 * BytesPerWord) * ((double)array_elements / 1024.0 / 1024.0
                 / 1024.0));
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Each kernel will be executed %d times.\n", ntest);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             " The *best* time for each kernel (excluding the first iteration)\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             " will be used to compute the reported bandwidth.\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "The SCALAR value used for this run is %f\n", SCALAR);
 #ifdef _OPENMP
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
 #pragma omp parallel
         {
 #pragma omp master
             {
                 k = omp_get_num_threads();
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                     "Number of Threads requested for each MPI rank = %i\n", k);
             }
         }
@@ -472,7 +472,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
 #pragma omp parallel
 #pragma omp atomic
         k++;
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Number of Threads counted for rank 0 = %i\n", k);
 #endif
     }
@@ -511,14 +511,14 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     }
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
         quantum = checktick();
         if (quantum >= 1) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "Your timer granularity/precision appears to be "
                 "%d microseconds.\n", quantum);
         } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "Your timer granularity appears to be "
                 "less than one microsecond.\n");
             quantum = 1;
@@ -537,23 +537,23 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
     t_est_us = (double)tcal_lo / 1000.0;
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Each test below will take on the order of %d microseconds.\n",
             (int)t_est_us);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "   (= %d timer ticks)\n", (int)(t_est_us / (double)quantum));
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Increase the size of the arrays if this shows that\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "you are not getting at least 20 timer ticks per test.\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "WARNING -- The above is only a rough guideline.\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "For best results, please be sure you know the\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "precision of your system timer.\n");
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
     }
 
     scalar = (STREAM_TYPE)SCALAR;
@@ -658,7 +658,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             avgtime[j] /= (double)(ntest - 1);
         }
 
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
         for (j = 0; j < 4; j++) {
             double best_mb_s = 0.0;
@@ -666,7 +666,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             if (mintime[j] > 0.0 && mintime[j] < (double)FLT_MAX) {
                 best_mb_s = 1.0E-06 * bytes_agg[j] / mintime[j];
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "%s%11.1f  %11.6f  %11.6f  %11.6f\n",
                 label[j], best_mb_s, avgtime[j], mintime[j], maxtime[j]);
 
@@ -675,7 +675,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
             summary16[j * 4 + 2][0] = mintime[j];
             summary16[j * 4 + 3][0] = maxtime[j];
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
     }
 
     computeSTREAMerrors(&AvgError[0], &AvgError[1], &AvgError[2], ntest);
@@ -684,7 +684,7 @@ d_stream_mpi(tpb_timer_t *timer, int rank, int nprocs, int ntest,
 
     if (rank == 0) {
         checkSTREAMresults(AvgErrByRank, nprocs, ntest);
-        tpb_printf(TPBM_PRTN_M_DIRECT, HLINE);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, HLINE);
     }
 
 cleanup_alloc:
@@ -808,7 +808,7 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
     } else if (sizeof(STREAM_TYPE) == 8) {
         epsilon = 1.e-13;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "WEIRD: sizeof(STREAM_TYPE) = %zu\n", sizeof(STREAM_TYPE));
         epsilon = 1.e-6;
     }
@@ -816,10 +816,10 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
     err = 0;
     if (abs(aAvgErr / aj) > epsilon) {
         err++;
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Failed Validation on array a[], AvgRelAbsErr > epsilon (%e)\n",
             epsilon);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
             aj, aAvgErr, abs(aAvgErr) / aj);
         ierr = 0;
@@ -828,7 +828,7 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
                 ierr++;
 #ifdef VERBOSE
                 if (ierr < 10) {
-                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                         "         array a: index: %ld, expected: %e, "
                         "observed: %e, relative error: %e\n",
                         (long)jj, aj, a[jj], abs((aj - a[jj]) / aAvgErr));
@@ -836,18 +836,18 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
 #endif
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     For array a[], %d errors were found.\n", ierr);
     }
     if (abs(bAvgErr / bj) > epsilon) {
         err++;
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Failed Validation on array b[], AvgRelAbsErr > epsilon (%e)\n",
             epsilon);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
             bj, bAvgErr, abs(bAvgErr) / bj);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     AvgRelAbsErr > Epsilon (%e)\n", epsilon);
         ierr = 0;
         for (jj = 0; jj < (ssize_t)array_elements; jj++) {
@@ -855,7 +855,7 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
                 ierr++;
 #ifdef VERBOSE
                 if (ierr < 10) {
-                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                         "         array b: index: %ld, expected: %e, "
                         "observed: %e, relative error: %e\n",
                         (long)jj, bj, b[jj], abs((bj - b[jj]) / bAvgErr));
@@ -863,18 +863,18 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
 #endif
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     For array b[], %d errors were found.\n", ierr);
     }
     if (abs(cAvgErr / cj) > epsilon) {
         err++;
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Failed Validation on array c[], AvgRelAbsErr > epsilon (%e)\n",
             epsilon);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     Expected Value: %e, AvgAbsErr: %e, AvgRelAbsErr: %e\n",
             cj, cAvgErr, abs(cAvgErr) / cj);
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     AvgRelAbsErr > Epsilon (%e)\n", epsilon);
         ierr = 0;
         for (jj = 0; jj < (ssize_t)array_elements; jj++) {
@@ -882,7 +882,7 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
                 ierr++;
 #ifdef VERBOSE
                 if (ierr < 10) {
-                    tpb_printf(TPBM_PRTN_M_DIRECT,
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                         "         array c: index: %ld, expected: %e, "
                         "observed: %e, relative error: %e\n",
                         (long)jj, cj, c[jj], abs((cj - c[jj]) / cAvgErr));
@@ -890,22 +890,22 @@ checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks, int ntimes)
 #endif
             }
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "     For array c[], %d errors were found.\n", ierr);
     }
     if (err == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "Solution Validates: avg error less than %e on all three arrays\n",
             epsilon);
     }
 #ifdef VERBOSE
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "Results Validation Verbose Results: \n");
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "    Expected a(1), b(1), c(1): %f %f %f \n", aj, bj, cj);
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "    Observed a(1), b(1), c(1): %f %f %f \n", a[1], b[1], c[1]);
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
         "    Rel Errors on a, b, c:     %e %e %e \n",
         abs(aAvgErr / aj), abs(bAvgErr / bj), abs(cAvgErr / cj));
 #endif
@@ -961,7 +961,7 @@ _sf_mpik_corelib_init(MPI_Comm comm, const char *tpb_workspace_path)
 
     if (bcast_err != TPBE_SUCCESS) {
         if (rank != 0) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "At stream_mpi init: Rank %d receives abort message\n",
                 rank);
             return TPBE_MPI_FAIL;
@@ -1008,13 +1008,13 @@ _sf_mpik_corelib_init(MPI_Comm comm, const char *tpb_workspace_path)
     }
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "TPBench is now initialized by rank: ");
         for (r = 0; r < nprocs; r++) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%d (pid=%d)%s",
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d (pid=%d)%s",
                 r, allpids[r], (r + 1 < nprocs) ? ", " : "");
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
         free(allpids);
     }
 
@@ -1024,7 +1024,7 @@ _sf_mpik_corelib_init(MPI_Comm comm, const char *tpb_workspace_path)
     }
 
     if (rank == 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "TPBench has been initialized by the MPI kernel.\n");
     }
 
@@ -1177,7 +1177,7 @@ _sf_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         char cap_hex[41];
 
         tpb_raf_id_to_hex(capsule_id, cap_hex);
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "MPI Task recorded. Task capsule ID = %s, included %d "
                    "tasks\n",
                    cap_hex, nprocs);
@@ -1214,7 +1214,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
     err = _sf_mpik_corelib_init(MPI_COMM_WORLD, NULL);
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: stream_mpi corelib init failed: %d\n", err);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: stream_mpi corelib init failed: %d\n", err);
         }
         MPI_Finalize();
         return err;
@@ -1227,8 +1227,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
     }
     if (timer_name == NULL) {
         if (rank == 0) {
-            fprintf(stderr,
-                "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         }
         MPI_Finalize();
         return TPBE_CLI_FAIL;
@@ -1237,7 +1236,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
     err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to set timer '%s'\n", timer_name);
         }
         MPI_Finalize();
         return err;
@@ -1246,7 +1245,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
     err = tpbk_pli_register_stream_mpi();
     if (err != 0) {
         if (rank == 0) {
-            fprintf(stderr, "Error: Failed to register kernel\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to register kernel\n");
         }
         MPI_Finalize();
         return err;
@@ -1257,7 +1256,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
         err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
         if (err != 0) {
             if (rank == 0) {
-                fprintf(stderr, "Error: Failed to build handle\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to build handle\n");
             }
             MPI_Finalize();
             return err;
@@ -1265,7 +1264,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
 
         if (rank == 0) {
             tpb_cliout_args(&handle);
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Kernel logs\n");
         }
 
         ev = getenv("TPB_HANDLE_INDEX");
@@ -1280,7 +1279,7 @@ tpbk_stream_mpi_entry(int argc, char **argv)
         err = run_stream_mpi();
 
         if (err != 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                 "Rank %d: Kernel stream_mpi failed: %d\n", rank, err);
             (void)tpb_k_write_task(&handle, err, NULL);
             tpb_driver_clean_handle(&handle);
@@ -1291,10 +1290,10 @@ tpbk_stream_mpi_entry(int argc, char **argv)
         cap_err = _sf_mpik_write_task(&handle, 0, my_task_id, capsule_id);
         if (rank == 0) {
             if (cap_err == 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT | TPBE_NOTE,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                     "Rank 0 created task capsule ended.\n");
             } else {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                     "stream_mpi: task capsule write failed %d\n", cap_err);
             }
         }

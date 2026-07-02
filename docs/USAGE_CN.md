@@ -54,7 +54,7 @@ tpbcli <subcommand> <options>
 - **`tpbcli kernel`**：管理工作区内的 kernel 编译历史 —— **`list`** / **`ls`**（扫描并注册 PLI 内核）、**`get`**（只读查询）、**`set`**（写入 metadata），以及构建系统内部使用的 **`backup-inactive`**。
 - **`tpbcli help`**：帮助文档。
 
-屏幕上的输出结果会同时输出到log目录下。
+屏幕上的输出结果会同步写入日志文件，路径：`<workspace>/rafdb/log/tpbrunlog_*.log`。
 
 ## 2.2 tpbcli run
 

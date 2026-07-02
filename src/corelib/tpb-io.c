@@ -25,26 +25,10 @@
 #include "rafdb/tpb-raf-types.h"
 
 /* Local Function Prototypes */
-
-/* Format and print a parameter value based on its dtype */
 static int _sf_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize);
-
-/* Format a value with exactly sigbit significant figures */
 static int _sf_format_sigfig(double value, char *buf, size_t bufsize, int sigbit);
-
-/* Extract UNAME+UKIND from a unit for grouping purposes */
 static inline TPB_UNIT_T _sf_get_uname(TPB_UNIT_T unit);
-
-/* Initialize CLI output format controller, gets terminal width via ioctl */
 static void _sf_init_cliout(void);
-
-/* Append message to the active run log file */
-static void _sf_log_write(const char *msg);
-
-/* Print a dynamic-width double horizontal line */
-static void _sf_print_dhline(int width);
-
-/* Transpose a 2D array */
 static void _sf_transpose(uint64_t *out, uint64_t **in, int m, int n);
 
 /* Module-level state */
@@ -57,10 +41,6 @@ static tpb_cliout_format_t cliout_fmt = {
     .sigbit_trim = 5,
     .initialized = 0
 };
-
-/* Logging state */
-static FILE *log_file = NULL;
-static char log_filepath[PATH_MAX] = {0};
 
 #define MAX_UNAME_GROUPS 32
 
@@ -183,118 +163,6 @@ _sf_transpose(uint64_t *out, uint64_t **in, int m, int n)
     }
 }
 
-/* Logging Function Implementations */
-
-int
-tpb_log_init(void)
-{
-    char hostname[256] = {0};
-    char logdir[PATH_MAX];
-    char timestamp[32];
-    time_t now;
-    struct tm *tm_now;
-    const char *ws;
-    const char *env_path;
-
-    if (log_file != NULL) {
-        return TPBE_SUCCESS;
-    }
-
-    env_path = getenv(TPB_LOG_FILE_ENV);
-    if (env_path != NULL && env_path[0] != '\0') {
-        if (strlen(env_path) >= sizeof(log_filepath)) {
-            printf("Warning: %s path too long\n", TPB_LOG_FILE_ENV);
-            return TPBE_FILE_IO_FAIL;
-        }
-        snprintf(log_filepath, sizeof(log_filepath), "%s", env_path);
-        log_file = fopen(log_filepath, "a");
-        if (log_file == NULL) {
-            printf("Warning: Could not open log file %s\n", log_filepath);
-            return TPBE_FILE_IO_FAIL;
-        }
-        fflush(log_file);
-        return TPBE_SUCCESS;
-    }
-
-    ws = _tpb_workspace_path_get();
-    if (ws == NULL || ws[0] == '\0') {
-        fprintf(stderr, "Warning: TPBench workspace not set for logging\n");
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    if (snprintf(logdir, sizeof(logdir), "%s/%s", ws, TPB_RAF_LOG_REL)
-        >= (int)sizeof(logdir)) {
-        fprintf(stderr, "Warning: Log directory path too long\n");
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    /* Get hostname */
-    if (gethostname(hostname, sizeof(hostname)) != 0) {
-        snprintf(hostname, sizeof(hostname), "unknown");
-    }
-
-    /* Generate timestamp */
-    now = time(NULL);
-    tm_now = localtime(&now);
-    snprintf(timestamp, sizeof(timestamp), "%04d%02d%02dT%02d%02d%02d",
-             tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
-             tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
-
-    /* Construct log filepath */
-    snprintf(log_filepath, sizeof(log_filepath),
-             "%s/tpbrunlog_%s_%s.log", logdir, timestamp, hostname);
-
-    /* Open log file */
-    log_file = fopen(log_filepath, "w");
-    if (log_file == NULL) {
-        fprintf(stderr, "Warning: Could not open log file %s\n", log_filepath);
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    fprintf(log_file, "TPBench Run Log\n");
-    fprintf(log_file, "Session Started: %04d-%02d-%02d %02d:%02d:%02d\n",
-            tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday,
-            tm_now->tm_hour, tm_now->tm_min, tm_now->tm_sec);
-    fprintf(log_file, "Hostname: %s\n", hostname);
-    fprintf(log_file, "TPB Version: %g\n", TPB_VERSION);
-    fprintf(log_file, "TPBench workspace: %s\n", ws);
-    fprintf(log_file,
-            "Note: Raw database and this log file live under this workspace.\n");
-    fprintf(log_file, "\n");
-    fflush(log_file);
-
-    return TPBE_SUCCESS;
-}
-
-void
-tpb_log_cleanup(void)
-{
-    if (log_file != NULL) {
-        fclose(log_file);
-        log_file = NULL;
-    }
-}
-
-static void
-_sf_log_write(const char *msg)
-{
-    if (log_file != NULL && msg != NULL) {
-        fputs(msg, log_file);
-        fflush(log_file);
-    }
-}
-
-const char *
-tpb_log_get_filepath(void)
-{
-    if (log_filepath[0] != '\0') {
-        return log_filepath;
-    }
-    return NULL;
-}
-
-/* Public Function Implementations */
-
 int
 tpb_mkdir(char *path)
 {
@@ -368,79 +236,6 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header)
 #endif
 }
 
-/* TPBench printf wrapper */
-void
-tpb_printf(uint64_t mode_bit, char *fmt, ...)
-{
-    uint64_t print_mode = mode_bit & 0x0F;
-    uint64_t tag_mode = mode_bit & 0xF0;
-    const char *tag = "NOTE";
-    char msg_buf[4096];
-    char header_buf[128] = {0};
-    int header_len = 0;
-
-    if (tag_mode == TPBE_WARN) {
-        tag = "WARN";
-    } else if (tag_mode == TPBE_FAIL) {
-        tag = "FAIL";
-    } else if (tag_mode == TPBE_UNKN) {
-        tag = "UNKN";
-    }
-
-    va_list args, args_copy;
-    va_start(args, fmt);
-
-    /* Format the message for both console and log */
-    if (print_mode == TPBM_PRTN_M_DIRECT) {
-        /* Direct mode - format the message to buffer */
-        va_copy(args_copy, args);
-        vsnprintf(msg_buf, sizeof(msg_buf), fmt, args_copy);
-        va_end(args_copy);
-        
-        vprintf(fmt, args);
-        va_end(args);
-        
-        _sf_log_write(msg_buf);
-        return;
-    }
-    
-    /* Build header string for timestamped/tagged output */
-    if (print_mode & TPBM_PRTN_M_TS) {
-        time_t t = time(0);
-        struct tm* lt = localtime(&t);
-        header_len += snprintf(header_buf + header_len, 
-                               sizeof(header_buf) - header_len,
-                               "%04d-%02d-%02d %02d:%02d:%02d ",
-                               lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
-                               lt->tm_hour, lt->tm_min, lt->tm_sec);
-    }
-    if (print_mode & TPBM_PRTN_M_TAG) {
-        header_len += snprintf(header_buf + header_len,
-                               sizeof(header_buf) - header_len,
-                               "[%s] ", tag);
-    }
-    
-    /* Format the actual message */
-    va_copy(args_copy, args);
-    vsnprintf(msg_buf, sizeof(msg_buf), fmt, args_copy);
-    va_end(args_copy);
-    
-    /* Print to console */
-    if (header_len > 0) {
-        printf("%s", header_buf);
-    }
-    vprintf(fmt, args);
-    va_end(args);
-    
-    /* Write to log file */
-    if (header_len > 0) {
-        _sf_log_write(header_buf);
-    }
-    _sf_log_write(msg_buf);
-    fflush(stdout);
-    fflush(stderr);
-}
-
 int
 tpb_cliout_args(tpb_k_rthdl_t *handle)
 {
@@ -454,8 +249,8 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
     int max_col = cliout_fmt.max_col;
 
     /* Kernel Name - do not wrap even if over max_col */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Input info\n");
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Input info\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Kernel Name: %s\n", handle->kernel.info.name);
 
     /* Run-time parameter settings - wrap at max_col */
     if (handle->argpack.n > 0 && handle->argpack.args != NULL) {
@@ -463,7 +258,7 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
         int prefix_len = (int)strlen(prefix);
         int cur_col = 0;
 
-        tpb_printf(TPBM_PRTN_M_DIRECT, "%s", prefix);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s", prefix);
         cur_col = prefix_len;
 
         for (int i = 0; i < handle->argpack.n; i++) {
@@ -479,15 +274,15 @@ tpb_cliout_args(tpb_k_rthdl_t *handle)
             /* Check if we need to wrap - disabled, do not auto wrap */
             /*
             if (cur_col + total_len > max_col && cur_col > 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
                 cur_col = 0;
             }
             */
 
-            tpb_printf(TPBM_PRTN_M_DIRECT, "%s%s", parm_buf, sep);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s%s", parm_buf, sep);
             cur_col += total_len;
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
     }
 
     return TPBE_SUCCESS;
@@ -511,7 +306,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     int sigbit_trim = cliout_fmt.sigbit_trim;
 
     /* Test results section */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Output\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Output\n");
 
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));
@@ -599,7 +394,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         TPB_UNIT_T base_unit = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
 
         /* Print metrics name */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Metrics: %s\n", out->name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metrics: %s\n", out->name);
 
         /* Determine display unit */
         TPB_UNIT_T display_unit = base_unit;
@@ -614,7 +409,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         }
 
         /* Print unit */
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Units: %s\n", tpb_unit_to_string(display_unit));
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Units: %s\n", tpb_unit_to_string(display_unit));
 
         /* Handle output based on shape */
         if (shape == TPB_UATTR_SHAPE_POINT) {
@@ -622,7 +417,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             double value = 0.0;
             int err = tpb_stat_mean(out->p, 1, out->dtype, &value);
             if (err != TPBE_SUCCESS) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result value: N/A\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result value: N/A\n");
                 continue;
             }
 
@@ -656,15 +451,15 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             } else {
                 tpb_format_value(value, buf, sizeof(buf), sigbit, intbit);
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Result value: %s\n", buf);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result value: %s\n", buf);
 
         } else if (shape == TPB_UATTR_SHAPE_1D) {
             /* 1D array - calculate mean and quantiles */
             double mean_val = 0.0;
             int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
             if (err != TPBE_SUCCESS) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: N/A\n");
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: N/A\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result mean: N/A\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result quantiles: N/A\n");
                 continue;
             }
 
@@ -700,8 +495,8 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
                 } else {
                     tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
                 }
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: N/A\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result mean: %s\n", buf);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result quantiles: N/A\n");
                 continue;
             }
 
@@ -739,13 +534,13 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             } else {
                 tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result mean: %s\n", buf);
 
             /* Print quantiles */
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Result quantiles: ");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result quantiles: ");
             for (size_t q = 0; q < nq; q++) {
                 if (q > 0) {
-                    tpb_printf(TPBM_PRTN_M_DIRECT, ", ");
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ", ");
                 }
                 /* Use sigbit_trim if enabled and not disabled for this output */
                 if (sigbit_trim > 0 && !trim_disabled) {
@@ -769,20 +564,20 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
                 } else {
                     tpb_format_value(qout[q], buf, sizeof(buf), sigbit, intbit);
                 }
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Q%.2f=%s", qtiles[q], buf);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Q%.2f=%s", qtiles[q], buf);
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
 
         } else {
             /* 2D+ arrays - warn and treat as 1D */
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Multi-dimension array not supported by CLI output\n");
 
             /* Calculate mean of all elements as fallback */
             double mean_val = 0.0;
             int err = tpb_stat_mean(out->p, (size_t)out->n, out->dtype, &mean_val);
             if (err != TPBE_SUCCESS) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: N/A\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result mean: N/A\n");
                 continue;
             }
 
@@ -816,14 +611,14 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
             } else {
                 tpb_format_value(mean_val, buf, sizeof(buf), sigbit, intbit);
             }
-            tpb_printf(TPBM_PRTN_M_DIRECT, "Result mean: %s\n", buf);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Result mean: %s\n", buf);
         }
     }
 
     free(qout);
 
     /* Print footer line */
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, DHLINE "\n");
 
     return TPBE_SUCCESS;
 }

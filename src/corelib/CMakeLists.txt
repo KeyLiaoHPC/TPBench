@@ -9,6 +9,8 @@ set(TPB_CORELIB_SOURCES
     tpb-dynloader.c
     tpb-autorecord.c
     strftime.c
+    tpblog/tpb-log.c
+    tpblog/tpb-printf.c
     rafdb/tpb-raf-workspace.c
     rafdb/tpb-raf-magic.c
     rafdb/tpb-raf-entry.c
@@ -26,6 +28,7 @@ target_include_directories(tpbench
     PRIVATE ${CMAKE_SOURCE_DIR}/src/include
             ${CMAKE_CURRENT_SOURCE_DIR}
             ${CMAKE_CURRENT_SOURCE_DIR}/rafdb
+            ${CMAKE_CURRENT_SOURCE_DIR}/tpblog
 )
 target_link_libraries(tpbench PUBLIC m dl rt)
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")

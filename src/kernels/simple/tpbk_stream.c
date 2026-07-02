@@ -151,12 +151,12 @@ run_stream(void)
     if (tpberr) return tpberr;
 
     if (ntest64 < 2) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "stream: ntest must be >= 2, got %" PRId64 "\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
     if (ntest64 > (int64_t)INT_MAX) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "stream: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -189,7 +189,7 @@ run_stream(void)
         tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Triad", ntest, &triad_bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Unsupported timer: %s\nThe STREAM benchmark only support wallclock timer. ", timer.name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Unsupported timer: %s\nThe STREAM benchmark only support wallclock timer. ", timer.name);
         return TPBE_KERN_ARG_FAIL;
     }
 
@@ -215,30 +215,31 @@ d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
     uint64_t t0, t1;
 
     printf(HLINE);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "STREAM version $Revision: 5.10 $\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "STREAM version $Revision: 5.10 $\n");
     printf(HLINE);
     BytesPerWord = sizeof(STREAM_TYPE);
-    printf(TPBM_PRTN_M_DIRECT, "This system uses %d bytes per array element.\n", BytesPerWord);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                    "This system uses %d bytes per array element.\n", BytesPerWord);
 
     err = 0;
     /* Use array_size (stream_array_size) if specified (non-zero) */
     if (array_size <= 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Illegal arguments stream_array_size must > 0, currently %u", array_size);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Illegal arguments stream_array_size must > 0, currently %u", array_size);
         return TPBE_KERN_ARG_FAIL;
     }
 
     *real_total_memsize = 3 * BytesPerWord * array_size;
-    tpb_printf(TPBM_PRTN_M_DIRECT,"Array size = %llu (elements), Offset = %d (elements)\n" , 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,"Array size = %llu (elements), Offset = %d (elements)\n" , 
                 (unsigned long long) array_size, 0);
-    tpb_printf(TPBM_PRTN_M_DIRECT,"Memory per array = %.1f MiB (= %.1f GiB).\n", 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,"Memory per array = %.1f MiB (= %.1f GiB).\n", 
 	BytesPerWord * ( (double) array_size / 1024.0/1024.0),
 	BytesPerWord * ( (double) array_size / 1024.0/1024.0/1024.0));
-    tpb_printf(TPBM_PRTN_M_DIRECT,"Total memory required = %.1f MiB (= %.1f GiB).\n",
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,"Total memory required = %.1f MiB (= %.1f GiB).\n",
 	(3.0 * BytesPerWord) * ( (double) array_size / 1024.0/1024.),
 	(3.0 * BytesPerWord) * ( (double) array_size / 1024.0/1024./1024.));
-    tpb_printf(TPBM_PRTN_M_DIRECT,"Each kernel will be executed %d times.\n", ntest);
-    tpb_printf(TPBM_PRTN_M_DIRECT," The *best* time for each kernel (excluding the first iteration)\n"); 
-    tpb_printf(TPBM_PRTN_M_DIRECT," will be used to compute the reported bandwidth.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,"Each kernel will be executed %d times.\n", ntest);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT," The *best* time for each kernel (excluding the first iteration)\n"); 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT," will be used to compute the reported bandwidth.\n");
 
     *array_size_out = array_size;
 
@@ -362,7 +363,7 @@ d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
 	    maxtime[3] = maxtime[3] > triad_time[k] ? maxtime[3] : triad_time[k];
 	}
     
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Function    Best Rate MB/s  Avg time     Min time     Max time\n");
     for (int j = 0; j < 4; j ++) {
 		avgtime[j] = avgtime[j] / (double)(ntest-1) / 1e9;
         mintime[j] /= 1e9;
@@ -375,7 +376,7 @@ d_stream(tpb_timer_t *timer, int ntest, uint64_t array_size,
     /* Verify results. */
     double errval;
     err = check_d_stream(array_size, ntest, a, b, c, s, epsilon, &errval);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "stream error: %.17f\n", errval);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "stream error: %.17f\n", errval);
     // kernel end
     
     free((void *)a);
@@ -454,7 +455,7 @@ tpbk_stream_entry(int argc, char **argv)
 
     err = tpb_k_corelib_init(NULL);
     if (err != 0) {
-        fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: tpb_k_corelib_init failed: %d\n", err);
         return err;
     }
 
@@ -465,40 +466,40 @@ tpbk_stream_entry(int argc, char **argv)
         timer_name = getenv("TPBENCH_TIMER");
     }
     if (timer_name == NULL) {
-        fprintf(stderr, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         return TPBE_CLI_FAIL;
     }
 
     err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to set timer '%s'\n", timer_name);
         return err;
     }
 
     err = tpbk_pli_register_stream();
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to register kernel\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to register kernel\n");
         return err;
     }
 
     tpb_k_rthdl_t handle;
     err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to build handle\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to build handle\n");
         return err;
     }
 
     tpb_cliout_args(&handle);
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Kernel logs\n");
     err = run_stream();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel stream failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "Kernel stream failed: %d\n", err);
         return err;
     }
 
     tpb_cliout_results(&handle);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel stream finished successfully.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Kernel stream finished successfully.\n");
 
     tpb_k_write_task(&handle, 0, NULL);
 

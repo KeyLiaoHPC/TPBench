@@ -72,7 +72,7 @@ resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size)
         }
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                "Suite file not found: %s\n", suite_arg);
     return TPBE_FILE_IO_FAIL;
 }
@@ -125,7 +125,7 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
     
     fp = fopen(log_path, "r");
     if (fp == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                    "Cannot open log file: %s\n", log_path);
         return TPBE_FILE_IO_FAIL;
     }
@@ -192,7 +192,7 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
     int all_found = 1;
     for (int i = 0; i < batch->nvspecs; i++) {
         if (isnan(batch->vresults[i])) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                        "Metric '%s' not found in log for batch '%s'\n",
                        batch->vspecs[i].name, batch->id);
             all_found = 0;
@@ -214,31 +214,31 @@ run_batch(tpb_bench_batch_t *batch)
         return TPBE_NULLPTR_ARG;
     }
     
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, 
                "Running batch: %s (kernel: %s)\n", batch->id, batch->kernel);
     
     /* Print the command that would be run */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Command: tpbcli run --kernel %s", batch->kernel);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Command: tpbcli run --kernel %s", batch->kernel);
     if (batch->kargs[0] != '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT, ":%s", batch->kargs);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ":%s", batch->kargs);
     }
     if (batch->wrapper[0] != '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT, " --wrapper %s", batch->wrapper);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, " --wrapper %s", batch->wrapper);
         if (batch->wrapper_args[0] != '\0') {
-            tpb_printf(TPBM_PRTN_M_DIRECT, " --wrapper-args '%s'",
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, " --wrapper-args '%s'",
                        batch->wrapper_args);
         }
     }
     if (batch->kenvs[0] != '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT, " --kenvs \"%s\"", batch->kenvs);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, " --kenvs \"%s\"", batch->kenvs);
     }
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
     
     /* Add handle for this kernel */
     err = tpb_driver_add_handle(batch->kernel);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                    "Failed to add handle for kernel: %s\n", batch->kernel);
         return err;
     }
@@ -260,7 +260,7 @@ run_batch(tpb_bench_batch_t *batch)
                 
                 err = tpb_driver_set_hdl_karg(key, val);
                 if (err != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+                    tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                                "Failed to set karg %s=%s\n", key, val);
                 }
             }
@@ -279,7 +279,7 @@ run_batch(tpb_bench_batch_t *batch)
         }
         err = tpb_driver_set_hdl_wrappers(&link, 1);
         if (err != 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Failed to set wrapper: %s\n", batch->wrapper);
         }
     }
@@ -301,7 +301,7 @@ run_batch(tpb_bench_batch_t *batch)
                 
                 err = tpb_driver_set_hdl_env(key, val);
                 if (err != 0) {
-                    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+                    tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                                "Failed to set env %s=%s\n", key, val);
                 }
             }
@@ -312,31 +312,31 @@ run_batch(tpb_bench_batch_t *batch)
     /* Run the kernel */
     err = tpb_driver_run_all();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                    "Batch %s execution failed\n", batch->id);
         return err;
     }
     
     /* Parse log file for metrics */
-    const char *log_path = tpb_log_get_filepath();
+    const char *log_path = tpblog_get_filepath();
     if (log_path != NULL) {
         err = parse_log_for_metrics(log_path, batch);
         if (err != 0 && err != TPBE_WARN) {
             return err;
         }
     } else {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                    "Log file not available for parsing\n");
     }
     
     /* Print parsed values */
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, 
                "Parsed values for batch %s:\n", batch->id);
     for (int i = 0; i < batch->nvspecs; i++) {
         if (isnan(batch->vresults[i])) {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "  %s: N/A\n", batch->vspecs[i].name);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  %s: N/A\n", batch->vspecs[i].name);
         } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, "  %s: %.6g\n", 
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "  %s: %.6g\n", 
                        batch->vspecs[i].name, batch->vresults[i]);
         }
     }
@@ -358,7 +358,7 @@ tpbcli_benchmark(int argc, char **argv)
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "--suite") == 0) {
             if (i + 1 >= argc) {
-                tpb_printf(TPBM_PRTN_M_DIRECT, 
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, 
                            "Option --suite requires an argument.\n");
                 return TPBE_CLI_FAIL;
             }
@@ -366,7 +366,7 @@ tpbcli_benchmark(int argc, char **argv)
             suite_arg = argv[i];
             
         } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Usage: tpbcli benchmark --suite <path_or_name>\n"
                        "\nOptions:\n"
                        "  --suite <path>  Path to benchmark YAML file, or suite name\n"
@@ -375,14 +375,14 @@ tpbcli_benchmark(int argc, char **argv)
             return TPBE_EXIT_ON_HELP;
             
         } else {
-            tpb_printf(TPBM_PRTN_M_DIRECT, 
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, 
                        "Unknown option: %s\n", argv[i]);
             return TPBE_CLI_FAIL;
         }
     }
     
     if (suite_arg == NULL) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, 
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, 
                    "No suite specified. Use --suite <path_or_name>.\n");
         return TPBE_CLI_FAIL;
     }
@@ -393,7 +393,7 @@ tpbcli_benchmark(int argc, char **argv)
         return err;
     }
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, 
                "Loading benchmark suite: %s\n", suite_path);
     
     /* Load and parse YAML */
@@ -403,11 +403,11 @@ tpbcli_benchmark(int argc, char **argv)
     }
     
     /* Print benchmark info */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Benchmark: %s\n", bench.name);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Benchmark: %s\n", bench.name);
     if (bench.note[0] != '\0') {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Description: %s\n", bench.note);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Description: %s\n", bench.note);
     }
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Batches: %d, Scores: %d\n", 
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Batches: %d, Scores: %d\n", 
                bench.nbatches, bench.nscores);
     
     /* Set default timer (same as tpbcli-run) */
@@ -415,13 +415,13 @@ tpbcli_benchmark(int argc, char **argv)
     TPB_RETURN_ON_ERROR(err, "At tpbcli-benchmark.c: tpb_argp_set_timer");
     
     /* Initialize kernel registry */
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Initializing TPBench kernels.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Initializing TPBench kernels.\n");
     err = tpb_register_kernel();
     TPB_RETURN_ON_ERROR(err, "At tpbcli-benchmark.c: tpb_register_kernel");
     
     /* Run each batch - kernel registry persists across batches */
     for (int i = 0; i < bench.nbatches; i++) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "\n=== Batch %d/%d: %s ===\n", 
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n=== Batch %d/%d: %s ===\n", 
                    i + 1, bench.nbatches, bench.batches[i].id);
         
         /* Reset handles before each batch (except first) to clear previous state */
@@ -431,7 +431,7 @@ tpbcli_benchmark(int argc, char **argv)
         
         err = run_batch(&bench.batches[i]);
         if (err != 0 && err != TPBE_WARN) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                        "Batch %s failed with error %d\n", 
                        bench.batches[i].id, err);
             /* Continue with other batches even if one fails */
@@ -439,11 +439,11 @@ tpbcli_benchmark(int argc, char **argv)
     }
     
     /* Calculate scores */
-    tpb_printf(TPBM_PRTN_M_DIRECT, "\n");
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Calculating scores...\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Calculating scores...\n");
     err = tpb_bench_score_calculate_all(&bench);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, 
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
                    "Score calculation had errors\n");
     }
     
@@ -453,7 +453,7 @@ tpbcli_benchmark(int argc, char **argv)
     /* Cleanup */
     tpb_bench_yaml_free(&bench);
     
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Benchmark complete.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Benchmark complete.\n");
     
     return TPBE_SUCCESS;
 }

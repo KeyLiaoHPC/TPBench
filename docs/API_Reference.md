@@ -185,40 +185,72 @@ TPBench uses a 64-bit unit encoding system (`TPB_UNIT_T`). Common units defined 
 
 ---
 
-## I/O Functions
+## TPBlog Functions
 
-Functions for input/output operations and formatted output. Defined in `tpb-io.h`.
+Formatted logging and column layout output. Implemented in `src/corelib/tpblog/`. See also [design_tpblog_CN.md](./design/design_tpblog_CN.md).
 
-### `tpb_printf`
+### `tpblog_init` / `tpblog_cleanup` / `tpblog_get_filepath`
 
-Format and print messages to stdout with optional timestamp and tag headers.
+Manage the per-run log file under `<workspace>/rafdb/log/tpbrunlog_*_<host>.log`.
 
 ```c
-void tpb_printf(uint64_t mode_bit, char *fmt, ...);
+int tpblog_init(void);
+void tpblog_cleanup(void);
+const char *tpblog_get_filepath(void);
 ```
 
-**Parameters:**
-- `mode_bit`: Mode bit combination of print modes and error tags
-- `fmt`: Printf-style format string
-- `...`: Variable arguments for format string
+**`TPB_LOG_FILE`:** Before PLI fork, the driver publishes the active log path in this environment variable. Parent and child both append to the same file without writing a second session header in the child.
 
-**Print Modes:**
-- `TPBM_PRTN_M_DIRECT` (0x00): Direct print, ignore headers
-- `TPBM_PRTN_M_TS` (0x01): Print timestamp header only
-- `TPBM_PRTN_M_TAG` (0x02): Print tag header only
-- `TPBM_PRTN_M_TSTAG` (0x03): Print both timestamp and tag headers
+### `tpblog_printf` / `tpblog_printf_f`
 
-**Error Tags:**
-- `TPBE_NOTE` (0x00): Informational note
-- `TPBE_WARN` (0x10): Warning
-- `TPBE_FAIL` (0x20): Failure
-- `TPBE_UNKN` (0x30): Unknown
+Format and print messages to **stdout** and the active run log (dual-write).
 
-**Output Format:** `YYYY-mm-dd HH:MM:SS [TAG] message`
+```c
+void tpblog_printf(tpb_log_level_t level, uint32_t log_type,
+                   uint32_t flags, const char *fmt, ...);
+void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type,
+                     uint32_t flags, const char *fmt, ...);
+```
 
-**Run log file:** When the workspace is initialized (`tpb_corelib_init` / `tpb_k_corelib_init`), corelib opens a timestamped log under `<workspace>/rafdb/log/tpbrunlog_*_<host>.log` via `tpb_log_init()` (declared in `tpb-io.h`, internal to the `tpbench` library). `tpb_printf` mirrors each line to that file when logging is active.
+**Log levels:** `TPB_LOG_LEVEL_TRACE` … `TPB_LOG_LEVEL_NONE` (filtered by `tpblog_set_level()`).
 
-**`TPB_LOG_FILE`:** Before fork/exec of a PLI kernel, the driver calls `tpb_log_cleanup()`, sets this environment variable to the current log path (`TPB_LOG_FILE_ENV` / `"TPB_LOG_FILE"`), and forks. The parent immediately calls `tpb_log_init()` again so it appends to the same file; the child process inherits `TPB_LOG_FILE` and `tpb_log_init()` inside `tpb_k_corelib_init` opens that path in append mode without writing a second session header. This yields one log file for both `tpbcli` and the kernel child launched via `tpbcli-pli-launcher`. At the start of `tpb_corelib_init()`, `TPB_LOG_FILE` is cleared (`unsetenv`) so a normal CLI session always starts a new timestamped log instead of appending to a stale path.
+**Log types / tags:**
+- `TPBLOG_TYPE_INFO` → `[INFO]`
+- `TPBLOG_TYPE_WARN` → `[WARN]`
+- `TPBLOG_TYPE_ERRO` → `[ERRO]`
+
+**Flags:**
+- `TPBLOG_FLAG_DIRECT` — message only
+- `TPBLOG_FLAG_TS` — prefix `YYYY-mm-dd HH:MM:SS`
+- `TPBLOG_FLAG_TAG` — prefix `[INFO|WARN|ERRO]`
+- `TPBLOG_FLAG_TSTAG` — both timestamp and tag
+
+### `tpblog_printf_c`
+
+Print proportional fixed-width columns to stdout and the run log.
+
+```c
+void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
+                     const char *const *cells);
+```
+
+Terminal width from `ioctl` on stdout (default 85). See design doc for width/degenerate rules.
+
+### `tpblog_snprintf`
+
+```c
+#define tpblog_snprintf(buf, bufsz, fmt, ...) snprintf((buf), (bufsz), (fmt), ##__VA_ARGS__)
+```
+
+---
+
+## I/O Functions
+
+File and CLI benchmark output helpers. Defined in `tpb-io.c`.
+
+### `tpb_set_outargs`
+
+Set CLI output formatting options (`unit_cast`, `sigbit_trim`).
 
 ---
 
@@ -562,8 +594,8 @@ Run a PLI kernel via fork/exec. Builds the execution command with environment
 variables, MPI arguments, and kernel parameters, then launches the kernel
 via `tpbcli-pli-launcher` and the kernel `.so`
 executable via shell. The child inherits the parent’s stdout and stderr; the
-shared run log is written through `tpb_printf` in both processes using
-`TPB_LOG_FILE` as described under `tpb_printf` (run log file).
+shared run log is written through `tpblog_printf_f` in both processes using
+`TPB_LOG_FILE` as described under TPBlog Functions.
 
 Declared in `tpb-public.h`.
 
@@ -1739,7 +1771,7 @@ Kernel metadata header names: `TPB_RAF_KERNEL_HDR_VARIATION`, `TPB_RAF_KERNEL_HD
 | `tpb_driver_add_handle()` … `tpb_driver_run_all()` | Multi-handle driver orchestration (see Driver section) |
 | `tpb_check_kargs()` / `tpb_argp_set_kargs_tokstr()` / `tpb_argp_set_timer()` | Host-side argument parsing helpers |
 | `tpb_record_begin_batch()` / `tpb_record_end_batch()` | Auto-record batch lifecycle |
-| `tpb_set_outargs()` / `tpb_log_get_filepath()` / `tpb_log_cleanup()` | CLI output and run log |
+| `tpblog_*()` / `tpb_set_outargs()` | Logging, dual-write stdout+log, column layout, CLI output formatting |
 | `tpb_dl_get_tpb_home()` / `tpb_dl_force_tpb_home()` | Resolve installation root for kernel discovery |
 | `tpb_ts_bits_to_isoutc()` | Format rafdb datetime bits as ISO UTC strings |
 

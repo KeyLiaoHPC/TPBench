@@ -153,10 +153,31 @@ if(TARGET tpbk_stream)
     tpb_add_subcase(A7 A7.2 stream_register_record test-kernel-record corelib)
 endif()
 
+# --- tpblog test executable (Pack A8) ---
+add_executable(test-tpblog EXCLUDE_FROM_ALL
+    test_tpblog.c
+)
+target_include_directories(test-tpblog PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-tpblog PRIVATE tpbench m)
+set_target_properties(test-tpblog PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A8 A8.1 init_session_header test-tpblog corelib)
+tpb_add_subcase(A8 A8.2 log_file_append      test-tpblog corelib)
+tpb_add_subcase(A8 A8.3 dual_write           test-tpblog corelib)
+tpb_add_subcase(A8 A8.4 tag_labels           test-tpblog corelib)
+tpb_add_subcase(A8 A8.5 column_widths        test-tpblog corelib)
+tpb_add_subcase(A8 A8.6 column_output        test-tpblog corelib)
+tpb_add_subcase(A8 A8.7 degenerate_output    test-tpblog corelib)
+tpb_add_subcase(A8 A8.8 snprintf_macro       test-tpblog corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
-            test-kernel-record
+            test-kernel-record test-tpblog
 )
 
 add_custom_target(check_corelib

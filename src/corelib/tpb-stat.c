@@ -258,10 +258,10 @@ dpipe_k0(int64_t *time_arr, int nskip, int ntest, int freq, size_t bpi, size_t n
 {
     __ovl_t res;
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, OVL_QUANT_HEADER "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, OVL_QUANT_HEADER "\n");
     /* MB/s */
     calc_rate_quant(&time_arr[nskip], ntest - nskip, niter * bpi, 1e3, &res);
-    tpb_printf(TPBM_PRTN_M_DIRECT,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                "MB/s    %-12.3f%-12.3f%-12.3f%-12.3f%-12.3f%-12.3f\n",
                res.meantp, res.tp05, res.tp25, res.tp50, res.tp75, res.tp95);
 

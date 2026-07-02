@@ -67,10 +67,10 @@ tpb_report_error(int err, const char *context)
         return TPBE_SUCCESS;
     }
     err_type = (unsigned)tpb_get_err_exit_flag(err);
-    tpb_printf(TPBM_PRTN_M_TSTAG | err_type,
-               "%s. Error message: %s\n",
-               context != NULL ? context : "TPBench error",
-               tpb_get_err_msg(err));
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, err_type, TPBLOG_FLAG_TSTAG,
+                    "%s. Error message: %s\n",
+                    context != NULL ? context : "TPBench error",
+                    tpb_get_err_msg(err));
     return err;
 }
 

@@ -381,8 +381,8 @@ tpb_register_kernel()
 
     if (current_rthdl || handle_list) {
         err = TPBE_ILLEGAL_CALL;
-        tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
-                   "Illegal call to tpb_register_kernel().\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                        "Illegal call to tpb_register_kernel().\n");
         return err;
     }
     if (kernel_all != NULL) {
@@ -421,8 +421,8 @@ tpb_register_kernels(int n, const char *const *names)
 
     if (current_rthdl || handle_list) {
         err = TPBE_ILLEGAL_CALL;
-        tpb_printf(TPBM_PRTN_M_TSTAG | tpb_get_err_exit_flag(err),
-                   "Illegal call to tpb_register_kernels().\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                        "Illegal call to tpb_register_kernels().\n");
         return err;
     }
     if (kernel_all != NULL) {
@@ -577,7 +577,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     /* Check if name is unique */
     for (int i = 0; i < nkern; i++) {
         if (strcmp(kernel_all[i].info.name, name) == 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, 
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                       "At tpb_k_register: Kernel name \'%s\' already registered\n", name);
             return TPBE_LIST_DUP;
         }
@@ -586,7 +586,7 @@ tpb_k_register(const char name[TPBM_NAME_STR_MAX_LEN], const char note[TPBM_NOTE
     /* Reallocate kernel array */
     kernel_all = (tpb_kernel_t *)realloc(kernel_all, sizeof(tpb_kernel_t) * (nkern + 1));
     if (kernel_all == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_register: realloc filed for kernel %s, "
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_register: realloc filed for kernel %s, "
                    "current regisered kernel number is %llu\n", name, nkern);
         return TPBE_MALLOC_FAIL;
     }
@@ -616,12 +616,12 @@ tpb_k_add_parm(const char *name, const char *note,
     tpb_rt_parm_t *parm;
 
     if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
     }
     if (current_rthdl != NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "tpb_k_add_parm cannot be called during kernel execution.\n");
         return TPBE_ILLEGAL_CALL;
     }
@@ -635,7 +635,7 @@ tpb_k_add_parm(const char *name, const char *note,
     current_kernel->info.parms = (tpb_rt_parm_t *)realloc(current_kernel->info.parms,
                                                           sizeof(tpb_rt_parm_t) * (nparms + 1));
     if (current_kernel->info.parms == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "At tpb_k_add_parm: Failed to realloc for %s.\n", name);
         return TPBE_MALLOC_FAIL;
     }
@@ -685,7 +685,7 @@ tpb_k_add_parm(const char *name, const char *note,
             break;
         default:
             va_end(args);
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: unsupported type %llx\n", type_code);
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: unsupported type %llx\n", type_code);
             return TPBE_KERN_ARG_FAIL;
     }
     
@@ -702,7 +702,7 @@ tpb_k_add_parm(const char *name, const char *note,
             parm->plims[0].f64 = va_arg(args, double);
             parm->plims[1].f64 = va_arg(args, double);
             if (parm->plims[0].f64 > parm->plims[1].f64) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: Illegal range\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: Illegal range\n");
                 return TPBE_KERN_ARG_FAIL;
             }
         } else if (type_code == TPB_FLOAT_T) {
@@ -710,7 +710,7 @@ tpb_k_add_parm(const char *name, const char *note,
             parm->plims[0].f32 = (float)va_arg(args, double);
             parm->plims[1].f32 = (float)va_arg(args, double);
             if (parm->plims[0].f32 > parm->plims[1].f32) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: Illegal range\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: Illegal range\n");
                 return TPBE_KERN_ARG_FAIL;
             }
         } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
@@ -719,7 +719,7 @@ tpb_k_add_parm(const char *name, const char *note,
             parm->plims[0].i64 = va_arg(args, int64_t);
             parm->plims[1].i64 = va_arg(args, int64_t);
             if (parm->plims[0].i64 > parm->plims[1].i64) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: Illegal range\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: Illegal range\n");
                 return TPBE_KERN_ARG_FAIL;
             }
         } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
@@ -728,7 +728,7 @@ tpb_k_add_parm(const char *name, const char *note,
             parm->plims[0].u64 = va_arg(args, uint64_t);
             parm->plims[1].u64 = va_arg(args, uint64_t);
             if (parm->plims[0].u64 > parm->plims[1].u64) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: Illegal range\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: Illegal range\n");
                 return TPBE_KERN_ARG_FAIL;
             }
         } else if (type_code == TPB_CHAR_T) {
@@ -736,7 +736,7 @@ tpb_k_add_parm(const char *name, const char *note,
             parm->plims[0].c = (char)va_arg(args, int);
             parm->plims[1].c = (char)va_arg(args, int);
             if (parm->plims[0].c > parm->plims[1].c) {
-                tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "At tpb_k_add_parm: Illegal range\n");
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "At tpb_k_add_parm: Illegal range\n");
                 return TPBE_KERN_ARG_FAIL;
             }
         } else {
@@ -810,7 +810,7 @@ tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T
     } else {
         /* Registration context: add output to kernel\'s info.outs */
         if (current_kernel == NULL) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "No kernel registered. Call tpb_k_register first.\n");
             return TPBE_KERN_ARG_FAIL;
         }
@@ -883,7 +883,7 @@ tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr)
                     break;
                 default:
                     /* Unknown type, return not found */
-                    tpb_printf(TPBM_PRTN_M_DIRECT, "DTYPE 0x%08llx is not supported.", dtype);
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "DTYPE 0x%08llx is not supported.", dtype);
                     return TPBE_LIST_NOT_FOUND;
             }
             return 0;
@@ -952,7 +952,7 @@ tpb_k_alloc_output(const char *name, uint64_t n, void *ptr)
             int err = tpb_dtype_elem_size(current_rthdl->respack.outputs[i].dtype,
                                           &elem_size);
             if (err != 0) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "In tpb_k_alloc_output: DTYPE 0x%08llx is not supported.\n",
                            (unsigned long long)current_rthdl->respack.outputs[i].dtype);
                 return TPBE_LIST_NOT_FOUND;
@@ -1048,7 +1048,7 @@ tpb_driver_add_handle(const char *kernel_name)
     /* Lookup kernel by name */
     err = _sf_get_kernel_by_name(kernel_name, &kernel);
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Kernel \'%s\' not found.\n", kernel_name);
         return TPBE_KERNEL_NE_FAIL;
     }
@@ -1056,7 +1056,7 @@ tpb_driver_add_handle(const char *kernel_name)
     /* For PLI kernels, require a registered runnable .so */
     if ((kernel->info.kctrl & TPB_KTYPE_MASK) == TPB_KTYPE_PLI) {
         if (!tpb_dl_is_complete(kernel_name)) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "Incomplete kernel: '%s' (missing or failed .so scan)\n",
                        kernel_name);
             return TPBE_KERNEL_INCOMPLETE;
@@ -1173,7 +1173,7 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
 
     /* Check if handle_list or current handle is NULL */
     if (handle_list == NULL || current_rthdl == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "In tpb_driver_set_hdl_karg: Empty kernel running list.\n");
         return TPBE_ILLEGAL_CALL;
     }
@@ -1188,7 +1188,7 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
     }
 
     if (parm == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Parameter '%s' is not existed in the kernel.\n", parm_name);
         return TPBE_KARG_NE_FAIL;
     }
@@ -1217,14 +1217,14 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
     if (check_mode == TPB_PARM_RANGE && parm->plims != NULL && parm->nlims == 2) {
         if (type_code == TPB_DOUBLE_T || type_code == TPB_LONG_DOUBLE_T) {
             if (parsed_value.f64 < parm->plims[0].f64 || parsed_value.f64 > parm->plims[1].f64) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "Parameter '%s' value %lf out of range [%lf, %lf]\n",
                            parm->name, parsed_value.f64, parm->plims[0].f64, parm->plims[1].f64);
                 return TPBE_KERN_ARG_FAIL;
             }
         } else if (type_code == TPB_FLOAT_T) {
             if (parsed_value.f32 < parm->plims[0].f32 || parsed_value.f32 > parm->plims[1].f32) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "Parameter '%s' value %f out of range [%f, %f]\n",
                            parm->name, parsed_value.f32, parm->plims[0].f32, parm->plims[1].f32);
                 return TPBE_KERN_ARG_FAIL;
@@ -1232,7 +1232,7 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
         } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
                    type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
             if (parsed_value.i64 < parm->plims[0].i64 || parsed_value.i64 > parm->plims[1].i64) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
                            parm->name, parsed_value.i64, parm->plims[0].i64, parm->plims[1].i64);
                 return TPBE_KERN_ARG_FAIL;
@@ -1240,7 +1240,7 @@ tpb_driver_set_hdl_karg(const char *parm_name, void *v)
         } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
                    type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
             if (parsed_value.u64 < parm->plims[0].u64 || parsed_value.u64 > parm->plims[1].u64) {
-                tpb_printf(TPBM_PRTN_M_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
                            parm->name, parsed_value.u64, parm->plims[0].u64, parm->plims[1].u64);
                 return TPBE_KERN_ARG_FAIL;
@@ -1260,7 +1260,7 @@ tpb_driver_set_hdl_env(const char *env_name, const char *env_value)
     }
 
     if (handle_list == NULL || current_rthdl == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "In tpb_driver_set_hdl_env: Empty kernel running list.\n");
         return TPBE_ILLEGAL_CALL;
     }
@@ -1391,7 +1391,7 @@ int
 tpb_driver_set_hdl_wrappers(const tpb_wrapper_link_t *links, int nlinks)
 {
     if (handle_list == NULL || current_rthdl == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "In tpb_driver_set_hdl_wrappers: Empty kernel running list.\n");
         return TPBE_ILLEGAL_CALL;
     }
@@ -1501,14 +1501,14 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     /* Get executable path */
     exec_path = (char *)tpb_dl_get_exec_path(hdl->kernel.info.name);
     if (exec_path == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Incomplete kernel: '%s'\n", hdl->kernel.info.name);
         return TPBE_KERNEL_INCOMPLETE;
     }
 
     launch_path = tpb_dl_get_pli_launch_path();
     if (launch_path == NULL && strstr(exec_path, ".so") != NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "PLI launcher not found under %s/bin/tpbcli-pli-launcher\n",
                    tpb_dl_get_tpb_home());
         return TPBE_KERNEL_INCOMPLETE;
@@ -1517,7 +1517,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     ar_bid = tpb_record_get_tbatch_id_hex();
     if (ar_bid != NULL) {
         if (memcmp(hdl->kernel.info.kernel_id, zero_id, 20) == 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "Kernel %s has zero KernelID, stop before fork.\n",
                        hdl->kernel.info.name);
             return TPBE_KERNEL_NE_FAIL;
@@ -1525,7 +1525,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
 
         err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
         if (err != TPBE_SUCCESS) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "Failed to resolve workspace for kernel %s (%d)\n",
                        hdl->kernel.info.name, err);
             return err;
@@ -1543,7 +1543,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         }
         if (err != TPBE_SUCCESS) {
             tpb_raf_id_to_hex(hdl->kernel.info.kernel_id, kernel_id_hex);
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "Kernel %s has unrecorded KernelID=%s, stop before fork.\n",
                        hdl->kernel.info.name, kernel_id_hex);
             return err;
@@ -1625,10 +1625,10 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     }
 
     /* Print full command for debugging/analysis */
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Exec: %s\n", full_cmd);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Exec: %s\n", full_cmd);
 
     if (g_dry_run_enabled) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "[DRY-RUN] Skipping fork for %s\n",
                    hdl->kernel.info.name);
         free(full_cmd);
@@ -1639,16 +1639,17 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
      * Close parent's log stream and publish path so the PLI child opens the same file
      * in append mode; reopen in the parent after fork.
      */
-    tpb_log_cleanup();
-    log_path = tpb_log_get_filepath();
+    tpblog_cleanup();
+    log_path = tpblog_get_filepath();
     if (log_path != NULL) {
-        setenv(TPB_LOG_FILE_ENV, log_path, 1);
+        setenv(TPBLOG_FILE_ENV, log_path, 1);
     }
 
     pid = fork();
     if (pid < 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "fork() failed\n");
-        (void)tpb_log_init();
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                        "fork() failed\n");
+        (void)tpblog_init();
         free(full_cmd);
         return TPBE_FILE_IO_FAIL;
     }
@@ -1656,12 +1657,14 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     if (pid == 0) {
         /* Execute via shell to handle env vars and wrapper chain correctly */
         execl("/bin/sh", "sh", "-c", full_cmd, (char *)NULL);
-        fprintf(stderr, "execl failed for /bin/sh\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                        "execl failed for /bin/sh\n");
         _exit(127);
     }
 
-    if (tpb_log_init() != TPBE_SUCCESS) {
-        fprintf(stderr, "Warning: could not reopen run log after fork\n");
+    if (tpblog_init() != TPBE_SUCCESS) {
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_DIRECT,
+                        "Warning: could not reopen run log after fork\n");
     }
 
     waitpid(pid, &status, 0);
@@ -1673,13 +1676,13 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     if (WIFEXITED(status)) {
         int exit_code = WEXITSTATUS(status);
         if (exit_code != 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "Kernel %s exited with code %d\n",
                        hdl->kernel.info.name, exit_code);
             return exit_code;
         }
     } else if (WIFSIGNALED(status)) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Kernel %s killed by signal %d\n",
                    hdl->kernel.info.name, WTERMSIG(status));
         return TPBE_KERN_ARG_FAIL;
@@ -1694,30 +1697,30 @@ tpb_driver_run_all(void)
     int err = 0;
 
     if (handle_list == NULL || nhdl <= 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN, "No kernels to run.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, "No kernels to run.\n");
         return 0;
     }
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, DHLINE "\n");
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Start driver runner.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, DHLINE "\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Start driver runner.\n");
 
     for (int i = 0; i < nhdl; i++) {
         tpb_k_rthdl_t *handle = &handle_list[i];
-        tpb_printf(TPBM_PRTN_M_DIRECT, "Test %d/%d  \n", i + 1, nhdl);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Test %d/%d  \n", i + 1, nhdl);
 
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel %s started (PLI).\n",
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Kernel %s started (PLI).\n",
                    handle->kernel.info.name);
         s_pli_handle_index = i;
         err = tpb_run_pli(handle);
 
         if (err != 0) {
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel %s failed.\n",
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "Kernel %s failed.\n",
                        handle->kernel.info.name);
             return err;
         }
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "TPBench exit.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "TPBench exit.\n");
     return 0;
 }
 
@@ -1767,7 +1770,7 @@ int
 tpb_k_finalize_pli(void)
 {
     if (current_kernel == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "No kernel registered. Call tpb_k_register first.\n");
         return TPBE_KERN_ARG_FAIL;
     }

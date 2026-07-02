@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 #include "tpb-types.h"
-#include "tpb-io.h"
+#include "tpblog/tpb-log.h"
 #include "rafdb/tpb-raf-types.h"
 #include "tpb_corelib_state.h"
 
@@ -112,7 +112,7 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
     }
 
     if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
-        unsetenv(TPB_LOG_FILE_ENV);
+        unsetenv(TPBLOG_FILE_ENV);
     }
 
     err = _sf_resolve_workspace_root(tpb_workspace_path, resolved, sizeof(resolved));
@@ -123,8 +123,8 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
     if (!silent) {
         const char *who;
 
-        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench v%g\n", TPB_VERSION);
-        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench workspace: %s\n", resolved);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "TPBench v%g\n", TPB_VERSION);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "TPBench workspace: %s\n", resolved);
         if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
             who = "tpbcli";
         } else if (caller_after == TPB_CORELIB_CTX_CALLER_KERNEL) {
@@ -132,7 +132,7 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
         } else {
             who = "unknown";
         }
-        tpb_printf(TPBM_PRTN_M_DIRECT, "TPBench is called by %s\n", who);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "TPBench is called by %s\n", who);
     }
 
     _tpb_workspace_path_set(resolved);
@@ -143,7 +143,7 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
         return err;
     }
 
-    err = tpb_log_init();
+    err = tpblog_init();
     if (err != TPBE_SUCCESS) {
         _tpb_workspace_path_set("");
         return err;

@@ -327,7 +327,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     if (found) {
         if (!tpb_raf_kernel_override_enabled()) {
             tpb_raf_id_to_hex(computed_id, kid_hex);
-            tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "KernelID %s already recorded; skip update "
                        "(set %s=1 to override).\n",
                        kid_hex, TPB_K_OVERRIDE_ENV);
@@ -412,7 +412,7 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
     snprintf(func_name, sizeof(func_name), "tpbk_pli_register_%s", kernel_name);
     *reg_out = (tpb_pli_register_fn_t)dlsym(handle, func_name);
     if (*reg_out == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: No PLI registration function %s in %s\n",
                    func_name, path_label);
         return TPBE_KERNEL_NE_FAIL;
@@ -440,7 +440,7 @@ _sf_try_load_from_path(const char *kernel_name, const char *path,
 
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: Failed to load %s: %s\n",
                    path, dlerror());
         return TPBE_KERNEL_NE_FAIL;
@@ -499,10 +499,10 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
     record_ok = (err == TPBE_SUCCESS && ws_err == TPBE_SUCCESS) ? 1 : 0;
 
     tpb_raf_id_to_hex(kernel_id, kernel_id_hex);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                " KernelID=%s\n", kernel_id_hex);
     if (is_new_kernel) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "New kernel found, add to kernel records.\n");
     }
     tpb_driver_set_kernel_id(kernel_name, kernel_id);
@@ -516,7 +516,7 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
     k->ktype = TPB_KTYPE_PLI;
 
     if (!k->complete) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: Kernel %s is incomplete: missing %s\n",
                    kernel_name, k->exec_path);
         if (require_success) {
@@ -546,7 +546,7 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
     }
 
     if (num_dyn_kernels >= MAX_DYN_KERNELS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: Maximum number of dynamic kernels reached.\n");
         return TPBE_KERNEL_NE_FAIL;
     }
@@ -558,22 +558,26 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
 
     _sf_build_kernel_paths(kernel_name, so_path, sizeof(so_path));
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Parsing kernel %s\n", kernel_name);
 
     if (_sf_try_load_from_path(kernel_name, so_path, so_path,
                                &handle, &reg_func) != TPBE_SUCCESS) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | (require_success ? TPBE_FAIL : TPBE_WARN),
-                   "In tpb_dl_scan: Failed to scan kernel %s "
-                   "(so dlopen failed).\n", kernel_name);
+        tpblog_printf_f(require_success ? TPB_LOG_LEVEL_ERROR : TPB_LOG_LEVEL_WARN,
+                        require_success ? TPBLOG_TYPE_ERRO : TPBLOG_TYPE_WARN,
+                        TPBLOG_FLAG_TSTAG,
+                        "In tpb_dl_scan: Failed to scan kernel %s "
+                        "(so dlopen failed).\n", kernel_name);
         return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
     }
 
     err = reg_func();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | (require_success ? TPBE_FAIL : TPBE_WARN),
-                   "In tpb_dl_scan: Failed to register kernel %s: error %d\n",
-                   kernel_name, err);
+        tpblog_printf_f(require_success ? TPB_LOG_LEVEL_ERROR : TPB_LOG_LEVEL_WARN,
+                        require_success ? TPBLOG_TYPE_ERRO : TPBLOG_TYPE_WARN,
+                        TPBLOG_FLAG_TSTAG,
+                        "In tpb_dl_scan: Failed to register kernel %s: error %d\n",
+                        kernel_name, err);
         dlclose(handle);
         return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
     }
@@ -646,7 +650,7 @@ tpb_dl_scan(void)
     snprintf(lib_path, PATH_MAX, "%s/lib", tpb_home_resolved);
     dir = opendir(lib_path);
     if (dir == NULL) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_WARN,
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: Cannot open lib directory: %s\n",
                    lib_path);
         dynloader_full_scan_done = 1;

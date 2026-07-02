@@ -38,8 +38,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
     }
 
     if (kernel_name == NULL) {
-        fprintf(stderr,
-                "Usage: tpbcli kernel backup-inactive --kernel <name>\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel backup-inactive --kernel <name>\n");
         return TPBE_CLI_FAIL;
     }
 
@@ -70,7 +69,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
              inactive_dir, kernel_name, kid_hex);
 
     if (rename(so_path, bak_path) != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL,
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "backup-inactive: rename failed for %s\n", so_path);
         return TPBE_FILE_IO_FAIL;
     }
@@ -81,7 +80,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
         (void)tpb_raf_record_patch_kernel_active(workspace, kernel_id, 0);
     }
 
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE,
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "backup-inactive: %s -> %s\n", so_path, bak_path);
     return TPBE_SUCCESS;
 }

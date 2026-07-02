@@ -101,12 +101,12 @@ run_triad(void)
     tpberr = tpb_k_get_arg("ntest", TPB_INT64_T, (void *)&ntest64);
     if (tpberr) return tpberr;
     if (ntest64 < 1) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "triad: ntest must be >= 1, got %" PRId64 "\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
     if (ntest64 > (int64_t)INT_MAX) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "triad: ntest %" PRId64 " exceeds INT_MAX\n", ntest64);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -136,7 +136,7 @@ run_triad(void)
         tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "In kernel triad: unknown timer unit name %llx", tpb_uname);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "In kernel triad: unknown timer unit name %llx", tpb_uname);
         return TPBE_KERN_ARG_FAIL;
     }
 
@@ -159,7 +159,7 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size, int64_t 
     /* Use array_size if specified (non-zero), otherwise use total_memsize */
     if (array_size > 0) {
         if (array_size > (uint32_t)INT_MAX) {
-            tpb_printf(TPBM_PRTN_M_DIRECT,
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                 "triad: array_size %" PRIu32 " exceeds INT_MAX\n", array_size);
             return TPBE_KERN_ARG_FAIL;
         }
@@ -170,11 +170,11 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size, int64_t 
     }
 
     if (ntest < 1) {
-        tpb_printf(TPBM_PRTN_M_DIRECT, "triad: internal ntest=%d invalid\n", ntest);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "triad: internal ntest=%d invalid\n", ntest);
         return TPBE_KERN_ARG_FAIL;
     }
     if (narr <= 0) {
-        tpb_printf(TPBM_PRTN_M_DIRECT,
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
             "triad: derived array length is %d (check total_memsize / array_size)\n", narr);
         return TPBE_KERN_ARG_FAIL;
     }
@@ -246,7 +246,7 @@ d_triad(tpb_timer_t *timer, int ntest, double kib, uint32_t array_size, int64_t 
     /* Verify results. */
     double errval;
     err = check_d_triad(narr, ntest, a, b, c, s, epsilon, &errval);
-    tpb_printf(TPBM_PRTN_M_DIRECT, "triad error: %lf\n", errval);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "triad error: %lf\n", errval);
 
     free((void *)a);
     free((void *)b);
@@ -283,7 +283,7 @@ tpbk_triad_entry(int argc, char **argv)
 
     err = tpb_k_corelib_init(NULL);
     if (err != 0) {
-        fprintf(stderr, "Error: tpb_k_corelib_init failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: tpb_k_corelib_init failed: %d\n", err);
         return err;
     }
 
@@ -294,40 +294,40 @@ tpbk_triad_entry(int argc, char **argv)
         timer_name = getenv("TPBENCH_TIMER");
     }
     if (timer_name == NULL) {
-        fprintf(stderr, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Timer not specified (argv[1] or TPBENCH_TIMER)\n");
         return TPBE_CLI_FAIL;
     }
 
     err = tpb_k_pli_set_timer(timer_name);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to set timer '%s'\n", timer_name);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to set timer '%s'\n", timer_name);
         return err;
     }
 
     err = tpbk_pli_register_triad();
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to register kernel\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to register kernel\n");
         return err;
     }
 
     tpb_k_rthdl_t handle;
     err = tpb_k_pli_build_handle(&handle, argc - 2, argv + 2);
     if (err != 0) {
-        fprintf(stderr, "Error: Failed to build handle\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Error: Failed to build handle\n");
         return err;
     }
 
     tpb_cliout_args(&handle);
 
-    tpb_printf(TPBM_PRTN_M_DIRECT, "Kernel logs\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Kernel logs\n");
     err = run_triad();
     if (err != 0) {
-        tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_FAIL, "Kernel triad failed: %d\n", err);
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, "Kernel triad failed: %d\n", err);
         return err;
     }
 
     tpb_cliout_results(&handle);
-    tpb_printf(TPBM_PRTN_M_TSTAG | TPBE_NOTE, "Kernel triad finished successfully.\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "Kernel triad finished successfully.\n");
 
     tpb_k_write_task(&handle, 0, NULL);
 

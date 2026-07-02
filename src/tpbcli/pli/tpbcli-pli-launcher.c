@@ -67,16 +67,15 @@ main(int argc, char **argv)
     int rc;
 
     if (argc < 3) {
-        fprintf(stderr,
-                "Usage: %s <kernel.so> <timer_name> [kernel_args...]\n",
-                argv[0]);
+        printf("Usage: %s <kernel.so> <timer_name> [kernel_args...]\n",
+               argv[0]);
         return TPBE_CLI_FAIL;
     }
 
     handle = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
-        fprintf(stderr, "tpbcli-pli-launcher: dlopen(%s): %s\n",
-                argv[1], dlerror());
+        printf("tpbcli-pli-launcher: dlopen(%s): %s\n",
+               argv[1], dlerror());
         return TPBE_KERNEL_NE_FAIL;
     }
 
@@ -114,9 +113,8 @@ main(int argc, char **argv)
 
     kernel_main = (int (*)(int, char **))dlsym(handle, "main");
     if (kernel_main == NULL) {
-        fprintf(stderr,
-                "tpbcli-pli-launcher: dlsym(tpbk_*_entry/main): %s\n",
-                dlerror());
+        printf("tpbcli-pli-launcher: dlsym(tpbk_*_entry/main): %s\n",
+               dlerror());
         dlclose(handle);
         return TPBE_KERNEL_NE_FAIL;
     }
