@@ -35,6 +35,7 @@ tpb_add_subcase(B2 B2.11 bad_kernel_name test-cli-run-nokernel tpbcli)
 if(TARGET tpbk_stream)
     tpb_add_subcase(B2 B2.12 dry_run_cartesian test-cli-run-nokernel tpbcli)
     tpb_add_subcase(B2 B2.13 help_kernel_specific test-cli-run-nokernel tpbcli)
+    tpb_add_subcase(B2 B2.14 run_kernel_found_id test-cli-run-nokernel tpbcli)
 endif()
 
 # --- wrapper dry-run command generation (Pack W1) ---

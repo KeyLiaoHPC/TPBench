@@ -46,6 +46,7 @@ static int test_help_kernel_no_name(void);
 static int test_bad_kernel_name(void);
 static int test_dry_run_cartesian(void);
 static int test_help_kernel_specific(void);
+static int test_run_kernel_found_id(void);
 
 /* Local Function Implementations */
 
@@ -303,6 +304,11 @@ test_help_kernel_no_name(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+    if (strstr(buf, "tpbcli kernel list") == NULL) {
+        FAIL("B2.10: missing kernel list hint");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
     PASS();
     return 0;
 }
@@ -320,15 +326,19 @@ test_bad_kernel_name(void)
         FAIL("B2.11: expected nonzero exit");
         return 1;
     }
-    if (strstr(buf, "requires a legal kernel name") == NULL &&
-        strstr(buf, "Kernel nonexistent_kern not found") == NULL &&
-        strstr(buf, "Failed to scan kernel nonexistent_kern") == NULL) {
-        FAIL("B2.11: missing hint");
+    if (strstr(buf, "Kernel nonexistent_kern not found. Use `tpbcli kernel list`")
+        == NULL) {
+        FAIL("B2.11: missing not-found hint");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    if (strstr(buf, "Available kernels:") == NULL) {
-        FAIL("B2.11: missing available kernel list");
+    if (strstr(buf, "Failed to scan kernel nonexistent_kern") != NULL) {
+        FAIL("B2.11: unexpected dynloader scan error");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Available kernels:") != NULL) {
+        FAIL("B2.11: unexpected inline kernel list");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
@@ -422,6 +432,43 @@ test_help_kernel_specific(void)
     return 0;
 }
 
+static int
+test_run_kernel_found_id(void)
+{
+    char cmd[4096];
+    char buf[32768];
+    int code;
+
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run --kernel stream "
+                     "--kargs stream_array_size=524288,ntest=3");
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.14: first run expected exit 0");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.14: second run expected exit 0");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "already recorded; skip update") != NULL) {
+        FAIL("B2.14: unexpected already-recorded warning");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Kernel stream found, KernelID:") == NULL) {
+        FAIL("B2.14: missing kernel found message");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -465,6 +512,9 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.13") == 0) {
         return test_help_kernel_specific();
+    }
+    if (strcmp(id, "B2.14") == 0) {
+        return test_run_kernel_found_id();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

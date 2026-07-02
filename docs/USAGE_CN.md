@@ -72,6 +72,8 @@ tpbcli run <tpbench_options> \
 **规则：** `--kargs`、`--kargs-dim`、`--kenvs`、`--kenvs-dim` 均必须出现在其所作用的 **`--kernel` 之后**（作用于命令行上最近一个 `--kernel`）。命令行上不再支持在第一个 `--kernel` 之前设置“默认”参数。
 
 **Wrapper 规则：** 第一个 `--kernel` 之前的 `--wrapper` / `--wrapper-args` 组成**全局**链，默认加在每个 kernel 前；某 kernel 组使用 `-og` / `--override-global` 时跳过全局链，保留该 kernel 的局部 wrapper。Wrapper 按顺序链接，后面的不会替换前面的。
+
+**内核发现：** `tpbcli run` 仅加载命令行 `--kernel` / `-k` 指定的内核，**不会**扫描整个 `lib/libtpbk_*.so`。若内核名不存在或 `.so` 无法加载，会输出 `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.`。请使用 **`tpbcli kernel list`** 查看已安装内核。找到已注册内核时，run 会输出 `Kernel <name> found, KernelID: <id>`（首次注册时为 `New kernel found, add to kernel records.`）。
 \<tpbench_options\>支持的选项包括：
 - `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。
@@ -297,7 +299,7 @@ tpbcli kernel set --kernel stream \
 tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
 ```
 
-当 KernelID 已存在时，除非环境变量 **`TPB_K_OVERRIDE=1`**（或 `true`/`yes`），否则 **`set` 会跳过更新** 并打印 warning。在 **`kernel list`** 或动态加载时重新注册未变化的 `.so` 时，同样受此约束。
+当 KernelID 已存在时，除非环境变量 **`TPB_K_OVERRIDE=1`**（或 `true`/`yes`），否则 **`set` 会跳过更新** 并打印 warning。在 **`kernel list`** 时重新注册未变化的 `.so` 同样受此约束。**`tpbcli run`** 不更新 kernel metadata，仅报告是否找到指定 kernel。
 
 ### 2.4.4 通过 CMake 记录编译历史
 

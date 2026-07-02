@@ -77,7 +77,7 @@ static int _sf_parse_outargs(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_timer(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_wrapper(tpbcli_argnode_t *node, const char *value);
 static int _sf_parse_wrapper_args(tpbcli_argnode_t *node, const char *value);
-static void _sf_print_kernel_list(void);
+static void _sf_print_kernel_list_hint(void);
 
 /* Local Function Implementations */
 
@@ -646,30 +646,10 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
 }
 
 static void
-_sf_print_kernel_list(void)
+_sf_print_kernel_list_hint(void)
 {
-    int nkern = tpb_query_kernel(0, NULL, NULL);
-    int i;
-
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                    "Available kernels:\n"
-                    "  %-15s %-9s %s\n",
-                    "Kernel", "KernelID", "Description");
-
-    for (i = 0; i < nkern; i++) {
-        tpb_kernel_t *kernel = NULL;
-
-        tpb_query_kernel(i, NULL, &kernel);
-        if (kernel == NULL) {
-            continue;
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                        "  %-15s %-9s %s\n",
-                        kernel->info.name, "-",
-                        kernel->info.note);
-        tpb_free_kernel(kernel);
-        free(kernel);
-    }
+                    "Use `tpbcli kernel list` to show kernel lists.\n");
 }
 
 static void
@@ -683,7 +663,7 @@ _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
         if (kernel == NULL) {
             fprintf(out, "Kernel '%s' info not available.\n",
                     g_pending_kernel_name);
-            _sf_print_kernel_list();
+            _sf_print_kernel_list_hint();
             return;
         }
         tpbcli_print_kernel_help_from_kernel(out, kernel, NULL, 1);
@@ -694,7 +674,7 @@ _sf_help_kernel_children(const tpbcli_argnode_t *node, FILE *out)
 
     fprintf(out,
             "--kernel option requires a legal kernel name.\n\n");
-    _sf_print_kernel_list();
+    _sf_print_kernel_list_hint();
     fprintf(out, "\n");
     tpbcli_default_help(node, out);
 }
@@ -748,8 +728,9 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
 
     err = tpb_driver_add_handle(value);
     if (err != 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Kernel %s not found\n", value);
-        _sf_print_kernel_list();
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                        "Kernel %s not found. Use `tpbcli kernel list` to show kernel lists.\n",
+                        value);
         return err;
     }
 
@@ -899,26 +880,25 @@ tpbcli_run(int argc, char **argv)
     if (n_run_kernels > 0) {
         err = tpb_register_kernels(n_run_kernels, run_kernel_ptrs);
         if (err != 0) {
-            (void)tpb_register_kernel();
             for (i = 0; i < n_run_kernels; i++) {
                 tpb_kernel_t *probe = NULL;
 
                 tpb_query_kernel(-1, run_kernel_ptrs[i], &probe);
                 if (probe == NULL) {
-                    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
-                                    "Kernel %s not found\n",
+                    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
+                                    TPBLOG_FLAG_TSTAG,
+                                    "Kernel %s not found. Use `tpbcli kernel list` to show kernel lists.\n",
                                     run_kernel_ptrs[i]);
                 } else {
                     tpb_free_kernel(probe);
                     free(probe);
                 }
             }
-            _sf_print_kernel_list();
             return err;
         }
     } else {
-        err = tpb_register_kernel();
-        TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernel");
+        err = tpb_register_kernels(0, NULL);
+        TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernels");
     }
 
     tree = tpbcli_argtree_create(

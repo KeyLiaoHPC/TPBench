@@ -6,8 +6,9 @@
 
 ```
 tpbcli_run()
-  ├── tpb_register_kernel()          // 注册 _tpb_common 元数据 + 扫描 .so（不创建 handle）
-  ├── parse_run()                    // 解析命令行参数
+  ├── _sf_collect_run_kernel_names() // 预扫描 argv 中的 --kernel 名称
+  ├── tpb_register_kernels(n, names) // 注册 _tpb_common + 仅扫描指定 .so
+  ├── tpbcli_argtree_parse()         // 解析命令行参数
   │   ├── --wrapper / --wrapper-args   // 第一个 --kernel 之前为全局；之后为当前 kernel 局部
   │   ├── --kernel [-og]               // 创建新 handle；切换 kernel 时绑定 wrapper
   │   ├── --kargs …                  // 须在 --kernel 之后；设置当前 handle
@@ -35,27 +36,30 @@ tpbcli_run()
 ```c
 int tpbcli_run(int argc, char **argv)
 {
-    // 1. 注册内核元数据、扫描 .so；handle_list 为空直至首个 --kernel
-    tpb_register_kernel();
+    // 1. 预收集 --kernel 名称；仅注册 _tpb_common + 指定 .so
+    _sf_collect_run_kernel_names(...);
+    tpb_register_kernels(n_run_kernels, run_kernel_ptrs);
 
     // 2. 解析命令行参数（核心）
-    parse_run(argc, argv);
+    tpbcli_argtree_parse(...);
 
     // 3. 执行所有 handle
     tpb_driver_run_all();
 }
 ```
 
-### 2.1 `tpb_register_kernel()` 初始化
+### 2.1 `tpb_register_kernels()` 初始化
 
 位置：`src/corelib/tpb-driver.c`
 
 ```
-tpb_register_kernel()
+tpb_register_kernels(n, names)
   ├── tpb_register_common()          // 填充 kernel_common（_tpb_common），供 tpb_query_kernel 等使用
-  ├── tpb_dl_scan()                  // 动态扫描 lib/ 下的 .so 内核库
+  ├── tpb_dl_scan_kernel(name)       // 仅扫描每个指定 kernel（严格：失败即中止）
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
+
+当 `n == 0`（例如 `run -h` 或 `run --kernel -h`）时，仅调用 `tpb_register_common()`，不扫描 `.so`。run 时找不到 kernel 会输出 `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.`。完整发现仍由 **`tpbcli kernel list`** 通过 `tpb_register_kernel()` → `tpb_dl_scan()` 完成。
 
 `_tpb_common` 仍描述一组"文档/合并用"的公共参数名，但**不再**对应运行时的伪 handle。CLI 在第一个 `--kernel` 之前不允许使用 `--kargs*` / `--kenvs*`。第一个 `--kernel` 之前允许全局 `--wrapper` 链。
 
@@ -407,10 +411,10 @@ tpbcli run --kernel stream --kargs ntest=20 \
 ### 执行序列：
 
 ```
-1. tpb_register_kernel()
-   → nhdl=0, handle_list=NULL
+1. _sf_collect_run_kernel_names() + tpb_register_kernels(1, {"stream"})
+   → nhdl=0, handle_list=NULL；仅扫描 libtpbk_stream.so
 
-2. parse_run() 遍历参数:
+2. tpbcli_argtree_parse() 遍历参数:
 
    a. --kernel stream
       → tpb_driver_add_handle("stream")

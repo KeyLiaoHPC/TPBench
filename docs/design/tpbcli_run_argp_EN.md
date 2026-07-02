@@ -6,8 +6,9 @@ This document analyzes the argument parsing workflow of the `tpbcli run` subcomm
 
 ```
 tpbcli_run()
-  ├── tpb_register_kernel()          // Register _tpb_common metadata + scan .so (no handle created)
-  ├── parse_run()                    // Parse CLI arguments
+  ├── _sf_collect_run_kernel_names() // Pre-scan argv for --kernel names
+  ├── tpb_register_kernels(n, names) // Register _tpb_common + scan named .so only
+  ├── tpbcli_argtree_parse()         // Parse CLI arguments
   │   ├── --wrapper / --wrapper-args   // Global before first --kernel; local after --kernel
   │   ├── --kernel [-og]               // Create new handle; bind wrappers on transition
   │   ├── --kargs …                    // Must follow --kernel; sets current handle
@@ -35,27 +36,30 @@ Location: `tpbcli_run()` in `src/tpbcli-run.c`
 ```c
 int tpbcli_run(int argc, char **argv)
 {
-    // 1. Register kernel metadata, scan .so; handle_list remains NULL until first --kernel
-    tpb_register_kernel();
+    // 1. Pre-collect --kernel names; register _tpb_common + named .so only
+    _sf_collect_run_kernel_names(...);
+    tpb_register_kernels(n_run_kernels, run_kernel_ptrs);
 
     // 2. Parse CLI arguments (core logic)
-    parse_run(argc, argv);
+    tpbcli_argtree_parse(...);
 
     // 3. Execute all handles
     tpb_driver_run_all();
 }
 ```
 
-### 2.1 `tpb_register_kernel()` Initialization
+### 2.1 `tpb_register_kernels()` Initialization
 
 Location: `src/corelib/tpb-driver.c`
 
 ```
-tpb_register_kernel()
+tpb_register_kernels(n, names)
   ├── tpb_register_common()          // Populate kernel_common (_tpb_common) for tpb_query_kernel etc.
-  ├── tpb_dl_scan()                  // Dynamically scan .so kernel libraries under lib/
+  ├── tpb_dl_scan_kernel(name)       // For each named kernel only (strict: failure aborts)
   └── handle_list = NULL, nhdl = 0, current_rthdl = NULL
 ```
+
+When `n == 0` (for example `run -h` or `run --kernel -h`), only `tpb_register_common()` runs; no `.so` scan occurs. Missing kernels during run print `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.` Full discovery remains in **`tpbcli kernel list`** via `tpb_register_kernel()` → `tpb_dl_scan()`.
 
 `_tpb_common` still describes a set of "documentation/merge-purpose" common parameter names, but **no longer** corresponds to a runtime pseudo-handle. The CLI disallows `--kargs*` / `--kenvs*` before the first `--kernel`. Global `--wrapper` links are allowed before the first `--kernel`.
 
@@ -407,10 +411,10 @@ tpbcli run --kernel stream --kargs ntest=20 \
 ### Execution Sequence:
 
 ```
-1. tpb_register_kernel()
-   → nhdl=0, handle_list=NULL
+1. _sf_collect_run_kernel_names() + tpb_register_kernels(1, {"stream"})
+   → nhdl=0, handle_list=NULL; only libtpbk_stream.so scanned
 
-2. parse_run() iterates arguments:
+2. tpbcli_argtree_parse() iterates arguments:
 
    a. --kernel stream
       → tpb_driver_add_handle("stream")

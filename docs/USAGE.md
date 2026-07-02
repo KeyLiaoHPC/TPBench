@@ -77,6 +77,8 @@ tpbcli run <tpbench_options> \
 
 **Wrapper rule:** `--wrapper` / `--wrapper-args` before the first `--kernel` form a **global** chain prepended to every kernel unless that kernel group uses `-og` / `--override-global`. Wrappers after a `--kernel` (and before the next `--kernel`) belong to that kernel only. Wrappers chain in order; later wrappers do not replace earlier ones.
 
+**Kernel discovery:** `tpbcli run` loads only the kernel(s) named on `--kernel` / `-k`. It does **not** scan all of `lib/libtpbk_*.so`. If a kernel name is missing or its `.so` cannot be loaded, TPBench prints `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.` Use **`tpbcli kernel list`** to discover installed kernels. When a named kernel is found, run logs `Kernel <name> found, KernelID: <id>` (or `New kernel found, add to kernel records.` on first registration).
+
 `<tpbench_options>` supported options include:
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
@@ -413,7 +415,7 @@ tpbcli kernel set --kernel stream \
 tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
 ```
 
-When the KernelID already exists, **`set` skips the update** and prints a warning unless **`TPB_K_OVERRIDE=1`** (or `true`/`yes`) is set in the environment. The same guard applies when re-registering an unchanged `.so` during **`kernel list`** or dynamic load.
+When the KernelID already exists, **`set` skips the update** and prints a warning unless **`TPB_K_OVERRIDE=1`** (or `true`/`yes`) is set in the environment. The same guard applies when re-registering an unchanged `.so` during **`kernel list`**. **`tpbcli run`** does not update kernel metadata; it only reports whether the named kernel was found.
 
 ### 2.4.4 Compile history from CMake
 

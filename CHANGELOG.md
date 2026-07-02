@@ -17,6 +17,8 @@
 
 ### Frontend: tpbcli
 
+- **Change:** `tpbcli run` never falls back to a full `lib/` scan. It loads only `--kernel` / `-k` names via `tpb_register_kernels()`. Missing kernels print `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.` Help paths (`run -h`, `run --kernel -h`) register `_tpb_common` only (`tpb_register_kernels(0, NULL)`).
+- **Change:** When `run` finds an already-recorded KernelID, it logs `Kernel <name> found, KernelID: <id>` at INFO instead of warning about `TPB_K_OVERRIDE`. Metadata updates remain in `tpbcli kernel set` / `kernel list`.
 - **Change:** `tpbcli run` registers only the kernel(s) named on the command line via `tpb_register_kernels()` (full `lib/` scan remains for `tpbcli kernel list`).
 - **Refactor:** `tpbcli database` uses the `tpbcli-argp` tree parser (same stack-based model as `run`). Top-level `database` has short alias **`db`**. After `database`/`db`, a subcommand is **required**: `list` (alias `ls`) or `dump`. Help flags use **`--help`** as the primary name and **`-h`** as the short name at each level. `tpbcli database --help` prints subcommand descriptions and a brief summary of dump selectors; `tpbcli database dump --help` lists all dump options. Conflicting dump selectors (`--id`, `--file`, etc.) are rejected by the parser.
 - **Breaking (API):** `tpbcli_database_dump(int argc, char **argv, …)` is removed from the public header; use **`tpbcli_database_dump_resolved(workspace, selector_name, primary_value, entry_value)`** (`selector_name` is a long option string such as `"--id"`, or NULL for usage).

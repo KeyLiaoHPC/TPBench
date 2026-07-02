@@ -69,7 +69,7 @@ static int _sf_hash_file_sha1(const char *path, unsigned char out[20]);
 static int _sf_is_zero_id(const unsigned char id[20]);
 static int _sf_load_register_fn(void *handle, const char *kernel_name,
                                 const char *path_label,
-                                tpb_pli_register_fn_t *reg_out);
+                                tpb_pli_register_fn_t *reg_out, int quiet);
 static int _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                                const char *kernel_name,
                                                const unsigned char so_sha1[20],
@@ -81,7 +81,7 @@ static int _sf_scan_kernel_internal(const char *kernel_name,
                                     int require_success);
 static int _sf_try_load_from_path(const char *kernel_name, const char *path,
                                   const char *path_label, void **handle_out,
-                                  tpb_pli_register_fn_t *reg_out);
+                                  tpb_pli_register_fn_t *reg_out, int quiet);
 
 /* Local Function Implementations */
 
@@ -298,7 +298,6 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     kernel_entry_t *entries = NULL;
     int nentries = 0;
     unsigned char computed_id[20];
-    char kid_hex[41];
 
     if (workspace == NULL || kernel_name == NULL || so_sha1 == NULL ||
         registered == NULL || out_final_id == NULL || is_new_kernel == NULL) {
@@ -325,13 +324,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
     }
 
     if (found) {
-        if (!tpb_raf_kernel_override_enabled()) {
-            tpb_raf_id_to_hex(computed_id, kid_hex);
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                       "KernelID %s already recorded; skip update "
-                       "(set %s=1 to override).\n",
-                       kid_hex, TPB_K_OVERRIDE_ENV);
-        } else {
+        if (tpb_raf_kernel_override_enabled()) {
             kernel_attr_t attr;
             void *data = NULL;
             uint64_t datasize = 0;
@@ -401,7 +394,8 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
 
 static int
 _sf_load_register_fn(void *handle, const char *kernel_name,
-                     const char *path_label, tpb_pli_register_fn_t *reg_out)
+                     const char *path_label, tpb_pli_register_fn_t *reg_out,
+                     int quiet)
 {
     char func_name[TPBM_NAME_STR_MAX_LEN + 32];
 
@@ -412,9 +406,11 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
     snprintf(func_name, sizeof(func_name), "tpbk_pli_register_%s", kernel_name);
     *reg_out = (tpb_pli_register_fn_t)dlsym(handle, func_name);
     if (*reg_out == NULL) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "In tpb_dl_scan: No PLI registration function %s in %s\n",
-                   func_name, path_label);
+        if (!quiet) {
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                       "In tpb_dl_scan: No PLI registration function %s in %s\n",
+                       func_name, path_label);
+        }
         return TPBE_KERNEL_NE_FAIL;
     }
 
@@ -424,7 +420,7 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
 static int
 _sf_try_load_from_path(const char *kernel_name, const char *path,
                        const char *path_label, void **handle_out,
-                       tpb_pli_register_fn_t *reg_out)
+                       tpb_pli_register_fn_t *reg_out, int quiet)
 {
     void *handle;
     int err;
@@ -440,13 +436,15 @@ _sf_try_load_from_path(const char *kernel_name, const char *path,
 
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "In tpb_dl_scan: Failed to load %s: %s\n",
-                   path, dlerror());
+        if (!quiet) {
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                       "In tpb_dl_scan: Failed to load %s: %s\n",
+                       path, dlerror());
+        }
         return TPBE_KERNEL_NE_FAIL;
     }
 
-    err = _sf_load_register_fn(handle, kernel_name, path_label, reg_out);
+    err = _sf_load_register_fn(handle, kernel_name, path_label, reg_out, quiet);
     if (err != TPBE_SUCCESS) {
         dlclose(handle);
         return err;
@@ -499,11 +497,18 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
     record_ok = (err == TPBE_SUCCESS && ws_err == TPBE_SUCCESS) ? 1 : 0;
 
     tpb_raf_id_to_hex(kernel_id, kernel_id_hex);
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
-               " KernelID=%s\n", kernel_id_hex);
     if (is_new_kernel) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "New kernel found, add to kernel records.\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
+                   " KernelID=%s\n", kernel_id_hex);
+    } else if (record_ok) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
+                   "Kernel %s found, KernelID: %s\n",
+                   kernel_name, kernel_id_hex);
+    } else {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
+                   " KernelID=%s\n", kernel_id_hex);
     }
     tpb_driver_set_kernel_id(kernel_name, kernel_id);
     tpb_driver_set_kernel_record_ok(kernel_name, record_ok);
@@ -562,22 +567,18 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
                "Parsing kernel %s\n", kernel_name);
 
     if (_sf_try_load_from_path(kernel_name, so_path, so_path,
-                               &handle, &reg_func) != TPBE_SUCCESS) {
-        tpblog_printf_f(require_success ? TPB_LOG_LEVEL_ERROR : TPB_LOG_LEVEL_WARN,
-                        require_success ? TPBLOG_TYPE_ERRO : TPBLOG_TYPE_WARN,
-                        TPBLOG_FLAG_TSTAG,
-                        "In tpb_dl_scan: Failed to scan kernel %s "
-                        "(so dlopen failed).\n", kernel_name);
+                               &handle, &reg_func, require_success)
+        != TPBE_SUCCESS) {
         return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
     }
 
     err = reg_func();
     if (err != 0) {
-        tpblog_printf_f(require_success ? TPB_LOG_LEVEL_ERROR : TPB_LOG_LEVEL_WARN,
-                        require_success ? TPBLOG_TYPE_ERRO : TPBLOG_TYPE_WARN,
-                        TPBLOG_FLAG_TSTAG,
-                        "In tpb_dl_scan: Failed to register kernel %s: error %d\n",
-                        kernel_name, err);
+        if (!require_success) {
+            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                       "In tpb_dl_scan: Failed to register kernel %s: error %d\n",
+                       kernel_name, err);
+        }
         dlclose(handle);
         return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
     }
