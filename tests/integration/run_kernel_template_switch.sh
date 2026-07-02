@@ -19,6 +19,14 @@ count_version_rows() {
     awk '/^Kernel Versions:/{found=1; next} found && /^[0-9a-f]{40} /{c++} END{print c+0}'
 }
 
+patch_template_sleep() {
+    local source="$1"
+    local seconds="$2"
+
+    sed -i '/#include <stdint.h>/a #include <unistd.h>' "${source}"
+    sed -i "/value\\[0\\] = 0\\.0;/i\\    sleep(${seconds});" "${source}"
+}
+
 rm -rf "${WS}" "${DIR_A}" "${DIR_B}"
 mkdir -p "${WS}"
 
@@ -27,6 +35,8 @@ export TPB_WORKSPACE="${WS}"
 
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel init --dir "${DIR_A}" --kernel "${KERNEL}"
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel init --dir "${DIR_B}" --kernel "${KERNEL}"
+patch_template_sleep "${DIR_A}/tpbk_${KERNEL}.c" 1
+patch_template_sleep "${DIR_B}/tpbk_${KERNEL}.c" 2
 
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel build --dir "${DIR_A}" --kernel "${KERNEL}" \
     --cflags "-O2 -DTMPL_VARIANT=1"
