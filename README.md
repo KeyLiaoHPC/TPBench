@@ -3,167 +3,171 @@
 TPBench is a micro benchmarking tool. It acts as a framework for developing, running, and managing micro kernels for benchmarking your systems for multiple targets. TPBench integrates facilities for measuring and storing compiling options, environment variables, dependencies information, input arguments, output metrics, process variables, etc. With TPBench, you can create benchmark workloads, group different workloads in to a customizable benchmark suite with your own score rules, trace and analyze any data you want.
 
 TPBench provides native-C frontends:
+
 - `tpbcli run`: Evaluate the performance and health with common micro computing kernels (e.g. arithmetic instructions, the STREAM benchmark, stencils, AI operators, etc).
 - `tpbcli benchmark`: Run predefined benchmark suites, calculate score and compare the performance from multiple dimensions you care.
 - `tpbcli database`: Record and track the performance.
 
 Refer to documentations in `docs/` for:
+
 - Build and basic usages ([docs/USAGE.md](docs/USAGE.md)). 基础编译及使用方法：[USAGE_CN.md](docs/USAGE_CN.md).
 - Cheatsheet/命令和选项速查表：[English](docs/cheatsheet.md)/[中文](docs/cheatsheet_CN.md)。
 - Programming interfaces ([docs/API_Reference.md](docs/API_Reference.md)).
 - Case studies and examples ([docs/EXAMPLES.md](docs/EXAMPLES.md)).
 
-## 1. Get Started: Running a STREAM Benchmark
+## Quickstart: 4-rank `stream_mpi` (512 MiB per core)
 
-### 1.1. Compiling TPBench
+This walkthrough matches the supported workflow: **default TPBench build**, then add the MPI STREAM kernel with **`tpbcli kernel build`**, then run with **`mpirun`**. Example target: **56 MPI ranks**, **`--map-by core --bind-to core`**, **512 MiB per array per rank**.
 
-Build from the TPBench source tree, then install to `~/tpbench`:
+### 1. Environment (optional)
+
+If MPI (and related libraries) are not on your default `PATH` / `LD_LIBRARY_PATH`, set them before build and run. Adjust paths for your site:
+
+```bash
+export MPI=/path/to/your/mpi/          # Open MPI install root
+export TPB_HOME=${HOME}/.tpbench  # where tpbcli + libtpbench.so live
+export TPB_WORKSPACE=${TPB_HOME}    # rafdb workspace (logs, task records)
+export PATH=${TPB_HOME}/bin:${MPI}/bin:${PATH}
+export LD_LIBRARY_PATH=${TPB_HOME}/lib:${MPI}/lib:${LD_LIBRARY_PATH}
+```
+
+`TPB_HOME` is used to find `bin/`, `lib/`, and kernel sources for `tpbcli kernel build`. `TPB_WORKSPACE` is where run logs and rafdb records are stored (defaults to the same tree when unset at run time).
+
+### 2. Build and install TPBench (default kernels)
+
+From the TPBench source tree. Default **`TPB_KERNELS=default`** builds CPU kernels `stream`, `triad`, `scale`, `axpy`, `rtriad`, and `sum`. MPI kernels such as `stream_mpi` are **not** built here; add them in the next step.
+
+Install prefix defaults to **`$HOME/.tpbench`**. To install elsewhere, set **`TPB_WORKSPACE`** (or **`CMAKE_INSTALL_PREFIX`**) **before** the first `cmake -B`:
 
 ```bash
 git clone https://github.com/KeyLiaoHPC/TPBench.git
-export TPB_WORKSPACE=~/tpbench
 cd TPBench
 cmake -B build
 cmake --build build --config Release
-cmake --install build 
-ls ~/tpbench
-bin  etc  include  lib  rafdb
+cmake --install build
+ls ${HOME}/.tpbench
+# bin  etc  include  lib  rafdb  src
 ```
 
-For running `tpbcli` linking `libtpbench.so`, set the library search path. You can also set $PATH for convenient:
+If a previous configure left **`TPB_USE_AVX512=ON`** in the cache but kernel objects fail with AVX-512 “target specific option mismatch”, reconfigure with the default (**OFF**):
 
 ```bash
-export PATH=${HOME}/tpbench/bin:${PATH}
-export LD_LIBRARY_PATH=$HOME/tpbench/lib:${LD_LIBRARY_PATH}
+cmake -B build -DTPB_USE_AVX512=OFF
+cmake --build build --config Release
+cmake --install build
 ```
 
-### 1.2. Running the STREAM benchmark
+### 3. Add the `stream_mpi` kernel
 
-Run one STREAM test with `ntest=20` and `stream_array_size=134217728`:
+Build and install **`libtpbk_stream_mpi.so`** into **`$TPB_HOME/lib`** using the MPI wrapper compiler:
 
 ```bash
-tpbcli run --kernel stream --kargs stream_array_size=134217728,ntest=20
-...
-Result quantiles: Q0.05=1.1308E5, Q0.25=1.1769E5, Q0.50=1.3686E5, Q0.75=1.3734E5, Q0.95=1.3777E5
-Metrics: triad_bw_walltime
-Units: MB/s
-Result mean: 1.3113E5
-Result quantiles: Q0.05=9.9613E4, Q0.25=1.1762E5, Q0.50=1.4419E5, Q0.75=1.4967E5, Q0.95=1.5102E5
-===
-2026-03-24 15:16:54 [NOTE] Kernel stream finished successfully.
-2026-03-24 15:16:54 [NOTE] Auto-record: task recorded, TaskID=cdad43d7505ec25d814f26b2d4b89d379cba9af8
-2026-03-24 15:16:54 [NOTE] TPBench exit.
-2026-03-24 15:16:54 [NOTE] Auto-record: batch ended, 1 tasks recorded.
-
+tpbcli kernel build --kernel stream_mpi --cc mpicc
+# expect: kernel build: stream_mpi PASS
+tpbcli kernel list | grep stream_mpi
 ```
 
-You should see `TPBench workspace: .../tpbench`, kernel parameters, timing and bandwidth metrics, `Solution Validates`, and a final success note.
+This uses the registry under **`$TPB_HOME/src/kernels/`** and does not require reconfiguring the main TPBench tree with **`-DTPB_KERNELS=stream_mpi`**.
 
-To sweep three array sizes ~32 MiB, ~512 MiB, and ~3 GiB, set `--kargs-dim`:
+### 4. Run: 4 ranks, 512 MiB per core
 
-```bash
-tpbcli run --kernel stream --kargs ntest=20 --kargs-dim 'stream_array_size=[1398101,22369621,134217728]'
+**Parameter semantics (code):** for `stream_mpi`, **`stream_array_size`** is the **total number of double elements per array summed over all MPI ranks**, not the per-rank size. Each rank gets `agg_elems / nprocs` elements (remainder to the last rank).
+
+For **512 MiB per array per rank** with **`double` (8 bytes)**:
+
+```text
+elements_per_rank = 512 * 1024 * 1024 / 8 = 67108864
+stream_array_size = elements_per_rank * nprocs
+                  = 67108864 * 4 = 268435456
 ```
 
-This command expands to three runs and records three tasks in one batch.
-
-### 1.3. Checking results
-
-Log files and records of arguments, task results are automatically saved in `${TPB_WORKSPACE}/rafdb`. The log filename includes your actual hostname.
-
-#### Quick results access
-
-For most users, the quickest way to review recent benchmark results is:
+Run (default **`ntest=10`**, **`twarm=500`** ms):
 
 ```bash
-# List recent runs with basic summary
+tpbcli run --kernel stream_mpi \
+  --kargs stream_array_size=268435456 \
+  --wrapper mpirun --wrapper-args '-np 4 --map-by core --bind-to core'
+```
+
+TPBench prints the resolved command, for example:
+
+```text
+Exec: ... mpirun -np 4 --map-by core --bind-to core \
+  .../tpbcli-pli-launcher .../libtpbk_stream_mpi.so clock_gettime 10 268435456 500
+```
+
+### 5. What to expect (FOM)
+
+Rank 0 prints aggregate STREAM results. **FOM bandwidth** uses global aggregate array bytes and the **minimum time across ranks** per iteration (excluding the first iteration), then reports best / avg / min / max. Example shape of output:
+
+```text
+Total Aggregate Array size = 3268435456 (elements)
+   Memory per array per MPI rank = 512.0 MiB (= 0.5 GiB).
+Function    Best Rate MB/s  Avg time     Min time     Max time
+Copy:         190087.3     0.355584     0.316326     0.417862
+Scale:        188713.0     0.348230     0.318630     0.374268
+Add:          222108.9     0.436748     0.406081     0.483628
+Triad:        215378.9     0.454098     0.418770     0.565483
+Solution Validates: avg error less than 1.000000e-13 on all three arrays
+```
+
+Registered FOM outputs (rank 0 summary): **`FOM,BANDWIDTH::* Best Rate MB/s`** and **`FOM,TIME::*`** for Copy / Scale / Add / Triad. Values appear in the run log; per-rank `.tpbr` records store **`EVENT,TIME::*`** iteration timings.
+
+Change **`ntest`** or **`twarm`** with **`--kargs`**, e.g. `--kargs ntest=20,twarm=1000,stream_array_size=268435456`.
+
+### 6. Check results
+
+Logs and task records are under **`${TPB_WORKSPACE}/rafdb/`** (default **`~/.tpbench/rafdb/`**).
+
+```bash
+# Recent batches
 tpbcli db list
 
-# Get detailed output from the latest log file (uses your actual hostname)
+# Last run log (hostname in filename)
 LOG_FILE=$(ls -t ~/.tpbench/rafdb/log/tpbrunlog_*.log | head -1)
-tail -50 "$LOG_FILE"
+tail -80 "$LOG_FILE"
 ```
 
-The terminal output during the run (also saved in the log file) typically contains the performance metrics (e.g., bandwidth, latency) in human-readable form.
+**MPI runs:** one **task capsule** groups all rank records (shown as 1 task in **`db list`**).
 
-#### Working with MPI results
+```bash
+# Capsule lists member rank TaskIDs
+tpbcli db dump --task-id <CapsuleID>
 
-For MPI kernels like `stream_mpi`:
+# Per-rank timings (FOM summary is in rank-0 log output, not always in .tpbr dump)
+tpbcli db dump --task-id <Rank0TaskID>
+```
 
-- Each run creates a **task capsule** that groups all rank records.
-- `tpbcli db list` shows the capsule as the entry point (counts as 1 task).
-- To get the capsule ID from a TBatchID:
+Resolve capsule ID from a batch:
 
 ```bash
 tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
 ```
 
-- The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.
-- To dump the capsule and see all member task IDs:
+More detail: [docs/USAGE.md](docs/USAGE.md) §2.3 (database) and §2.4.6 (`kernel build`).
+
+## More examples
+
+**Single-process STREAM** (kernel built by default install):
 
 ```bash
-tpbcli db dump --task-id <CapsuleID>
+tpbcli run --kernel stream --kargs stream_array_size=134217728,ntest=20
 ```
 
-- To get metrics from a specific rank (e.g., rank 0):
+**Sweep array sizes** with **`--kargs-dim`**:
 
 ```bash
-tpbcli db dump --task-id <Rank0TaskID>
+tpbcli run --kernel stream --kargs ntest=20 \
+  --kargs-dim 'stream_array_size=[1398101,22369621,134217728]'
 ```
 
-#### Raw record exploration
-
-The `--entry` option shows summary information without needing a specific ID:
+**Rebuild an MPI kernel after source changes:**
 
 ```bash
-# List all task batch entries
-tpbcli db dump --entry task_batch
-
-# List all kernel definitions
-tpbcli db dump --entry kernel
-
-# List all task entry points (capsules and standalone tasks)
-tpbcli db dump --entry task
+tpbcli kernel build --kernel stream_mpi --cc mpicc
 ```
 
-**Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
-
-#### Using TaskID from logs
-
-The TaskID printed in the log (e.g., `4c48e958...`) can be used directly:
-
-```bash
-# Dump a specific task record (use first 4+ hex chars)
-tpbcli db dump --task-id 4c48e958bcb93c21609bbb5e4d509943212d197f
-
-# You can also check all recorded task entry IDs
-tpbcli db dump --entry task
-```
-
-Use `tpbcli database` to check detailed record, you can find the TasiID above is `4c48e958bcb93c21609bbb5e4d509943212d197f` :
-```bash
-# Dumping raw data of tpbr
-tpbcli d dump --id 4c48
-# You can also check all recorded task's ID by dumping the entry file (.tpbe)
-tpbcli d dump --entry task
-```
-
-### 1.4. Building and running the parallel STREAM benchmark
-
-By default, TPBench only builds a STREAM benchmark. You can compile any kernels into your TPBench installation by setting `--target tpb_build_kernels`, set `-DTPB_KERNELS` or `-DTPB_KERNEL_TAGS` to select test kernels and set `-DTPB_KERNEL_CFLAGS`/`-DTPB_KERNEL_CXXFLAGS`/`TPB_KERNEL_FFLAGS` to configure compiler options. After building, use custom build target `--tpb_install_kernel` to install the new kernels to your `$TPB_WORKSPACE`.
-
-This example shows how to add a STREAM-MPI kernel and run it with 2 MPI processes and 2 OpenMP threads per MPI rank. Please set the `-DTPB_MPI_PATH` to your actual MPI library path. 
-``` bash
-# If TPBench has not been built, in TPBench root directory
-cmake -B build -DTPB_KERNELS=stream_mpi -DTPB_ENABLE_OPENMP=ON -DTPB_MPI_PATH=/path/to/mpi/library
-# Or, if you want to add one more kernel when after installing TPBench
-cmake --build build --target tpb_build_kernel  \
--DTPB_KERNELS=stream_mpi -DTPB_ENABLE_OPENMP=ON -DTPB_MPI_PATH=/path/to/mpi/library
-# Install and run the kernel. Here you can use 'r' for 'run'.
-cmake --build build --target tpb_install_kernel
-tpbcli r --kernel stream --kargs ntest=10,stream_array_size=67108864 --kenvs 'OMP_NUM_THREADS=2' --wrapper numactl
-```
-
+Do **not** use stale **`cmake --build ... --target tpb_build_kernel`** examples for adding kernels after install; use **`tpbcli kernel build`** as above. To include MPI kernels in the **main** tree configure step instead, see [docs/USAGE.md](docs/USAGE.md) and **`TPB_KERNELS=stream_mpi`** with **`TPB_MPI_PATH`**.
 
 ## License
 
@@ -182,5 +186,4 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+along with this program.  If not, see [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
