@@ -23,7 +23,7 @@
 
 /* Local Function Prototypes */
 static int resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size);
-static int run_batch(tpb_bench_batch_t *batch);
+static int run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal);
 static int parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch);
 static double parse_result_value(const char *str);
 
@@ -206,12 +206,18 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
  * @brief Run a single batch entry.
  */
 static int
-run_batch(tpb_bench_batch_t *batch)
+run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal)
 {
     int err;
-    
+    int rec_err;
+    int nhdl;
+    int kernel_err = 0;
+
     if (batch == NULL) {
         return TPBE_NULLPTR_ARG;
+    }
+    if (tbatch_fatal != NULL) {
+        *tbatch_fatal = 0;
     }
     
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
@@ -309,14 +315,39 @@ run_batch(tpb_bench_batch_t *batch)
         }
     }
     
+    rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_BENCHMARK);
+    if (rec_err != 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                   "tpbcli_benchmark: begin_batch failed (%d)\n", rec_err);
+        if (tbatch_fatal != NULL) {
+            *tbatch_fatal = 1;
+        }
+        return rec_err;
+    }
+
     /* Run the kernel */
     err = tpb_driver_run_all();
     if (err != 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Batch %s execution failed\n", batch->id);
-        return err;
+        kernel_err = err;
     }
-    
+
+    nhdl = tpb_get_nhdl();
+    rec_err = tpb_record_end_batch(nhdl);
+    if (rec_err != 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                   "tpbcli_benchmark: end_batch failed (%d)\n", rec_err);
+        if (tbatch_fatal != NULL) {
+            *tbatch_fatal = 1;
+        }
+        return rec_err;
+    }
+
+    if (kernel_err != 0) {
+        return kernel_err;
+    }
+
     /* Parse log file for metrics */
     const char *log_path = tpblog_get_filepath();
     if (log_path != NULL) {
@@ -421,6 +452,8 @@ tpbcli_benchmark(int argc, char **argv)
     
     /* Run each batch - kernel registry persists across batches */
     for (int i = 0; i < bench.nbatches; i++) {
+        int tbatch_fatal = 0;
+
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n=== Batch %d/%d: %s ===\n", 
                    i + 1, bench.nbatches, bench.batches[i].id);
         
@@ -429,7 +462,11 @@ tpbcli_benchmark(int argc, char **argv)
             tpb_driver_reset_handles();
         }
         
-        err = run_batch(&bench.batches[i]);
+        err = run_batch(&bench.batches[i], &tbatch_fatal);
+        if (tbatch_fatal) {
+            tpb_bench_yaml_free(&bench);
+            return err;
+        }
         if (err != 0 && err != TPBE_WARN) {
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                        "Batch %s failed with error %d\n", 

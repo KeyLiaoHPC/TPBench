@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include "include/tpb-public.h"
 #include "corelib/rafdb/tpb-raf-types.h"
@@ -78,6 +79,51 @@ run_cmd(const char *cmd)
         fprintf(stderr, "  Command failed with rc=%d\n", rc);
     }
     return rc;
+}
+
+static int
+write_stream_bench_yaml(const char *path)
+{
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) {
+        return -1;
+    }
+    fprintf(fp,
+            "benchmark:\n"
+            "  name: stream_bench\n"
+            "  batch:\n"
+            "    - id: b1\n"
+            "      kernel: stream\n"
+            "      kargs: [[\"stream_array_size\", \"32\"], [\"ntest\", \"10\"]]\n"
+            "      v:\n"
+            "        - [\"FOM,BANDWIDTH::Triad\", \"mean\"]\n"
+            "  score:\n"
+            "    - id: s1\n"
+            "      name: Triad\n"
+            "      display: 1\n"
+            "      modifier: raw\n"
+            "      args:\n"
+            "        - \"@batch[id=='b1'].v[0]\"\n");
+    fclose(fp);
+    return 0;
+}
+
+static int
+make_task_batch_readonly(const char *workspace)
+{
+    char tbatch_dir[640];
+
+    snprintf(tbatch_dir, sizeof(tbatch_dir), "%s/rafdb/task_batch", workspace);
+    return chmod(tbatch_dir, 0555);
+}
+
+static int
+restore_task_batch_writable(const char *workspace)
+{
+    char tbatch_dir[640];
+
+    snprintf(tbatch_dir, sizeof(tbatch_dir), "%s/rafdb/task_batch", workspace);
+    return chmod(tbatch_dir, 0755);
 }
 
 static int
@@ -171,6 +217,126 @@ test_tri_record(void)
     return (g_fail > 0) ? 1 : 0;
 }
 
+static int
+test_benchmark_tbatch_record(void)
+{
+    int err;
+    char cmd[4096];
+    char suite_path[640];
+    tbatch_entry_t *tb_entries = NULL;
+    task_entry_t *tk_entries = NULL;
+    int tb_count = 0;
+    int tk_count = 0;
+
+    setup_test_dir();
+
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("bench init_workspace", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(suite_path, sizeof(suite_path), "%s/bench_stream.yml", g_test_dir);
+    err = write_stream_bench_yaml(suite_path);
+    CHECK("bench write yaml", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli benchmark "
+             "--suite %s",
+             g_bin_dir, g_test_dir, g_bin_dir, suite_path);
+    err = run_cmd(cmd);
+    CHECK("benchmark exit", err == 0);
+
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &tb_entries, &tb_count);
+    CHECK("bench list_tbatch ok", err == 0);
+    CHECK_INT("bench tbatch count", 1, tb_count);
+    if (err == 0 && tb_count == 1) {
+        CHECK_INT("bench batch type", TPB_BATCH_TYPE_BENCHMARK,
+                  tb_entries[0].batch_type);
+        CHECK_INT("bench ntask", 1, tb_entries[0].ntask);
+        CHECK("bench id nonzero", !is_zero_id(tb_entries[0].tbatch_id));
+    }
+
+    err = tpb_raf_entry_list_task(g_test_dir, &tk_entries, &tk_count);
+    CHECK("bench list_task ok", err == 0);
+    CHECK_INT("bench task count", 1, tk_count);
+    if (err == 0 && tk_count == 1 && tb_count == 1) {
+        CHECK("bench task tbatch_id matches",
+              memcmp(tk_entries[0].tbatch_id, tb_entries[0].tbatch_id, 20) == 0);
+    }
+
+    free(tb_entries);
+    free(tk_entries);
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
+static int
+test_benchmark_begin_batch_fail(void)
+{
+    int err;
+    char cmd[4096];
+    char suite_path[640];
+    char buf_path[640];
+    FILE *fp;
+    char line[512];
+    int saw_begin_fail = 0;
+
+    setup_test_dir();
+
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("bench_fail init_workspace", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = make_task_batch_readonly(g_test_dir);
+    CHECK("bench_fail chmod task_batch", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(suite_path, sizeof(suite_path), "%s/bench_stream.yml", g_test_dir);
+    err = write_stream_bench_yaml(suite_path);
+    CHECK("bench_fail write yaml", err == 0);
+    if (err != 0) {
+        (void)restore_task_batch_writable(g_test_dir);
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(buf_path, sizeof(buf_path), "%s/bench_fail.out", g_test_dir);
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli benchmark "
+             "--suite %s > %s 2>&1",
+             g_bin_dir, g_test_dir, g_bin_dir, suite_path, buf_path);
+    err = run_cmd(cmd);
+    CHECK("benchmark begin_batch fail exit", err != 0);
+
+    fp = fopen(buf_path, "r");
+    if (fp != NULL) {
+        while (fgets(line, sizeof(line), fp) != NULL) {
+            if (strstr(line, "begin_batch failed") != NULL) {
+                saw_begin_fail = 1;
+                break;
+            }
+        }
+        fclose(fp);
+    }
+    CHECK("benchmark begin_batch fail message", saw_begin_fail);
+
+    (void)restore_task_batch_writable(g_test_dir);
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
 typedef struct {
     const char *id;
     const char *name;
@@ -201,6 +367,8 @@ main(int argc, char **argv)
 
     test_case_t cases[] = {
         {"C1.1", "tri_tests_record", test_tri_record},
+        {"C1.2", "benchmark_tbatch_record", test_benchmark_tbatch_record},
+        {"C1.3", "benchmark_begin_batch_fail", test_benchmark_begin_batch_fail},
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int pass = 0, fail = 0;

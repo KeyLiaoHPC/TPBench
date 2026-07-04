@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 
 #include "include/tpb-public.h"
+#include "corelib/rafdb/tpb-raf-kernel-meta.h"
 
 #ifndef TPB_TEST_TPB_HOME
 #define TPB_TEST_TPB_HOME ""

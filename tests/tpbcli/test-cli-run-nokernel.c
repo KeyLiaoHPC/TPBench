@@ -3,10 +3,13 @@
  * Test pack B2: `tpbcli run` rejects kargs/kenvs before --kernel; wrapper-args needs --wrapper.
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #ifndef TPB_TEST_TPBCLI_STR
 #define TPB_TEST_TPBCLI_STR "./bin/tpbcli"
@@ -47,6 +50,7 @@ static int test_bad_kernel_name(void);
 static int test_dry_run_cartesian(void);
 static int test_help_kernel_specific(void);
 static int test_run_kernel_found_id(void);
+static int test_run_begin_batch_fail(void);
 
 /* Local Function Implementations */
 
@@ -469,6 +473,73 @@ test_run_kernel_found_id(void)
     return 0;
 }
 
+static int
+test_run_begin_batch_fail(void)
+{
+    char cmd[4096];
+    char buf[32768];
+    char ws[512];
+    char tbatch_dir[640];
+    int code;
+
+    snprintf(ws, sizeof(ws), "/tmp/tpb_run_tbatch_fail_%d", (int)getpid());
+    snprintf(tbatch_dir, sizeof(tbatch_dir), "%s/rafdb/task_batch", ws);
+
+    if (mkdir(ws, 0755) != 0 && errno != EEXIST) {
+        FAIL("B2.15 setup mkdir workspace");
+        return 1;
+    }
+    {
+        char rafdb_dir[640];
+        snprintf(rafdb_dir, sizeof(rafdb_dir), "%s/rafdb", ws);
+        if (mkdir(rafdb_dir, 0755) != 0 && errno != EEXIST) {
+            FAIL("B2.15 setup mkdir rafdb");
+            return 1;
+        }
+    }
+    if (mkdir(tbatch_dir, 0755) != 0 && errno != EEXIST) {
+        FAIL("B2.15 setup mkdir task_batch");
+        return 1;
+    }
+    if (chmod(tbatch_dir, 0555) != 0) {
+        FAIL("B2.15 setup chmod task_batch");
+        return 1;
+    }
+
+    if (TPB_TEST_TPB_HOME[0] != '\0') {
+        snprintf(cmd, sizeof(cmd),
+                 "TPB_HOME=\"%s\" TPB_WORKSPACE=\"%s\" \"%s\" "
+                 "run --kernel stream --kargs stream_array_size=32,ntest=5",
+                 TPB_TEST_TPB_HOME, ws, TPB_TEST_TPBCLI_STR);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+                 "TPB_WORKSPACE=\"%s\" \"%s\" "
+                 "run --kernel stream --kargs stream_array_size=32,ntest=5",
+                 ws, TPB_TEST_TPBCLI_STR);
+    }
+
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    (void)chmod(tbatch_dir, 0755);
+    {
+        char rm_cmd[640];
+        snprintf(rm_cmd, sizeof(rm_cmd), "rm -rf %s", ws);
+        (void)system(rm_cmd);
+    }
+
+    if (code == 0) {
+        FAIL("B2.15 run_begin_batch_fail: expected nonzero exit");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "begin_batch failed") == NULL) {
+        FAIL("B2.15 run_begin_batch_fail: missing begin_batch failed message");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -515,6 +586,9 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.14") == 0) {
         return test_run_kernel_found_id();
+    }
+    if (strcmp(id, "B2.15") == 0) {
+        return test_run_begin_batch_fail();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

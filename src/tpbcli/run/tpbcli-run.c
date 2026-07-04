@@ -1075,21 +1075,20 @@ tpbcli_run(int argc, char **argv)
     usleep((useconds_t)(1000000 + (rand() % 1000) * 1000));
 
     rec_err = tpb_record_begin_batch(TPB_BATCH_TYPE_RUN);
-    if (rec_err) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "tpbcli_run: begin_batch failed (%d), "
-                   "continuing without recording.\n", rec_err);
+    if (rec_err != 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                   "tpbcli_run: begin_batch failed (%d)\n", rec_err);
+        return rec_err;
     }
 
     err = tpb_driver_run_all();
     TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_driver_run_all");
 
-    if (!rec_err) {
-        rec_err = tpb_record_end_batch(nhdl);
-        if (rec_err) {
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                       "tpbcli_run: end_batch failed (%d)\n", rec_err);
-        }
+    rec_err = tpb_record_end_batch(nhdl);
+    if (rec_err != 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                   "tpbcli_run: end_batch failed (%d)\n", rec_err);
+        return rec_err;
     }
 
     return err;
