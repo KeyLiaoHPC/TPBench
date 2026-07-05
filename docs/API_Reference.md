@@ -50,6 +50,9 @@ All TPBench functions return an `tpb_errno_t` error code. Defined in `tpb-types.
 | 12 | `TPBE_ILLEGAL_CALL` | Illegal function call |
 | 13 | `TPBE_KERNEL_NE_FAIL` | Kernel does not exist |
 | 14 | `TPBE_KARG_NE_FAIL` | Kernel argument does not exist |
+| 15 | `TPBE_KERNEL_INCOMPLETE` | Incomplete kernel (missing .so) |
+| 16 | `TPBE_DLOPEN_FAIL` | Failed to load kernel library |
+| 17 | `TPBE_METRIC_MISSING` | Required benchmark metric not found in log |
 
 ---
 
@@ -1057,27 +1060,34 @@ const char *tpb_unit_to_string(TPB_UNIT_T unit);
 
 Functions for error handling and validation. Declared in `tpb-public.h`.
 
-### `TPB_EXIT_ON_ERROR` / `TPB_RETURN_ON_ERROR`
+Log severity tags (`TPB_LOG_TAG_NOTE`, `TPB_LOG_TAG_WARN`, `TPB_LOG_TAG_FAIL`,
+`TPB_LOG_TAG_UNKN`) are used only as `tpblog_printf_f()` log-type arguments.
+They are not error return codes.
 
-Macros that call `tpb_report_error()` and exit or return when `err != 0`.
+### `TPB_RETURN_ON_ERROR`
 
-### `tpb_report_error` / `tpb_exit_on_error`
+Macro that calls `tpb_report_error()` and returns when `err != 0`.
 
-Report an error message (with optional context) and optionally exit with the error code.
+### `tpb_report_error`
 
-### `tpb_get_err_exit_flag`
-
-Get error exit flag from error code.
+Log a formatted error with a tag chosen from the error cause code, then return
+the same error code. `TPBE_KERN_VERIFY_FAIL` and `TPBE_METRIC_MISSING` use
+`[WARN]`; other known `TPBE_*` codes use `[ERRO]`.
 
 ```c
-int tpb_get_err_exit_flag(int err);
+int tpb_report_error(int err, const char *context);
 ```
 
 **Parameters:**
-- `err`: Error code
+- `err`: Error code from `tpb_errno_t`
+- `context`: Short caller context string
 
 **Returns:**
-- Error type flag
+- `err` unchanged
+
+Call sites that must exit on fatal errors should call `tpb_report_error()` and
+then `exit(err)` explicitly (except for warn-level codes such as
+`TPBE_KERN_VERIFY_FAIL`).
 
 ---
 

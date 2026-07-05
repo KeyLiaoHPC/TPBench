@@ -25,7 +25,6 @@
 
 typedef struct _tpb_error {
     tpb_errno_t err_code;
-    unsigned err_type;
     char err_msg[256];
 } tpb_error_type;
 

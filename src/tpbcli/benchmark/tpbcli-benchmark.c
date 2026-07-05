@@ -199,7 +199,7 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
         }
     }
     
-    return all_found ? TPBE_SUCCESS : TPBE_WARN;
+    return all_found ? TPBE_SUCCESS : TPBE_METRIC_MISSING;
 }
 
 /**
@@ -352,7 +352,7 @@ run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal)
     const char *log_path = tpblog_get_filepath();
     if (log_path != NULL) {
         err = parse_log_for_metrics(log_path, batch);
-        if (err != 0 && err != TPBE_WARN) {
+        if (err != 0 && err != TPBE_METRIC_MISSING) {
             return err;
         }
     } else {
@@ -467,7 +467,7 @@ tpbcli_benchmark(int argc, char **argv)
             tpb_bench_yaml_free(&bench);
             return err;
         }
-        if (err != 0 && err != TPBE_WARN) {
+        if (err != 0 && err != TPBE_METRIC_MISSING) {
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                        "Batch %s failed with error %d\n", 
                        bench.batches[i].id, err);

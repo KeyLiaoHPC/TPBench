@@ -302,6 +302,62 @@ test_a8_8_snprintf_macro(void)
     return 0;
 }
 
+static int
+test_a8_9_log_tag_macros(void)
+{
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_WARN), "WARN") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_FAIL), "ERRO") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_UNKN), "ERRO") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_NOTE), "INFO") != 0) {
+        return 1;
+    }
+    return 0;
+}
+
+static void
+fn_report_kern_verify_fail(void)
+{
+    (void)tpb_report_error(TPBE_KERN_VERIFY_FAIL, "test context");
+}
+
+static void
+fn_report_dlopen_fail(void)
+{
+    (void)tpb_report_error(TPBE_DLOPEN_FAIL, "test context");
+}
+
+static int
+test_a8_10_report_error_tags(void)
+{
+    char outbuf[4096];
+
+    if (setup_workspace() != TPBE_SUCCESS) {
+        return 1;
+    }
+    if (capture_stdout_call(fn_report_kern_verify_fail, outbuf,
+                            sizeof(outbuf)) != 0) {
+        return 1;
+    }
+    if (strstr(outbuf, "[WARN]") == NULL) {
+        return 1;
+    }
+    if (capture_stdout_call(fn_report_dlopen_fail, outbuf,
+                            sizeof(outbuf)) != 0) {
+        return 1;
+    }
+    if (strstr(outbuf, "[ERRO]") == NULL) {
+        return 1;
+    }
+    tpblog_cleanup();
+    return 0;
+}
+
 static test_case_t cases[] = {
     { "A8.1", "init_session_header", test_a8_1_init_session_header },
     { "A8.2", "log_file_append", test_a8_2_log_file_append },
@@ -311,6 +367,8 @@ static test_case_t cases[] = {
     { "A8.6", "column_output", test_a8_6_column_output },
     { "A8.7", "degenerate_output", test_a8_7_degenerate_output },
     { "A8.8", "snprintf_macro", test_a8_8_snprintf_macro },
+    { "A8.9", "log_tag_macros", test_a8_9_log_tag_macros },
+    { "A8.10", "report_error_tags", test_a8_10_report_error_tags },
 };
 
 static int

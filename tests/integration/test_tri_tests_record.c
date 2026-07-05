@@ -82,6 +82,33 @@ run_cmd(const char *cmd)
 }
 
 static int
+write_stream_bench_yaml_missing_metric(const char *path)
+{
+    FILE *fp = fopen(path, "w");
+    if (fp == NULL) {
+        return -1;
+    }
+    fprintf(fp,
+            "benchmark:\n"
+            "  name: stream_bench_missing\n"
+            "  batch:\n"
+            "    - id: b1\n"
+            "      kernel: stream\n"
+            "      kargs: [[\"stream_array_size\", \"32\"], [\"ntest\", \"10\"]]\n"
+            "      v:\n"
+            "        - [\"NoSuchMetric\", \"mean\"]\n"
+            "  score:\n"
+            "    - id: s1\n"
+            "      name: Missing\n"
+            "      display: 1\n"
+            "      modifier: raw\n"
+            "      args:\n"
+            "        - \"@batch[id=='b1'].v[0]\"\n");
+    fclose(fp);
+    return 0;
+}
+
+static int
 write_stream_bench_yaml(const char *path)
 {
     FILE *fp = fopen(path, "w");
@@ -337,6 +364,62 @@ test_benchmark_begin_batch_fail(void)
     return (g_fail > 0) ? 1 : 0;
 }
 
+static int
+test_benchmark_metric_missing_soft_fail(void)
+{
+    int err;
+    char cmd[4096];
+    char suite_path[640];
+    char buf_path[640];
+    FILE *fp;
+    char line[512];
+    int saw_metric_missing = 0;
+    int saw_score_na = 0;
+
+    setup_test_dir();
+
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("bench_missing init_workspace", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(suite_path, sizeof(suite_path), "%s/bench_missing.yml", g_test_dir);
+    err = write_stream_bench_yaml_missing_metric(suite_path);
+    CHECK("bench_missing write yaml", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    snprintf(buf_path, sizeof(buf_path), "%s/bench_missing.out", g_test_dir);
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli benchmark "
+             "--suite %s > %s 2>&1",
+             g_bin_dir, g_test_dir, g_bin_dir, suite_path, buf_path);
+    err = run_cmd(cmd);
+    CHECK("benchmark metric missing exit 0", err == 0);
+
+    fp = fopen(buf_path, "r");
+    if (fp != NULL) {
+        while (fgets(line, sizeof(line), fp) != NULL) {
+            if (strstr(line, "Metric 'NoSuchMetric' not found") != NULL) {
+                saw_metric_missing = 1;
+            }
+            if (strstr(line, "s1") != NULL && strstr(line, "N/A") != NULL) {
+                saw_score_na = 1;
+            }
+        }
+        fclose(fp);
+    }
+    CHECK("benchmark metric missing warn message", saw_metric_missing);
+    CHECK("benchmark metric missing score N/A", saw_score_na);
+
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
 typedef struct {
     const char *id;
     const char *name;
@@ -369,6 +452,8 @@ main(int argc, char **argv)
         {"C1.1", "tri_tests_record", test_tri_record},
         {"C1.2", "benchmark_tbatch_record", test_benchmark_tbatch_record},
         {"C1.3", "benchmark_begin_batch_fail", test_benchmark_begin_batch_fail},
+        {"C1.4", "benchmark_metric_missing_soft_fail",
+         test_benchmark_metric_missing_soft_fail},
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int pass = 0, fail = 0;

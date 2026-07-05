@@ -25,11 +25,11 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPBM_NAME_STR_MAX_LEN 256
 #define TPBM_NOTE_STR_MAX_LEN 2048
 
-/* Error tags / legacy severity bits for tpblog tag mapping */
-#define TPBE_NOTE   0x00
-#define TPBE_WARN   0x10
-#define TPBE_FAIL   0x20
-#define TPBE_UNKN   0x30
+/* tpblog line tag types; rendered as [INFO], [WARN], or [ERRO] */
+#define TPB_LOG_TAG_NOTE  0x00U
+#define TPB_LOG_TAG_WARN  0x10U
+#define TPB_LOG_TAG_FAIL  0x20U
+#define TPB_LOG_TAG_UNKN  0x30U
 
 /** @brief tpblog verbosity threshold. Messages below the active level are suppressed. */
 typedef enum {
@@ -47,10 +47,9 @@ typedef enum {
 #define TPBLOG_FLAG_TAG    0x02U
 #define TPBLOG_FLAG_TSTAG  (TPBLOG_FLAG_TS | TPBLOG_FLAG_TAG)
 
-/** @brief tpblog line tag types; rendered as [INFO], [WARN], or [ERRO]. */
-#define TPBLOG_TYPE_INFO  TPBE_NOTE
-#define TPBLOG_TYPE_WARN  TPBE_WARN
-#define TPBLOG_TYPE_ERRO  TPBE_FAIL
+#define TPBLOG_TYPE_INFO  TPB_LOG_TAG_NOTE
+#define TPBLOG_TYPE_WARN  TPB_LOG_TAG_WARN
+#define TPBLOG_TYPE_ERRO  TPB_LOG_TAG_FAIL
 
 /** @brief Environment variable for deterministic column-width tests. */
 #define TPBLOG_TEST_WIDTH_ENV "TPBLOG_TEST_WIDTH"
@@ -145,16 +144,10 @@ enum _tpb_errno {
     TPBE_KERNEL_NE_FAIL,
     TPBE_KARG_NE_FAIL,
     TPBE_KERNEL_INCOMPLETE,
-    TPBE_DLOPEN_FAIL
+    TPBE_DLOPEN_FAIL,
+    TPBE_METRIC_MISSING
 };
 typedef enum _tpb_errno tpb_errno_t;
-
-/**
- * @brief Map TPBE_* code to TPBE_NOTE / TPBE_WARN / TPBE_FAIL print tag.
- * @param err Error code from tpb_errno_t.
- * @return Severity tag suitable for tpblog type bits.
- */
-int tpb_get_err_exit_flag(int err);
 
 /**
  * @brief Human-readable message for a TPBE_* code.
@@ -170,20 +163,6 @@ const char *tpb_get_err_msg(int err);
  * @return err unchanged.
  */
 int tpb_report_error(int err, const char *context);
-
-/**
- * @brief Log a formatted error and exit when severity is TPBE_FAIL.
- * @param err Error code from tpb_errno_t.
- * @param context Short caller context string.
- */
-void tpb_exit_on_error(int err, const char *context);
-
-#define TPB_EXIT_ON_ERROR(err, ctx) \
-    do { \
-        if ((err) != TPBE_SUCCESS) { \
-            tpb_exit_on_error((err), (ctx)); \
-        } \
-    } while (0)
 
 #define TPB_RETURN_ON_ERROR(err, ctx) \
     do { \

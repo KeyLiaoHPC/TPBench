@@ -171,6 +171,8 @@ tpb_add_subcase(A8 A8.5 column_widths        test-tpblog corelib)
 tpb_add_subcase(A8 A8.6 column_output        test-tpblog corelib)
 tpb_add_subcase(A8 A8.7 degenerate_output    test-tpblog corelib)
 tpb_add_subcase(A8 A8.8 snprintf_macro       test-tpblog corelib)
+tpb_add_subcase(A8 A8.9 log_tag_macros        test-tpblog corelib)
+tpb_add_subcase(A8 A8.10 report_error_tags    test-tpblog corelib)
 
 # Aggregate targets
 add_custom_target(test_corelib

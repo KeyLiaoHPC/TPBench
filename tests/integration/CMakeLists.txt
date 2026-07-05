@@ -16,6 +16,7 @@ if(TARGET tpbk_stream)
     tpb_add_subcase(C1 C1.1 tri_tests_record test-tri-record integration)
     tpb_add_subcase(C1 C1.2 benchmark_tbatch_record test-tri-record integration)
     tpb_add_subcase(C1 C1.3 benchmark_begin_batch_fail test-tri-record integration)
+    tpb_add_subcase(C1 C1.4 benchmark_metric_missing_soft_fail test-tri-record integration)
 endif()
 
 # --- Integration: O2/O3 kernel compile history (Pack C3) ---

@@ -35,11 +35,11 @@ tpblog_get_level(void)
 const char *
 _tpblog_tag_from_type(uint32_t log_type)
 {
-    if (log_type == TPBLOG_TYPE_WARN || log_type == TPBE_WARN) {
+    if (log_type == TPBLOG_TYPE_WARN || log_type == TPB_LOG_TAG_WARN) {
         return "WARN";
     }
-    if (log_type == TPBLOG_TYPE_ERRO || log_type == TPBE_FAIL
-        || log_type == TPBE_UNKN) {
+    if (log_type == TPBLOG_TYPE_ERRO || log_type == TPB_LOG_TAG_FAIL
+        || log_type == TPB_LOG_TAG_UNKN) {
         return "ERRO";
     }
     return "INFO";

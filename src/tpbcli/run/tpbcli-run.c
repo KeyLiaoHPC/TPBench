@@ -898,7 +898,13 @@ tpbcli_run(int argc, char **argv)
         }
     } else {
         err = tpb_register_kernels(0, NULL);
-        TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_register_kernels");
+        if (err != TPBE_SUCCESS) {
+            err = tpb_report_error(err,
+                                   "At tpbcli-run.c: tpb_register_kernels");
+            if (err != TPBE_KERN_VERIFY_FAIL) {
+                exit(err);
+            }
+        }
     }
 
     tree = tpbcli_argtree_create(
@@ -1082,7 +1088,12 @@ tpbcli_run(int argc, char **argv)
     }
 
     err = tpb_driver_run_all();
-    TPB_EXIT_ON_ERROR(err, "At tpbcli-run.c: tpb_driver_run_all");
+    if (err != TPBE_SUCCESS) {
+        err = tpb_report_error(err, "At tpbcli-run.c: tpb_driver_run_all");
+        if (err != TPBE_KERN_VERIFY_FAIL) {
+            exit(err);
+        }
+    }
 
     rec_err = tpb_record_end_batch(nhdl);
     if (rec_err != 0) {

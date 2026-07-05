@@ -109,9 +109,10 @@ parent: tpblog_init (append)
 
 ## 5. 错误处理边界
 
-- `tpb_report_error()` / `tpb_exit_on_error()` 负责错误码与 exit 决策。
-- 已删除 `__tpbm_exit_on_error` 合并宏。
-- `TPB_EXIT_ON_ERROR` / `TPB_RETURN_ON_ERROR` 仅调用上述报告函数。
+- `tpb_report_error()` 根据原因码选择 `[INFO]` / `[WARN]` / `[ERRO]` 日志 tag。
+- 日志 tag 使用 `TPB_LOG_TAG_*`（或 `TPBLOG_TYPE_*` alias），与 `TPBE_*` 原因码分离。
+- 需要退出的调用点显式调用 `exit(err)`；`TPBE_KERN_VERIFY_FAIL` 等 warn 级原因码不退出。
+- `TPB_RETURN_ON_ERROR` 仅调用 `tpb_report_error()` 并 return。
 
 ## 6. 使用示例
 
