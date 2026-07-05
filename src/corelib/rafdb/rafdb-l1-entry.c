@@ -35,17 +35,17 @@ _tpb_raf_l1_entry_append(const char *workspace, uint8_t domain,
 
     fd = open(fpath, O_RDWR | O_CREAT, 0644);
     if (fd < 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (flock(fd, LOCK_EX) != 0) {
         (void)close(fd);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fp = fdopen(fd, "r+b");
     if (!fp) {
         (void)close(fd);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fstat(fd, &st) != 0) {
@@ -66,7 +66,7 @@ _tpb_raf_l1_entry_append(const char *workspace, uint8_t domain,
         }
 
         if (fclose(fp) != 0) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
         }
         return TPBE_SUCCESS;
     }
@@ -102,13 +102,13 @@ _tpb_raf_l1_entry_append(const char *workspace, uint8_t domain,
     }
 
     if (fclose(fp) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
 }
 
 int
@@ -137,30 +137,30 @@ _tpb_raf_l1_entry_list(const char *workspace, uint8_t domain,
     if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN)) {
         *entries_out = NULL;
         *count_out = 0;
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     data_size = fsize - 2 * TPB_RAF_MAGIC_LEN;
     if (data_size < 0 || (data_size % (long)entry_size) != 0) {
         *entries_out = NULL;
         *count_out = 0;
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     n = (int)(data_size / (long)entry_size);
 
     fp = fopen(fpath, "rb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic_check, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (!tpb_raf_validate_magic(magic_check, TPB_RAF_FTYPE_ENTRY, domain,
                                 TPB_RAF_POS_START)) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (n == 0) {
@@ -173,25 +173,25 @@ _tpb_raf_l1_entry_list(const char *workspace, uint8_t domain,
     buf = malloc((size_t)n * entry_size);
     if (!buf) {
         fclose(fp);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_MALLOC_FAIL, NULL);
     }
 
     if (fread(buf, entry_size, (size_t)n, fp) != (size_t)n) {
         free(buf);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic_check, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
         free(buf);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (!tpb_raf_validate_magic(magic_check, TPB_RAF_FTYPE_ENTRY, domain,
                                 TPB_RAF_POS_END)) {
         free(buf);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fclose(fp);

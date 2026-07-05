@@ -5,6 +5,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include "../../include/tpb-public.h"
 #include "../tpb-types.h"
 #include "rafdb-l1-types.h"
 
@@ -66,40 +67,40 @@ tpb_raf_detect_file(const char *filepath,
     uint8_t hi, lo;
 
     if (!filepath || !ftype_out || !domain_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     fp = fopen(filepath, "rb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     fclose(fp);
 
     if (!_sf_match_magic_prefix(magic)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (magic[6] != TPB_RAF_MAGIC_B6 ||
         magic[7] != TPB_RAF_MAGIC_B7) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (magic[5] != TPB_RAF_POS_START) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     hi = (uint8_t)(magic[4] & 0xF0u);
     lo = (uint8_t)(magic[4] & 0x0Fu);
 
     if (hi != TPB_RAF_FTYPE_ENTRY && hi != TPB_RAF_FTYPE_RECORD) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     if (lo != TPB_RAF_DOM_TBATCH &&
         lo != TPB_RAF_DOM_KERNEL &&
         lo != TPB_RAF_DOM_TASK) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     *ftype_out = hi;

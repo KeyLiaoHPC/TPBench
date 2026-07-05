@@ -151,9 +151,7 @@ _sf_bind_wrappers_to_handle(int hdl_idx)
     }
 
     err = tpb_driver_set_hdl_wrappers_idx(hdl_idx, links, nlinks);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
 
     g_segment_nwrappers = 0;
     g_segment_has_open_wrapper = 0;
@@ -173,7 +171,7 @@ _sf_parse_wrapper(tpbcli_argnode_t *node, const char *value)
     if (value == NULL || value[0] == '\0') {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "--wrapper requires an application name.\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     if (!g_seen_first_kernel) {
@@ -189,7 +187,7 @@ _sf_parse_wrapper(tpbcli_argnode_t *node, const char *value)
     if (*nlinks >= MAX_WRAPPER_LINKS) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Too many --wrapper links (max %d)\n", MAX_WRAPPER_LINKS);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     snprintf(chain[*nlinks].app, TPBM_NAME_STR_MAX_LEN, "%s", value);
@@ -225,12 +223,12 @@ _sf_parse_wrapper_args(tpbcli_argnode_t *node, const char *value)
     if (*nlinks <= 0 || !(*has_open)) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "--wrapper-args requires a preceding --wrapper.\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     content = _sf_unquote_argstr(value, &allocated);
     if (content == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
 
     last = &chain[*nlinks - 1];
@@ -262,7 +260,7 @@ parse_outargs_string(const char *outargs_str)
 {
     char *str_copy = strdup(outargs_str);
     if (str_copy == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
 
     /* Variables to accumulate settings - use defaults if not specified */
@@ -302,7 +300,7 @@ parse_outargs_string(const char *outargs_str)
             } else {
                 tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Unknown outargs key: %s\n", key);
                 free(str_copy);
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
             }
         }
 
@@ -322,7 +320,7 @@ apply_dim_value(tpb_dim_values_t *dim_val, int index)
     char value_str[256];
 
     if (dim_val == NULL || index < 0 || index >= dim_val->n) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     if (dim_val->is_string && dim_val->str_values != NULL) {
@@ -353,9 +351,7 @@ expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     }
 
     err = tpb_dim_generate_values(dim_cfg, &vals);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Expanding %d values for '%s' on kernel '%s'\n",
@@ -377,7 +373,7 @@ expand_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
         }
         if (err != 0) {
             tpb_dim_values_free(vals);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
         }
     }
 
@@ -410,7 +406,7 @@ _sf_collect_run_kernel_names(int argc, char **argv,
     int j;
 
     if (n_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
     *n_out = 0;
 
@@ -436,7 +432,7 @@ _sf_collect_run_kernel_names(int argc, char **argv,
         }
 
         if (n >= MAX_DIM_CONFIGS) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
         }
 
         snprintf(names[n], TPBM_NAME_STR_MAX_LEN, "%s", argv[i + 1]);
@@ -470,7 +466,7 @@ _sf_expand_cartesian_kargs(void)
             for (d = d - 1; d >= 0; d--) {
                 tpb_dim_values_free(vals[d]);
             }
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
         }
         total *= vals[d]->n;
     }
@@ -510,7 +506,8 @@ _sf_expand_cartesian_kargs(void)
         tpb_dim_values_free(vals[d]);
     }
 
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
@@ -522,7 +519,7 @@ parse_kenvs_tokstr(const char *tokstr)
     int err;
 
     if (tokstr == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
 
     snprintf(buf, sizeof(buf), "%s", tokstr);
@@ -539,7 +536,7 @@ parse_kenvs_tokstr(const char *tokstr)
         if (eq == NULL) {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid env arg \"%s\". Expected KEY=VALUE.\n", token);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
         }
 
         *eq = '\0';
@@ -561,14 +558,12 @@ parse_kenvs_tokstr(const char *tokstr)
         if (*key == '\0') {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid env arg: empty key detected.\n");
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
         }
 
         /* Set environment variable for current handle */
         err = tpb_driver_set_hdl_env(key, value);
-        if (err != 0) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
 
         token = strtok_r(NULL, ",", &saveptr);
     }
@@ -582,7 +577,7 @@ apply_env_dim_value(tpb_dim_values_t *dim_val, int index)
     char value_str[TPBM_CLI_STR_MAX_LEN];
 
     if (dim_val == NULL || index < 0 || index >= dim_val->n) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     if (dim_val->is_string && dim_val->str_values != NULL) {
@@ -614,7 +609,7 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
     if (err != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Failed to generate env dimension values\n");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
@@ -637,7 +632,7 @@ expand_env_dim_handles(tpb_dim_config_t *dim_cfg, const char *kernel_name)
         }
         if (err != 0) {
             tpb_dim_values_free(vals);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
         }
     }
 
@@ -719,9 +714,7 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
     nhdl = tpb_get_nhdl();
     if (nhdl > 0) {
         err = _sf_bind_wrappers_to_handle(nhdl - 1);
-        if (err != 0) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     _sf_flush_pending_dims();
@@ -731,7 +724,7 @@ _sf_parse_kernel(tpbcli_argnode_t *node, const char *value)
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                         "Kernel %s not found. Use `tpbcli kernel list` to show kernel lists.\n",
                         value);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     snprintf(g_pending_kernel_name, TPBM_NAME_STR_MAX_LEN, "%s", value);
@@ -760,14 +753,14 @@ _sf_parse_kargs_dim(tpbcli_argnode_t *node, const char *value)
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Too many --kargs-dim options (max %d)\n",
                    MAX_DIM_CONFIGS);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     err = tpb_argp_parse_dim(value, &cfg);
     if (err != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Failed to parse --kargs-dim: %s\n", value);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     g_pending_dim_cfgs[g_n_pending_dims++] = cfg;
@@ -793,12 +786,13 @@ _sf_parse_kenvs_dim(tpbcli_argnode_t *node, const char *value)
     if (err != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Failed to parse --kenvs-dim: %s\n", value);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     err = expand_env_dim_handles(cfg, g_pending_kernel_name);
     tpb_dim_config_free(cfg);
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
@@ -813,7 +807,8 @@ _sf_parse_timer(tpbcli_argnode_t *node, const char *value)
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid timer: %s\n", value);
     }
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
@@ -860,18 +855,14 @@ tpbcli_run(int argc, char **argv)
     g_pending_override_global = 0;
 
     err = tpb_argp_set_timer("clock_gettime");
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "Initializing TPBench kernels.\n");
 
     err = _sf_collect_run_kernel_names(argc, argv, run_kernel_names,
                                        &n_run_kernels);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
 
     for (i = 0; i < n_run_kernels; i++) {
         run_kernel_ptrs[i] = run_kernel_names[i];
@@ -894,15 +885,17 @@ tpbcli_run(int argc, char **argv)
                     free(probe);
                 }
             }
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "tpb_register_kernels");
         }
     } else {
         err = tpb_register_kernels(0, NULL);
         if (err != TPBE_SUCCESS) {
-            err = tpb_report_error(err,
-                                   "At tpbcli-run.c: tpb_register_kernels");
-            if (err != TPBE_KERN_VERIFY_FAIL) {
-                exit(err);
+            if (TPBE_CAUSE(err) == TPBE_KERN_VERIFY_FAIL) {
+                (void)tpb_report_error_at(__FILE__, __func__, TPB_MOD_CLI_RUN,
+                                          TPBE_KERN_VERIFY_FAIL, 0,
+                                          "tpb_register_kernels");
+            } else {
+                TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "tpb_register_kernels");
             }
         }
     }
@@ -911,7 +904,7 @@ tpbcli_run(int argc, char **argv)
         (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",
         "Run benchmark kernels");
     if (tree == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
     root = &tree->root;
 
@@ -925,7 +918,7 @@ tpbcli_run(int argc, char **argv)
     });
     if (run_cmd == NULL) {
         tpbcli_argtree_destroy(tree);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
 
     kernel = tpbcli_add_arg(run_cmd, &(tpbcli_argconf_t){
@@ -939,7 +932,7 @@ tpbcli_run(int argc, char **argv)
     });
     if (kernel == NULL) {
         tpbcli_argtree_destroy(tree);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
 
     tpbcli_add_arg(kernel, &(tpbcli_argconf_t){
@@ -996,7 +989,7 @@ tpbcli_run(int argc, char **argv)
     });
     if (wrapper == NULL) {
         tpbcli_argtree_destroy(tree);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
     tpbcli_add_arg(wrapper, &(tpbcli_argconf_t){
         .name = "--wrapper-args",
@@ -1048,7 +1041,7 @@ tpbcli_run(int argc, char **argv)
             g_pending_dim_cfgs[i] = NULL;
         }
         g_n_pending_dims = 0;
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "tpbcli_parse_args");
     }
 
     _sf_flush_pending_dims();
@@ -1056,9 +1049,7 @@ tpbcli_run(int argc, char **argv)
     nhdl = tpb_get_nhdl();
     if (nhdl > 0) {
         err = _sf_bind_wrappers_to_handle(nhdl - 1);
-        if (err != 0) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
     }
 
     if (nhdl > 0) {
@@ -1075,6 +1066,9 @@ tpbcli_run(int argc, char **argv)
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "=== DRY RUN COMPLETE ===\n");
         g_dry_run = 0;
+        if (err != TPBE_SUCCESS) {
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "tpb_driver_run_all");
+        }
         return err;
     }
 
@@ -1084,14 +1078,17 @@ tpbcli_run(int argc, char **argv)
     if (rec_err != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "tpbcli_run: begin_batch failed (%d)\n", rec_err);
-        return rec_err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, rec_err, "tpb_record_begin_batch");
     }
 
     err = tpb_driver_run_all();
     if (err != TPBE_SUCCESS) {
-        err = tpb_report_error(err, "At tpbcli-run.c: tpb_driver_run_all");
-        if (err != TPBE_KERN_VERIFY_FAIL) {
-            exit(err);
+        if (TPBE_CAUSE(err) == TPBE_KERN_VERIFY_FAIL) {
+            (void)tpb_report_error_at(__FILE__, __func__, TPB_MOD_CLI_RUN,
+                                      TPBE_KERN_VERIFY_FAIL, 0,
+                                      "tpb_driver_run_all");
+        } else {
+            TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "tpb_driver_run_all");
         }
     }
 
@@ -1099,7 +1096,7 @@ tpbcli_run(int argc, char **argv)
     if (rec_err != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "tpbcli_run: end_batch failed (%d)\n", rec_err);
-        return rec_err;
+        TPB_PROPAGATE(TPB_MOD_CLI_RUN, rec_err, "tpb_record_end_batch");
     }
 
     return err;

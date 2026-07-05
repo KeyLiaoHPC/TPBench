@@ -216,7 +216,7 @@ tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header)
 
     fp = fopen(path, "w");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL, NULL);
     }
     if (header != NULL && strlen(header) > 0) {
         fprintf(fp, "%s\n", header);
@@ -240,7 +240,7 @@ int
 tpb_cliout_args(tpb_k_rthdl_t *handle)
 {
     if (handle == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_IO, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Initialize format controller on first call */
@@ -292,7 +292,7 @@ int
 tpb_cliout_results(tpb_k_rthdl_t *handle)
 {
     if (handle == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_IO, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Initialize format controller on first call */
@@ -311,7 +311,7 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
     /* Allocate quantile output array */
     double *qout = (double *)malloc(nq * sizeof(double));
     if (qout == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_IO, TPBE_MALLOC_FAIL, NULL);
     }
 
     /* Pass 1: Build UNAME groups for cast-enabled outputs */

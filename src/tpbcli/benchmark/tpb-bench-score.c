@@ -242,7 +242,7 @@ int
 tpb_bench_score_calculate_all(tpb_benchmark_t *bench)
 {
     if (bench == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_NULLPTR_ARG, NULL);
     }
     
     /* Reset calculated flags */

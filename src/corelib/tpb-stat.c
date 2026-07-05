@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "tpb-stat.h"
+#include "tpb-public.h"
 #include "tpb-io.h"
 
 /* Local Function Prototypes */
@@ -86,17 +87,17 @@ tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
                   double *qarr, size_t nq, double *qout)
 {
     if (arr == NULL || qarr == NULL || qout == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (!_sf_check_dtype_support(dtype)) {
-        return TPBE_DTYPE_NOT_SUPPORTED;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_DTYPE_NOT_SUPPORTED, NULL);
     }
 
     /* Allocate temporary double array for sorting */
     double *tmp = (double *)malloc(narr * sizeof(double));
     if (tmp == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     /* Copy and cast elements to double */
@@ -126,11 +127,11 @@ int
 tpb_stat_mean(void *arr, size_t narr, TPB_DTYPE dtype, double *mean_out)
 {
     if (arr == NULL || mean_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (!_sf_check_dtype_support(dtype)) {
-        return TPBE_DTYPE_NOT_SUPPORTED;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_DTYPE_NOT_SUPPORTED, NULL);
     }
 
     double sum = 0.0;
@@ -146,11 +147,11 @@ int
 tpb_stat_max(void *arr, size_t narr, TPB_DTYPE dtype, double *max_out)
 {
     if (arr == NULL || max_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (!_sf_check_dtype_support(dtype)) {
-        return TPBE_DTYPE_NOT_SUPPORTED;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_DTYPE_NOT_SUPPORTED, NULL);
     }
 
     double max_val = _sf_get_element(arr, 0, dtype);
@@ -169,11 +170,11 @@ int
 tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out)
 {
     if (arr == NULL || min_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (!_sf_check_dtype_support(dtype)) {
-        return TPBE_DTYPE_NOT_SUPPORTED;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_DTYPE_NOT_SUPPORTED, NULL);
     }
 
     double min_val = _sf_get_element(arr, 0, dtype);
@@ -223,7 +224,7 @@ calc_rate_quant(int64_t *raw, int nitem, double volume, double s, __ovl_t *res)
 {
     double *rate = (double *)malloc(nitem * sizeof(double));
     if (rate == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     for (int i = 0; i < nitem; i++) {
@@ -240,7 +241,7 @@ calc_period_quant(uint64_t *raw, int nitem, double volume, double s, __ovl_t *re
 {
     double *period = (double *)malloc(nitem * sizeof(double));
     if (period == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     for (int i = 0; i < nitem; i++) {

@@ -31,16 +31,16 @@ _sf_split_meta_key(const char *full_key, char *section_out, size_t section_len,
     const char *dot;
 
     if (full_key == NULL || section_out == NULL || subkey_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     dot = strchr(full_key, '.');
     if (dot == NULL || dot == full_key) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     if ((size_t)(dot - full_key) >= section_len) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_KERN_ARG_FAIL, NULL);
     }
     memcpy(section_out, full_key, (size_t)(dot - full_key));
     section_out[dot - full_key] = '\0';
@@ -67,11 +67,11 @@ tpb_raf_entry_patch_kernel_active(const char *workspace,
     kernel_entry_t *entries;
 
     if (workspace == NULL || kernel_id == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (tpb_raf_entry_list_kernel(workspace, &entries, &n) != TPBE_SUCCESS) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     off = -1;
@@ -83,7 +83,7 @@ tpb_raf_entry_patch_kernel_active(const char *workspace,
     }
     free(entries);
     if (off < 0) {
-        return TPBE_LIST_NOT_FOUND;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
     }
 
     snprintf(fpath, sizeof(fpath), "%s/%s/%s",
@@ -91,27 +91,27 @@ tpb_raf_entry_patch_kernel_active(const char *workspace,
 
     fd = open(fpath, O_RDWR);
     if (fd < 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (flock(fd, LOCK_EX) != 0) {
         close(fd);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fp = fdopen(fd, "r+b");
     if (fp == NULL) {
         close(fd);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fstat(fd, &st) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     fsize = (long)st.st_size;
     if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN)) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     {
@@ -121,11 +121,11 @@ tpb_raf_entry_patch_kernel_active(const char *workspace,
 
         if (fseek(fp, entry_off, SEEK_SET) != 0) {
             fclose(fp);
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         if (fwrite(&active, sizeof(active), 1, fp) != 1) {
             fclose(fp);
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
     }
 
@@ -148,7 +148,7 @@ tpb_raf_record_patch_kernel_active(const char *workspace,
     const long active_off = 8 + 8 + 8 + 60 + 256 + 64 + 2048 + 4 + 4 + 4 + 4;
 
     if (workspace == NULL || kernel_id == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_raf_id_to_hex(kernel_id, hex);
@@ -157,17 +157,17 @@ tpb_raf_record_patch_kernel_active(const char *workspace,
 
     fp = fopen(fpath, "r+b");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     off = active_off;
     if (fseek(fp, off, SEEK_SET) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fwrite(&active, sizeof(active), 1, fp) != 1) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fclose(fp);
@@ -189,13 +189,11 @@ tpb_raf_kernel_deactivate_same_name(const char *workspace,
     int err;
 
     if (workspace == NULL || kernel_name == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     err = tpb_raf_entry_list_kernel(workspace, &entries, &n);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_L3_KERNEL, err, NULL);
 
     for (i = 0; i < n; i++) {
         if (strcmp(entries[i].kernel_name, kernel_name) != 0) {
@@ -240,27 +238,23 @@ tpb_raf_kernel_update_meta_key(const char *workspace,
 
     if (workspace == NULL || kernel_id == NULL ||
         full_key == NULL || value == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     err = _sf_split_meta_key(full_key, section, sizeof(section),
                              subkey, sizeof(subkey));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_L3_KERNEL, err, NULL);
 
     memset(&attr, 0, sizeof(attr));
     err = tpb_raf_record_read_kernel(workspace, kernel_id, &attr,
                                      &data, &datasize);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_L3_KERNEL, err, NULL);
 
     hdr_idx = tpb_raf_kernel_find_header(&attr, section);
     if (hdr_idx < 0) {
         tpb_raf_free_headers(attr.headers, attr.nheader);
         free(data);
-        return TPBE_LIST_NOT_FOUND;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
     }
 
     {
@@ -273,13 +267,13 @@ tpb_raf_kernel_update_meta_key(const char *workspace,
         if (data == NULL || off + attr.headers[hdr_idx].data_size > datasize) {
             tpb_raf_free_headers(attr.headers, attr.nheader);
             free(data);
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         payload = strdup((const char *)((const uint8_t *)data + off));
         if (payload == NULL) {
             tpb_raf_free_headers(attr.headers, attr.nheader);
             free(data);
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_MALLOC_FAIL, NULL);
         }
         payload_cap = strlen(payload) + 1;
     }
@@ -289,7 +283,7 @@ tpb_raf_kernel_update_meta_key(const char *workspace,
         free(payload);
         tpb_raf_free_headers(attr.headers, attr.nheader);
         free(data);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_RAF_L3_KERNEL, err, NULL);
     }
 
     attr.headers[hdr_idx].dimsizes[0] = strlen(payload) + 1;
@@ -305,7 +299,7 @@ tpb_raf_kernel_update_meta_key(const char *workspace,
         free(payload);
         tpb_raf_free_headers(attr.headers, attr.nheader);
         free(data);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_MALLOC_FAIL, NULL);
     }
 
     ptr = (uint8_t *)new_data;
@@ -333,5 +327,6 @@ tpb_raf_kernel_update_meta_key(const char *workspace,
     err = tpb_raf_record_write_kernel(workspace, &attr, new_data, new_datasize);
     tpb_raf_free_headers(attr.headers, attr.nheader);
     free(new_data);
-    return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_L3_KERNEL, err, NULL);
+    return TPBE_SUCCESS;
 }

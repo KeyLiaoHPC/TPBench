@@ -90,13 +90,13 @@ _sf_get_current_timestamps(tpb_dtbits_t *utc_bits, uint64_t *btime_ns)
     int err;
 
     err = tpb_ts_get_datetime(TPBM_TS_UTC, &dt);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     err = tpb_ts_datetime_to_bits(&dt, 0, utc_bits);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     err = tpb_ts_get_btime(&bt);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     *btime_ns = bt.sec * 1000000000ULL + bt.nsec;
     return 0;
@@ -150,7 +150,7 @@ _sf_scan_batch(const char *workspace,
     int j;
 
     if (!workspace || !tbatch_id || !ntask_out || !nkernel_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     *ntask_out = 0;
@@ -158,9 +158,7 @@ _sf_scan_batch(const char *workspace,
     task_entries = NULL;
     task_count = 0;
     err = tpb_raf_entry_list_task(workspace, &task_entries, &task_count);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     matched = 0;
     nkernel = 0;
@@ -176,10 +174,7 @@ _sf_scan_batch(const char *workspace,
         }
         err = tpb_raf_record_append_tbatch(workspace, tbatch_id,
                                            task_entries[i].task_record_id);
-        if (err != 0) {
-            free(task_entries);
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
         matched++;
         for (j = 0; j < i; j++) {
             if (task_entries[j].utc_bits < batch_utc_bits) {
@@ -236,13 +231,12 @@ tpb_record_begin_batch(uint32_t batch_type)
 
     err = tpb_raf_resolve_workspace(s_workspace, sizeof(s_workspace));
     if (err) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "Auto-record: failed to resolve workspace (%d)\n", err);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_RAF_MISC, err,
+                      "Auto-record: failed to resolve workspace");
     }
 
     err = _sf_get_current_timestamps(&s_batch_utc_bits, &s_batch_btime_ns);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     _sf_get_host_and_user(s_batch_hostname, sizeof(s_batch_hostname),
                       s_batch_username, sizeof(s_batch_username));
@@ -252,7 +246,7 @@ tpb_record_begin_batch(uint32_t batch_type)
     err = tpb_raf_gen_tbatch_id(s_batch_utc_bits, s_batch_btime_ns,
                                    s_batch_hostname, s_batch_username,
                                    s_batch_pid, s_tbatch_id);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     tpb_raf_id_to_hex(s_tbatch_id, s_tbatch_id_hex);
 
@@ -291,11 +285,8 @@ tpb_record_begin_batch(uint32_t batch_type)
         skel.headers = h2;
         err = tpb_raf_record_write_tbatch(s_workspace, &skel, NULL, 0);
         if (err) {
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                       "Auto-record: failed to write skeleton tbatch record "
-                       "(%d)\n",
-                       err);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_RAF_MISC, err,
+                          "Auto-record: failed to write skeleton tbatch record");
         }
     }
 
@@ -333,7 +324,7 @@ tpb_record_end_batch(int ntask)
     if (!s_batch_active) return 0;
 
     err = _sf_get_current_timestamps(&end_utc, &end_btime_ns);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
     (void)end_utc;
 
     duration = 0;
@@ -343,21 +334,11 @@ tpb_record_end_batch(int ntask)
 
     err = _sf_scan_batch(s_workspace, s_tbatch_id, s_batch_utc_bits,
                          &matched, &nkernel);
-    if (err != 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "Auto-record: tbatch scan failed (%d)\n", err);
-        s_batch_active = 0;
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     err = tpb_raf_record_patch_tbatch_counters(s_workspace, s_tbatch_id,
             duration, (uint32_t)nkernel, (uint32_t)matched);
-    if (err != 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "Auto-record: failed to patch tbatch record (%d)\n", err);
-        s_batch_active = 0;
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     /* Write tbatch entry */
     {
@@ -405,7 +386,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     uint32_t pid;
     uint32_t tid;
 
-    if (!hdl) return TPBE_NULLPTR_ARG;
+    if (!hdl) TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
 
     /* Read TBatchID from env (or zero) */
     const char *env_bid = getenv("TPB_TBATCH_ID");
@@ -440,10 +421,10 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     /* Resolve workspace */
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     err = _sf_get_current_timestamps(&utc_bits, &btime_ns);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     _sf_get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
     pid = (uint32_t)getpid();
@@ -452,7 +433,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     err = tpb_raf_gen_task_id(utc_bits, btime_ns, hostname, username,
                                 tbatch_id, kernel_id, handle_index,
                                 pid, tid, task_id);
-    if (err) return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     /* Build task_attr_t */
     uint32_t ninput = (uint32_t)hdl->argpack.n;
@@ -491,7 +472,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     if (nheader > 0) {
         headers = (tpb_meta_header_t *)calloc(nheader, sizeof(tpb_meta_header_t));
-        if (!headers) return TPBE_MALLOC_FAIL;
+        if (!headers) TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_MALLOC_FAIL, NULL);
 
         /* Input headers */
         for (uint32_t i = 0; i < ninput; i++) {
@@ -549,7 +530,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
         /* Serialize data: inputs then outputs */
         rec_data = calloc(1, (size_t)(rec_datasize > 0 ? rec_datasize : 1));
-        if (!rec_data) { free(headers); return TPBE_MALLOC_FAIL; }
+        if (!rec_data) { free(headers); TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_MALLOC_FAIL, NULL); }
 
         uint8_t *ptr = (uint8_t *)rec_data;
 
@@ -587,11 +568,10 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     /* Write task record (.tpbr) */
     err = tpb_raf_record_write_task(workspace, &attr, rec_data, rec_datasize);
     if (err) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "Auto-record: failed to write task record (%d)\n", err);
         free(headers);
         free(rec_data);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_RAF_MISC, err,
+                      "Auto-record: failed to write task record");
     }
 
     if (task_id_out != NULL) {
@@ -611,13 +591,15 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
     err = tpb_raf_entry_append_task(workspace, &entry);
     if (err) {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                   "Auto-record: failed to append task entry (%d)\n", err);
+        free(headers);
+        free(rec_data);
+        TPB_PROPAGATE(TPB_MOD_RAF_MISC, err,
+                      "Auto-record: failed to append task entry");
     }
 
     free(headers);
     free(rec_data);
-    return err;
+    return TPBE_SUCCESS;
 }
 
 /* Public wrapper for kernel callers */
@@ -639,7 +621,8 @@ tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "Task recorded. Task ID = %s\n", task_hex);
     }
-    return err;
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 /* meta_magic(8) + metasize(8) + datasize(8) + task_record_id(20) */
@@ -667,64 +650,60 @@ tpb_k_task_set_derive_to(const unsigned char task_id[20],
     long offset;
 
     if (task_id == NULL || derive_to_id == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     tpb_raf_id_to_hex(task_id, hex);
     if (snprintf(fpath, sizeof(fpath), "%s/%s/%s.tpbr",
             workspace, TPB_RAF_TASK_DIR, hex) >= (int)sizeof(fpath)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fp = fopen(fpath, "r+b");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp) != TPB_RAF_MAGIC_LEN) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (!tpb_raf_validate_magic(magic, TPB_RAF_FTYPE_RECORD,
             TPB_RAF_DOM_TASK, TPB_RAF_POS_START)) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     /* After magic: metasize(8) + datasize(8) -> task_record_id at +24 */
     if (fseek(fp, 24L, SEEK_SET) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fread(idchk, 1, 20, fp) != 20) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (memcmp(idchk, task_id, 20) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fseek(fp, TPB_TASK_TPBR_DERIVE_TO_OFF, SEEK_SET) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fclose(fp) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     entries = NULL;
     count = 0;
     err = tpb_raf_entry_list_task(workspace, &entries, &count);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     row = -1;
     for (j = 0; j < count; j++) {
@@ -736,27 +715,27 @@ tpb_k_task_set_derive_to(const unsigned char task_id[20],
     free(entries);
 
     if (row < 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (snprintf(fpath, sizeof(fpath), "%s/%s/%s",
             workspace, TPB_RAF_TASK_DIR, TPB_RAF_TASK_ENTRY)
             >= (int)sizeof(fpath)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     fp = fopen(fpath, "r+b");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     fd = fileno(fp);
     if (fd < 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (flock(fd, LOCK_EX) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     offset = (long)TPB_RAF_MAGIC_LEN + (long)row * TPB_TASK_TPBE_ENTRY_STRIDE
@@ -764,21 +743,21 @@ tpb_k_task_set_derive_to(const unsigned char task_id[20],
     if (fseek(fp, offset, SEEK_SET) != 0) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fwrite(derive_to_id, 1, 20, fp) != 20) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (fflush(fp) != 0) {
         (void)flock(fd, LOCK_UN);
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     (void)flock(fd, LOCK_UN);
     if (fclose(fp) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     return TPBE_SUCCESS;
@@ -800,20 +779,16 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
     void *mp = MAP_FAILED;
 
     if (!first_task_id || !capsule_id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     memset(&src, 0, sizeof(src));
     err = tpb_raf_record_read_task(workspace, first_task_id, &src,
                                    NULL, NULL);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     _sf_get_host_and_user(hostname, sizeof(hostname), username, sizeof(username));
 
@@ -822,9 +797,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
                                        src.handle_index, src.pid, src.tid,
                                        capsule_id_out);
     tpb_raf_free_headers(src.headers, src.nheader);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     memset(&chdr, 0, sizeof(chdr));
     chdr.block_size = TPB_RAF_HDR_FIXED_SIZE;
@@ -853,9 +826,7 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
 
     err = tpb_raf_record_create_task_capsule(workspace, &cap,
                                              first_task_id);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     memset(&entry, 0, sizeof(entry));
     memcpy(entry.task_record_id, capsule_id_out, 20);
@@ -868,31 +839,29 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
     entry.handle_index = src.handle_index;
 
     err = tpb_raf_entry_append_task(workspace, &entry);
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     if (_sf_capsule_shm_build_name(src.kernel_id, src.handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_CLI_FAIL, NULL);
     }
     (void)shm_unlink(shm_name);
 
     sfd = shm_open(shm_name, O_CREAT | O_RDWR, 0600);
     if (sfd < 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (ftruncate(sfd, TPB_CAPSULE_SHM_SIZE) != 0) {
         close(sfd);
         (void)shm_unlink(shm_name);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     mp = mmap(NULL, TPB_CAPSULE_SHM_SIZE, PROT_READ | PROT_WRITE,
               MAP_SHARED, sfd, 0);
     if (mp == MAP_FAILED) {
         close(sfd);
         (void)shm_unlink(shm_name);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     memset(mp, 0, TPB_CAPSULE_SHM_SIZE);
@@ -917,12 +886,12 @@ tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
     volatile const unsigned char *p;
 
     if (!kernel_id || !capsule_id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (_sf_capsule_shm_build_name(kernel_id, handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     for (;;) {
@@ -931,7 +900,7 @@ tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
             break;
         }
         if (errno != ENOENT) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
         }
         usleep(1000);
     }
@@ -939,7 +908,7 @@ tpb_k_sync_capsule_task(const unsigned char kernel_id[20],
     mp = mmap(NULL, TPB_CAPSULE_SHM_SIZE, PROT_READ, MAP_SHARED, sfd, 0);
     if (mp == MAP_FAILED) {
         close(sfd);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
 
     p = (volatile const unsigned char *)mp;
@@ -961,13 +930,11 @@ tpb_k_append_capsule_task(const unsigned char capsule_id[20],
     int err;
 
     if (!capsule_id || !task_id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
     return tpb_raf_record_append_task_capsule(workspace, capsule_id,
                                               task_id);
@@ -980,14 +947,14 @@ tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
     char shm_name[96];
 
     if (!kernel_id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
     }
     if (_sf_capsule_shm_build_name(kernel_id, handle_index,
                                shm_name, sizeof(shm_name)) < 0) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_CLI_FAIL, NULL);
     }
     if (shm_unlink(shm_name) != 0 && errno != ENOENT) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }

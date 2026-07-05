@@ -9,6 +9,7 @@
 #include <unistd.h>
 
 #include "tpb-types.h"
+#include "tpb-public.h"
 #include "tpblog/tpb-log.h"
 #include "rafdb/tpb-raf-types.h"
 #include "tpb_corelib_state.h"
@@ -64,12 +65,12 @@ _sf_resolve_workspace_root(const char *override, char *out, size_t outlen)
     const char *home;
 
     if (out == NULL || outlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (override != NULL && override[0] != '\0') {
         if (strlen(override) >= outlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_MISC, TPBE_FILE_IO_FAIL, NULL);
         }
         snprintf(out, outlen, "%s", override);
         return TPBE_SUCCESS;
@@ -78,7 +79,7 @@ _sf_resolve_workspace_root(const char *override, char *out, size_t outlen)
     env_ws = getenv("TPB_WORKSPACE");
     if (env_ws != NULL && env_ws[0] != '\0') {
         if (strlen(env_ws) >= outlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_MISC, TPBE_FILE_IO_FAIL, NULL);
         }
         snprintf(out, outlen, "%s", env_ws);
         return TPBE_SUCCESS;
@@ -86,10 +87,10 @@ _sf_resolve_workspace_root(const char *override, char *out, size_t outlen)
 
     home = getenv("HOME");
     if (home == NULL || home[0] == '\0') {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     if (snprintf(out, outlen, "%s/%s", home, TPB_RAF_DEFAULT_DIR) >= (int)outlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -108,7 +109,7 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
     int err;
 
     if (_s_corelib_initialized) {
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     if (caller_after == TPB_CORELIB_CTX_CALLER_TPBCLI) {
@@ -116,9 +117,7 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
     }
 
     err = _sf_resolve_workspace_root(tpb_workspace_path, resolved, sizeof(resolved));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
 
     if (!silent) {
         const char *who;
@@ -140,13 +139,13 @@ _tpb_init_corelib_ex(const char *tpb_workspace_path, int caller_after,
     err = tpb_raf_init_workspace(resolved);
     if (err != TPBE_SUCCESS) {
         _tpb_workspace_path_set("");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
     }
 
     err = tpblog_init();
     if (err != TPBE_SUCCESS) {
         _tpb_workspace_path_set("");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
     }
 
     _tpb_caller_set(caller_after);

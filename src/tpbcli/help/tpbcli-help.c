@@ -37,8 +37,8 @@ tpbcli_help(int argc, char **argv)
     int err;
 
     err = parse_help(argc, argv);
-    if (err != 0 && err != TPBE_EXIT_ON_HELP) {
-        return err;
+    if (err != 0 && TPBE_CAUSE(err) != TPBE_EXIT_ON_HELP) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
     }
 
     tpbcli_print_help_total();

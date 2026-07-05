@@ -126,7 +126,7 @@ typedef uint32_t TPB_K_CTRL;
 #define TPB_KTYPE_FLI       TPB_KTYPE_PLI
 #define TPB_KTYPE_ALI       TPB_KTYPE_PLI
 
-/* Error codes */
+/* Error codes (cause field, low 8 bits of encoded return value) */
 enum _tpb_errno {
     TPBE_SUCCESS = 0,
     TPBE_EXIT_ON_HELP,
@@ -149,25 +149,98 @@ enum _tpb_errno {
 };
 typedef enum _tpb_errno tpb_errno_t;
 
+/* Module codes (high byte of encoded return value) */
+enum _tpb_module {
+    TPB_MOD_NONE = 0,
+    TPB_MOD_DRIVER,
+    TPB_MOD_ARGP,
+    TPB_MOD_IMPL,
+    TPB_MOD_IO,
+    TPB_MOD_MISC,
+    TPB_MOD_RAF_L1,
+    TPB_MOD_RAF_L2_KERNEL,
+    TPB_MOD_RAF_L2_TASK,
+    TPB_MOD_RAF_L2_TBATCH,
+    TPB_MOD_RAF_L3_KERNEL,
+    TPB_MOD_RAF_L3_TASK,
+    TPB_MOD_RAF_L3_TBATCH,
+    TPB_MOD_RAF_MISC,
+    TPB_MOD_CLI_RUN,
+    TPB_MOD_CLI_BENCHMARK,
+    TPB_MOD_CLI_KERNEL,
+    TPB_MOD_CLI_MISC
+};
+typedef enum _tpb_module tpb_module_t;
+
+#define TPBE_CAUSE_MASK 0x000000FFu
+#define TPBE_MOD_SHIFT  8
+#define TPBE_MOD_MASK   0x0000FF00u
+#define TPBE_MAKE(mod, cause) \
+    ((int)(((unsigned)(mod) << TPBE_MOD_SHIFT) \
+           | ((unsigned)(cause) & TPBE_CAUSE_MASK)))
+#define TPBE_CAUSE(err) \
+    ((int)((unsigned)(err) & TPBE_CAUSE_MASK))
+#define TPBE_MODULE(err) \
+    ((int)(((unsigned)(err) & TPBE_MOD_MASK) >> TPBE_MOD_SHIFT))
+#define TPBE_IS_ENCODED(err) \
+    ((err) != 0 && ((unsigned)(err) & TPBE_MOD_MASK) != 0)
+
 /**
- * @brief Human-readable message for a TPBE_* code.
- * @param err Error code from tpb_errno_t.
+ * @brief Human-readable message for a TPBE_* cause code.
+ * @param err Encoded or bare cause code.
  * @return Message string; never NULL.
  */
 const char *tpb_get_err_msg(int err);
 
 /**
- * @brief Log a formatted error and return the error code.
- * @param err Error code from tpb_errno_t.
- * @param context Short caller context string.
- * @return err unchanged.
+ * @brief Short name for a TPB_MOD_* module code.
+ * @param mod Module code from tpb_module_t.
+ * @return Module name string; never NULL.
  */
-int tpb_report_error(int err, const char *context);
+const char *tpb_err_module_name(int mod);
 
-#define TPB_RETURN_ON_ERROR(err, ctx) \
+/**
+ * @brief Re-encode err with cur_mod; cause unchanged. No logging.
+ * @param cur_mod Reporting module for the caller.
+ * @param err Encoded or bare error from a callee.
+ * @return TPBE_SUCCESS, TPBE_EXIT_ON_HELP, or TPBE_MAKE(cur_mod, cause).
+ */
+int tpb_err_propagate(int cur_mod, int err);
+
+/**
+ * @brief Map an encoded error to a process exit status (cause only).
+ * @param err Encoded or bare error code.
+ * @return Cause value suitable for exit(3).
+ */
+int tpb_err_to_exit_status(int err);
+
+/**
+ * @brief Log an error at file/func and return TPBE_MAKE(mod, cause).
+ * @param file Source file (__FILE__).
+ * @param func Source function (__func__).
+ * @param mod Reporting module code.
+ * @param cause Bare TPBE_* cause code.
+ * @param is_origin Non-zero at failure origin (includes reason string).
+ * @param msg Optional context; NULL to omit.
+ * @return TPBE_MAKE(mod, cause).
+ */
+int tpb_report_error_at(const char *file, const char *func, int mod,
+                        int cause, int is_origin, const char *msg);
+
+/* Origin: local statement or non-TPBench external call failed. */
+#define TPB_FAIL(mod, cause, msg) \
+    return tpb_report_error_at(__FILE__, __func__, (mod), (cause), 1, (msg))
+
+/* Propagate callee error: swap module, keep cause, log without reason. */
+#define TPB_PROPAGATE(mod, err, msg) \
     do { \
-        if ((err) != TPBE_SUCCESS) { \
-            return tpb_report_error((err), (ctx)); \
+        int _tpb_prop_e = (err); \
+        if (_tpb_prop_e == TPBE_EXIT_ON_HELP) { \
+            return _tpb_prop_e; \
+        } \
+        if (_tpb_prop_e != TPBE_SUCCESS) { \
+            return tpb_report_error_at(__FILE__, __func__, (mod), \
+                                      TPBE_CAUSE(_tpb_prop_e), 0, (msg)); \
         } \
     } while (0)
 

@@ -229,7 +229,7 @@ normalize_entry_name(const char *in, char *out, size_t outlen)
 {
     size_t i, j;
     if (!in || !out || outlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
     }
     for (i = 0, j = 0; in[i] != '\0' && j + 1 < outlen; i++) {
         char c = in[i];
@@ -247,7 +247,7 @@ static int
 entry_name_to_domain(const char *norm, uint8_t *domain_out)
 {
     if (!norm || !domain_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
     }
     if (strcmp(norm, "task_batch") == 0 ||
         strcmp(norm, "tbatch") == 0 ||
@@ -263,7 +263,7 @@ entry_name_to_domain(const char *norm, uint8_t *domain_out)
         *domain_out = TPB_RAF_DOM_TASK;
         return TPBE_SUCCESS;
     }
-    return TPBE_CLI_FAIL;
+    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 }
 
 static int
@@ -286,7 +286,7 @@ parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
     size_t n, i;
 
     if (!in || !out || !out_len || outsz < 42) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
     }
     a = in;
     while (*a != '\0' && isspace((unsigned char)*a)) {
@@ -298,13 +298,13 @@ parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
     }
     n = (size_t)(z - a);
     if (n < 4 || n > 40) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     memcpy(out, a, n);
     out[n] = '\0';
     for (i = 0; i < n; i++) {
         if (!isxdigit((unsigned char)out[i])) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         out[i] = (char)tolower((unsigned char)out[i]);
     }
@@ -423,7 +423,7 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
     if (parse_id_hex_arg(arg, norm, sizeof(norm), &plen) != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid id (need 4-40 hex digits, no 0x): %s\n", arg);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     switch (t) {
@@ -440,19 +440,19 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
         dom_filter = TPB_RAF_DOM_TASK;
         break;
     default:
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     if (plen == 40) {
         if (tpb_raf_hex_to_id(norm, id) != TPBE_SUCCESS) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         if (t == DUMP_T_ID_GLOBAL) {
             err = tpb_raf_find_record(workspace, id, &dom);
             if (err != TPBE_SUCCESS) {
                 tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                            "No .tpbr found for id in workspace.\n");
-                return err;
+                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "tpb_raf_find_record");
             }
             return dump_tpbr_by_domain(workspace, dom, id);
         }
@@ -467,24 +467,24 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
                                        &matches, &nmatch);
         if (err != TPBE_SUCCESS) {
             tpb_raf_free_id_matches(matches);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "scan_tpbr_prefix_matches");
         }
 
         if (nmatch == 0) {
             tpb_raf_free_id_matches(matches);
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "No .tpbr matches id prefix %s in workspace.\n", norm);
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_FILE_IO_FAIL, NULL);
         }
         if (nmatch > 1) {
             print_ambiguous_id_table(norm, matches, nmatch, workspace);
             tpb_raf_free_id_matches(matches);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
 
         if (tpb_raf_hex_to_id(matches[0].id_hex, id) != TPBE_SUCCESS) {
             tpb_raf_free_id_matches(matches);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         dom = matches[0].domain;
         tpb_raf_free_id_matches(matches);
@@ -747,9 +747,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     memset(&attr, 0, sizeof(attr));
     err = tpb_raf_record_read_tbatch(workspace, id, &attr,
                                         &data, &datasize);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
@@ -790,9 +788,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     memset(&attr, 0, sizeof(attr));
     err = tpb_raf_record_read_kernel(workspace, id, &attr,
                                        &data, &datasize);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
@@ -827,9 +823,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     memset(&attr, 0, sizeof(attr));
     err = tpb_raf_record_read_task(workspace, id, &attr,
                                      &data, &datasize);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
     dump_print_kv_hex20("task_record_id", attr.task_record_id);
@@ -881,9 +875,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
     if (domain == TPB_RAF_DOM_TBATCH) {
         tbatch_entry_t *e = NULL;
         err = tpb_raf_entry_list_tbatch(workspace, &e, &n);
-        if (err != TPBE_SUCCESS) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
         for (i = 0; i < n; i++) {
             char p[80];
@@ -919,9 +911,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
     if (domain == TPB_RAF_DOM_KERNEL) {
         kernel_entry_t *e = NULL;
         err = tpb_raf_entry_list_kernel(workspace, &e, &n);
-        if (err != TPBE_SUCCESS) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
         for (i = 0; i < n; i++) {
             char p[80];
@@ -949,9 +939,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
         int nvis;
 
         err = tpb_raf_entry_list_task(workspace, &e, &n);
-        if (err != TPBE_SUCCESS) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
         nvis = 0;
         for (i = 0; i < n; i++) {
             if (memcmp(e[i].derive_to, z20, 20) == 0) {
@@ -1009,14 +997,10 @@ dump_file_path(const char *workspace, const char *filepath)
     const char *bn;
 
     err = resolve_file_path(workspace, filepath, resolved, sizeof(resolved));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     err = tpb_raf_detect_file(resolved, &ftype, &domain);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     if (ftype == TPB_RAF_FTYPE_ENTRY) {
         return dump_tpbe_domain(workspace, domain);
@@ -1042,7 +1026,7 @@ dump_file_path(const char *workspace, const char *filepath)
 
         if (parse_id_hex_arg(base, norm, sizeof(norm), &plen) != TPBE_SUCCESS ||
             plen >= 40) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         scan_err = scan_tpbr_prefix_matches(workspace, norm, plen, domain,
                                             &matches, &nmatch);
@@ -1052,16 +1036,16 @@ dump_file_path(const char *workspace, const char *filepath)
         }
         if (nmatch == 0) {
             tpb_raf_free_id_matches(matches);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         if (nmatch > 1) {
             print_ambiguous_id_table(norm, matches, nmatch, workspace);
             tpb_raf_free_id_matches(matches);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         if (tpb_raf_hex_to_id(matches[0].id_hex, id) != TPBE_SUCCESS) {
             tpb_raf_free_id_matches(matches);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         tpb_raf_free_id_matches(matches);
     }
@@ -1092,7 +1076,7 @@ tpbcli_database_dump_resolved(const char *workspace,
     (void)entry_value;
 
     if (workspace == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (selector_name == NULL || primary_value == NULL) {
@@ -1120,7 +1104,7 @@ tpbcli_database_dump_resolved(const char *workspace,
         snprintf(entrybuf, sizeof(entrybuf), "%s", primary_value);
         buf[0] = '\0';
     } else {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     if (t == DUMP_T_NONE) {
@@ -1130,7 +1114,7 @@ tpbcli_database_dump_resolved(const char *workspace,
                    "--task-id <hex>|--score-id <hex>|--file <path>|"
                    "--entry <name>]\n"
                    "Enter a ID, a file name in the workspace, or a full path to a tpbe or tpbr file.\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     if (t == DUMP_T_SCORE_ID) {
@@ -1143,13 +1127,13 @@ tpbcli_database_dump_resolved(const char *workspace,
     if (t == DUMP_T_ENTRY) {
         char norm[256];
         if (normalize_entry_name(entrybuf, norm, sizeof(norm)) != TPBE_SUCCESS) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         if (entry_name_to_domain(norm, &dom) != TPBE_SUCCESS) {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Unknown entry name \"%s\". Try: task_batch, kernel, task\n",
                        entrybuf);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         return dump_tpbe_domain(workspace, dom);
     }

@@ -110,7 +110,7 @@ _sf_resolve_tpb_home(void)
     if (home != NULL && home[0] != '\0') {
         if (snprintf(tpb_home_resolved, PATH_MAX, "%s/%s", home,
                      TPB_RAF_DEFAULT_DIR) >= PATH_MAX) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_DRIVER, TPBE_FILE_IO_FAIL, NULL);
         }
         return 0;
     }
@@ -124,7 +124,7 @@ _sf_resolve_tpb_home(void)
         return 0;
     }
 
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_DRIVER, TPBE_FILE_IO_FAIL, NULL);
 }
 
 static int
@@ -132,7 +132,7 @@ _sf_build_kernel_paths(const char *kernel_name, char *so_path,
                        size_t so_len)
 {
     if (kernel_name == NULL || so_path == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     snprintf(so_path, so_len, "%s/lib/libtpbk_%s.so",
@@ -144,7 +144,7 @@ static int
 _sf_build_pli_launch_path(char *launch_path, size_t launch_len)
 {
     if (launch_path == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     snprintf(launch_path, launch_len, "%s/bin/tpbcli-pli-launcher",
@@ -210,12 +210,12 @@ _sf_hash_file_sha1(const char *path, unsigned char out[20])
     tpb_sha1_ctx_t sha1_ctx;
 
     if (path == NULL || out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     fp = fopen(path, "rb");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_FILE_IO_FAIL, NULL);
     }
 
     tpb_sha1_init(&sha1_ctx);
@@ -249,7 +249,7 @@ _sf_follow_kernel_dup_chain(const char *workspace,
     int err;
 
     if (workspace == NULL || start_id == NULL || final_id == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     memcpy(cur_id, start_id, 20);
@@ -301,14 +301,12 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
 
     if (workspace == NULL || kernel_name == NULL || so_sha1 == NULL ||
         registered == NULL || out_final_id == NULL || is_new_kernel == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
     *is_new_kernel = 0;
 
     err = tpb_raf_gen_kernel_id(so_sha1, computed_id);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
 
     err = tpb_raf_entry_list_kernel(workspace, &entries, &nentries);
     if (err != TPBE_SUCCESS) {
@@ -345,7 +343,8 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         }
         err = _sf_follow_kernel_dup_chain(workspace, computed_id, out_final_id);
         free(entries);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
+        return TPBE_SUCCESS;
     }
 
     {
@@ -358,14 +357,14 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                                    &attr, &data, &datasize);
         if (err != TPBE_SUCCESS) {
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
         }
 
         err = tpb_raf_record_write_kernel(workspace, &attr, data, datasize);
         tpb_raf_kernel_free_built_attr(&attr, data);
         if (err != TPBE_SUCCESS) {
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
         }
 
         memset(&ent, 0, sizeof(ent));
@@ -379,7 +378,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         err = tpb_raf_entry_append_kernel(workspace, &ent);
         if (err != TPBE_SUCCESS) {
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
         }
 
         (void)tpb_raf_kernel_deactivate_same_name(workspace, kernel_name,
@@ -400,7 +399,7 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
     char func_name[TPBM_NAME_STR_MAX_LEN + 32];
 
     if (handle == NULL || kernel_name == NULL || reg_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     snprintf(func_name, sizeof(func_name), "tpbk_pli_register_%s", kernel_name);
@@ -411,7 +410,7 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
                        "In tpb_dl_scan: No PLI registration function %s in %s\n",
                        func_name, path_label);
         }
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     return TPBE_SUCCESS;
@@ -427,11 +426,11 @@ _sf_try_load_from_path(const char *kernel_name, const char *path,
 
     if (kernel_name == NULL || path == NULL || handle_out == NULL ||
         reg_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (access(path, R_OK) != 0) {
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
@@ -441,13 +440,13 @@ _sf_try_load_from_path(const char *kernel_name, const char *path,
                        "In tpb_dl_scan: Failed to load %s: %s\n",
                        path, dlerror());
         }
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     err = _sf_load_register_fn(handle, kernel_name, path_label, reg_out, quiet);
     if (err != TPBE_SUCCESS) {
         dlclose(handle);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
     }
 
     *handle_out = handle;
@@ -526,7 +525,7 @@ _sf_finalize_kernel_scan(const char *kernel_name, void *dl_handle,
                    kernel_name, k->exec_path);
         if (require_success) {
             dlclose(dl_handle);
-            return TPBE_KERNEL_INCOMPLETE;
+            TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_INCOMPLETE, NULL);
         }
     }
 
@@ -543,7 +542,7 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
     int err;
 
     if (kernel_name == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (_sf_find_dyn_kernel(kernel_name) >= 0) {
@@ -553,13 +552,11 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
     if (num_dyn_kernels >= MAX_DYN_KERNELS) {
         tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "In tpb_dl_scan: Maximum number of dynamic kernels reached.\n");
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     err = _sf_resolve_tpb_home();
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
 
     _sf_build_kernel_paths(kernel_name, so_path, sizeof(so_path));
 
@@ -569,7 +566,10 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
     if (_sf_try_load_from_path(kernel_name, so_path, so_path,
                                &handle, &reg_func, require_success)
         != TPBE_SUCCESS) {
-        return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
+        if (require_success) {
+            TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
+        }
+        return TPBE_SUCCESS;
     }
 
     err = reg_func();
@@ -580,14 +580,15 @@ _sf_scan_kernel_internal(const char *kernel_name, int require_success)
                        kernel_name, err);
         }
         dlclose(handle);
-        return require_success ? TPBE_KERNEL_NE_FAIL : TPBE_SUCCESS;
+        if (require_success) {
+            TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
+        }
+        return TPBE_SUCCESS;
     }
 
     err = _sf_finalize_kernel_scan(kernel_name, handle, so_path,
                                    require_success);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
 
     return TPBE_SUCCESS;
 }
@@ -609,7 +610,7 @@ tpb_dl_force_tpb_home(const char *path)
     char *resolved;
 
     if (path == NULL || path[0] == '\0') {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_home_resolved[0] = '\0';
@@ -619,7 +620,7 @@ tpb_dl_force_tpb_home(const char *path)
     }
     if (snprintf(tpb_home_resolved, PATH_MAX, "%s", path) >= PATH_MAX) {
         tpb_home_resolved[0] = '\0';
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -644,9 +645,7 @@ tpb_dl_scan(void)
     }
 
     err = _sf_resolve_tpb_home();
-    if (err != 0) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
 
     snprintf(lib_path, PATH_MAX, "%s/lib", tpb_home_resolved);
     dir = opendir(lib_path);

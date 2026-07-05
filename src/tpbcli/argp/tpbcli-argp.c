@@ -143,7 +143,7 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
     tpbcli_argnode_t *x;
 
     if (match == NULL)
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 
     x = _sf_sibling_exclusive_conflict(match);
     if (x != NULL) {
@@ -151,7 +151,7 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
                         "error: cannot use '%s' because '%s' is already selected\n",
                         match->name != NULL ? match->name : "?",
                         x->name != NULL ? x->name : "?");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     x = _sf_sibling_conflict_opts_hit(match);
@@ -160,7 +160,7 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
                         "error: '%s' conflicts with '%s'\n",
                         match->name != NULL ? match->name : "?",
                         x->name != NULL ? x->name : "?");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     if (match->max_chosen == 0) {
@@ -171,7 +171,7 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "%s\n",
                         match->desc != NULL ? match->desc : "deprecated option");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     if (match->max_chosen > 0 && match->chosen_count >= match->max_chosen) {
@@ -179,7 +179,7 @@ _sf_validate_pre_increment(tpbcli_argnode_t *match, FILE *out)
                         "error: '%s' can only be specified %d time(s)\n",
                         match->name != NULL ? match->name : "?",
                         match->max_chosen);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     return TPBE_SUCCESS;
@@ -217,14 +217,14 @@ _sf_resolve_conflict_opts_validate(const tpbcli_argnode_t *node)
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                                 "error: conflict_opts name '%s' is not a sibling of '%s'\n",
                                 nm, node->name != NULL ? node->name : "?");
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
             }
         }
     }
 
     for (c = node->first_child; c != NULL; c = c->next_sibling) {
         if (_sf_resolve_conflict_opts_validate(c) != TPBE_SUCCESS)
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -354,7 +354,7 @@ _sf_find_arg_dfs(const tpbcli_argnode_t *node, int target_depth, const char *nam
     tpbcli_argnode_t *c;
 
     if (node == NULL)
-        return TPBE_LIST_NOT_FOUND;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_LIST_NOT_FOUND, NULL);
     if (node->depth == target_depth) {
         if (node->name != NULL && strcmp(node->name, name) == 0) {
             *out = (tpbcli_argnode_t *)node;
@@ -369,7 +369,7 @@ _sf_find_arg_dfs(const tpbcli_argnode_t *node, int target_depth, const char *nam
         if (_sf_find_arg_dfs(c, target_depth, name, out) == TPBE_SUCCESS)
             return TPBE_SUCCESS;
     }
-    return TPBE_LIST_NOT_FOUND;
+    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_LIST_NOT_FOUND, NULL);
 }
 
 static int
@@ -389,7 +389,7 @@ _sf_mandatory_fail(const tpbcli_argnode_t *parent, FILE *out)
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "error: missing required option '%s'\n",
                         c->name != NULL ? c->name : "?");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -404,7 +404,7 @@ _sf_post_loop(tpbcli_argtree_t *tree, tpbcli_argnode_t **stack, int stack_sz,
     int err;
 
     if (tree == NULL)
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 
     for (c = tree->root.first_child; c != NULL; c = c->next_sibling) {
         if (c->is_set) {
@@ -420,8 +420,9 @@ _sf_post_loop(tpbcli_argtree_t *tree, tpbcli_argnode_t **stack, int stack_sz,
 
     for (i = stack_sz - 1; i >= 0; i--) {
         err = _sf_mandatory_fail(stack[i], out);
-        if (err != TPBE_SUCCESS)
-            return err;
+        if (err != TPBE_SUCCESS) {
+            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+        }
     }
 
     for (i = stack_sz - 1; i >= 1; i--) {
@@ -540,14 +541,14 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
     tpbcli_argnode_t *hchild;
 
     if (tree == NULL || argv == NULL)
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 
     _sf_reset_parse_state(&tree->root);
     if (_sf_resolve_conflict_opts_validate(&tree->root) != TPBE_SUCCESS)
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 
     if (stack_sz >= TPBCLI_ARGP_STACK_MAX)
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     stack[stack_sz++] = &tree->root;
 
     for (i = 1; i < argc; ) {
@@ -559,14 +560,15 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
 
         if (match != NULL) {
             err = _sf_validate_pre_increment(match, stdout);
-            if (err != TPBE_SUCCESS)
-                return err;
+            if (err != TPBE_SUCCESS) {
+                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+            }
 
             if (match->type == TPBCLI_ARG_CMD) {
                 match->is_set = 1;
                 match->chosen_count++;
                 if (stack_sz >= TPBCLI_ARGP_STACK_MAX)
-                    return TPBE_CLI_FAIL;
+                    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
                 stack[stack_sz++] = match;
                 i++;
                 if ((match->flags & TPBCLI_ARGF_DELEGATE_SUBCMD) != 0u) {
@@ -579,7 +581,7 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
                 if (match->parse_fn != NULL) {
                     err = match->parse_fn(match, NULL);
                     if (err != 0)
-                        return TPBE_CLI_FAIL;
+                        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
                 }
                 match->is_set = 1;
                 match->chosen_count++;
@@ -592,14 +594,15 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                                 "error: '%s' requires a value\n",
                                 match->name != NULL ? match->name : "?");
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
             }
 
             hchild = _sf_find_max_chosen_zero_child(match, argv[i + 1]);
             if (hchild != NULL) {
                 err = _sf_validate_pre_increment(hchild, stdout);
-                if (err != TPBE_SUCCESS)
-                    return err;
+                if (err != TPBE_SUCCESS) {
+                    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                }
                 i += 2;
                 continue;
             }
@@ -607,14 +610,14 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
             if (match->parse_fn != NULL) {
                 err = match->parse_fn(match, argv[i + 1]);
                 if (err != 0)
-                    return TPBE_CLI_FAIL;
+                    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
             }
             match->parsed_value = argv[i + 1];
             match->is_set = 1;
             match->chosen_count++;
             if (match->first_child != NULL) {
                 if (stack_sz >= TPBCLI_ARGP_STACK_MAX)
-                    return TPBE_CLI_FAIL;
+                    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
                 stack[stack_sz++] = match;
             }
             i += 2;
@@ -624,7 +627,7 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
         /* pop: reset children of popped node for reuse on rematch */
         if (stack_sz <= 1) {
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "error: unknown argument '%s'\n", tok);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         {
             tpbcli_argnode_t *popped = stack[stack_sz - 1];

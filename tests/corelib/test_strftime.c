@@ -554,20 +554,20 @@ test_null_pointer(void)
     tpb_btime_t btime = {0};
 
     /* Test NULL pointer handling for tpb_ts_get_datetime (only valid modes) */
-    if (tpb_ts_get_datetime(TPBM_TS_UTC, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_get_datetime(TPBM_TS_LOCAL, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_get_btime(NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_btime_to_datetime(&btime, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_btime_to_datetime(NULL, &dt) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_datetime_to_bits(NULL, 0, &bits) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_datetime_to_bits(&dt, 0, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_bits_to_datetime(bits, NULL, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_bits_to_isoutc(bits, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_bits_to_isotz(bits, 0, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_isoutc_to_bits(NULL, &bits) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_isoutc_to_bits(&str, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_isotz_to_bits(NULL, &bits, NULL) != TPBE_NULLPTR_ARG) return 1;
-    if (tpb_ts_isotz_to_bits(&str, NULL, NULL) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_get_datetime(TPBM_TS_UTC, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_get_datetime(TPBM_TS_LOCAL, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_get_btime(NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_btime_to_datetime(&btime, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_btime_to_datetime(NULL, &dt)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_datetime_to_bits(NULL, 0, &bits)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_datetime_to_bits(&dt, 0, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_bits_to_datetime(bits, NULL, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_bits_to_isoutc(bits, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_bits_to_isotz(bits, 0, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_isoutc_to_bits(NULL, &bits)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_isoutc_to_bits(&str, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_isotz_to_bits(NULL, &bits, NULL)) != TPBE_NULLPTR_ARG) return 1;
+    if (TPBE_CAUSE(tpb_ts_isotz_to_bits(&str, NULL, NULL)) != TPBE_NULLPTR_ARG) return 1;
 
     return 0;
 }

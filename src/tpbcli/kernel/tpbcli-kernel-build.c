@@ -125,12 +125,12 @@ _sf_run_shell(const char *cmd)
 
     st = system(cmd);
     if (st == -1) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (WIFEXITED(st) && WEXITSTATUS(st) == 0) {
         return TPBE_SUCCESS;
     }
-    return TPBE_CLI_FAIL;
+    TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
 }
 
 static int
@@ -150,7 +150,7 @@ _sf_ensure_dir(const char *path)
     if (mkdir(path, 0755) == 0 || access(path, F_OK) == 0) {
         return TPBE_SUCCESS;
     }
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
 }
 
 static int
@@ -163,23 +163,23 @@ _sf_copy_file(const char *src, const char *dst)
 
     in = fopen(src, "rb");
     if (in == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     out = fopen(dst, "wb");
     if (out == NULL) {
         fclose(in);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
         if (fwrite(buf, 1, n, out) != n) {
             fclose(in);
             fclose(out);
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
     }
     fclose(in);
     if (fclose(out) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -218,12 +218,12 @@ _sf_parse_build_args(int argc, char **argv,
         } else if (strncmp(argv[i], "-D", 2) == 0) {
             if (args->opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: too many -D options.\n");
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
             }
             args->opts.cmake_defs[args->opts.ncmake_defs++] = argv[i] + 2;
         } else {
             _sf_print_build_usage();
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
     }
 
@@ -231,14 +231,14 @@ _sf_parse_build_args(int argc, char **argv,
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: --kernel and --kernel-tag are mutually "
                         "exclusive; specify exactly one.\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
     if (args->kernel_csv == NULL && args->tag_csv == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: specify exactly one of --kernel or "
                         "--kernel-tag.\n");
         _sf_print_build_usage();
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -259,9 +259,7 @@ _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
     int err;
 
     err = tpbcli_kernel_reg_load(tpb_home, &reg);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
     if (reg_out != NULL) {
         *reg_out = reg;
     }
@@ -279,7 +277,7 @@ _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
             if (all_tags[0] != '\0') {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: known tags: %s\n", all_tags);
             }
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
         return n;
     }
@@ -289,14 +287,14 @@ _sf_resolve_kernel_names(const tpbcli_kernel_build_args_t *args,
                                     req_scratch, sizeof(req_scratch));
     if (n <= 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: --kernel list is empty or invalid.\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
     for (i = 0; i < n; i++) {
         if (!tpbcli_kernel_name_valid(tokens[i])) {
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                             "kernel build: invalid kernel name '%s'.\n",
                             tokens[i]);
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
         names_out[i] = tokens[i];
     }
@@ -315,7 +313,7 @@ _sf_resolve_kernel_dir(const char *tpb_home,
 
     if (dir_explicit) {
         if (snprintf(out, outlen, "%s", dir_path) >= (int)outlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         return TPBE_SUCCESS;
     }
@@ -328,11 +326,11 @@ _sf_resolve_kernel_dir(const char *tpb_home,
                         "kernel build: use --dir <path> for out-of-tree kernels "
                         "not listed in the registry.\n",
                         kernel_name, tpb_home);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
     if (snprintf(out, outlen, "%s/src/kernels/%s",
                  tpb_home, ent->path) >= (int)outlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -355,62 +353,62 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
     if (configure) {
         if (snprintf(tpbench_dir, sizeof(tpbench_dir), "%s/lib/cmake/TPBench",
                      tpb_home) >= (int)sizeof(tpbench_dir)) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         n = snprintf(cmd, cmdlen,
                      "cmake -S \"%s\" -B \"%s\" -DTPBench_DIR=\"%s\" "
                      "-DTPB_KERNEL_NAME=\"%s\"",
                      source_dir, build_dir, tpbench_dir, kernel_name);
         if (n < 0 || (size_t)n >= cmdlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         if (opts->cc != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DCMAKE_C_COMPILER=\"%s\"", opts->cc);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->cxx != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DCMAKE_CXX_COMPILER=\"%s\"", opts->cxx);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->fc != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DCMAKE_Fortran_COMPILER=\"%s\"", opts->fc);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->cflags != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_CFLAGS=\"%s\"", opts->cflags);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->cxxflags != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_CXXFLAGS=\"%s\"", opts->cxxflags);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->fcflags != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_FFLAGS=\"%s\"", opts->fcflags);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (opts->ldflags != NULL) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_LDFLAGS=\"%s\"", opts->ldflags);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         if (link_libs != NULL && link_libs[0] != '\0') {
@@ -418,14 +416,14 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_LINK_LIBS=\"%s\"", link_libs);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         for (i = 0; i < opts->ncmake_defs; i++) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -D%s", opts->cmake_defs[i]);
             if (n < 0 || (size_t)n >= cmdlen) {
-                return TPBE_FILE_IO_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
         return TPBE_SUCCESS;
@@ -433,12 +431,12 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
 
     if (snprintf(target, sizeof(target), "tpbk_%s", kernel_name) >=
         (int)sizeof(target)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     n = snprintf(cmd, cmdlen, "cmake --build \"%s\" --target %s",
                  build_dir, target);
     if (n < 0 || (size_t)n >= cmdlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -452,18 +450,12 @@ _sf_activate_installed_kernel(const char *kernel_name, const char *so_path)
     int err;
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = tpb_raf_hash_file(so_path, sha1);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
     err = tpb_raf_gen_kernel_id(sha1, kernel_id);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     (void)tpb_raf_kernel_deactivate_same_name(workspace, kernel_name, kernel_id);
     (void)tpb_raf_entry_patch_kernel_active(workspace, kernel_id, 1);
@@ -515,7 +507,8 @@ _sf_register_compile_meta(const char *kernel_name,
     argv[argc] = NULL;
 
     err = tpbcli_kernel_set(argc, argv);
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
@@ -524,13 +517,13 @@ _sf_canonicalize_path(char *path, size_t pathlen)
     char resolved[PATH_MAX];
 
     if (path == NULL || pathlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     if (realpath(path, resolved) == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (strlen(resolved) >= pathlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     snprintf(path, pathlen, "%s", resolved);
     return TPBE_SUCCESS;
@@ -544,7 +537,7 @@ _sf_ensure_registry_cmake(const char *source_dir, const char *tpb_home)
 
     if (snprintf(cmake_path, sizeof(cmake_path), "%s/CMakeLists.txt",
                  source_dir) >= (int)sizeof(cmake_path)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (access(cmake_path, R_OK) == 0) {
         return TPBE_SUCCESS;  /* Installed or previously staged */
@@ -553,7 +546,7 @@ _sf_ensure_registry_cmake(const char *source_dir, const char *tpb_home)
     /* Fallback: copy shipped template into the kernel source tree */
     if (snprintf(tmpl_path, sizeof(tmpl_path), "%s/etc/cmake/kernel/CMakeLists.registry.txt",
                  tpb_home) >= (int)sizeof(tmpl_path)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (access(tmpl_path, R_OK) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
@@ -561,14 +554,14 @@ _sf_ensure_registry_cmake(const char *source_dir, const char *tpb_home)
                         "kernel build: reinstall TPBench or rebuild with a current "
                         "version that stages registry CMakeLists.txt files.\n",
                         cmake_path, tmpl_path);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     if (_sf_copy_file(tmpl_path, cmake_path) != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: failed to install registry CMakeLists.txt "
                         "into '%s'.\n", source_dir);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -594,13 +587,11 @@ _sf_build_one_kernel(const char *kernel_name,
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: directory '%s' not found.\n",
                         source_dir);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     err = _sf_ensure_registry_cmake(source_dir, tpb_home);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     /* Optional per-kernel link libraries from kernel_link_defs.txt */
     link_libs[0] = '\0';
@@ -609,87 +600,77 @@ _sf_build_one_kernel(const char *kernel_name,
 
     if (snprintf(tpbench_pkg, sizeof(tpbench_pkg), "%s/lib/cmake/TPBench",
                  tpb_home) >= (int)sizeof(tpbench_pkg)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (access(tpbench_pkg, F_OK) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: TPBench package not found at '%s'.\n",
                         tpbench_pkg);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     if (snprintf(source_file, sizeof(source_file), "%s/tpbk_%s.c",
                  source_dir, kernel_name) >= (int)sizeof(source_file)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (access(source_file, R_OK) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: source '%s' not found.\n",
                         source_file);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     if (snprintf(build_dir, sizeof(build_dir), "%s/build_%s",
                  source_dir, kernel_name) >= (int)sizeof(build_dir)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     err = _sf_ensure_dir(build_dir);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = _sf_build_cmake_cmd(cmd, sizeof(cmd), source_dir, build_dir,
                               tpb_home, kernel_name, link_libs, opts, 1);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "kernel build: %s\n", cmd);
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: cmake configure failed for '%s'.\n",
                    kernel_name);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_run_shell");
     }
 
     err = _sf_build_cmake_cmd(cmd, sizeof(cmd), source_dir, build_dir,
                               tpb_home, kernel_name, link_libs, opts, 0);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG, "kernel build: %s\n", cmd);
     err = _sf_run_shell(cmd);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: cmake build failed for '%s'.\n",
                    kernel_name);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_run_shell");
     }
 
     if (snprintf(built_so, sizeof(built_so), "%s/lib/libtpbk_%s.so",
                  build_dir, kernel_name) >= (int)sizeof(built_so)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (access(built_so, R_OK) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                         "kernel build: built library '%s' not found.\n",
                         built_so);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     err = tpb_dl_force_tpb_home(tpb_home);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     if (snprintf(lib_dir, sizeof(lib_dir), "%s/lib", tpb_home) >=
         (int)sizeof(lib_dir)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     err = _sf_ensure_dir(lib_dir);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     backup_argv[0] = "tpbcli";
     backup_argv[1] = "kernel";
@@ -701,25 +682,21 @@ _sf_build_one_kernel(const char *kernel_name,
 
     if (snprintf(dest_so, sizeof(dest_so), "%s/libtpbk_%s.so",
                  lib_dir, kernel_name) >= (int)sizeof(dest_so)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     err = _sf_copy_file(built_so, dest_so);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: failed to install '%s'.\n", dest_so);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_copy_file");
     }
 
     err = _sf_activate_installed_kernel(kernel_name, dest_so);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = _sf_register_compile_meta(kernel_name, dest_so, source_dir,
                                     build_dir, opts);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "kernel build: installed %s\n", dest_so);
@@ -743,15 +720,13 @@ tpbcli_kernel_build(int argc, char **argv)
     int npass = 0;
 
     err = _sf_parse_build_args(argc, argv, &args);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = tpbcli_kernel_resolve_home(args.tpb_home_opt, tpb_home,
                                      sizeof(tpb_home));
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: failed to resolve TPB_HOME.\n");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "tpbcli_kernel_resolve_home");
     }
     (void)_sf_canonicalize_path(tpb_home, sizeof(tpb_home));
 
@@ -800,5 +775,8 @@ tpbcli_kernel_build(int argc, char **argv)
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                "kernel build: summary %d passed, %d failed (of %d)\n",
                npass, nfail, nkern);
-    return (nfail > 0) ? TPBE_CLI_FAIL : TPBE_SUCCESS;
+    if (nfail > 0) {
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
+    }
+    return TPBE_SUCCESS;
 }

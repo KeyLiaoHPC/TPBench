@@ -103,7 +103,7 @@ _sf_pick_latest_entry(const kernel_entry_t *entries, int n,
         *out_idx = pick;
         return 0;
     }
-    return TPBE_LIST_NOT_FOUND;
+    TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
 }
 
 static int
@@ -118,7 +118,7 @@ _sf_find_entry_by_id(const kernel_entry_t *entries, int n,
             return TPBE_SUCCESS;
         }
     }
-    return TPBE_LIST_NOT_FOUND;
+    TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
 }
 
 int
@@ -147,25 +147,21 @@ tpbcli_kernel_get(int argc, char **argv)
             kernel_id_hex = argv[++i];
         } else {
             _sf_print_get_usage();
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
     }
 
     if ((kernel_name == NULL && kernel_id_hex == NULL) ||
         (kernel_name != NULL && kernel_id_hex != NULL)) {
         _sf_print_get_usage();
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = tpb_raf_entry_list_kernel(workspace, &entries, &n);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     if (kernel_id_hex != NULL) {
         err = tpb_raf_hex_to_id(kernel_id_hex, kernel_id);
@@ -173,14 +169,14 @@ tpbcli_kernel_get(int argc, char **argv)
             tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "Invalid kernel id '%s'.\n", kernel_id_hex);
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
         }
         err = _sf_find_entry_by_id(entries, n, kernel_id, &idx);
         if (err != TPBE_SUCCESS) {
             tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "No kernel record for id '%s'.\n", kernel_id_hex);
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
         }
         kernel_name = entries[idx].kernel_name;
     } else {
@@ -189,7 +185,7 @@ tpbcli_kernel_get(int argc, char **argv)
             tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                        "No kernel records for '%s'.\n", kernel_name);
             free(entries);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
         }
     }
 
@@ -200,7 +196,7 @@ tpbcli_kernel_get(int argc, char **argv)
         tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
                    "Failed to read kernel record (%d).\n", err);
         free(entries);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
     }
 
     if (verbose) {

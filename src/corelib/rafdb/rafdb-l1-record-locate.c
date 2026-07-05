@@ -4,6 +4,7 @@
  */
 
 #include <sys/stat.h>
+#include "../../include/tpb-public.h"
 #include "rafdb-l1-domain-reg.h"
 #include "rafdb-l1-internal.h"
 #include "../tpb-types.h"
@@ -21,7 +22,7 @@ tpb_raf_find_record(const char *workspace, const unsigned char id[20],
     int nd;
 
     if (!workspace || !id || !domain_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     nd = _tpb_raf_l1_domain_count();
@@ -38,5 +39,5 @@ tpb_raf_find_record(const char *workspace, const unsigned char id[20],
             return TPBE_SUCCESS;
         }
     }
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
 }

@@ -24,6 +24,7 @@
 #include "tpb-driver.h"
 #include "tpb-io.h"
 #include "tpb-types.h"
+#include "tpb-public.h"
 
 /* Local Function Prototypes */
 
@@ -122,7 +123,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg \"%s\". Expected key=value.\n",
                        tokens[i]);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
         *eq = '\0';
@@ -132,7 +133,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg. Empty key or value detected.\n");
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
         parm_idx = _sf_find_parm_index(rt_parms, nparms, key);
@@ -158,23 +159,19 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         } else if (type_code == TPB_CHAR_T) {
             parsed_value.c = value[0];
             if (parsed_value.c == '\0') {
-                return TPBE_MALLOC_FAIL;
+                TPB_FAIL(TPB_MOD_ARGP, TPBE_MALLOC_FAIL, NULL);
             }
         } else {
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
         uint32_t check_mode = rt_parms[parm_idx].ctrlbits & TPB_PARM_CHECK_MASK;
         if (check_mode == TPB_PARM_RANGE) {
             err = _sf_check_arg_range(&rt_parms[parm_idx], &parsed_value);
-            if (err != 0) {
-                return err;
-            }
+            TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
         } else if (check_mode == TPB_PARM_LIST) {
             err = _sf_check_arg_list(&rt_parms[parm_idx], &parsed_value);
-            if (err != 0) {
-                return err;
-            }
+            TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
         }
 
         rt_parms[parm_idx].value = parsed_value;
@@ -192,7 +189,7 @@ _sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
     int nparms = 0;
 
     if (kernel == NULL || rt_parms_out == NULL || nparms_out == NULL) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     max_parms = kernel->info.nparms + (kernel_common ? kernel_common->info.nparms : 0);
@@ -204,7 +201,7 @@ _sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
 
     rt_parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * max_parms);
     if (rt_parms == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_MALLOC_FAIL, NULL);
     }
 
     for (int i = 0; i < kernel->info.nparms; i++) {
@@ -232,7 +229,7 @@ static int
 _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
@@ -243,14 +240,14 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %lf out of range [%lf, %lf]\n",
                        parm->name, value->f64, parm->plims[0].f64, parm->plims[1].f64);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
     } else if (type_code == TPB_FLOAT_T) {
         if (value->f32 < parm->plims[0].f32 || value->f32 > parm->plims[1].f32) {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %f out of range [%f, %f]\n",
                        parm->name, value->f32, parm->plims[0].f32, parm->plims[1].f32);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
     } else if (type_code == TPB_INT_T || type_code == TPB_INT8_T || type_code == TPB_INT16_T ||
                type_code == TPB_INT32_T || type_code == TPB_INT64_T) {
@@ -258,7 +255,7 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %" PRId64 " out of range [%" PRId64 ", %" PRId64 "]\n",
                        parm->name, value->i64, parm->plims[0].i64, parm->plims[1].i64);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
     } else if (type_code == TPB_UINT8_T || type_code == TPB_UINT16_T ||
                type_code == TPB_UINT32_T || type_code == TPB_UINT64_T) {
@@ -266,14 +263,14 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value %" PRIu64 " out of range [%" PRIu64 ", %" PRIu64 "]\n",
                        parm->name, value->u64, parm->plims[0].u64, parm->plims[1].u64);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
     } else if (type_code == TPB_CHAR_T) {
         if (value->c < parm->plims[0].c || value->c > parm->plims[1].c) {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Parameter '%s' value '%c' out of range ['%c', '%c']\n",
                        parm->name, value->c, parm->plims[0].c, parm->plims[1].c);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
     }
 
@@ -285,7 +282,7 @@ static int
 _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     uint32_t type_code = parm->ctrlbits & TPB_PARM_TYPE_MASK;
@@ -335,7 +332,7 @@ _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
                    "Parameter '%s' value %c is not in list\n", parm->name, value->c);
     }
 
-    return TPBE_KERN_ARG_FAIL;
+    TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
 }
 
 /* Public Function Implementations */
@@ -351,7 +348,7 @@ tpb_check_kargs(char **common_tokens, int ncommon,
     int err;
 
     if (kernel == NULL) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
     }
 
     /* Query common kernel parameters (allocates isolated copy) */
@@ -359,31 +356,17 @@ tpb_check_kargs(char **common_tokens, int ncommon,
     /* kernel_common may be NULL if _tpb_common not found, that's OK */
 
     err = _sf_build_rt_parms(kernel, kernel_common, &rt_parms, nparms_out);
-    if (err != 0) {
-        tpb_free_kernel(kernel_common);
-        free(kernel_common);
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
     err = _sf_apply_karg_tokens(common_tokens, ncommon,
                             rt_parms, *nparms_out,
                             kernel->info.name, 0);
-    if (err != 0) {
-        free(rt_parms);
-        tpb_free_kernel(kernel_common);
-        free(kernel_common);
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
     err = _sf_apply_karg_tokens(kernel_tokens, nkernel,
                             rt_parms, *nparms_out,
                             kernel->info.name, 1);
-    if (err != 0) {
-        free(rt_parms);
-        tpb_free_kernel(kernel_common);
-        free(kernel_common);
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
     *rt_parms_out = rt_parms;
     tpb_free_kernel(kernel_common);
@@ -402,7 +385,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
     (void)nchar;  /* Unused parameter */
 
     if (tokstr == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (narg != NULL) {
@@ -415,7 +398,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
     while (token != NULL) {
         char *trimmed = _sf_trim_whitespace(token);
         if (trimmed == NULL || *trimmed == '\0') {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_CLI_FAIL, NULL);
         }
 
         /* Parse key=value */
@@ -423,7 +406,7 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
         if (eq == NULL) {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg \"%s\". Expected key=value.\n", trimmed);
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
         *eq = '\0';
@@ -433,14 +416,12 @@ tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg)
         if (key == NULL || value == NULL || *key == '\0' || *value == '\0') {
             tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                        "Invalid kernel arg. Empty key or value detected.\n");
-            return TPBE_KERN_ARG_FAIL;
+            TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
         /* Use tpb_driver_set_hdl_karg to set the argument for current handle */
         err = tpb_driver_set_hdl_karg(key, value);
-        if (err != 0) {
-            return err;
-        }
+        TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
         if (narg != NULL) {
             (*narg)++;
@@ -456,9 +437,10 @@ int
 tpb_argp_set_timer(const char *timer_name)
 {
     tpb_timer_t timer;
+    int err;
 
     if (timer_name == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_NULLPTR_ARG, NULL);
     }
 
     memset(&timer, 0, sizeof(tpb_timer_t));
@@ -482,8 +464,10 @@ tpb_argp_set_timer(const char *timer_name)
         timer.get_stamp = get_time_tsc_asym;
 #endif
     } else {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_ARGP, TPBE_CLI_FAIL, NULL);
     }
 
-    return tpb_driver_set_timer(timer);
+    err = tpb_driver_set_timer(timer);
+    TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
+    return TPBE_SUCCESS;
 }

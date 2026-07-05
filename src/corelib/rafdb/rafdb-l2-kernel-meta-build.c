@@ -76,7 +76,7 @@ _sf_append_parm_value(uint8_t **ptr, const tpb_rt_parm_t *parm,
                       uint32_t elem_size)
 {
     if (*ptr == NULL || parm == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     memcpy(*ptr, &parm->value, elem_size);
@@ -91,7 +91,7 @@ _sf_init_meta_payload(char **payload_buf, size_t *payload_cap,
     size_t need;
 
     if (payload_buf == NULL || payload_cap == NULL || section == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     need = 64;
@@ -100,7 +100,7 @@ _sf_init_meta_payload(char **payload_buf, size_t *payload_cap,
     }
     *payload_buf = (char *)calloc(1, need);
     if (*payload_buf == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_MALLOC_FAIL, NULL);
     }
     *payload_cap = need;
     snprintf(*payload_buf, need, "format=tpbench.kernel_meta.v1\nsection=%s\n",
@@ -154,7 +154,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
     uint32_t mi;
 
     if (kernel == NULL || kernel_id == NULL || attr_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     nparm = (uint32_t)kernel->info.nparms;
@@ -163,7 +163,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
 
     hdrs = (tpb_meta_header_t *)calloc(nheader, sizeof(*hdrs));
     if (hdrs == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_MALLOC_FAIL, NULL);
     }
 
     datasize = 0;
@@ -201,7 +201,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
                 free(meta_payloads[k]);
             }
             free(hdrs);
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_MALLOC_FAIL, NULL);
         }
         _sf_fill_string_header(&hdrs[nparm + nmetric + mi],
                                g_meta_hdr_names[mi], meta_payloads[mi]);
@@ -214,7 +214,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
             free(meta_payloads[mi]);
         }
         free(hdrs);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_MALLOC_FAIL, NULL);
     }
 
     ptr = (uint8_t *)data;

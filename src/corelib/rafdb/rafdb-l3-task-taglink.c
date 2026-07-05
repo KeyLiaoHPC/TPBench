@@ -45,7 +45,7 @@ tpb_raf_record_append_task_capsule(const char *workspace,
     uint64_t new_hdr_ds;
 
     if (!workspace || !capsule_id || !task_id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_TASK, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TASK,
@@ -53,13 +53,13 @@ tpb_raf_record_append_task_capsule(const char *workspace,
 
     fp = fopen(fpath, "r+b");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_TASK, TPBE_FILE_IO_FAIL, NULL);
     }
     (void)setvbuf(fp, NULL, _IONBF, 0);
     fd = fileno(fp);
     if (fd < 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_TASK, TPBE_FILE_IO_FAIL, NULL);
     }
 
     memset(&fl, 0, sizeof(fl));
@@ -69,7 +69,7 @@ tpb_raf_record_append_task_capsule(const char *workspace,
     fl.l_len = 0;
     if (fcntl(fd, F_SETLKW, &fl) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_TASK, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -198,5 +198,5 @@ fail_unlock:
     fl.l_type = F_UNLCK;
     (void)fcntl(fd, F_SETLK, &fl);
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L3_TASK, TPBE_FILE_IO_FAIL, NULL);
 }

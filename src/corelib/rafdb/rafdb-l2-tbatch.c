@@ -31,10 +31,13 @@ tpb_raf_entry_append_tbatch(const char *workspace,
                             const tbatch_entry_t *entry)
 {
     if (!workspace || !entry) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_TBATCH,
-                                  entry, sizeof(tbatch_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_TBATCH,
+                  _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_TBATCH,
+                                           entry, sizeof(tbatch_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -46,11 +49,14 @@ tpb_raf_entry_list_tbatch(const char *workspace,
                           int *count)
 {
     if (!workspace || !entries || !count) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_TBATCH,
-                                 (void **)entries, count,
-                                 sizeof(tbatch_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_TBATCH,
+                  _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_TBATCH,
+                                         (void **)entries, count,
+                                         sizeof(tbatch_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -69,7 +75,7 @@ tpb_raf_gen_tbatch_id(tpb_dtbits_t utc_bits,
     int len;
 
     if (!hostname || !username || !id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_sha1_init(&ctx);
@@ -110,7 +116,7 @@ tpb_raf_record_write_tbatch(const char *workspace,
     uint64_t metasize;
 
     if (!workspace || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
@@ -118,7 +124,7 @@ tpb_raf_record_write_tbatch(const char *workspace,
 
     fp = fopen(fpath, "wb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
     }
 
     metasize = 236 + TPB_RAF_RESERVE_SIZE;
@@ -205,7 +211,7 @@ tpb_raf_record_write_tbatch(const char *workspace,
 
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
 }
 
 /**
@@ -225,7 +231,7 @@ tpb_raf_record_patch_tbatch_counters(const char *workspace,
     int fd;
 
     if (!workspace || !tbatch_id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
@@ -233,13 +239,13 @@ tpb_raf_record_patch_tbatch_counters(const char *workspace,
 
     fp = fopen(fpath, "r+b");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
     }
     (void)setvbuf(fp, NULL, _IONBF, 0);
     fd = fileno(fp);
     if (fd < 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
     }
 
     memset(&fl, 0, sizeof(fl));
@@ -249,7 +255,7 @@ tpb_raf_record_patch_tbatch_counters(const char *workspace,
     fl.l_len = 0;
     if (fcntl(fd, F_SETLKW, &fl) != 0) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -291,7 +297,7 @@ fail_unlock:
     fl.l_type = F_UNLCK;
     (void)fcntl(fd, F_SETLK, &fl);
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
 }
 
 /**
@@ -312,7 +318,7 @@ tpb_raf_record_read_tbatch(const char *workspace,
     uint64_t ds;
 
     if (!workspace || !tbatch_id || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TBATCH,
@@ -320,7 +326,7 @@ tpb_raf_record_read_tbatch(const char *workspace,
 
     fp = fopen(fpath, "rb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -448,5 +454,5 @@ fail_hdrs:
     attr->headers = NULL;
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, NULL);
 }

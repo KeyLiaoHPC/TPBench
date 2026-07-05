@@ -60,20 +60,18 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
     int err;
 
     if (kernel_id == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_home = tpb_dl_get_tpb_home();
     if (tpb_home == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
              tpb_home, kernel_name);
 
     err = tpb_raf_hash_file(so_path, sha1);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     return tpb_raf_gen_kernel_id(sha1, kernel_id);
 }
@@ -105,51 +103,47 @@ tpbcli_kernel_set(int argc, char **argv)
         if (strcmp(argv[i], "--kernel") == 0) {
             if (i + 1 >= argc) {
                 _sf_print_set_usage();
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
             }
             kernel_name = argv[++i];
         } else if (strcmp(argv[i], "--key") == 0) {
             if (i + 2 >= argc) {
                 _sf_print_set_usage();
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
             }
             if (npairs >= TPBCLI_KERNEL_SET_MAX_KV) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel set: too many --key pairs.\n");
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
             }
             pairs[npairs].key = argv[++i];
             pairs[npairs].value = argv[++i];
             npairs++;
         } else {
             _sf_print_set_usage();
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
     }
 
     if (kernel_name == NULL || npairs == 0) {
         _sf_print_set_usage();
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     err = _sf_hash_current_kernel_so(kernel_name, kernel_id);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel set: cannot hash libtpbk_%s.so (%d).\n",
                    kernel_name, err);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_hash_current_kernel_so");
     }
 
     exists_before = _sf_kernel_id_exists(workspace, kernel_id);
 
     err = tpb_register_kernels(1, &kernel_name);
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, NULL);
 
     if (exists_before && !tpb_raf_kernel_override_enabled()) {
         tpb_raf_id_to_hex(kernel_id, kid_hex);
@@ -167,7 +161,7 @@ tpbcli_kernel_set(int argc, char **argv)
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                        "kernel set: failed to update '%s' (%d).\n",
                        pairs[i].key, err);
-            return err;
+            TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "tpb_raf_kernel_update_meta_key");
         }
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
                    "kernel set: updated %s for kernel %s.\n",

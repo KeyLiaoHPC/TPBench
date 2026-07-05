@@ -266,7 +266,7 @@ tpb_bench_yaml_load(const char *path, tpb_benchmark_t *bench)
     tpb_bench_score_t *cur_score = NULL;
     
     if (path == NULL || bench == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_NULLPTR_ARG, NULL);
     }
     
     /* Initialize benchmark structure */
@@ -276,7 +276,7 @@ tpb_bench_yaml_load(const char *path, tpb_benchmark_t *bench)
     if (fp == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
                    "Cannot open benchmark file: %s\n", path);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_FILE_IO_FAIL, NULL);
     }
     
     while (fgets(line, sizeof(line), fp) != NULL) {

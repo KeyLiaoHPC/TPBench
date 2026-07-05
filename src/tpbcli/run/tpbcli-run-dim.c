@@ -110,7 +110,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     int is_string = 0;
 
     if (spec == NULL || cfg == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* spec should be: [a, b, c, ...] */
@@ -121,7 +121,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     if (*p != '[') {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid list sequence: expected '[' at start of '%s'\n", spec);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     p++;
 
@@ -130,7 +130,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     if (end == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid list sequence: missing ']' in '%s'\n", spec);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     *end = '\0';
 
@@ -140,7 +140,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
     if (str_vals == NULL || num_vals == NULL) {
         free(str_vals);
         free(num_vals);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
 
     /* Parse comma-separated values */
@@ -158,7 +158,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
                 }
                 free(str_vals);
                 free(num_vals);
-                return TPBE_MALLOC_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
             }
             str_vals = new_str;
             num_vals = new_num;
@@ -171,7 +171,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
             }
             free(str_vals);
             free(num_vals);
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
         }
 
         /* Check if numeric */
@@ -188,7 +188,7 @@ tpb_argp_parse_list(const char *spec, tpb_dim_config_t *cfg)
         free(str_vals);
         free(num_vals);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Invalid list sequence: empty list\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     cfg->type = TPB_DIM_LIST;
@@ -216,7 +216,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     int nlim;
 
     if (spec == NULL || cfg == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* spec should be: <op>(@,x)(st,min,max,nlim) */
@@ -228,14 +228,14 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (op_end == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing '(' in '%s'\n", spec);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     size_t op_len = op_end - p;
     if (op_len >= sizeof(op_name)) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: operator name too long\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     strncpy(op_name, p, op_len);
     op_name[op_len] = '\0';
@@ -254,7 +254,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     } else {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: unknown operator '%s'\n", op_name);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     /* Parse (@, x) */
@@ -263,7 +263,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (first_paren_end == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing ')' for operator params\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     *first_paren_end = '\0';
 
@@ -272,7 +272,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (comma == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '@,x' format\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     /* Verify @ symbol */
@@ -283,7 +283,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '@' as first operand, got '%s'\n",
                    at_part);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     /* Parse x value */
@@ -296,7 +296,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (*params_start != '(') {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: expected '(' for range params\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     params_start++;
 
@@ -304,7 +304,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (params_end == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing ')' for range params\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     *params_end = '\0';
 
@@ -316,7 +316,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (tok == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing start value\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     st = strtod(trim_whitespace_dim(tok), NULL);
 
@@ -324,7 +324,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (tok == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing min value\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     min = strtod(trim_whitespace_dim(tok), NULL);
 
@@ -332,7 +332,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (tok == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing max value\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     max = strtod(trim_whitespace_dim(tok), NULL);
 
@@ -340,7 +340,7 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (tok == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: missing nlim value\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
     nlim = (int)strtol(trim_whitespace_dim(tok), NULL, 10);
 
@@ -348,14 +348,14 @@ tpb_argp_parse_dim_recur(const char *spec, tpb_dim_config_t *cfg)
     if (min > max) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: min (%g) > max (%g)\n", min, max);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     if (st < min || st > max) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Invalid recursive sequence: start (%g) not in [%g, %g]\n",
                    st, min, max);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     cfg->type = TPB_DIM_RECUR;
@@ -381,13 +381,13 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
     int err;
 
     if (argstr == NULL || cfg == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Allocate config */
     *cfg = (tpb_dim_config_t *)malloc(sizeof(tpb_dim_config_t));
     if (*cfg == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
     memset(*cfg, 0, sizeof(tpb_dim_config_t));
 
@@ -403,7 +403,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
                    argstr);
         free(*cfg);
         *cfg = NULL;
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     *eq = '\0';
@@ -420,7 +420,7 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
                    "flat Cartesian product.\n");
         free(*cfg);
         *cfg = NULL;
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     /* Detect sequence type based on first character */
@@ -448,7 +448,8 @@ tpb_argp_parse_dim(const char *argstr, tpb_dim_config_t **cfg)
         *cfg = NULL;
     }
 
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 /* Value Generation */
@@ -460,12 +461,12 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
     int n = 0;
 
     if (cfg == NULL || values == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_NULLPTR_ARG, NULL);
     }
 
     val = (tpb_dim_values_t *)malloc(sizeof(tpb_dim_values_t));
     if (val == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
     }
     memset(val, 0, sizeof(tpb_dim_values_t));
 
@@ -481,7 +482,7 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
             free(val->values);
             free(val->str_values);
             free(val);
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
         }
 
         for (int i = 0; i < n; i++) {
@@ -494,7 +495,7 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
                 free(val->values);
                 free(val->str_values);
                 free(val);
-                return TPBE_MALLOC_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
             }
         }
 
@@ -516,7 +517,7 @@ tpb_dim_generate_values(tpb_dim_config_t *cfg, tpb_dim_values_t **values)
         val->values = (double *)malloc(sizeof(double) * cap);
         if (val->values == NULL) {
             free(val);
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_MALLOC_FAIL, NULL);
         }
 
         /* Generate values */
@@ -564,7 +565,7 @@ recur_done:
 
     default:
         free(val);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_RUN, TPBE_CLI_FAIL, NULL);
     }
 
     *values = val;

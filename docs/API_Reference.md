@@ -31,7 +31,9 @@ The `tpbcli` frontend lives under `src/tpbcli/` and links against `libtpbench.so
 
 ## Error Codes
 
-All TPBench functions return an `tpb_errno_t` error code. Defined in `tpb-types.h`.
+All TPBench functions return an encoded error: low byte is `tpb_errno_t` cause
+(`TPBE_*`), high byte is reporting module (`TPB_MOD_*`). Defined in
+`tpb-public.h`.
 
 | Code | Name | Description |
 |------|------|-------------|
@@ -1058,52 +1060,85 @@ const char *tpb_unit_to_string(TPB_UNIT_T unit);
 
 ## Error Handling
 
-Functions for error handling and validation. Declared in `tpb-public.h`.
+Functions for layered error handling. Declared in `tpb-public.h`; cause codes
+are the `TPBE_*` enum values (low byte). Module codes (`TPB_MOD_*`) occupy the
+high byte and identify which API layer is reporting.
 
 Log severity tags (`TPB_LOG_TAG_NOTE`, `TPB_LOG_TAG_WARN`, `TPB_LOG_TAG_FAIL`,
 `TPB_LOG_TAG_UNKN`) are used only as `tpblog_printf_f()` log-type arguments.
 They are not error return codes.
 
-### `TPB_RETURN_ON_ERROR`
-
-Macro that calls `tpb_report_error()` and returns when `err != 0`.
-
-### `tpb_report_error`
-
-Log a formatted error with a tag chosen from the error cause code, then return
-the same error code. `TPBE_KERN_VERIFY_FAIL` and `TPBE_METRIC_MISSING` use
-`[WARN]`; other known `TPBE_*` codes use `[ERRO]`.
+### Encoding macros
 
 ```c
-int tpb_report_error(int err, const char *context);
+#define TPBE_MAKE(mod, cause)
+#define TPBE_CAUSE(err)
+#define TPBE_MODULE(err)
+#define TPBE_IS_ENCODED(err)
 ```
 
-**Parameters:**
-- `err`: Error code from `tpb_errno_t`
-- `context`: Short caller context string
+### `TPB_FAIL`
 
-**Returns:**
-- `err` unchanged
+Origin failure at the current layer (local statement or external API):
 
-Call sites that must exit on fatal errors should call `tpb_report_error()` and
-then `exit(err)` explicitly (except for warn-level codes such as
-`TPBE_KERN_VERIFY_FAIL`).
+```c
+TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL, "context message");
+```
 
----
+Logs: `At <file>, <func>. <context>. <reason>. [errcode=<cause>].`
+
+### `TPB_PROPAGATE`
+
+Propagate an unhandled error from a TPBench callee; swaps module, keeps cause:
+
+```c
+TPB_PROPAGATE(TPB_MOD_CLI_RUN, err, "optional context");
+```
+
+Logs: `At <file>, <func>. [<context>.] [errcode=<cause>].`
+
+### `tpb_report_error_at`
+
+Low-level log + return helper used by the macros above:
+
+```c
+int tpb_report_error_at(const char *file, const char *func, int mod,
+                        int cause, int is_origin, const char *msg);
+```
+
+### `tpb_err_propagate`
+
+Re-encode without logging (cleanup / goto paths):
+
+```c
+int tpb_err_propagate(int cur_mod, int err);
+```
+
+### `tpb_err_to_exit_status`
+
+Map return value to process exit code (cause only; `TPBE_EXIT_ON_HELP` → 0):
+
+```c
+int tpb_err_to_exit_status(int err);
+```
+
+### `tpb_err_module_name`
+
+Lookup short module name for diagnostics:
+
+```c
+const char *tpb_err_module_name(int mod);
+```
 
 ### `tpb_get_err_msg`
 
-Get error message from error code.
+Get human-readable message for a cause code (accepts encoded or bare cause):
 
 ```c
 const char *tpb_get_err_msg(int err);
 ```
 
-**Parameters:**
-- `err`: Error code
-
-**Returns:**
-- Error message string
+**Returns:** Message string; `"Unknown error."` for unrecognized causes.
 
 ---
 

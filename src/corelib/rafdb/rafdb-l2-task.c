@@ -24,10 +24,13 @@ tpb_raf_entry_append_task(const char *workspace,
                           const task_entry_t *entry)
 {
     if (!workspace || !entry) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_TASK,
-                                  entry, sizeof(task_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_TASK,
+                  _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_TASK,
+                                           entry, sizeof(task_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -39,11 +42,14 @@ tpb_raf_entry_list_task(const char *workspace,
                         int *count)
 {
     if (!workspace || !entries || !count) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_TASK,
-                                  (void **)entries, count,
-                                  sizeof(task_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_TASK,
+                  _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_TASK,
+                                         (void **)entries, count,
+                                         sizeof(task_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -67,7 +73,7 @@ tpb_raf_gen_task_id(tpb_dtbits_t utc_bits,
 
     if (!hostname || !username || !tbatch_id ||
         !kernel_id || !id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_sha1_init(&ctx);
@@ -124,7 +130,7 @@ tpb_raf_gen_taskcapsule_id(tpb_dtbits_t utc_bits,
 
     if (!hostname || !username || !tbatch_id ||
         !kernel_id || !id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
 
     tpb_sha1_init(&ctx);
@@ -175,7 +181,7 @@ tpb_raf_record_write_task(const char *workspace,
     uint64_t metasize;
 
     if (!workspace || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TASK,
@@ -184,7 +190,7 @@ tpb_raf_record_write_task(const char *workspace,
 
     fp = fopen(fpath, "wb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_FILE_IO_FAIL, NULL);
     }
 
     metasize = 156 + TPB_RAF_RESERVE_SIZE;
@@ -276,7 +282,7 @@ tpb_raf_record_write_task(const char *workspace,
     return TPBE_SUCCESS;
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_FILE_IO_FAIL, NULL);
 }
 
 /**
@@ -288,12 +294,16 @@ tpb_raf_record_create_task_capsule(const char *workspace,
                                   const unsigned char first_task_id[20])
 {
     if (!workspace || !attr || !first_task_id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
     if (attr->nheader != 1 || attr->ninput != 0 || attr->noutput != 0) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_CLI_FAIL, NULL);
     }
-    return tpb_raf_record_write_task(workspace, attr, first_task_id, 20);
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_TASK,
+                  tpb_raf_record_write_task(workspace, attr, first_task_id,
+                                            20),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -314,7 +324,7 @@ tpb_raf_record_read_task(const char *workspace,
     uint64_t ds;
 
     if (!workspace || !task_id || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_TASK,
@@ -322,7 +332,7 @@ tpb_raf_record_read_task(const char *workspace,
 
     fp = fopen(fpath, "rb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -456,5 +466,5 @@ fail_hdrs:
     attr->headers = NULL;
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_TASK, TPBE_FILE_IO_FAIL, NULL);
 }

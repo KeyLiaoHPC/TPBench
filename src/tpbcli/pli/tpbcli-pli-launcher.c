@@ -69,14 +69,14 @@ main(int argc, char **argv)
     if (argc < 3) {
         printf("Usage: %s <kernel.so> <timer_name> [kernel_args...]\n",
                argv[0]);
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     handle = dlopen(argv[1], RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
         printf("tpbcli-pli-launcher: dlopen(%s): %s\n",
                argv[1], dlerror());
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     if (_sf_extract_kernel_name(argv[1], kernel_name,
@@ -87,14 +87,14 @@ main(int argc, char **argv)
             so_copy = strdup(argv[1]);
             if (so_copy == NULL) {
                 dlclose(handle);
-                return TPBE_MALLOC_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
             }
 
             kargv = (char **)malloc(sizeof(char *) * (size_t)(argc - 1));
             if (kargv == NULL) {
                 free(so_copy);
                 dlclose(handle);
-                return TPBE_MALLOC_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
             }
 
             kargv[0] = basename(so_copy);
@@ -107,7 +107,8 @@ main(int argc, char **argv)
             free(kargv);
             free(so_copy);
             dlclose(handle);
-            return rc;
+            TPB_PROPAGATE(TPB_MOD_CLI_MISC, rc, "kernel_entry");
+            return TPBE_SUCCESS;
         }
     }
 
@@ -116,20 +117,20 @@ main(int argc, char **argv)
         printf("tpbcli-pli-launcher: dlsym(tpbk_*_entry/main): %s\n",
                dlerror());
         dlclose(handle);
-        return TPBE_KERNEL_NE_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
     so_copy = strdup(argv[1]);
     if (so_copy == NULL) {
         dlclose(handle);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     kargv = (char **)malloc(sizeof(char *) * (size_t)(argc - 1));
     if (kargv == NULL) {
         free(so_copy);
         dlclose(handle);
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     kargv[0] = basename(so_copy);
@@ -142,5 +143,6 @@ main(int argc, char **argv)
     free(kargv);
     free(so_copy);
     dlclose(handle);
-    return rc;
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, rc, NULL);
+    return TPBE_SUCCESS;
 }

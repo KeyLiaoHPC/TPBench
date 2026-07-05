@@ -173,11 +173,11 @@ tpb_raf_hash_file(const char *filepath, unsigned char sha1_out[20])
     size_t nread;
 
     if (filepath == NULL || sha1_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
     fp = fopen(filepath, "rb");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     tpb_sha1_init(&ctx);
     while ((nread = fread(buf, 1, sizeof(buf), fp)) > 0) {
@@ -185,7 +185,7 @@ tpb_raf_hash_file(const char *filepath, unsigned char sha1_out[20])
     }
     if (ferror(fp)) {
         fclose(fp);
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
     tpb_sha1_final(&ctx, sha1_out);
     fclose(fp);

@@ -174,10 +174,30 @@ tpb_add_subcase(A8 A8.8 snprintf_macro       test-tpblog corelib)
 tpb_add_subcase(A8 A8.9 log_tag_macros        test-tpblog corelib)
 tpb_add_subcase(A8 A8.10 report_error_tags    test-tpblog corelib)
 
+# --- error code test executable (Pack A9) ---
+add_executable(test-errcode EXCLUDE_FROM_ALL
+    test_errcode.c
+)
+target_include_directories(test-errcode PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-errcode PRIVATE tpbench m)
+set_target_properties(test-errcode PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A9 A9.1 make_roundtrip   test-errcode corelib)
+tpb_add_subcase(A9 A9.2 propagate_swap   test-errcode corelib)
+tpb_add_subcase(A9 A9.3 propagate_legacy test-errcode corelib)
+tpb_add_subcase(A9 A9.4 exit_status      test-errcode corelib)
+tpb_add_subcase(A9 A9.5 unknown_msg      test-errcode corelib)
+tpb_add_subcase(A9 A9.6 module_name      test-errcode corelib)
+tpb_add_subcase(A9 A9.7 success_plain    test-errcode corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
-            test-kernel-record test-tpblog
+            test-kernel-record test-tpblog test-errcode
 )
 
 add_custom_target(check_corelib

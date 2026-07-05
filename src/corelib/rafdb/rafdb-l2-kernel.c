@@ -22,10 +22,13 @@ tpb_raf_entry_append_kernel(const char *workspace,
                             const kernel_entry_t *entry)
 {
     if (!workspace || !entry) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_KERNEL,
-                                  entry, sizeof(kernel_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_KERNEL,
+                  _tpb_raf_l1_entry_append(workspace, TPB_RAF_DOM_KERNEL,
+                                           entry, sizeof(kernel_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -37,11 +40,14 @@ tpb_raf_entry_list_kernel(const char *workspace,
                           int *count)
 {
     if (!workspace || !entries || !count) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
-    return _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_KERNEL,
-                                  (void **)entries, count,
-                                  sizeof(kernel_entry_t));
+    TPB_PROPAGATE(TPB_MOD_RAF_L2_KERNEL,
+                  _tpb_raf_l1_entry_list(workspace, TPB_RAF_DOM_KERNEL,
+                                         (void **)entries, count,
+                                         sizeof(kernel_entry_t)),
+                  NULL);
+    return TPBE_SUCCESS;
 }
 
 /**
@@ -52,7 +58,7 @@ tpb_raf_gen_kernel_id(const unsigned char tpbx_sha1[20],
                       unsigned char id_out[20])
 {
     if (!tpbx_sha1 || !id_out) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     memcpy(id_out, tpbx_sha1, 20);
@@ -75,7 +81,7 @@ tpb_raf_record_write_kernel(const char *workspace,
     uint64_t metasize;
 
     if (!workspace || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_KERNEL,
@@ -83,7 +89,7 @@ tpb_raf_record_write_kernel(const char *workspace,
 
     fp = fopen(fpath, "wb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     metasize = 2448 + TPB_RAF_KERNEL_ATTR_RESERVE;
@@ -160,7 +166,7 @@ tpb_raf_record_write_kernel(const char *workspace,
     return TPBE_SUCCESS;
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_FILE_IO_FAIL, NULL);
 }
 
 /**
@@ -181,7 +187,7 @@ tpb_raf_record_read_kernel(const char *workspace,
     uint64_t ds;
 
     if (!workspace || !kernel_id || !attr) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     _tpb_raf_l1_build_record_path(workspace, TPB_RAF_DOM_KERNEL,
@@ -189,7 +195,7 @@ tpb_raf_record_read_kernel(const char *workspace,
 
     fp = fopen(fpath, "rb");
     if (!fp) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     if (fread(magic, 1, TPB_RAF_MAGIC_LEN, fp)
@@ -308,5 +314,5 @@ fail_hdrs:
     attr->headers = NULL;
 fail:
     fclose(fp);
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_FILE_IO_FAIL, NULL);
 }

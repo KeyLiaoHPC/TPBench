@@ -49,7 +49,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
         if (strcmp(argv[i], "--workspace") == 0) {
             if (i + 1 >= argc) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: --workspace requires a path\n");
-                return TPBE_CLI_FAIL;
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
             }
             *ws_out = argv[i + 1];
             i += 2;
@@ -63,7 +63,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                             "Set \"--workspace\" or one of sub applications. \n"
                             "r[un], b[enchmark], db|database, k[ernel], h[elp].\n");
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         break;
     }
@@ -75,41 +75,61 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
 static int
 _sf_dispatch_run(tpbcli_argnode_t *node, const char *value)
 {
+    int err;
+
     (void)node;
     (void)value;
-    return tpbcli_run(g_top_argc, g_top_argv);
+    err = tpbcli_run(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
 _sf_dispatch_benchmark(tpbcli_argnode_t *node, const char *value)
 {
+    int err;
+
     (void)node;
     (void)value;
-    return tpbcli_benchmark(g_top_argc, g_top_argv);
+    err = tpbcli_benchmark(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
 _sf_dispatch_database(tpbcli_argnode_t *node, const char *value)
 {
+    int err;
+
     (void)node;
     (void)value;
-    return tpbcli_database(g_top_argc, g_top_argv);
+    err = tpbcli_database(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
 _sf_dispatch_kernel(tpbcli_argnode_t *node, const char *value)
 {
+    int err;
+
     (void)node;
     (void)value;
-    return tpbcli_kernel(g_top_argc, g_top_argv);
+    err = tpbcli_kernel(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static int
 _sf_dispatch_help_cmd(tpbcli_argnode_t *node, const char *value)
 {
+    int err;
+
     (void)node;
     (void)value;
-    return tpbcli_help(g_top_argc, g_top_argv);
+    err = tpbcli_help(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 static void
@@ -126,7 +146,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
     tpbcli_argnode_t *root;
 
     if (tree == NULL) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     root = &tree->root;
 
@@ -139,7 +159,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_run,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "benchmark",
@@ -150,7 +170,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_benchmark,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "database",
@@ -161,7 +181,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_database,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "kernel",
@@ -172,7 +192,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_kernel,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "help",
@@ -183,7 +203,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_help_cmd,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
             .name = "--help",
@@ -194,7 +214,7 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .max_chosen = 0,
             .help_fn = _sf_top_help_flag,
         }) == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }
@@ -219,16 +239,17 @@ tpbcli_main(int argc, char **argv)
         (argc > 0 && argv[0] != NULL) ? argv[0] : "tpbcli",
         "TPBench performance benchmarking CLI");
     if (tree == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
     err = _sf_build_top_arg_tree(tree);
     if (err != TPBE_SUCCESS) {
         tpbcli_argtree_destroy(tree);
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "_sf_build_top_arg_tree");
     }
     err = tpbcli_parse_args(tree, argc, argv);
     tpbcli_argtree_destroy(tree);
-    return err;
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
 }
 
 int
@@ -247,14 +268,14 @@ main(int argc, char **argv)
 
     err = parse_global_cli_prefix(argc, argv, &ws_opt, &first_idx);
     if (err != TPBE_SUCCESS) {
-        return err;
+        return tpb_err_to_exit_status(err);
     }
 
     init_ws = NULL;
     if (ws_opt != NULL) {
         if (snprintf(ws_buf, sizeof(ws_buf), "%s", ws_opt) >= (int)sizeof(ws_buf)) {
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: workspace path too long\n");
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         init_ws = ws_buf;
     }
@@ -264,7 +285,7 @@ main(int argc, char **argv)
     if (use_heap_argv) {
         dispatch_argv = (char **)malloc(sizeof(char *) * (size_t)(dispatch_argc + 1));
         if (dispatch_argv == NULL) {
-            return TPBE_MALLOC_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
         }
         dispatch_argv[0] = argv[0];
         for (k = first_idx; k < argc; k++) {
@@ -280,7 +301,7 @@ main(int argc, char **argv)
         if (use_heap_argv) {
             free(dispatch_argv);
         }
-        return rc;
+        return tpb_err_to_exit_status(rc);
     }
 
     rc = tpbcli_main(dispatch_argc, dispatch_argv);
@@ -291,8 +312,5 @@ main(int argc, char **argv)
 
     tpblog_cleanup();
 
-    if (rc == TPBE_EXIT_ON_HELP) {
-        return 0;
-    }
-    return rc;
+    return tpb_err_to_exit_status(rc);
 }

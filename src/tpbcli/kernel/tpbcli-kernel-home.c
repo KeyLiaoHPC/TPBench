@@ -41,12 +41,12 @@ tpbcli_kernel_resolve_home(const char *override, char *out, size_t outlen)
     const char *home;
 
     if (out == NULL || outlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (override != NULL && override[0] != '\0') {
         if (strlen(override) >= outlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         snprintf(out, outlen, "%s", override);
         return TPBE_SUCCESS;
@@ -55,7 +55,7 @@ tpbcli_kernel_resolve_home(const char *override, char *out, size_t outlen)
     env_home = getenv("TPB_HOME");
     if (env_home != NULL && env_home[0] != '\0') {
         if (strlen(env_home) >= outlen) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         snprintf(out, outlen, "%s", env_home);
         return TPBE_SUCCESS;
@@ -63,10 +63,10 @@ tpbcli_kernel_resolve_home(const char *override, char *out, size_t outlen)
 
     home = getenv("HOME");
     if (home == NULL || home[0] == '\0') {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     if (snprintf(out, outlen, "%s/.tpbench", home) >= (int)outlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     return TPBE_SUCCESS;
 }

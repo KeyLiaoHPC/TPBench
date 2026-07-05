@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <math.h>
 #include "tpb-unitcast.h"
+#include "tpb-public.h"
 #include "tpb-types.h"
 #include "tpb-stat.h"
 
@@ -399,7 +400,7 @@ tpb_cast_unit(void *arr, int narr, TPB_DTYPE dtype,
               double *arr_cast, int sigbit, int decbit)
 {
     if (arr == NULL || unit_cast == NULL || arr_cast == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (narr <= 0) {

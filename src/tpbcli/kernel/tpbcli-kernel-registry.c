@@ -70,27 +70,27 @@ _sf_name_from_source(const char *fname, char *name_out, size_t name_len)
     size_t suf;
 
     if (fname == NULL || name_out == NULL || name_len == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     pre = strlen(TPBCLI_KERNEL_REG_PREFIX);
     suf = strlen(TPBCLI_KERNEL_REG_SUFFIX);
     flen = strlen(fname);
     if (flen <= pre + suf) {
-        return TPBE_CLI_FAIL;
+        return TPBE_MAKE(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL);
     }
     if (strncmp(fname, TPBCLI_KERNEL_REG_PREFIX, pre) != 0) {
-        return TPBE_CLI_FAIL;
+        return TPBE_MAKE(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL);
     }
     if (strcmp(fname + flen - suf, TPBCLI_KERNEL_REG_SUFFIX) != 0) {
-        return TPBE_CLI_FAIL;
+        return TPBE_MAKE(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL);
     }
     if (flen - pre - suf >= name_len) {
-        return TPBE_FILE_IO_FAIL;
+        return TPBE_MAKE(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL);
     }
     memcpy(name_out, fname + pre, flen - pre - suf);
     name_out[flen - pre - suf] = '\0';
     if (!tpbcli_kernel_name_valid(name_out)) {
-        return TPBE_CLI_FAIL;
+        return TPBE_MAKE(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL);
     }
     return TPBE_SUCCESS;
 }
@@ -103,7 +103,7 @@ _sf_add_entry(tpbcli_kernel_reg_list_t *list,
     int i;
 
     if (list == NULL || name == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     for (i = 0; i < list->count; i++) {
         if (strcmp(list->entries[i].name, name) == 0) {
@@ -122,7 +122,7 @@ _sf_add_entry(tpbcli_kernel_reg_list_t *list,
         }
     }
     if (list->count >= TPBCLI_KERNEL_REG_MAX) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
     snprintf(list->entries[list->count].name,
              sizeof(list->entries[list->count].name), "%s", name);
@@ -154,7 +154,7 @@ _sf_parse_registry_file(const char *path, tpbcli_kernel_reg_list_t *list)
 
     fp = fopen(path, "r");
     if (fp == NULL) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     while (fgets(line, sizeof(line), fp) != NULL) {
         char *p;
@@ -283,11 +283,11 @@ tpbcli_kernel_reg_split_csv(const char *value,
 
     if (value == NULL || tokens_out == NULL || scratch == NULL ||
         tokens_max <= 0 || scratch_len == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     vlen = strlen(value);
     if (vlen + 1U > scratch_len) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     memcpy(scratch, value, vlen + 1U);
 
@@ -300,7 +300,7 @@ tpbcli_kernel_reg_split_csv(const char *value,
             memmove(scratch, scratch + 1, vlen - 1U);
         } else if (scratch[0] == '\'' || scratch[0] == '"' ||
                    scratch[vlen - 1U] == '\'' || scratch[vlen - 1U] == '"') {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
     }
     (void)quote;
@@ -313,7 +313,7 @@ tpbcli_kernel_reg_split_csv(const char *value,
             continue;
         }
         if (count >= tokens_max) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
         }
         tokens_out[count++] = tok;
     }
@@ -328,13 +328,13 @@ tpbcli_kernel_reg_load(const char *tpb_home, tpbcli_kernel_reg_list_t *out)
     int err;
 
     if (tpb_home == NULL || out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     memset(out, 0, sizeof(*out));
 
     if (snprintf(reg_path, sizeof(reg_path), "%s/%s",
                  tpb_home, TPBCLI_KERNEL_REG_LIST_FILE) >= (int)sizeof(reg_path)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     err = _sf_parse_registry_file(reg_path, out);
     if (err != TPBE_SUCCESS) {
@@ -343,7 +343,7 @@ tpbcli_kernel_reg_load(const char *tpb_home, tpbcli_kernel_reg_list_t *out)
 
     if (snprintf(scan_root, sizeof(scan_root), "%s/src/kernels",
                  tpb_home) >= (int)sizeof(scan_root)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     _sf_scan_dir(scan_root, "", out, 0);
     return TPBE_SUCCESS;
@@ -382,13 +382,13 @@ tpbcli_kernel_reg_expand_tags(const tpbcli_kernel_reg_list_t *list,
 
     if (list == NULL || tag_csv == NULL || names_out == NULL ||
         names_max <= 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     snprintf(scratch, sizeof(scratch), "%s", tag_csv);
     nreq = tpbcli_kernel_reg_split_csv(scratch, req_tags, 32,
                                        req_scratch, sizeof(req_scratch));
     if (nreq <= 0) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
     }
 
     out_count = 0;
@@ -479,13 +479,13 @@ tpbcli_kernel_reg_link_libs(const char *tpb_home,
     char libs[TPBCLI_KERNEL_REG_LINK_MAX];
 
     if (tpb_home == NULL || name == NULL || out == NULL || outlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     out[0] = '\0';
 
     if (snprintf(path, sizeof(path), "%s/%s",
                  tpb_home, TPBCLI_KERNEL_REG_LINK_FILE) >= (int)sizeof(path)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
     fp = fopen(path, "r");
     if (fp == NULL) {

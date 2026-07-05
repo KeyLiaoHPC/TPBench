@@ -47,7 +47,7 @@ tpb_raf_resolve_record_file(const char *workspace, const char *inpath,
 
     if (workspace == NULL || inpath == NULL || resolved == NULL ||
         resolved_cap == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (stat(inpath, &st) == 0 && S_ISREG(st.st_mode)) {
@@ -73,7 +73,7 @@ tpb_raf_resolve_record_file(const char *workspace, const char *inpath,
         }
     }
 
-    return TPBE_FILE_IO_FAIL;
+    TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
 }
 
 /**
@@ -96,7 +96,7 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
 
     if (workspace == NULL || id_hex_prefix == NULL || matches_out == NULL ||
         nmatch_out == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
     *matches_out = NULL;
     *nmatch_out = 0;
@@ -148,7 +148,7 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
                 if (!nm) {
                     closedir(dp);
                     free(matches);
-                    return TPBE_MALLOC_FAIL;
+                    TPB_FAIL(TPB_MOD_RAF_L1, TPBE_MALLOC_FAIL, NULL);
                 }
                 matches = nm;
                 cap = nc;

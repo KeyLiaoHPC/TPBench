@@ -98,6 +98,29 @@ Same as CPU kernel, plus:
 
 Extend [`src/corelib/`](src/corelib/) directly; keep CLI on public API only.
 
+### Error handling (layered module + cause)
+
+Return values encode **module** (high byte, `TPB_MOD_*`) and **cause** (low byte, `TPBE_*`):
+
+```c
+#define TPBE_MAKE(mod, cause)  /* combine module + cause */
+#define TPBE_CAUSE(err)        /* extract cause for comparisons / exit status */
+#define TPBE_MODULE(err)       /* extract reporting module (internal) */
+```
+
+| Macro / function | When to use |
+|------------------|-------------|
+| `TPB_FAIL(mod, cause, msg)` | Origin failure: local statement or non-TPBench external call. Logs file, func, msg, reason string, `[errcode=cause]`. |
+| `TPB_PROPAGATE(mod, err, msg)` | Callee returned an error and this layer does not handle it. Logs file, func, msg, `[errcode=cause]`; swaps module, keeps cause. |
+| `tpb_err_propagate(mod, err)` | Same re-encode as propagate, no log (cleanup / goto paths). |
+
+Module codes: `TPB_MOD_DRIVER`, `TPB_MOD_ARGP`, `TPB_MOD_IMPL`, `TPB_MOD_IO`, `TPB_MOD_MISC`, `TPB_MOD_RAF_L1`, `TPB_MOD_RAF_L2_{KERNEL,TASK,TBATCH}`, `TPB_MOD_RAF_L3_{KERNEL,TASK,TBATCH}`, `TPB_MOD_RAF_MISC`, `TPB_MOD_CLI_{RUN,BENCHMARK,KERNEL,MISC}`.
+
+Rules:
+- Corelib **must not** call `exit()`; return encoded errors to the caller.
+- `tpbcli` decides termination; `main()` maps returns with `tpb_err_to_exit_status()` (cause only). `TPBE_EXIT_ON_HELP` stays unencoded and exits 0.
+- Compare named causes with `TPBE_CAUSE(err) == TPBE_*`. Raw kernel exit codes (0–255) are stored verbatim in the cause byte.
+
 ## Kernel Layout (PLI)
 
 **Discovery**: [`src/kernels/CMakeLists.txt`](src/kernels/CMakeLists.txt) GLOBs `/*/tpbk_<kern>.c` under immediate subdirs of `src/kernels/`. Registry name `<kern>` must match filename.

@@ -57,16 +57,16 @@ tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
     char search[256];
 
     if (value_out == NULL || value_len == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     value_out[0] = '\0';
     if (payload == NULL || key == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     klen = strlen(key);
     if (klen + 2 >= sizeof(search)) {
-        return TPBE_KERN_ARG_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_KERN_ARG_FAIL, NULL);
     }
     snprintf(search, sizeof(search), "%s=", key);
 
@@ -94,7 +94,7 @@ tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
         }
         line = end + 1;
     }
-    return TPBE_LIST_NOT_FOUND;
+    TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
 }
 
 /**
@@ -110,16 +110,16 @@ tpb_raf_kernel_get_header_payload(const kernel_attr_t *attr, const void *data,
     const char *payload;
 
     if (buf == NULL || bufsz == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
     buf[0] = '\0';
     if (attr == NULL || hdr_name == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     idx = tpb_raf_kernel_find_header(attr, hdr_name);
     if (idx < 0) {
-        return TPBE_LIST_NOT_FOUND;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
     }
     for (j = 0; j < (uint32_t)idx; j++) {
         off += attr->headers[j].data_size;
@@ -204,7 +204,7 @@ tpb_raf_kernel_meta_kv_set(char **payload_buf, size_t *payload_cap,
 
     if (payload_buf == NULL || payload_cap == NULL ||
         key == NULL || value == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
     old = (*payload_buf != NULL) ? *payload_buf : "";
@@ -213,7 +213,7 @@ tpb_raf_kernel_meta_kv_set(char **payload_buf, size_t *payload_cap,
     out_cap = strlen(old) + strlen(key) + strlen(value) + 32;
     out = (char *)calloc(1, out_cap);
     if (out == NULL) {
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_MALLOC_FAIL, NULL);
     }
 
     replaced = 0;
@@ -233,7 +233,7 @@ tpb_raf_kernel_meta_kv_set(char **payload_buf, size_t *payload_cap,
                 size_t ll = (size_t)(end - line + 1);
                 if (out_len + ll + 1 > out_cap) {
                     free(out);
-                    return TPBE_MALLOC_FAIL;
+                    TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_MALLOC_FAIL, NULL);
                 }
                 memcpy(out + out_len, line, ll);
                 out[out_len + ll] = '\0';

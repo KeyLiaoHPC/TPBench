@@ -9,6 +9,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include "../../include/tpb-public.h"
 #include "../tpb-types.h"
 #include "../tpb_corelib_state.h"
 #include "rafdb-l1-domain-reg.h"
@@ -94,7 +95,7 @@ tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
     struct stat st;
 
     if (!out_path || pathlen == 0) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (tpb_corelib_workspace_ready() != 0) {
@@ -105,19 +106,19 @@ tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
 
     if (ws == NULL || ws[0] == '\0') {
         if (tpb_corelib_workspace_ready() != 0) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
         }
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_ILLEGAL_CALL, NULL);
     }
 
     if (strlen(ws) >= pathlen) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     snprintf(out_path, pathlen, "%s", ws);
 
     if (stat(out_path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     return TPBE_SUCCESS;
@@ -134,18 +135,18 @@ tpb_raf_init_workspace(const char *workspace_path)
     int nd;
 
     if (!workspace_path) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     snprintf(path, sizeof(path), "%s/etc", workspace_path);
     if (_sf_mkdir_recursive(path) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     snprintf(path, sizeof(path), "%s/%s", workspace_path, TPB_RAF_CONFIG_REL);
     if (!_sf_file_exists(path)) {
         if (_sf_write_default_config(path) != 0) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
         }
     }
 
@@ -158,13 +159,13 @@ tpb_raf_init_workspace(const char *workspace_path)
         }
         snprintf(path, sizeof(path), "%s/%s", workspace_path, desc->subdir);
         if (_sf_mkdir_recursive(path) != 0) {
-            return TPBE_FILE_IO_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
         }
     }
 
     snprintf(path, sizeof(path), "%s/%s", workspace_path, TPB_RAF_LOG_REL);
     if (_sf_mkdir_recursive(path) != 0) {
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
     return TPBE_SUCCESS;

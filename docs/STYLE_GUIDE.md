@@ -316,6 +316,49 @@ Use simple `/* Section Name */` comments to delineate code sections:
 /* Utility Functions */
 ```
 
+## 12. Error Handling
+
+TPBench uses layered error codes: an 8-bit **cause** (`TPBE_*`, low byte) and an
+8-bit **module** (`TPB_MOD_*`, high byte) combined with `TPBE_MAKE(mod, cause)`.
+
+### Origin vs propagate
+
+```c
+/* Local / external failure at this layer */
+if (fp == NULL) {
+    TPB_FAIL(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL,
+             "fopen failed for batch record");
+}
+
+/* Internal TPBench call — unhandled error bubbles up */
+err = tpb_raf_record_write_tbatch(...);
+TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
+```
+
+- **Origin** (`TPB_FAIL`): log includes the cause reason string once.
+- **Propagate** (`TPB_PROPAGATE`): log omits the reason string; cause unchanged.
+- Both log `At <file>, <func>` and `[errcode=<cause>]`.
+- Module is internal; do not print it in user-facing messages.
+
+### Cleanup paths
+
+Use `tpb_err_propagate(cur_mod, err)` when re-encoding without logging, then
+`goto cleanup` or assign to a status variable.
+
+### Termination
+
+Corelib and rafdb return errors; only `tpbcli` may decide process exit.
+Use `tpb_err_to_exit_status(err)` in `main()` (returns cause; maps
+`TPBE_EXIT_ON_HELP` to 0).
+
+### Comparisons
+
+```c
+if (TPBE_CAUSE(err) == TPBE_LIST_NOT_FOUND) { /* handle */ }
+if (err == TPBE_SUCCESS) { /* ok */ }
+if (err == TPBE_EXIT_ON_HELP) { /* help — never encoded */ }
+```
+
 ---
 
 ## Quick Reference

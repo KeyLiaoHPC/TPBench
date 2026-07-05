@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "../../src/tpbcli/argp/tpbcli-argp.h"
+#include "../../src/include/tpb-public.h"
 
 static int g_pass;
 static int g_fail;
@@ -25,6 +26,9 @@ static int g_delegate_called;
                 (msg), (int)(exp), (int)(act));                         \
     }                                                                   \
 } while (0)
+
+#define ASSERT_EQ_ERR(msg, exp, act) \
+    ASSERT_EQ_INT(msg, exp, TPBE_CAUSE(act))
 
 #define ASSERT_EQ_STR(msg, exp, act) do {                               \
     if ((exp) != NULL && (act) != NULL && strcmp((exp), (act)) == 0) {    \
@@ -287,7 +291,7 @@ test_mandatory_and_preset(void)
     });
 
     err = tpbcli_parse_args(tree, 2, argv1);
-    ASSERT_EQ_INT("missing kernel", TPBE_CLI_FAIL, err);
+    ASSERT_EQ_ERR("missing kernel", TPBE_CLI_FAIL, err);
 
     err = tpbcli_parse_args(tree, 4, argv2);
     ASSERT_EQ_INT("ok with preset timer", TPBE_SUCCESS, err);
@@ -318,7 +322,7 @@ test_exclusive_conflict(void)
         .max_chosen = 1,
     });
 
-    ASSERT_EQ_INT("exclusive", TPBE_CLI_FAIL,
+    ASSERT_EQ_ERR("exclusive", TPBE_CLI_FAIL,
                   tpbcli_parse_args(tree, 3, argv));
 
     tpbcli_argtree_destroy(tree);
@@ -361,7 +365,7 @@ test_conflict_opts(void)
         .parse_fn = parse_timer,
     });
 
-    ASSERT_EQ_INT("conflict P F", TPBE_CLI_FAIL,
+    ASSERT_EQ_ERR("conflict P F", TPBE_CLI_FAIL,
                   tpbcli_parse_args(tree, 6, argv_bad));
     ASSERT_EQ_INT("P timer ok", TPBE_SUCCESS,
                   tpbcli_parse_args(tree, 6, argv_ok));
@@ -456,7 +460,7 @@ test_unknown_arg(void)
         .max_chosen = 1,
     });
 
-    ASSERT_EQ_INT("unknown", TPBE_CLI_FAIL,
+    ASSERT_EQ_ERR("unknown", TPBE_CLI_FAIL,
                   tpbcli_parse_args(tree, 2, argv));
 
     tpbcli_argtree_destroy(tree);
@@ -543,7 +547,7 @@ test_max_chosen(void)
         .parse_fn = parse_kernel,
     });
 
-    ASSERT_EQ_INT("deprecated", TPBE_CLI_FAIL,
+    ASSERT_EQ_ERR("deprecated", TPBE_CLI_FAIL,
                   tpbcli_parse_args(t1, 4, av_dep));
     tpbcli_argtree_destroy(t1);
 
@@ -554,7 +558,7 @@ test_max_chosen(void)
         .flags = TPBCLI_ARGF_EXCLUSIVE,
         .max_chosen = 1,
     });
-    ASSERT_EQ_INT("run twice fail", TPBE_CLI_FAIL,
+    ASSERT_EQ_ERR("run twice fail", TPBE_CLI_FAIL,
                   tpbcli_parse_args(t2, 3, av_twice));
     tpbcli_argtree_destroy(t2);
 
@@ -602,7 +606,7 @@ test_find_arg(void)
 
     out = NULL;
     r = tpbcli_find_arg(&tree->root, "leaf", 1, &out);
-    ASSERT_EQ_INT("leaf not depth1", TPBE_LIST_NOT_FOUND, r);
+    ASSERT_EQ_ERR("leaf not depth1", TPBE_LIST_NOT_FOUND, r);
 
     out = NULL;
     r = tpbcli_find_arg(&tree->root, "a", 1, &out);

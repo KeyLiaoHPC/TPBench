@@ -323,13 +323,17 @@ test_a8_9_log_tag_macros(void)
 static void
 fn_report_kern_verify_fail(void)
 {
-    (void)tpb_report_error(TPBE_KERN_VERIFY_FAIL, "test context");
+    (void)tpb_report_error_at("test_tpblog.c", "fn_report_kern_verify_fail",
+                              TPB_MOD_IMPL, TPBE_KERN_VERIFY_FAIL, 1,
+                              "test context");
 }
 
 static void
 fn_report_dlopen_fail(void)
 {
-    (void)tpb_report_error(TPBE_DLOPEN_FAIL, "test context");
+    (void)tpb_report_error_at("test_tpblog.c", "fn_report_dlopen_fail",
+                              TPB_MOD_IMPL, TPBE_DLOPEN_FAIL, 1,
+                              "test context");
 }
 
 static int
@@ -347,11 +351,17 @@ test_a8_10_report_error_tags(void)
     if (strstr(outbuf, "[WARN]") == NULL) {
         return 1;
     }
+    if (strstr(outbuf, "At test_tpblog.c") == NULL) {
+        return 1;
+    }
     if (capture_stdout_call(fn_report_dlopen_fail, outbuf,
                             sizeof(outbuf)) != 0) {
         return 1;
     }
     if (strstr(outbuf, "[ERRO]") == NULL) {
+        return 1;
+    }
+    if (strstr(outbuf, "[errcode=") == NULL) {
         return 1;
     }
     tpblog_cleanup();

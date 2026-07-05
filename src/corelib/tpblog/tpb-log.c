@@ -40,6 +40,7 @@ tpblog_init(void)
 {
     char hostname[256] = {0};
     char logdir[PATH_MAX];
+    char fail_msg[PATH_MAX + 64];
     char timestamp[32];
     time_t now;
     struct tm *tm_now;
@@ -54,18 +55,16 @@ tpblog_init(void)
     env_path = getenv(TPBLOG_FILE_ENV);
     if (env_path != NULL && env_path[0] != '\0') {
         if (strlen(env_path) >= sizeof(log_filepath)) {
-            tpblog_printf(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
-                          TPBLOG_FLAG_DIRECT,
-                          "Warning: %s path too long\n", TPBLOG_FILE_ENV);
-            return TPBE_FILE_IO_FAIL;
+            snprintf(fail_msg, sizeof(fail_msg), "%s path too long",
+                     TPBLOG_FILE_ENV);
+            TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL, fail_msg);
         }
         snprintf(log_filepath, sizeof(log_filepath), "%s", env_path);
         log_file = fopen(log_filepath, "a");
         if (log_file == NULL) {
-            tpblog_printf(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
-                          TPBLOG_FLAG_DIRECT,
-                          "Warning: Could not open log file %s\n", log_filepath);
-            return TPBE_FILE_IO_FAIL;
+            snprintf(fail_msg, sizeof(fail_msg),
+                     "Could not open log file %s", log_filepath);
+            TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL, fail_msg);
         }
         fflush(log_file);
         return TPBE_SUCCESS;
@@ -73,18 +72,13 @@ tpblog_init(void)
 
     ws = _tpb_workspace_path_get();
     if (ws == NULL || ws[0] == '\0') {
-        tpblog_printf(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
-                      TPBLOG_FLAG_DIRECT,
-                      "Warning: TPBench workspace not set for logging\n");
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL,
+                 "TPBench workspace not set for logging");
     }
 
     if (snprintf(logdir, sizeof(logdir), "%s/%s", ws, TPB_RAF_LOG_REL)
         >= (int)sizeof(logdir)) {
-        tpblog_printf(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
-                      TPBLOG_FLAG_DIRECT,
-                      "Warning: Log directory path too long\n");
-        return TPBE_FILE_IO_FAIL;
+        TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL, "Log directory path too long");
     }
 
     if (gethostname(hostname, sizeof(hostname)) != 0) {
@@ -102,10 +96,9 @@ tpblog_init(void)
 
     log_file = fopen(log_filepath, "w");
     if (log_file == NULL) {
-        tpblog_printf(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
-                      TPBLOG_FLAG_DIRECT,
-                      "Warning: Could not open log file %s\n", log_filepath);
-        return TPBE_FILE_IO_FAIL;
+        snprintf(fail_msg, sizeof(fail_msg),
+                 "Could not open log file %s", log_filepath);
+        TPB_FAIL(TPB_MOD_IO, TPBE_FILE_IO_FAIL, fail_msg);
     }
 
     fprintf(log_file, "TPBench Run Log\n");

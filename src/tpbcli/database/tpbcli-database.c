@@ -240,7 +240,7 @@ _sf_parse_database_dump_opt(tpbcli_argnode_t *node, const char *value)
     database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
 
     if (ctx == NULL || node->name == NULL || value == NULL) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     ctx->dump_selector = node->name;
     snprintf(ctx->primary_buf, sizeof(ctx->primary_buf), "%s", value);
@@ -276,7 +276,7 @@ tpbcli_database(int argc, char **argv)
     if (tree == NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Failed to allocate database argument tree.\n");
-        return TPBE_MALLOC_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }
 
     err = tpbcli_parse_args(tree, argc, argv);
@@ -285,21 +285,19 @@ tpbcli_database(int argc, char **argv)
     if (err == TPBE_EXIT_ON_HELP) {
         return err;
     }
-    if (err != TPBE_SUCCESS) {
-        return err;
-    }
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
     if (!cli_ctx.want_list && !cli_ctx.want_dump) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "error: missing required subcommand: list|ls or dump\n");
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "Failed to resolve workspace.\n");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "tpb_raf_resolve_workspace");
     }
 
     if (cli_ctx.want_list) {

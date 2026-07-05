@@ -80,7 +80,7 @@ tpbcli_database_ls(const char *workspace)
                                       &count);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Failed\n");
-        return err;
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "tpb_raf_entry_list_tbatch");
     }
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Done\n");
 

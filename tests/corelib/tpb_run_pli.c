@@ -124,7 +124,7 @@ static int
 test_null_handle(void)
 {
     int err = tpb_run_pli(NULL);
-    return (err == TPBE_NULLPTR_ARG) ? 0 : 1;
+    return (TPBE_CAUSE(err) == TPBE_NULLPTR_ARG) ? 0 : 1;
 }
 
 /* A2.2: Missing executable returns TPBE_KERNEL_INCOMPLETE */
@@ -143,7 +143,7 @@ test_missing_exec(void)
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
     tpb_free_kernel(&hdl.kernel);
-    return (err == TPBE_KERNEL_INCOMPLETE) ? 0 : 1;
+    return (TPBE_CAUSE(err) == TPBE_KERNEL_INCOMPLETE) ? 0 : 1;
 }
 
 /* A2.3: Child exits 0, function returns success */
@@ -181,7 +181,7 @@ test_child_nonzero_exit(void)
     err = tpb_run_pli(&hdl);
     free(hdl.argpack.args);
     tpb_free_kernel(&hdl.kernel);
-    return (err == 42) ? 0 : 1;
+    return (TPBE_CAUSE(err) == 42) ? 0 : 1;
 }
 
 /* A2.5: Child killed by signal, function returns TPBE_KERN_ARG_FAIL */
@@ -202,7 +202,7 @@ test_child_signaled(void)
     tpb_free_kernel(&hdl.kernel);
     /* Signal death: either TPBE_KERN_ARG_FAIL or a non-zero exit code
        (shell may translate SIGKILL to exit 137) */
-    return (err != 0) ? 0 : 1;
+    return (TPBE_CAUSE(err) != 0) ? 0 : 1;
 }
 
 /* A2.6: TPB_KERNEL_ID is injected into child process env */

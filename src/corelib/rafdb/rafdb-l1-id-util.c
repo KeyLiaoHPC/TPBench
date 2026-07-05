@@ -6,6 +6,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include "../../include/tpb-public.h"
 #include "../tpb-types.h"
 
 /* Local Function Prototypes */
@@ -49,16 +50,16 @@ tpb_raf_hex_to_id(const char *hex, unsigned char id[20])
     size_t i;
 
     if (!hex || !id) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
     }
 
     for (i = 0; i < 40; i++) {
         if (!isxdigit((unsigned char)hex[i])) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_CLI_FAIL, NULL);
         }
     }
     if (hex[40] != '\0') {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_CLI_FAIL, NULL);
     }
 
     for (i = 0; i < 20; i++) {
@@ -66,7 +67,7 @@ tpb_raf_hex_to_id(const char *hex, unsigned char id[20])
         int lo = _sf_hex_nibble((unsigned char)hex[i * 2 + 1]);
 
         if (hi < 0 || lo < 0) {
-            return TPBE_CLI_FAIL;
+            TPB_FAIL(TPB_MOD_RAF_L1, TPBE_CLI_FAIL, NULL);
         }
         id[i] = (unsigned char)((hi << 4) | lo);
     }

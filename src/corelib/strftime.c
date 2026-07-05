@@ -49,7 +49,7 @@ int
 tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt)
 {
     if (dt == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     memset(dt, 0, sizeof(tpb_datetime_t));
@@ -75,7 +75,7 @@ tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt)
 
     default:
         /* Invalid mode: return error */
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     return 0;
@@ -88,14 +88,14 @@ int
 tpb_ts_get_btime(tpb_btime_t *btime)
 {
     if (btime == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     struct timespec ts;
     if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0) {
         /* Fallback to MONOTONIC if BOOTTIME not available */
         if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
-            return TPBE_ILLEGAL_CALL;
+            TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
         }
     }
 
@@ -120,7 +120,7 @@ int
 tpb_ts_btime_to_datetime(const tpb_btime_t *btime, tpb_datetime_t *dt)
 {
     if (btime == NULL || dt == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Rough conversion constants */
@@ -182,12 +182,12 @@ tpb_ts_datetime_to_bits(const tpb_datetime_t *dt, int16_t tz_bias_min,
                            tpb_dtbits_t *bits)
 {
     if (dt == NULL || bits == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Validate year range (1970-2226) */
     if (dt->year < TPB_TS_YEAR_BIAS || dt->year > TPB_TS_YEAR_BIAS + 255) {
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     uint64_t b = 0;
@@ -219,7 +219,7 @@ tpb_ts_bits_to_datetime(tpb_dtbits_t bits, tpb_datetime_t *dt,
                          int16_t *tz_bias_min)
 {
     if (dt == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Extract fields using positioned masks: mask isolates field, shift normalizes */
@@ -250,11 +250,11 @@ tpb_ts_bits_to_isoutc(tpb_dtbits_t bits, tpb_datetime_str_t *str)
     tpb_datetime_t dt;
 
     if (str == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (tpb_ts_bits_to_datetime(bits, &dt, NULL) != 0) {
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     int written = snprintf(str->str, sizeof(str->str),
@@ -263,7 +263,7 @@ tpb_ts_bits_to_isoutc(tpb_dtbits_t bits, tpb_datetime_str_t *str)
                            dt.hour, dt.min, dt.sec);
 
     if (written < 0 || (size_t)written >= sizeof(str->str)) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     return 0;
@@ -279,11 +279,11 @@ tpb_ts_bits_to_isotz(tpb_dtbits_t bits, int16_t tz_bias_min,
     tpb_datetime_t dt;
 
     if (str == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     if (tpb_ts_bits_to_datetime(bits, &dt, NULL) != 0) {
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     int tz_sign = (tz_bias_min >= 0) ? 1 : -1;
@@ -299,7 +299,7 @@ tpb_ts_bits_to_isotz(tpb_dtbits_t bits, int16_t tz_bias_min,
                            tz_hours, tz_mins);
 
     if (written < 0 || (size_t)written >= sizeof(str->str)) {
-        return TPBE_CLI_FAIL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_CLI_FAIL, NULL);
     }
 
     return 0;
@@ -312,9 +312,10 @@ int
 tpb_ts_isoutc_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits)
 {
     tpb_datetime_t dt = {0};
+    int err;
 
     if (str == NULL || bits == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Parse YYYY-MM-DDThh:mm:ssZ */
@@ -323,7 +324,7 @@ tpb_ts_isoutc_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits)
                         &year, &month, &day, &hour, &min, &sec);
 
     if (parsed != 6) {
-        return TPBE_ILLEGAL_CALL;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
     }
 
     dt.year = (uint16_t)year;
@@ -333,7 +334,9 @@ tpb_ts_isoutc_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits)
     dt.min = (uint8_t)min;
     dt.sec = (uint8_t)sec;
 
-    return tpb_ts_datetime_to_bits(&dt, 0, bits);  /* UTC has 0 timezone bias */
+    err = tpb_ts_datetime_to_bits(&dt, 0, bits);
+    TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
+    return 0;
 }
 
 /**
@@ -344,9 +347,10 @@ tpb_ts_isotz_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits,
                       int16_t *tz_bias_min)
 {
     tpb_datetime_t dt = {0};
+    int err;
 
     if (str == NULL || bits == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     /* Parse YYYY-MM-DDThh:mm:ss+HH:MM or YYYY-MM-DDThh:mm:ss-HH:MM */
@@ -371,7 +375,7 @@ tpb_ts_isotz_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits,
                             &year, &month, &day, &hour, &min, &sec,
                             &tz_sign, &tz_hour);
             if (parsed != 8) {
-                return TPBE_ILLEGAL_CALL;
+                TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
             }
         }
     }
@@ -392,7 +396,9 @@ tpb_ts_isotz_to_bits(const tpb_datetime_str_t *str, tpb_dtbits_t *bits,
         *tz_bias_min = bias;
     }
 
-    return tpb_ts_datetime_to_bits(&dt, bias, bits);
+    err = tpb_ts_datetime_to_bits(&dt, bias, bits);
+    TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
+    return 0;
 }
 
 /**
@@ -405,7 +411,7 @@ _sf_from_timespec(tpb_datetime_t *dt, const struct timespec *ts)
     struct tm tm_buf;
 
     if (dt == NULL || ts == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     gmtime_r(&sec, &tm_buf);
@@ -421,7 +427,7 @@ static int
 _sf_from_tm(tpb_datetime_t *dt, const struct tm *tm)
 {
     if (dt == NULL || tm == NULL) {
-        return TPBE_NULLPTR_ARG;
+        TPB_FAIL(TPB_MOD_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
     dt->year = (uint16_t)(tm->tm_year + 1900);

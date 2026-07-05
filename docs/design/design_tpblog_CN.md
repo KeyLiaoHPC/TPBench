@@ -27,7 +27,7 @@ src/corelib/tpblog/
 |------|------|
 | `tpb_corelib_state.c` | `tpb_corelib_init()` 时调用 `tpblog_init()` |
 | `tpb-driver.c` | PLI fork 前发布 `TPB_LOG_FILE`，子进程 append 同一 log |
-| `tpb-impl.c` | `tpb_report_error()` 经 `tpblog_printf_f()` 输出 |
+| `tpb-impl.c` | `tpb_report_error_at()` 经 `tpblog_printf_f()` 输出 |
 | `tpb-io.c` | CLI benchmark 结果格式化，调用 `tpblog_printf_f()` |
 | `tpbcli-print-kernel-help.c` | kernel help 表格，调用 `tpblog_printf_c()` |
 
@@ -109,10 +109,11 @@ parent: tpblog_init (append)
 
 ## 5. 错误处理边界
 
-- `tpb_report_error()` 根据原因码选择 `[INFO]` / `[WARN]` / `[ERRO]` 日志 tag。
-- 日志 tag 使用 `TPB_LOG_TAG_*`（或 `TPBLOG_TYPE_*` alias），与 `TPBE_*` 原因码分离。
-- 需要退出的调用点显式调用 `exit(err)`；`TPBE_KERN_VERIFY_FAIL` 等 warn 级原因码不退出。
-- `TPB_RETURN_ON_ERROR` 仅调用 `tpb_report_error()` 并 return。
+- `TPB_FAIL` / `TPB_PROPAGATE` 在起源点或传播链上调用 `tpb_report_error_at()`，经 `tpblog_printf_f()` 输出。
+- 起源日志含原因字符串；传播日志仅含 `At <file>, <func>` 与 `[errcode=<cause>]`。
+- 日志 tag 由 cause 决定：`TPBE_KERN_VERIFY_FAIL` / `TPBE_METRIC_MISSING` → `[WARN]`，其余已知 cause → `[ERRO]`。
+- 日志 tag 使用 `TPB_LOG_TAG_*`（或 `TPBLOG_TYPE_*` alias），与 `TPBE_*` 原因码分离；模块码（`TPB_MOD_*`）不写入日志。
+- corelib 只 return 编码错误，不调用 `exit()`；`tpbcli` main 用 `tpb_err_to_exit_status()` 映射进程退出码（仅 cause）。
 
 ## 6. 使用示例
 
