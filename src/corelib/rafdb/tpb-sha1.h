@@ -38,13 +38,4 @@ void tpb_sha1_update(tpb_sha1_ctx_t *ctx, const void *data,
 void tpb_sha1_final(tpb_sha1_ctx_t *ctx,
                     unsigned char digest[20]);
 
-/**
- * @brief One-shot SHA1: hash data and produce 20-byte digest.
- * @param data Input data
- * @param len Length in bytes
- * @param digest Output buffer, at least 20 bytes
- */
-void tpb_sha1(const void *data, size_t len,
-              unsigned char digest[20]);
-
 #endif /* TPB_SHA1_H */

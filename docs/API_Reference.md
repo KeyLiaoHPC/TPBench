@@ -1258,29 +1258,6 @@ int tpb_raf_validate_magic(const unsigned char magic[8],
 
 ---
 
-#### `tpb_raf_magic_scan`
-
-Scan a buffer for TPBench magic signatures.
-
-```c
-int tpb_raf_magic_scan(const void *buf, size_t len,
-                         size_t *offsets, int *nfound,
-                         int max_results);
-```
-
-**Parameters:**
-- `buf`: Buffer to scan
-- `len`: Buffer length in bytes
-- `offsets`: Output array for found magic offsets (must be pre-allocated)
-- `nfound`: Output: total number of magic signatures found
-- `max_results`: Maximum results to store in `offsets`
-
-**Returns:**
-- `TPBE_SUCCESS` on success
-- `TPBE_NULLPTR_ARG` if required arguments are NULL
-
----
-
 ### Entry Operations (.tpbe)
 
 Entry files store fixed-size record summaries for fast indexing (`tbatch_entry_t` / `kernel_entry_t`: 264 bytes; `task_entry_t`: 232 bytes). The public macro `TPB_RAF_RESERVE_SIZE` (128) is the tail reserve size in each entry and the opaque reserve block size in each `.tpbr` meta section.
@@ -1758,7 +1735,7 @@ These helpers support `tpbcli database dump` and `tpbcli kernel` without exposin
 | `tpb_raf_free_id_matches()` | Free scan result array |
 | `tpb_raf_hash_file()` | SHA-1 hash of a kernel `.so` or other file |
 | `tpb_raf_kernel_override_enabled()` | True when `TPB_K_OVERRIDE` allows overwriting KernelID records |
-| `tpb_raf_kernel_find_header()` / `tpb_raf_kernel_meta_kv_get()` | Read kernel metadata headers and kv payloads |
+| `tpb_raf_kernel_find_header()` / `tpb_raf_kernel_meta_kv_get()` / `tpb_raf_kernel_get_header_payload()` / `tpb_raf_kernel_variation_summary()` | Read kernel metadata headers and kv payloads |
 | `tpb_raf_entry_patch_kernel_active()` / `tpb_raf_record_patch_kernel_active()` | Soft activate/deactivate kernel history entries |
 | `tpb_raf_kernel_deactivate_same_name()` / `tpb_raf_kernel_update_meta_key()` | Kernel history management from `tpbcli kernel set` |
 

@@ -872,7 +872,6 @@ src/corelib/rafdb/
 Magic:
 - `tpb_raf_build_magic(ftype, domain, pos, out)` -- 构建 8 字节 magic
 - `tpb_raf_validate_magic(magic, ftype, domain, pos)` -- 验证 magic 字节
-- `tpb_raf_magic_scan(buf, len, offsets, nfound, max)` -- 扫描缓冲区中的 magic 签名
 
 条目 (.tpbe):
 - `tpb_raf_entry_append_{tbatch,kernel,task}(workspace, entry)` -- 追加条目

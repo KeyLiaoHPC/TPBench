@@ -29,8 +29,6 @@ static void cleanup_test_dir(void);
 static int test_magic_construct(void);
 static int test_magic_validate_ok(void);
 static int test_magic_validate_bad(void);
-static int test_magic_scan_tpbe(void);
-static int test_magic_scan_tpbr(void);
 static int test_id_tbatch(void);
 static int test_id_kernel(void);
 static int test_id_task(void);
@@ -170,53 +168,6 @@ test_magic_validate_bad(void)
                                  TPB_RAF_POS_START)) {
         return 1;
     }
-    return 0;
-}
-
-/* A4.4: magic_scan_tpbe */
-static int
-test_magic_scan_tpbe(void)
-{
-    unsigned char buf[256];
-    unsigned char magic[8];
-    size_t offsets[4];
-    int nfound = 0;
-
-    memset(buf, 0xAB, sizeof(buf));
-
-    tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
-                          TPB_RAF_DOM_TBATCH,
-                          TPB_RAF_POS_START, magic);
-    memcpy(buf + 50, magic, 8);
-    memcpy(buf + 200, magic, 8);
-
-    tpb_raf_magic_scan(buf, sizeof(buf), offsets,
-                         &nfound, 4);
-    if (nfound != 2) return 1;
-    if (offsets[0] != 50 || offsets[1] != 200) return 1;
-    return 0;
-}
-
-/* A4.5: magic_scan_tpbr */
-static int
-test_magic_scan_tpbr(void)
-{
-    unsigned char buf[128];
-    unsigned char magic[8];
-    size_t offsets[4];
-    int nfound = 0;
-
-    memset(buf, 0xCD, sizeof(buf));
-
-    tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
-                          TPB_RAF_DOM_KERNEL,
-                          TPB_RAF_POS_START, magic);
-    memcpy(buf + 30, magic, 8);
-
-    tpb_raf_magic_scan(buf, sizeof(buf), offsets,
-                         &nfound, 4);
-    if (nfound != 1) return 1;
-    if (offsets[0] != 30) return 1;
     return 0;
 }
 
@@ -859,8 +810,6 @@ main(int argc, char **argv)
         { "A4.1",  "magic_construct",    test_magic_construct },
         { "A4.2",  "magic_validate_ok",  test_magic_validate_ok },
         { "A4.3",  "magic_validate_bad", test_magic_validate_bad },
-        { "A4.4",  "magic_scan_tpbe",    test_magic_scan_tpbe },
-        { "A4.5",  "magic_scan_tpbr",    test_magic_scan_tpbr },
         { "A4.6",  "id_tbatch",          test_id_tbatch },
         { "A4.7",  "id_kernel",          test_id_kernel },
         { "A4.8",  "id_task",            test_id_task },

@@ -26,9 +26,7 @@ static tpb_error_type tpb_errors[] = {
     {TPBE_KERNEL_NE_FAIL,      TPBE_FAIL, "Kernel does not exist."},
     {TPBE_KARG_NE_FAIL,        TPBE_FAIL, "Kernel argument does not exist."},
     {TPBE_KERNEL_INCOMPLETE,   TPBE_FAIL, "Incomplete kernel (missing .so)."},
-    {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."},
-    {TPBE_MERGE_MISMATCH,      TPBE_FAIL, "Task merge source mismatch."},
-    {TPBE_MERGE_FAIL,          TPBE_FAIL, "Task merge failed."}
+    {TPBE_DLOPEN_FAIL,         TPBE_FAIL, "Failed to load kernel library."}
 };
 
 #define TPB_ERR_TABLE_SIZE ((int)(sizeof(tpb_errors) / sizeof(tpb_errors[0])))

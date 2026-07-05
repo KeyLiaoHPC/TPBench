@@ -980,7 +980,6 @@ Workspace:
 Magic:
 - `tpb_raf_build_magic(ftype, domain, pos, out)` -- construct 8-byte magic
 - `tpb_raf_validate_magic(magic, ftype, domain, pos)` -- validate magic bytes
-- `tpb_raf_magic_scan(buf, len, offsets, nfound, max)` -- scan buffer for magic signatures
 
 Entry (.tpbe):
 - `tpb_raf_entry_append_{tbatch,kernel,task}(workspace, entry)` -- append entry

@@ -162,18 +162,6 @@ tpb_sha1_final(tpb_sha1_ctx_t *ctx, unsigned char digest[20])
 }
 
 /**
- * @brief One-shot SHA1: hash data and produce 20-byte digest.
- */
-void
-tpb_sha1(const void *data, size_t len, unsigned char digest[20])
-{
-    tpb_sha1_ctx_t ctx;
-    tpb_sha1_init(&ctx);
-    tpb_sha1_update(&ctx, data, len);
-    tpb_sha1_final(&ctx, digest);
-}
-
-/**
  * @brief SHA-1 hash the contents of a regular file.
  */
 int

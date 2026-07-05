@@ -18,11 +18,6 @@
 
 /* Local Function Prototypes */
 
-static int _sf_get_header_payload(const kernel_attr_t *attr,
-                                  const void *data, const char *hdr_name,
-                                  char *buf, size_t bufsz);
-static void _sf_variation_summary(const char *payload, char *out,
-                                  size_t outlen);
 static void _sf_print_kernel_versions(FILE *out, const char *workspace,
                                       const kernel_entry_t *entries, int n,
                                       const char *kernel_name);
@@ -39,81 +34,6 @@ static void
 _sf_print_get_usage(void)
 {
     tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "Usage: tpbcli kernel get [-v] (--kernel <name>|--id <hex>)\n");
-}
-
-static int
-_sf_get_header_payload(const kernel_attr_t *attr, const void *data,
-                       const char *hdr_name, char *buf, size_t bufsz)
-{
-    int idx;
-    uint64_t off = 0;
-    uint32_t j;
-    const char *payload;
-
-    if (buf == NULL || bufsz == 0) {
-        return TPBE_NULLPTR_ARG;
-    }
-    buf[0] = '\0';
-    if (attr == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    idx = tpb_raf_kernel_find_header(attr, hdr_name);
-    if (idx < 0) {
-        return TPBE_LIST_NOT_FOUND;
-    }
-    for (j = 0; j < (uint32_t)idx; j++) {
-        off += attr->headers[j].data_size;
-    }
-    if (data == NULL || attr->headers[idx].data_size == 0) {
-        return TPBE_SUCCESS;
-    }
-    payload = (const char *)((const uint8_t *)data + off);
-    snprintf(buf, bufsz, "%s", payload);
-    return TPBE_SUCCESS;
-}
-
-static void
-_sf_variation_summary(const char *payload, char *out, size_t outlen)
-{
-    const char *line;
-    const char *p;
-
-    if (out == NULL || outlen == 0) {
-        return;
-    }
-    out[0] = '\0';
-    if (payload == NULL || payload[0] == '\0') {
-        return;
-    }
-
-    line = payload;
-    while (*line != '\0') {
-        while (*line == '\n' || *line == '\r') {
-            line++;
-        }
-        if (line[0] == '\0') {
-            break;
-        }
-        if (strncmp(line, "format=", 7) == 0 ||
-            strncmp(line, "section=", 8) == 0) {
-            p = strchr(line, '\n');
-            line = (p != NULL) ? p + 1 : line + strlen(line);
-            continue;
-        }
-        p = strchr(line, '\n');
-        if (p != NULL) {
-            size_t n = (size_t)(p - line);
-            if (n >= outlen) {
-                n = outlen - 1;
-            }
-            memcpy(out, line, n);
-            out[n] = '\0';
-        } else {
-            snprintf(out, outlen, "%s", line);
-        }
-        return;
-    }
 }
 
 static void
@@ -143,11 +63,11 @@ _sf_print_kernel_versions(FILE *out, const char *workspace,
         err = tpb_raf_record_read_kernel(workspace, entries[i].kernel_id,
                                          &attr, &data, &datasize);
         if (err == TPBE_SUCCESS) {
-            if (_sf_get_header_payload(&attr, data,
-                                       TPB_RAF_KERNEL_HDR_VARIATION,
-                                       payload, sizeof(payload)) ==
-                TPBE_SUCCESS) {
-                _sf_variation_summary(payload, variation, sizeof(variation));
+            if (tpb_raf_kernel_get_header_payload(&attr, data,
+                    TPB_RAF_KERNEL_HDR_VARIATION,
+                    payload, sizeof(payload)) == TPBE_SUCCESS) {
+                tpb_raf_kernel_variation_summary(payload, variation,
+                                                 sizeof(variation));
             }
             tpb_raf_free_headers(attr.headers, attr.nheader);
             free(data);

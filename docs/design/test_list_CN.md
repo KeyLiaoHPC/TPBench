@@ -32,8 +32,6 @@
 | A4.1 | `corelib/rafdb/` | 验证 RAFDB `tpb_raf_build_magic()` 构造正确的魔数字节序列。 |
 | A4.2 | `corelib/rafdb/` | 验证 RAFDB 有效魔术字节可通过校验。 |
 | A4.3 | `corelib/rafdb/` | 验证 RAFDB 损坏或跨域魔术字节无法通过校验。 |
-| A4.4 | `corelib/rafdb/` | 验证 RAFDB 可在缓冲区指定偏移扫描 tbatch entry 魔术字。 |
-| A4.5 | `corelib/rafdb/` | 验证 RAFDB 可在缓冲区中扫描 kernel record 魔术字。 |
 | A4.6 | `corelib/rafdb/` | 验证 RAFDB tbatch ID 生成具有确定性。 |
 | A4.7 | `corelib/rafdb/` | 验证 RAFDB kernel ID 等于输入 SHA1 哈希值。 |
 | A4.8 | `corelib/rafdb/` | 验证 RAFDB task ID 确定性生成且 handle_index 变化时 ID 不同。 |

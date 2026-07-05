@@ -74,6 +74,33 @@ int tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
                                char *value_out, size_t value_len);
 
 /**
+ * @brief Copy a kernel metadata string header payload by name.
+ * @param attr Kernel attributes from tpb_raf_record_read_kernel().
+ * @param data Record data buffer from read_kernel (may be NULL).
+ * @param hdr_name Header name (e.g. TPB_RAF_KERNEL_HDR_VARIATION).
+ * @param buf Output buffer for NUL-terminated payload.
+ * @param bufsz Capacity of buf.
+ * @return TPBE_SUCCESS, TPBE_LIST_NOT_FOUND, or TPBE_NULLPTR_ARG.
+ */
+int tpb_raf_kernel_get_header_payload(const kernel_attr_t *attr,
+                                      const void *data,
+                                      const char *hdr_name,
+                                      char *buf, size_t bufsz);
+
+/**
+ * @brief Build a one-line variation summary from a metadata kv payload.
+ *
+ * Prefers the kernel.name key when present (formatted as kernel.name=<value>);
+ * otherwise returns the first non-format/section line from the payload.
+ *
+ * @param payload Metadata kv payload string.
+ * @param out Output buffer.
+ * @param outlen Capacity of out.
+ */
+void tpb_raf_kernel_variation_summary(const char *payload, char *out,
+                                      size_t outlen);
+
+/**
  * @brief Patch active flag in kernel .tpbe entry for a KernelID.
  */
 int tpb_raf_entry_patch_kernel_active(const char *workspace,

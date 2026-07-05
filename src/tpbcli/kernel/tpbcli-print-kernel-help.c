@@ -44,11 +44,6 @@ static void _sf_print_parm_entry(const char *name, const char *note,
                                  uint32_t type_bits);
 static void _sf_print_metric_entry(const char *full_name, const char *note,
                                    uint64_t uattr_bits);
-static int _sf_get_header_payload(const kernel_attr_t *attr,
-                                  const void *data, const char *hdr_name,
-                                  char *buf, size_t bufsz);
-static void _sf_variation_summary(const char *payload, char *out,
-                                  size_t outlen);
 static void _sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
                                               uint32_t nparm);
 static void _sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel);
@@ -311,81 +306,6 @@ _sf_print_metric_entry(const char *full_name, const char *note,
     _sf_print_wrapped_note(note);
 }
 
-static int
-_sf_get_header_payload(const kernel_attr_t *attr, const void *data,
-                       const char *hdr_name, char *buf, size_t bufsz)
-{
-    int idx;
-    uint64_t off = 0;
-    uint32_t j;
-    const char *payload;
-
-    if (buf == NULL || bufsz == 0) {
-        return TPBE_NULLPTR_ARG;
-    }
-    buf[0] = '\0';
-    if (attr == NULL) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    idx = tpb_raf_kernel_find_header(attr, hdr_name);
-    if (idx < 0) {
-        return TPBE_LIST_NOT_FOUND;
-    }
-    for (j = 0; j < (uint32_t)idx; j++) {
-        off += attr->headers[j].data_size;
-    }
-    if (data == NULL || attr->headers[idx].data_size == 0) {
-        return TPBE_SUCCESS;
-    }
-    payload = (const char *)((const uint8_t *)data + off);
-    snprintf(buf, bufsz, "%s", payload);
-    return TPBE_SUCCESS;
-}
-
-static void
-_sf_variation_summary(const char *payload, char *out, size_t outlen)
-{
-    const char *line;
-    const char *p;
-
-    if (out == NULL || outlen == 0) {
-        return;
-    }
-    out[0] = '\0';
-    if (payload == NULL || payload[0] == '\0') {
-        return;
-    }
-
-    line = payload;
-    while (*line != '\0') {
-        while (*line == '\n' || *line == '\r') {
-            line++;
-        }
-        if (line[0] == '\0') {
-            break;
-        }
-        if (strncmp(line, "format=", 7) == 0 ||
-            strncmp(line, "section=", 8) == 0) {
-            p = strchr(line, '\n');
-            line = (p != NULL) ? p + 1 : line + strlen(line);
-            continue;
-        }
-        p = strchr(line, '\n');
-        if (p != NULL) {
-            size_t n = (size_t)(p - line);
-            if (n >= outlen) {
-                n = outlen - 1;
-            }
-            memcpy(out, line, n);
-            out[n] = '\0';
-        } else {
-            snprintf(out, outlen, "%s", line);
-        }
-        return;
-    }
-}
-
 static void
 _sf_print_kernel_header(const char *name, const char *kernel_id_hex, int active,
                         const char *version, const char *notes,
@@ -589,11 +509,11 @@ tpbcli_print_kernel_help_from_kernel(FILE *out, const tpb_kernel_t *kernel,
             if (attr.description[0] != '\0') {
                 notes = attr.description;
             }
-            if (_sf_get_header_payload(&attr, data,
-                                       TPB_RAF_KERNEL_HDR_VARIATION,
-                                       payload, sizeof(payload)) ==
-                TPBE_SUCCESS) {
-                _sf_variation_summary(payload, variation, sizeof(variation));
+            if (tpb_raf_kernel_get_header_payload(&attr, data,
+                    TPB_RAF_KERNEL_HDR_VARIATION,
+                    payload, sizeof(payload)) == TPBE_SUCCESS) {
+                tpb_raf_kernel_variation_summary(payload, variation,
+                                                 sizeof(variation));
             }
             tpb_raf_free_headers(attr.headers, attr.nheader);
             free(data);
@@ -621,9 +541,11 @@ tpbcli_print_kernel_help_from_attr(FILE *out, const kernel_attr_t *attr,
 
     tpb_raf_id_to_hex(attr->kernel_id, kid_hex);
     variation[0] = '\0';
-    if (_sf_get_header_payload(attr, data, TPB_RAF_KERNEL_HDR_VARIATION,
-                               payload, sizeof(payload)) == TPBE_SUCCESS) {
-        _sf_variation_summary(payload, variation, sizeof(variation));
+    if (tpb_raf_kernel_get_header_payload(attr, data,
+            TPB_RAF_KERNEL_HDR_VARIATION, payload,
+            sizeof(payload)) == TPBE_SUCCESS) {
+        tpb_raf_kernel_variation_summary(payload, variation,
+                                         sizeof(variation));
     }
 
     _sf_print_kernel_header(attr->kernel_name, kid_hex, (int)attr->active,

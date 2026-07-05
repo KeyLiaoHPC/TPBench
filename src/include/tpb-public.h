@@ -145,9 +145,7 @@ enum _tpb_errno {
     TPBE_KERNEL_NE_FAIL,
     TPBE_KARG_NE_FAIL,
     TPBE_KERNEL_INCOMPLETE,
-    TPBE_DLOPEN_FAIL,
-    TPBE_MERGE_MISMATCH,
-    TPBE_MERGE_FAIL
+    TPBE_DLOPEN_FAIL
 };
 typedef enum _tpb_errno tpb_errno_t;
 
@@ -1028,19 +1026,6 @@ int tpb_raf_validate_magic(const unsigned char magic[8],
                              uint8_t pos);
 
 /**
- * @brief Scan a buffer for TPBench magic signatures.
- * @param buf     Buffer to scan
- * @param len     Buffer length
- * @param offsets Output array of found offsets
- * @param nfound  Output: number of magics found
- * @param max_results Maximum offsets to return
- * @return 0 on success
- */
-int tpb_raf_magic_scan(const void *buf, size_t len,
-                         size_t *offsets, int *nfound,
-                         int max_results);
-
-/**
  * @brief Detect rafdb file type and domain from the first 8-byte magic.
  * @param filepath Path to a .tpbe or .tpbr file
  * @param ftype_out Receives TPB_RAF_FTYPE_ENTRY or TPB_RAF_FTYPE_RECORD
@@ -1440,6 +1425,33 @@ int tpb_raf_kernel_find_header(const kernel_attr_t *attr, const char *name);
  */
 int tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
                                char *value_out, size_t value_len);
+
+/**
+ * @brief Copy a kernel metadata string header payload by name.
+ * @param attr Kernel attributes from tpb_raf_record_read_kernel().
+ * @param data Record data buffer from read_kernel (may be NULL).
+ * @param hdr_name Header name (e.g. TPB_RAF_KERNEL_HDR_VARIATION).
+ * @param buf Output buffer for NUL-terminated payload.
+ * @param bufsz Capacity of buf.
+ * @return TPBE_SUCCESS, TPBE_LIST_NOT_FOUND, or TPBE_NULLPTR_ARG.
+ */
+int tpb_raf_kernel_get_header_payload(const kernel_attr_t *attr,
+                                      const void *data,
+                                      const char *hdr_name,
+                                      char *buf, size_t bufsz);
+
+/**
+ * @brief Build a one-line variation summary from a metadata kv payload.
+ *
+ * Prefers the kernel.name key when present (formatted as kernel.name=<value>);
+ * otherwise returns the first non-format/section line from the payload.
+ *
+ * @param payload Metadata kv payload string.
+ * @param out Output buffer.
+ * @param outlen Capacity of out.
+ */
+void tpb_raf_kernel_variation_summary(const char *payload, char *out,
+                                      size_t outlen);
 
 /**
  * @brief Patch active flag in kernel .tpbe entry for a KernelID.

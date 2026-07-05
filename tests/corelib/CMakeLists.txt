@@ -70,8 +70,6 @@ set_target_properties(test-raf PROPERTIES
 tpb_add_subcase(A4 A4.1  magic_construct    test-raf corelib)
 tpb_add_subcase(A4 A4.2  magic_validate_ok  test-raf corelib)
 tpb_add_subcase(A4 A4.3  magic_validate_bad test-raf corelib)
-tpb_add_subcase(A4 A4.4  magic_scan_tpbe    test-raf corelib)
-tpb_add_subcase(A4 A4.5  magic_scan_tpbr    test-raf corelib)
 tpb_add_subcase(A4 A4.6  id_tbatch          test-raf corelib)
 tpb_add_subcase(A4 A4.7  id_kernel          test-raf corelib)
 tpb_add_subcase(A4 A4.8  id_task            test-raf corelib)

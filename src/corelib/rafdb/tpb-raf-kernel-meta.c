@@ -203,6 +203,95 @@ tpb_raf_kernel_meta_kv_get(const char *payload, const char *key,
     return TPBE_LIST_NOT_FOUND;
 }
 
+/**
+ * @brief Copy a kernel metadata string header payload by name.
+ */
+int
+tpb_raf_kernel_get_header_payload(const kernel_attr_t *attr, const void *data,
+                                  const char *hdr_name, char *buf, size_t bufsz)
+{
+    int idx;
+    uint64_t off = 0;
+    uint32_t j;
+    const char *payload;
+
+    if (buf == NULL || bufsz == 0) {
+        return TPBE_NULLPTR_ARG;
+    }
+    buf[0] = '\0';
+    if (attr == NULL || hdr_name == NULL) {
+        return TPBE_NULLPTR_ARG;
+    }
+
+    idx = tpb_raf_kernel_find_header(attr, hdr_name);
+    if (idx < 0) {
+        return TPBE_LIST_NOT_FOUND;
+    }
+    for (j = 0; j < (uint32_t)idx; j++) {
+        off += attr->headers[j].data_size;
+    }
+    if (data == NULL || attr->headers[idx].data_size == 0) {
+        return TPBE_SUCCESS;
+    }
+    payload = (const char *)((const uint8_t *)data + off);
+    snprintf(buf, bufsz, "%s", payload);
+    return TPBE_SUCCESS;
+}
+
+/**
+ * @brief Build a one-line variation summary from a metadata kv payload.
+ */
+void
+tpb_raf_kernel_variation_summary(const char *payload, char *out, size_t outlen)
+{
+    char kv_val[512];
+    const char *line;
+    const char *p;
+
+    if (out == NULL || outlen == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (payload == NULL || payload[0] == '\0') {
+        return;
+    }
+
+    if (tpb_raf_kernel_meta_kv_get(payload, "kernel.name", kv_val,
+                                   sizeof(kv_val)) == TPBE_SUCCESS &&
+        kv_val[0] != '\0') {
+        snprintf(out, outlen, "kernel.name=%s", kv_val);
+        return;
+    }
+
+    line = payload;
+    while (*line != '\0') {
+        while (*line == '\n' || *line == '\r') {
+            line++;
+        }
+        if (line[0] == '\0') {
+            break;
+        }
+        if (strncmp(line, "format=", 7) == 0 ||
+            strncmp(line, "section=", 8) == 0) {
+            p = strchr(line, '\n');
+            line = (p != NULL) ? p + 1 : line + strlen(line);
+            continue;
+        }
+        p = strchr(line, '\n');
+        if (p != NULL) {
+            size_t n = (size_t)(p - line);
+            if (n >= outlen) {
+                n = outlen - 1;
+            }
+            memcpy(out, line, n);
+            out[n] = '\0';
+        } else {
+            snprintf(out, outlen, "%s", line);
+        }
+        return;
+    }
+}
+
 int
 tpb_raf_kernel_meta_kv_set(char **payload_buf, size_t *payload_cap,
                            const char *key, const char *value)

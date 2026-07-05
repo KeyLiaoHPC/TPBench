@@ -1,6 +1,6 @@
 /*
  * tpb-raf-magic.c
- * Magic signature construction, validation, and scanning.
+ * Magic signature construction, validation, and file detection.
  */
 
 #include <stdio.h>
@@ -51,70 +51,6 @@ tpb_raf_validate_magic(const unsigned char magic[8],
     unsigned char expected[8];
     tpb_raf_build_magic(ftype, domain, pos, expected);
     return (memcmp(magic, expected, 8) == 0) ? 1 : 0;
-}
-
-/**
- * @brief Scan a buffer for TPBench magic signatures.
- */
-int
-tpb_raf_magic_scan(const void *buf, size_t len,
-                     size_t *offsets, int *nfound,
-                     int max_results)
-{
-    const unsigned char *p = (const unsigned char *)buf;
-    int found = 0;
-    size_t i;
-
-    if (!buf || !offsets || !nfound) {
-        return TPBE_NULLPTR_ARG;
-    }
-
-    *nfound = 0;
-
-    if (len < TPB_RAF_MAGIC_LEN) {
-        return TPBE_SUCCESS;
-    }
-
-    for (i = 0; i <= len - TPB_RAF_MAGIC_LEN; i++) {
-        if (!_sf_match_magic_prefix(p + i)) {
-            continue;
-        }
-        /* Check bytes 6-7 */
-        if (p[i + 6] != TPB_RAF_MAGIC_B6 ||
-            p[i + 7] != TPB_RAF_MAGIC_B7) {
-            continue;
-        }
-        /* Validate byte 5 is a known position mark */
-        if (p[i + 5] != TPB_RAF_POS_START &&
-            p[i + 5] != TPB_RAF_POS_SPLIT &&
-            p[i + 5] != TPB_RAF_POS_END) {
-            continue;
-        }
-        /* Validate byte 4 high nibble is valid file type */
-        uint8_t hi = p[i + 4] & 0xF0;
-        if (hi != TPB_RAF_FTYPE_ENTRY &&
-            hi != TPB_RAF_FTYPE_RECORD) {
-            continue;
-        }
-        /* Validate byte 4 low nibble is valid domain */
-        uint8_t lo = p[i + 4] & 0x0F;
-        if (lo != TPB_RAF_DOM_TBATCH &&
-            lo != TPB_RAF_DOM_KERNEL &&
-            lo != TPB_RAF_DOM_TASK) {
-            continue;
-        }
-
-        if (found < max_results) {
-            offsets[found] = i;
-        }
-        found++;
-        if (found >= max_results) {
-            break;
-        }
-    }
-
-    *nfound = found;
-    return TPBE_SUCCESS;
 }
 
 /**
