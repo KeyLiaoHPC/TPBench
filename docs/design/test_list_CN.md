@@ -29,23 +29,23 @@
 | A3.15 | `corelib/strftime.h` | 验证 strftime 模块所有函数拒绝 NULL 指针参数。 |
 | A3.16 | `corelib/strftime.h` | 验证 strftime 模块支持 1970–2225 年份范围，越界返回错误。 |
 | A3.17 | `corelib/strftime.h` | 验证 strftime 模块支持 −720 至 +720 分钟时区偏移往返。 |
-| A4.1 | `corelib/rafdb/` | 验证 RAFDB `tpb_raf_build_magic()` 构造正确的魔数字节序列。 |
-| A4.2 | `corelib/rafdb/` | 验证 RAFDB 有效魔术字节可通过校验。 |
-| A4.3 | `corelib/rafdb/` | 验证 RAFDB 损坏或跨域魔术字节无法通过校验。 |
-| A4.6 | `corelib/rafdb/` | 验证 RAFDB tbatch ID 生成具有确定性。 |
-| A4.7 | `corelib/rafdb/` | 验证 RAFDB kernel ID 等于输入 SHA1 哈希值。 |
-| A4.8 | `corelib/rafdb/` | 验证 RAFDB task ID 确定性生成且 handle_index 变化时 ID 不同。 |
-| A4.9 | `corelib/rafdb/` | 验证 RAFDB 不同输入产生不同 ID。 |
-| A4.10 | `corelib/rafdb/` | 验证 RAFDB 单条 tbatch entry 写入后可正确读回。 |
-| A4.11 | `corelib/rafdb/` | 验证 RAFDB 单条 kernel entry 写入后可正确读回。 |
-| A4.12 | `corelib/rafdb/` | 验证 RAFDB 单条 task entry 写入后可正确读回。 |
-| A4.13 | `corelib/rafdb/` | 验证 RAFDB 连续追加 5 条 tbatch entry 后 list 返回全部记录。 |
-| A4.14 | `corelib/rafdb/` | 验证 RAFDB tbatch record 写入属性与数据载荷后可正确读回。 |
-| A4.15 | `corelib/rafdb/` | 验证 RAFDB kernel record 写入属性与 uint64 载荷后可读回。 |
-| A4.16 | `corelib/rafdb/` | 验证 RAFDB task record 写入 int64 elapsed 载荷后可读回。 |
-| A4.17 | `corelib/rafdb/` | 验证 RAFDB 一维 header（4 元素）写入后可正确读回。 |
-| A4.18 | `corelib/rafdb/` | 验证 RAFDB 三维 header（2×3×4）写入后可正确读回。 |
-| A4.19 | `corelib/rafdb/` | 验证 RAFDB 混合维度（1D、1D、2D）三条 header 可共存于单条 record。 |
+| A4.1 | `corelib/rafdb/rafdb-l1-magic.c` | 验证 RAFDB `tpb_raf_build_magic()` 构造正确的魔数字节序列。 |
+| A4.2 | `corelib/rafdb/rafdb-l1-magic.c` | 验证 RAFDB 有效魔术字节可通过校验。 |
+| A4.3 | `corelib/rafdb/rafdb-l1-magic.c` | 验证 RAFDB 损坏或跨域魔术字节无法通过校验。 |
+| A4.6 | `corelib/rafdb/rafdb-l2-tbatch.c` | 验证 RAFDB tbatch ID 生成具有确定性。 |
+| A4.7 | `corelib/rafdb/rafdb-l2-kernel.c` | 验证 RAFDB kernel ID 等于输入 SHA1 哈希值。 |
+| A4.8 | `corelib/rafdb/rafdb-l2-task.c` | 验证 RAFDB task ID 确定性生成且 handle_index 变化时 ID 不同。 |
+| A4.9 | `corelib/rafdb/rafdb-l2-*.c` | 验证 RAFDB 不同输入产生不同 ID。 |
+| A4.10 | `corelib/rafdb/rafdb-l2-tbatch.c`, `rafdb-l1-entry.c` | 验证 RAFDB 单条 tbatch entry 写入后可正确读回。 |
+| A4.11 | `corelib/rafdb/rafdb-l2-kernel.c` | 验证 RAFDB 单条 kernel entry 写入后可正确读回。 |
+| A4.12 | `corelib/rafdb/rafdb-l2-task.c` | 验证 RAFDB 单条 task entry 写入后可正确读回。 |
+| A4.13 | `corelib/rafdb/rafdb-l2-tbatch.c` | 验证 RAFDB 连续追加 5 条 tbatch entry 后 list 返回全部记录。 |
+| A4.14 | `corelib/rafdb/rafdb-l2-tbatch.c` | 验证 RAFDB tbatch record 写入属性与数据载荷后可正确读回。 |
+| A4.15 | `corelib/rafdb/rafdb-l2-kernel.c` | 验证 RAFDB kernel record 写入属性与 uint64 载荷后可读回。 |
+| A4.16 | `corelib/rafdb/rafdb-l2-task.c` | 验证 RAFDB task record 写入 int64 elapsed 载荷后可读回。 |
+| A4.17 | `corelib/rafdb/rafdb-l2-tbatch.c`, `rafdb-l1-record-io.c` | 验证 RAFDB 一维 header（4 元素）写入后可正确读回。 |
+| A4.18 | `corelib/rafdb/rafdb-l2-tbatch.c` | 验证 RAFDB 三维 header（2×3×4）写入后可正确读回。 |
+| A4.19 | `corelib/rafdb/rafdb-l2-tbatch.c` | 验证 RAFDB 混合维度（1D、1D、2D）三条 header 可共存于单条 record。 |
 | A5.1 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 可完成 double 数组随机长度往返读写。 |
 | A5.2 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 可完成 float 数组往返读写。 |
 | A5.3 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 可完成 int64 数组往返读写。 |
@@ -53,16 +53,16 @@
 | A5.5 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 支持随机数据类型和随机长度往返读写。 |
 | A5.6 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 可同时输出 double、int32、float 三个数组。 |
 | A5.7 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_write_task` 跳过未分配（n=0, p=NULL）的输出项。 |
-| A6.1 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证 taskcapsule ID 与 task ID 哈希值不同。 |
-| A6.2 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证 `tpb_record_write_task` 输出非零 TaskRecordID。 |
-| A6.3 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证 `tpb_record_write_task` 在输出指针为 NULL 时仍创建 entry。 |
-| A6.4 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证 capsule record 包含正确 header（`TPBLINK::TaskID`）和 20 字节载荷。 |
-| A6.5 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证 capsule entry 出现在 `task.tpbe` 列表中。 |
-| A6.6 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证单条 task 可追加至 capsule，载荷为 40 字节。 |
-| A6.7 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证三条 task 追加至 capsule，载荷为 80 字节且顺序保持。 |
-| A6.8 | `corelib/tpb-autorecord.c`, `corelib/rafdb/` | 验证两个独立进程可分别追加 task 至同一 capsule（跨 PID 锁）。 |
+| A6.1 | `corelib/rafdb/rafdb-l2-task.c` | 验证 taskcapsule ID 与 task ID 哈希值不同。 |
+| A6.2 | `corelib/tpb-autorecord.c`, `corelib/rafdb/rafdb-l2-task.c` | 验证 `tpb_record_write_task` 输出非零 TaskRecordID。 |
+| A6.3 | `corelib/tpb-autorecord.c`, `corelib/rafdb/rafdb-l2-task.c` | 验证 `tpb_record_write_task` 在输出指针为 NULL 时仍创建 entry。 |
+| A6.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `rafdb-l2-task.c` | 验证 capsule record 包含正确 header（`TPBLINK::TaskID`）和 20 字节载荷。 |
+| A6.5 | `corelib/rafdb/rafdb-l2-task.c` | 验证 capsule entry 出现在 `task.tpbe` 列表中。 |
+| A6.6 | `corelib/rafdb/rafdb-l3-task-taglink.c` | 验证单条 task 可追加至 capsule，载荷为 40 字节。 |
+| A6.7 | `corelib/rafdb/rafdb-l3-task-taglink.c` | 验证三条 task 追加至 capsule，载荷为 80 字节且顺序保持。 |
+| A6.8 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `rafdb-l1-entry.c` | 验证两个独立进程可分别追加 task 至同一 capsule（跨 PID 锁）。 |
 | A6.9 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_sync_capsule_task` 返回与创建时相同的 capsule ID。 |
-| A7.1 | `corelib/tpb-autorecord.c` | 验证 `tpb_raf_kernel_build_registered_attr` 正确统计 parm 和 metric 数量。 |
+| A7.1 | `corelib/rafdb/rafdb-l2-kernel-meta-build.c` | 验证 `tpb_raf_kernel_build_registered_attr` 正确统计 parm 和 metric 数量。 |
 | A7.2 | `corelib/tpb-autorecord.c`, `kernels/simple/tpbk_stream.c` | 验证真实 stream kernel 注册后 record 包含 ≥3 个 parm 和 ≥4 个 metric。 |
 | A8.1 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 初始化后日志文件包含 "TPBench Run Log" 和会话头。 |
 | A8.2 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 重新初始化时追加内容且不重写文件头。 |
@@ -143,6 +143,7 @@
 | C1.1 | `corelib/tpb-autorecord.c`, `corelib/rafdb/`, `tpbcli/run/`, `tpbcli/pli/` | 验证三种调用方式（tpbcli r、tpbcli run 带 dim、直接 pli-launcher）产生 2 个 tbatch（ntask=1,3）、共 5 条 task 且 tbatch_id 链接正确。 |
 | C1.2 | `corelib/tpb-autorecord.c`, `corelib/rafdb/`, `tpbcli/benchmark/` | 验证 YAML 驱动的 benchmark 产生 1 个 BENCHMARK 类型 tbatch 且 1 条 task 正确链接。 |
 | C1.3 | `corelib/rafdb/`, `tpbcli/benchmark/` | 验证只读 task_batch 目录导致 benchmark 报 "begin_batch failed" 错误。 |
+| C1.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `kernels/streaming_memory_access_mpi/` | **手工/CI 可选：** `tpbcli kernel build stream_mpi` + `mpirun -np 4 --map-by core --bind-to core` 运行后 `db list` 显示 1 条 task capsule（4 rank 聚合）。 |
 | C3.1 | `corelib/tpb-autorecord.c`, `cmake/TPBenchKernelRegistry.cmake` | 验证 stream kernel 分别以 -O2 和 -O3 编译后 `kernel get -v` 显示 ≥2 个版本行。 |
 | C4.1 | `cmake/`, root `CMakeLists.txt` | 验证 CMake 包安装后 `build/lib/cmake/TPBench/` 包含 Config.cmake 和 Kernel.cmake，模板存在于 `build/etc/cmake/kernel/`。 |
 | C4.2 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证同名模板从两个目录构建后 active 版本可切换，非活跃版本存入 `lib/inactive/`，版本计数正确跟踪。 |

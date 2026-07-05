@@ -947,19 +947,38 @@ The ChassisStatic domain stores static information about the system chassis/encl
 
 ### 3.1. Module Structure
 
-The `rafdb` backend is implemented as a set of C source files in `src/corelib/rafdb/`:
+The `rafdb` backend is organized in three layers under `src/corelib/rafdb/`:
 
 ```
 src/corelib/rafdb/
-├── tpb-raf-types.h      # Internal constants, magic defs, file path defs
-├── tpb-raf-workspace.c  # Workspace resolution, init, config.json R/W
-├── tpb-raf-magic.c      # Magic signature build, validate, scan
-├── tpb-raf-entry.c      # .tpbe append/read/list for all 3 domains
-├── tpb-raf-record.c     # .tpbr write/read for all 3 domains
-├── tpb-raf-id.c         # SHA1-based ID generation
-├── tpb-sha1.c             # Pure-C SHA1 implementation (RFC 3174)
-└── tpb-sha1.h             # SHA1 internal header
+├── rafdb-l1-types.h              # L1 constants, magic, path limits
+├── rafdb-l1-internal.h           # L1 cross-file internal API
+├── rafdb-l1-domain-reg.c/.h      # Domain registry (cross-domain catalog)
+├── rafdb-l1-magic.c              # Magic signature build, validate, detect
+├── rafdb-l1-sha1.c / .h          # SHA1 + tpb_raf_hash_file
+├── rafdb-l1-id-util.c            # tpb_raf_id_to_hex / hex_to_id
+├── rafdb-l1-workspace.c          # Workspace resolve + init (registry-driven)
+├── rafdb-l1-entry.c              # Generic .tpbe append/list + flock
+├── rafdb-l1-record-io.c          # Header serialization, free_headers
+├── rafdb-l1-record-path.c        # Entry/record path building
+├── rafdb-l1-record-locate.c      # tpb_raf_find_record (cross-domain)
+├── rafdb-l1-scan.c               # resolve_record_file, scan_by_id_prefix
+├── rafdb-l2-tbatch.c             # TBatch domain entry/record/ID
+├── rafdb-l2-kernel.c             # Kernel domain entry/record/ID
+├── rafdb-l2-task.c               # Task domain entry/record/ID, create_capsule
+├── rafdb-l2-kernel-meta-build.c  # build_registered_attr
+├── rafdb-l3-tbatch-taglink.c     # TPBLINK:: append to tbatch .tpbr
+├── rafdb-l3-task-taglink.c       # TPBLINK:: capsule append
+├── rafdb-l3-kernel-kvmeta.c      # Kernel metadata kv helpers
+├── rafdb-l3-kernel-patch.c       # Kernel active patch / deactivate
+├── tpb-raf-types.h               # Alias → rafdb-l1-types.h
+├── tpb-sha1.h                    # Alias → rafdb-l1-sha1.h
+└── tpb-raf-kernel-meta.h         # Kernel L2/L3 constants
 ```
+
+**Layer rules:** L1 is domain-agnostic (including cross-domain scan/locate). L2 is strictly per-domain CRUD. L3 is strictly per-domain decoration; filenames must include the domain name (`rafdb-l3-<domain>-*.c`).
+
+See also [`docs/design/rafdb_architecture.md`](rafdb_architecture.md) for the dependency diagram.
 
 All public types and function declarations are in `src/include/tpb-public.h`, merged into the generated flat `include/tpbench.h` at build/install time.
 
@@ -988,9 +1007,22 @@ Entry (.tpbe):
 Record (.tpbr):
 - `tpb_raf_record_write_{tbatch,kernel,task}(workspace, attr, data, datasize)` -- write record
 - `tpb_raf_record_read_{tbatch,kernel,task}(workspace, id, attr, data, datasize)` -- read record
+- `tpb_raf_record_patch_tbatch_counters(workspace, tbatch_id, duration, nkernel, ntask)` -- patch tbatch counters
+- `tpb_raf_record_append_tbatch(workspace, tbatch_id, task_id)` -- append TaskID to tbatch TPBLINK header (`rafdb-l3-tbatch-taglink.c`)
 - `tpb_raf_record_create_task_capsule(workspace, attr, first_task_id)` -- new task capsule
-- `tpb_raf_record_append_task_capsule(workspace, capsule_id, task_id)` -- append member ID
+- `tpb_raf_record_append_task_capsule(workspace, capsule_id, task_id)` -- append member ID (`rafdb-l3-task-taglink.c`)
 - `tpb_raf_free_headers(headers, nheader)` -- free allocated header arrays
+
+Cross-domain (L1):
+- `tpb_raf_find_record(workspace, id, domain_out)` -- locate .tpbr by ID
+- `tpb_raf_resolve_record_file(workspace, inpath, resolved, cap)` -- resolve user path
+- `tpb_raf_scan_records_by_id_prefix(...)` / `tpb_raf_free_id_matches(...)` -- prefix scan
+- `tpb_raf_hash_file(filepath, sha1_out)` -- file SHA1
+
+Kernel metadata (L2/L3):
+- `tpb_raf_kernel_build_registered_attr(...)` / `tpb_raf_kernel_free_built_attr(...)`
+- `tpb_raf_kernel_find_header`, `tpb_raf_kernel_meta_kv_get/set`, `tpb_raf_kernel_update_meta_key`
+- `tpb_raf_entry_patch_kernel_active`, `tpb_raf_record_patch_kernel_active`, `tpb_raf_kernel_deactivate_same_name`
 
 ID Generation:
 - `tpb_raf_gen_tbatch_id(utc_bits, btime, hostname, username, pid, id_out)` -- TBatchID

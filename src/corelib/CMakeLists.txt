@@ -11,14 +11,24 @@ set(TPB_CORELIB_SOURCES
     strftime.c
     tpblog/tpb-log.c
     tpblog/tpb-printf.c
-    rafdb/tpb-raf-workspace.c
-    rafdb/tpb-raf-magic.c
-    rafdb/tpb-raf-entry.c
-    rafdb/tpb-raf-record.c
-    rafdb/tpb-raf-id.c
-    rafdb/tpb-raf-kernel-meta.c
-    rafdb/tpb-sha1.c
-    rafdb/tpb-raf-scan.c
+    rafdb/rafdb-l1-domain-reg.c
+    rafdb/rafdb-l1-magic.c
+    rafdb/rafdb-l1-sha1.c
+    rafdb/rafdb-l1-id-util.c
+    rafdb/rafdb-l1-workspace.c
+    rafdb/rafdb-l1-entry.c
+    rafdb/rafdb-l1-record-io.c
+    rafdb/rafdb-l1-record-path.c
+    rafdb/rafdb-l1-record-locate.c
+    rafdb/rafdb-l1-scan.c
+    rafdb/rafdb-l2-tbatch.c
+    rafdb/rafdb-l2-kernel.c
+    rafdb/rafdb-l2-task.c
+    rafdb/rafdb-l2-kernel-meta-build.c
+    rafdb/rafdb-l3-tbatch-taglink.c
+    rafdb/rafdb-l3-task-taglink.c
+    rafdb/rafdb-l3-kernel-kvmeta.c
+    rafdb/rafdb-l3-kernel-patch.c
 )
 
 add_library(tpbench SHARED ${TPB_CORELIB_SOURCES} ${TPB_TIMER_SOURCES})

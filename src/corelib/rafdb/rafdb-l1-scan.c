@@ -1,6 +1,6 @@
 /*
- * tpb-raf-scan.c
- * rafdb record path resolution and ID prefix scanning.
+ * rafdb-l1-scan.c
+ * L1 cross-domain record path resolution and ID prefix scanning.
  */
 
 #include <ctype.h>
@@ -11,13 +11,12 @@
 #include <sys/stat.h>
 
 #include "../../include/tpb-public.h"
-#include "tpb-raf-types.h"
+#include "rafdb-l1-domain-reg.h"
+#include "rafdb-l1-internal.h"
+#include "rafdb-l1-types.h"
 
 /* Local Function Prototypes */
-
 static int _sf_cmp_id_match(const void *a, const void *b);
-
-/* Local Function Implementations */
 
 static int
 _sf_cmp_id_match(const void *a, const void *b)
@@ -43,6 +42,8 @@ tpb_raf_resolve_record_file(const char *workspace, const char *inpath,
     struct stat st;
     const char *base;
     char trybuf[TPB_RAF_PATH_MAX];
+    int i;
+    int nd;
 
     if (workspace == NULL || inpath == NULL || resolved == NULL ||
         resolved_cap == 0) {
@@ -57,23 +58,19 @@ tpb_raf_resolve_record_file(const char *workspace, const char *inpath,
     base = strrchr(inpath, '/');
     base = base ? base + 1 : inpath;
 
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_TBATCH_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(resolved, resolved_cap, "%s", trybuf);
-        return TPBE_SUCCESS;
-    }
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_KERNEL_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(resolved, resolved_cap, "%s", trybuf);
-        return TPBE_SUCCESS;
-    }
-    snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
-             workspace, TPB_RAF_TASK_DIR, base);
-    if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
-        snprintf(resolved, resolved_cap, "%s", trybuf);
-        return TPBE_SUCCESS;
+    nd = _tpb_raf_l1_domain_count();
+    for (i = 0; i < nd; i++) {
+        const tpb_raf_domain_desc_t *desc = _tpb_raf_l1_domain_by_index(i);
+
+        if (desc == NULL) {
+            continue;
+        }
+        snprintf(trybuf, sizeof(trybuf), "%s/%s/%s",
+                 workspace, desc->subdir, base);
+        if (stat(trybuf, &st) == 0 && S_ISREG(st.st_mode)) {
+            snprintf(resolved, resolved_cap, "%s", trybuf);
+            return TPBE_SUCCESS;
+        }
     }
 
     return TPBE_FILE_IO_FAIL;
@@ -90,19 +87,12 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
                                   tpb_raf_id_match_t **matches_out,
                                   int *nmatch_out)
 {
-    static const struct {
-        const char *reldir;
-        uint8_t     domain;
-    } dirs[3] = {
-        { TPB_RAF_TBATCH_DIR, TPB_RAF_DOM_TBATCH },
-        { TPB_RAF_KERNEL_DIR, TPB_RAF_DOM_KERNEL },
-        { TPB_RAF_TASK_DIR,   TPB_RAF_DOM_TASK },
-    };
     char dirpath[TPB_RAF_PATH_MAX];
     tpb_raf_id_match_t *matches = NULL;
     int n = 0;
     int cap = 0;
-    size_t di;
+    int di;
+    int nd;
 
     if (workspace == NULL || id_hex_prefix == NULL || matches_out == NULL ||
         nmatch_out == NULL) {
@@ -111,16 +101,21 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
     *matches_out = NULL;
     *nmatch_out = 0;
 
-    for (di = 0; di < sizeof(dirs) / sizeof(dirs[0]); di++) {
+    nd = _tpb_raf_l1_domain_count();
+    for (di = 0; di < nd; di++) {
+        const tpb_raf_domain_desc_t *desc = _tpb_raf_l1_domain_by_index(di);
         DIR *dp;
         struct dirent *ent;
 
+        if (desc == NULL) {
+            continue;
+        }
         if (domain_filter != TPB_RAF_DOM_ALL &&
-            domain_filter != dirs[di].domain) {
+            domain_filter != desc->domain_id) {
             continue;
         }
         snprintf(dirpath, sizeof(dirpath), "%s/%s",
-                 workspace, dirs[di].reldir);
+                 workspace, desc->subdir);
         dp = opendir(dirpath);
         if (!dp) {
             continue;
@@ -149,6 +144,7 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
                 int nc = cap ? cap * 2 : 16;
                 tpb_raf_id_match_t *nm = (tpb_raf_id_match_t *)realloc(
                     matches, (size_t)nc * sizeof(*matches));
+
                 if (!nm) {
                     closedir(dp);
                     free(matches);
@@ -159,7 +155,7 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
             }
             snprintf(matches[n].id_hex, sizeof(matches[n].id_hex),
                      "%s", idpart);
-            matches[n].domain = dirs[di].domain;
+            matches[n].domain = desc->domain_id;
             n++;
         }
         closedir(dp);

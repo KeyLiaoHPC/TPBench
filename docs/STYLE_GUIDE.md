@@ -8,7 +8,7 @@ Follow these guidelines for consistency across all `tpb-*` source files.
 ### 1.1. Public Functions
 **Public APIs for TPBench core functionality**
 - Functions in `src/include/*` headers and implemented in `src/corelib/*`: use `tpb_` prefix. E.g., `tpb_printf()`, `tpb_register_kernel()`
-- Functions in `src/corelib/<module>/`: use `tpb_<module>_<verb>_<noun>` pattern. Omit the filename; use module name. E.g., `tpb_raf_read_record()` in `src/corelib/rafdb/tpb-raf-record.c`, not `tpb_record_read_record()`.
+- Functions in `src/corelib/<module>/`: use `tpb_<module>_<verb>_<noun>` pattern. Omit the filename; use module name. E.g., `tpb_raf_record_read_tbatch()` in `src/corelib/rafdb/rafdb-l2-tbatch.c`, not `tpb_record_read_tbatch()`.
 
 **Public APIs for the kernel-specific behaviors**
 - For normal single kernel: `tpb_k_<do>_<something>`. E.g. `tpb_k_write_task()`.

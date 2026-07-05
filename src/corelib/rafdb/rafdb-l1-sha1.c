@@ -1,5 +1,5 @@
 /*
- * tpb-sha1.c
+ * rafdb-l1-sha1.c
  * Pure-C SHA1 implementation (RFC 3174). No external dependencies.
  */
 
@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "../../include/tpb-public.h"
-#include "tpb-sha1.h"
+#include "rafdb-l1-sha1.h"
 
 /* Local Function Prototypes */
 static void _sf_process_block(tpb_sha1_ctx_t *ctx,

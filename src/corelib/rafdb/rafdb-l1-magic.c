@@ -1,12 +1,12 @@
 /*
- * tpb-raf-magic.c
+ * rafdb-l1-magic.c
  * Magic signature construction, validation, and file detection.
  */
 
 #include <stdio.h>
 #include <string.h>
 #include "../tpb-types.h"
-#include "tpb-raf-types.h"
+#include "rafdb-l1-types.h"
 
 /* Local Function Prototypes */
 /*

@@ -1,6 +1,6 @@
 /*
- * tpb-raf-workspace.c
- * Workspace resolution, initialization, and config.json management.
+ * rafdb-l1-workspace.c
+ * L1 workspace resolution and initialization (domain dirs via registry).
  */
 
 #include <stdio.h>
@@ -11,7 +11,8 @@
 #include <errno.h>
 #include "../tpb-types.h"
 #include "../tpb_corelib_state.h"
-#include "tpb-raf-types.h"
+#include "rafdb-l1-domain-reg.h"
+#include "rafdb-l1-types.h"
 
 /* Local Function Prototypes */
 static int _sf_dir_exists(const char *path);
@@ -23,7 +24,10 @@ static int
 _sf_dir_exists(const char *path)
 {
     struct stat st;
-    if (stat(path, &st) != 0) return 0;
+
+    if (stat(path, &st) != 0) {
+        return 0;
+    }
     return S_ISDIR(st.st_mode);
 }
 
@@ -31,12 +35,10 @@ static int
 _sf_file_exists(const char *path)
 {
     struct stat st;
+
     return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
 }
 
-/*
- * Create directory and all parents. Returns 0 on success.
- */
 static int
 _sf_mkdir_recursive(const char *path)
 {
@@ -69,14 +71,14 @@ _sf_mkdir_recursive(const char *path)
     return 0;
 }
 
-/*
- * Write a minimal default config.json: {"name": "default"}
- */
 static int
 _sf_write_default_config(const char *config_path)
 {
     FILE *fp = fopen(config_path, "w");
-    if (!fp) return -1;
+
+    if (!fp) {
+        return -1;
+    }
     fprintf(fp, "{\n    \"name\": \"default\"\n}\n");
     fclose(fp);
     return 0;
@@ -98,10 +100,6 @@ tpb_raf_resolve_workspace(char *out_path, size_t pathlen)
     if (tpb_corelib_workspace_ready() != 0) {
         ws = _tpb_workspace_path_get();
     } else {
-        /*
-         * Unit tests and minimal tools may set TPB_WORKSPACE without
-         * tpb_corelib_init.
-         */
         ws = getenv("TPB_WORKSPACE");
     }
 
@@ -132,46 +130,39 @@ int
 tpb_raf_init_workspace(const char *workspace_path)
 {
     char path[TPB_RAF_PATH_MAX];
+    int i;
+    int nd;
 
     if (!workspace_path) {
         return TPBE_NULLPTR_ARG;
     }
 
-    /* Create etc/ directory and config.json */
     snprintf(path, sizeof(path), "%s/etc", workspace_path);
     if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
 
-    snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAF_CONFIG_REL);
+    snprintf(path, sizeof(path), "%s/%s", workspace_path, TPB_RAF_CONFIG_REL);
     if (!_sf_file_exists(path)) {
         if (_sf_write_default_config(path) != 0) {
             return TPBE_FILE_IO_FAIL;
         }
     }
 
-    /* Create rafdb domain directories */
-    snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAF_TBATCH_DIR);
-    if (_sf_mkdir_recursive(path) != 0) {
-        return TPBE_FILE_IO_FAIL;
+    nd = _tpb_raf_l1_domain_count();
+    for (i = 0; i < nd; i++) {
+        const tpb_raf_domain_desc_t *desc = _tpb_raf_l1_domain_by_index(i);
+
+        if (desc == NULL) {
+            continue;
+        }
+        snprintf(path, sizeof(path), "%s/%s", workspace_path, desc->subdir);
+        if (_sf_mkdir_recursive(path) != 0) {
+            return TPBE_FILE_IO_FAIL;
+        }
     }
 
-    snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAF_KERNEL_DIR);
-    if (_sf_mkdir_recursive(path) != 0) {
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAF_TASK_DIR);
-    if (_sf_mkdir_recursive(path) != 0) {
-        return TPBE_FILE_IO_FAIL;
-    }
-
-    snprintf(path, sizeof(path), "%s/%s",
-             workspace_path, TPB_RAF_LOG_REL);
+    snprintf(path, sizeof(path), "%s/%s", workspace_path, TPB_RAF_LOG_REL);
     if (_sf_mkdir_recursive(path) != 0) {
         return TPBE_FILE_IO_FAIL;
     }
