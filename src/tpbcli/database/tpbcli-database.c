@@ -4,7 +4,9 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #ifdef __linux__
 #include <linux/limits.h>
 #else
@@ -14,6 +16,8 @@
 #include "tpb-public.h"
 #include "tpbcli-argp.h"
 #include "tpbcli-database.h"
+
+#define TPBCLI_DB_LIST_DEFAULT_COUNT 20
 
 /* Local Function Prototypes */
 
@@ -25,12 +29,25 @@ static int _sf_parse_database_dump_opt(tpbcli_argnode_t *node,
                                        const char *value);
 static int _sf_parse_database_list_cmd(tpbcli_argnode_t *node,
                                        const char *value);
+static int _sf_parse_list_domain_flag(tpbcli_argnode_t *node,
+                                      const char *value);
+static int _sf_parse_list_domain_opt(tpbcli_argnode_t *node,
+                                     const char *value);
+static int _sf_parse_list_count_newest(tpbcli_argnode_t *node,
+                                       const char *value);
+static int _sf_parse_list_count_oldest(tpbcli_argnode_t *node,
+                                       const char *value);
+static int _sf_parse_positive_int(const char *value, int *out);
+static int _sf_parse_domain_name(const char *value, uint8_t *domain_out);
 
 typedef struct database_cli_ctx {
     int          want_list;
     int          want_dump;
     const char  *dump_selector;
     char         primary_buf[PATH_MAX];
+    uint8_t      list_domain;
+    int          list_count;
+    int          list_from_oldest;
 } database_cli_ctx_t;
 
 static const char *_sf_conf_not_id[] = {
@@ -61,6 +78,147 @@ static const char *_sf_conf_not_entry[] = {
     "--id", "--tbatch-id", "--kernel-id", "--task-id",
     "--score-id", "--file", NULL
 };
+static const char *_sf_conf_list_not_dT[] = {
+    "-dt", "-dk", "--domain", NULL
+};
+static const char *_sf_conf_list_not_dt[] = {
+    "-dT", "-dk", "--domain", NULL
+};
+static const char *_sf_conf_list_not_dk[] = {
+    "-dT", "-dt", "--domain", NULL
+};
+static const char *_sf_conf_list_not_domain[] = {
+    "-dT", "-dt", "-dk", NULL
+};
+static const char *_sf_conf_list_not_n[] = {
+    "-N", NULL
+};
+static const char *_sf_conf_list_not_N[] = {
+    "-n", NULL
+};
+
+static int
+_sf_parse_positive_int(const char *value, int *out)
+{
+    char *end;
+    long v;
+
+    if (value == NULL || value[0] == '\0' || out == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    v = strtol(value, &end, 10);
+    if (end == value || *end != '\0' || v <= 0 || v > INT_MAX) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+                   "error: invalid record count '%s' (positive integer required)\n",
+                   value);
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    *out = (int)v;
+    return 0;
+}
+
+static int
+_sf_parse_domain_name(const char *value, uint8_t *domain_out)
+{
+    if (value == NULL || domain_out == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    if (strcasecmp(value, "tbatch") == 0 ||
+        strcasecmp(value, "task_batch") == 0) {
+        *domain_out = TPB_RAF_DOM_TBATCH;
+        return 0;
+    }
+    if (strcasecmp(value, "task") == 0) {
+        *domain_out = TPB_RAF_DOM_TASK;
+        return 0;
+    }
+    if (strcasecmp(value, "kernel") == 0) {
+        *domain_out = TPB_RAF_DOM_KERNEL;
+        return 0;
+    }
+    tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
+               "error: unknown domain '%s' (use tbatch, task, or kernel)\n",
+               value);
+    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+}
+
+static int
+_sf_parse_list_domain_flag(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    uint8_t domain;
+
+    (void)value;
+    if (ctx == NULL || node->name == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    if (strcmp(node->name, "-dT") == 0) {
+        domain = TPB_RAF_DOM_TBATCH;
+    } else if (strcmp(node->name, "-dt") == 0) {
+        domain = TPB_RAF_DOM_TASK;
+    } else if (strcmp(node->name, "-dk") == 0) {
+        domain = TPB_RAF_DOM_KERNEL;
+    } else {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    ctx->list_domain = domain;
+    return 0;
+}
+
+static int
+_sf_parse_list_domain_opt(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    uint8_t domain;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_domain_name(value, &domain);
+    if (err != 0) {
+        return err;
+    }
+    ctx->list_domain = domain;
+    return 0;
+}
+
+static int
+_sf_parse_list_count_newest(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_positive_int(value, &ctx->list_count);
+    if (err != 0) {
+        return err;
+    }
+    ctx->list_from_oldest = 0;
+    return 0;
+}
+
+static int
+_sf_parse_list_count_oldest(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_positive_int(value, &ctx->list_count);
+    if (err != 0) {
+        return err;
+    }
+    ctx->list_from_oldest = 1;
+    return 0;
+}
 
 static tpbcli_argtree_t *
 _sf_build_database_argtree(void *ctx_void)
@@ -118,7 +276,7 @@ _sf_build_database_argtree(void *ctx_void)
     list_cmd = tpbcli_add_arg(db_cmd, &(tpbcli_argconf_t){
         .name = "list",
         .short_name = "ls",
-        .desc = "List tbatch records in the workspace index",
+        .desc = "List rafdb index records (tbatch, task, or kernel domain)",
         .type = TPBCLI_ARG_CMD,
         .flags = TPBCLI_ARGF_EXCLUSIVE,
         .max_chosen = 1,
@@ -141,6 +299,51 @@ _sf_build_database_argtree(void *ctx_void)
         tpbcli_argtree_destroy(tree);
         return NULL;
     }
+
+#define ADD_LIST_FLAG(_nm, _desc, _conf)                                       \
+    do {                                                                     \
+        if (tpbcli_add_arg(list_cmd, &(tpbcli_argconf_t){                     \
+                .name = (_nm),                                               \
+                .desc = (_desc),                                             \
+                .type = TPBCLI_ARG_FLAG,                                     \
+                .max_chosen = 1,                                             \
+                .conflict_opts = (_conf),                                    \
+                .parse_fn = _sf_parse_list_domain_flag,                      \
+                .user_data = ctx,                                            \
+            }) == NULL) {                                                    \
+            tpbcli_argtree_destroy(tree);                                    \
+            return NULL;                                                     \
+        }                                                                    \
+    } while (0)
+
+#define ADD_LIST_OPT(_nm, _desc, _conf, _fn)                                   \
+    do {                                                                     \
+        if (tpbcli_add_arg(list_cmd, &(tpbcli_argconf_t){                     \
+                .name = (_nm),                                               \
+                .desc = (_desc),                                             \
+                .type = TPBCLI_ARG_OPT,                                      \
+                .max_chosen = 1,                                             \
+                .conflict_opts = (_conf),                                    \
+                .parse_fn = (_fn),                                           \
+                .user_data = ctx,                                            \
+            }) == NULL) {                                                    \
+            tpbcli_argtree_destroy(tree);                                    \
+            return NULL;                                                     \
+        }                                                                    \
+    } while (0)
+
+    ADD_LIST_FLAG("-dT", "List tbatch domain (default)", _sf_conf_list_not_dT);
+    ADD_LIST_FLAG("-dt", "List task domain entry points", _sf_conf_list_not_dt);
+    ADD_LIST_FLAG("-dk", "List kernel domain", _sf_conf_list_not_dk);
+    ADD_LIST_OPT("--domain",
+                 "Domain name: tbatch, task, or kernel",
+                 _sf_conf_list_not_domain, _sf_parse_list_domain_opt);
+    ADD_LIST_OPT("-n", "Show latest N records", _sf_conf_list_not_n,
+                 _sf_parse_list_count_newest);
+    ADD_LIST_OPT("-N", "Show oldest N records", _sf_conf_list_not_N,
+                 _sf_parse_list_count_oldest);
+#undef ADD_LIST_FLAG
+#undef ADD_LIST_OPT
 
     dump_cmd = tpbcli_add_arg(db_cmd, &(tpbcli_argconf_t){
         .name = "dump",
@@ -210,7 +413,8 @@ _sf_emit_database_help(const tpbcli_argnode_t *node, FILE *out)
     fprintf(out, "Usage: tpbcli database|db <list|ls|dump> ...\n\n");
     fprintf(out, "Database operations for TPBench rafdb results.\n\n");
     fprintf(out, "Commands:\n");
-    fprintf(out, "  list, ls    List tbatch records in the workspace index.\n");
+    fprintf(out, "  list, ls    List rafdb index records (default: tbatch, latest 20).\n");
+    fprintf(out, "              Options: -dT|-dt|-dk, --domain, -n, -N.\n");
     fprintf(out, "  dump        Dump one record or domain as CSV-style lines.\n");
     fprintf(out, "              Brief selectors: --id, --tbatch-id, "
                    "--kernel-id,\n");
@@ -271,6 +475,9 @@ tpbcli_database(int argc, char **argv)
     int err;
 
     memset(&cli_ctx, 0, sizeof(cli_ctx));
+    cli_ctx.list_domain = TPB_RAF_DOM_TBATCH;
+    cli_ctx.list_count = TPBCLI_DB_LIST_DEFAULT_COUNT;
+    cli_ctx.list_from_oldest = 0;
 
     tree = _sf_build_database_argtree(&cli_ctx);
     if (tree == NULL) {
@@ -301,7 +508,9 @@ tpbcli_database(int argc, char **argv)
     }
 
     if (cli_ctx.want_list) {
-        return tpbcli_database_ls(workspace);
+        return tpbcli_database_ls(workspace, cli_ctx.list_domain,
+                                  cli_ctx.list_count,
+                                  cli_ctx.list_from_oldest);
     }
 
     return tpbcli_database_dump_resolved(workspace, cli_ctx.dump_selector,

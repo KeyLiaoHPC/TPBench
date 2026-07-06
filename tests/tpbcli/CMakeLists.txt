@@ -137,6 +137,11 @@ tpb_add_subcase(B4 B4.6  database_dump_conflict    test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.7  database_unknown_action   test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.8  database_dump_unknown_flag test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.9  database_ls_alias         test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.10 database_list_domain_task test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.11 database_list_domain_kernel test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.12 database_list_count_conflict test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.13 database_list_domain_conflict test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.14 database_list_domain_invalid test-cli-database tpbcli)
 
 # --- kernel subcommand (Pack B5) ---
 add_executable(test-cli-kernel EXCLUDE_FROM_ALL

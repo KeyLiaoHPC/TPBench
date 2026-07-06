@@ -115,6 +115,13 @@ test_b4_3_list_help(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+    if (strstr(buf, "-dT") == NULL || strstr(buf, "-dt") == NULL ||
+        strstr(buf, "-dk") == NULL || strstr(buf, "--domain") == NULL ||
+        strstr(buf, "-n") == NULL || strstr(buf, "-N") == NULL) {
+        FAIL("B4.3: missing list domain/count options");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
     PASS();
     return 0;
 }
@@ -239,6 +246,114 @@ test_b4_9_ls_alias(void)
     return 0;
 }
 
+static int
+test_b4_10_list_domain_task(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -dt", buf, sizeof(buf));
+
+    if (code != 0) {
+        FAIL("B4.10: expected exit 0 for -dt");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Start Time (UTC)") == NULL ||
+        strstr(buf, "Task ID") == NULL) {
+        FAIL("B4.10: missing task list headers");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b4_11_list_domain_kernel(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list --domain kernel",
+        buf, sizeof(buf));
+
+    if (code != 0) {
+        FAIL("B4.11: expected exit 0 for --domain kernel");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Kernel Name") == NULL ||
+        strstr(buf, "Kernel ID") == NULL) {
+        FAIL("B4.11: missing kernel list headers");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b4_12_list_count_conflict(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -n 3 -N 3", buf,
+        sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B4.12: expected nonzero for -n/-N conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.12: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b4_13_list_domain_conflict(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -dT -dk", buf,
+        sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B4.13: expected nonzero for domain conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.13: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b4_14_list_domain_invalid(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list --domain bogus", buf,
+        sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B4.14: expected nonzero for bogus domain");
+        return 1;
+    }
+    if (strstr(buf, "unknown domain") == NULL) {
+        FAIL("B4.14: missing unknown domain message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -273,6 +388,21 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B4.9") == 0) {
         return test_b4_9_ls_alias();
+    }
+    if (strcmp(id, "B4.10") == 0) {
+        return test_b4_10_list_domain_task();
+    }
+    if (strcmp(id, "B4.11") == 0) {
+        return test_b4_11_list_domain_kernel();
+    }
+    if (strcmp(id, "B4.12") == 0) {
+        return test_b4_12_list_count_conflict();
+    }
+    if (strcmp(id, "B4.13") == 0) {
+        return test_b4_13_list_domain_conflict();
+    }
+    if (strcmp(id, "B4.14") == 0) {
+        return test_b4_14_list_domain_invalid();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

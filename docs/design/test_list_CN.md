@@ -111,13 +111,18 @@
 | B3.11 | `tpbcli/argp/tpbcli-argp.c` | 验证 argp 解析器 DELEGATE_SUBCMD 标志将未解析参数传递给回调。 |
 | B4.1 | `tpbcli/database/tpbcli-database.c` | 验证裸 `database` 命令失败并提示 list/dump 子命令。 |
 | B4.2 | `tpbcli/database/tpbcli-database.c` | 验证 `database -h` 显示 list/dump 及 `--id`/`--file` 说明。 |
-| B4.3 | `tpbcli/database/tpbcli-database.c` | 验证 `database list -h` 显示 Usage 帮助。 |
+| B4.3 | `tpbcli/database/tpbcli-database.c` | 验证 `database list -h` 显示 Usage 及 `-dT`/`-dt`/`-dk`/`--domain`/`-n`/`-N` 选项。 |
 | B4.4 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -h` 显示 `--id` 和 `--file` 标志。 |
 | B4.5 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump` 无选择器时报 Usage 错误。 |
 | B4.6 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump --id X --file Y` 报告 "conflict" 冲突。 |
 | B4.7 | `tpbcli/database/tpbcli-database.c` | 验证 `database nosuchcmd` 报 "unknown argument" 错误。 |
 | B4.8 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump --notaflag` 报 "unknown argument" 错误。 |
 | B4.9 | `tpbcli/database/tpbcli-database.c` | 验证 `database ls` 作为 `list` 别名成功执行。 |
+| B4.10 | `tpbcli/database/tpbcli-database-ls.c` | 验证 `database list -dt` 正常退出且含 task 表头。 |
+| B4.11 | `tpbcli/database/tpbcli-database-ls.c` | 验证 `database list --domain kernel` 正常退出且含 kernel 表头。 |
+| B4.12 | `tpbcli/database/tpbcli-database.c` | 验证 `database list -n 3 -N 3` 报告 count 选项冲突。 |
+| B4.13 | `tpbcli/database/tpbcli-database.c` | 验证 `database list -dT -dk` 报告 domain 选项冲突。 |
+| B4.14 | `tpbcli/database/tpbcli-database.c` | 验证 `database list --domain bogus` 报告未知 domain 错误。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |
 | B5.2 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel get` 不修改 kernel.tpbe entry 数量。 |
 | B5.3 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel set` 后 `get -v` 显示 kernel 信息和列名，无旧 type 包装。 |

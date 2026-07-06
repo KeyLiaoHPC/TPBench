@@ -234,13 +234,42 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [wrapper_app wrapper_args ...] <kernel_entry
 
 必须再指定子命令：**`list`**（别名 **`ls`**）或 **`dump`**。
 
-- **`tpbcli db list`** — 打印工作区索引中近期 tbatch 表（与 **`database list`** 相同）。
+- **`tpbcli db list`** — 列出 rafdb 索引记录（默认：tbatch 域、最近 20 条）。可通过选项选择域与条数。
 - **`tpbcli db dump`** — 须且仅能指定以下之一：**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`** *路径*、**`--entry`** *名称*（详见 **`dump --help`**）。各选择项互斥。
+
+### `db list` 选项
+
+```
+tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
+```
+
+默认：**`-dT`**（tbatch）与 **`-n 20`**（最近 20 条）。
+
+| 选项 | 含义 |
+|------|------|
+| `-dT` | tbatch 域（默认） |
+| `-dt` | task 域（仅入口点；MPI capsule，不含各 rank 行） |
+| `-dk` | kernel 域 |
+| `--domain <name>` | 与 `-dT`/`-dt`/`-dk` 等价（`tbatch`、`task` 或 `kernel`） |
+| `-n <N>` | 最近 *N* 条（新的在上） |
+| `-N <N>` | 最旧 *N* 条（旧的在先） |
+
+域选择项互斥；**`-n`** 与 **`-N`** 互斥。
+
+记录 ID 显示为 6 位十六进制前缀加 `*`（如 `b12a23*`），与 `tpbcli kernel ls` 一致。列宽按终端比例分配（`tpblog_printf_c`，与 kernel list 相同）。
+
+**tbatch 列：** Start Time (UTC)、Type、Duration(s)、NTask、NKernel、NScore、TBatch ID
+
+**task 列：** Start Time (UTC)、Kernel、Exit、Duration(s)、Handle、Task ID、TBatch ID
+
+**kernel 列：** Kernel Name、Active、NParm、NMetric、Build Time (UTC)、Kernel ID
 
 示例：
 
 ```bash
 $ tpbcli db list
+$ tpbcli db list -dt -n 10
+$ tpbcli db list --domain kernel -N 5
 $ tpbcli database dump --tbatch-id <40位十六进制>
 ```
 

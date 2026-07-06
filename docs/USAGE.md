@@ -287,13 +287,42 @@ Synonyms: **`tpbcli database`**, **`tpbcli db`**.
 
 You must supply a subcommand: **`list`** (alias **`ls`**) or **`dump`**.
 
-- **`tpbcli db list`** — Print recent tbatch rows from the workspace index (same data as **`database list`**).
+- **`tpbcli db list`** — List rafdb index records (default: tbatch domain, latest 20). Options select domain and how many rows to show.
 - **`tpbcli db dump`** — Requires exactly one of: **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`** *path*, **`--entry`** *name* (see **`dump --help`** for semantics). Selectors are mutually exclusive.
+
+### `db list` options
+
+```
+tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
+```
+
+Defaults: **`-dT`** (tbatch) and **`-n 20`** (latest 20 records).
+
+| Option | Meaning |
+|--------|---------|
+| `-dT` | Tbatch domain (default) |
+| `-dt` | Task domain (entry points only; MPI capsules, not per-rank rows) |
+| `-dk` | Kernel domain |
+| `--domain <name>` | Same as `-dT`/`-dt`/`-dk` (`tbatch`, `task`, or `kernel`) |
+| `-n <N>` | Latest *N* records (newest first) |
+| `-N <N>` | Oldest *N* records (oldest first) |
+
+Domain selectors are mutually exclusive. **`-n`** and **`-N`** are mutually exclusive.
+
+Record IDs are shown as a 6-digit hex prefix plus `*` (for example `b12a23*`), matching `tpbcli kernel ls`. Columns use proportional terminal-width layout via `tpblog_printf_c` (same as kernel list).
+
+**Tbatch columns:** Start Time (UTC), Type, Duration(s), NTask, NKernel, NScore, TBatch ID
+
+**Task columns:** Start Time (UTC), Kernel, Exit, Duration(s), Handle, Task ID, TBatch ID
+
+**Kernel columns:** Kernel Name, Active, NParm, NMetric, Build Time (UTC), Kernel ID
 
 Examples:
 
 ```bash
 $ tpbcli db list
+$ tpbcli db list -dt -n 10
+$ tpbcli db list --domain kernel -N 5
 $ tpbcli database dump --tbatch-id <40_hex_chars>
 ```
 

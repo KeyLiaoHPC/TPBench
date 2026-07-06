@@ -244,22 +244,30 @@ RAFDB front-end. Subcommands: `list`/`ls`, `dump` (`src/tpbcli-database.c`).
 
 ### `database list` / `database ls`
 
-#### Mandatory
+```
+tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
+```
 
-
-| Option | Purpose |
-| ------ | ------- |
-| `list` / `ls` | Subcommand only; no further required flags. |
-
-
-Shows up to the latest 20 tbatch records from `rafdb/task_batch/` (`src/tpbcli-database-ls.c`).
-
-#### Optional
-
+Defaults: **`-dT`** (tbatch) and **`-n 20`** (latest 20). Domain flags and `--domain` are mutually exclusive; **`-n`** and **`-N`** are mutually exclusive.
 
 | Option | Purpose |
 | ------ | ------- |
+| `list` / `ls` | Subcommand. |
+| `-dT` | Tbatch domain (default). |
+| `-dt` | Task entry points (`derive_to==0`). |
+| `-dk` | Kernel domain. |
+| `--domain <name>` | `tbatch`, `task`, or `kernel`. |
+| `-n <N>` | Latest N records. |
+| `-N <N>` | Oldest N records. |
 | `--help` / `-h` | Subcommand help. |
+
+**Tbatch columns:** Start Time (UTC), Type, Duration(s), NTask, NKernel, NScore, TBatch ID (6-hex prefix + `*`).
+
+**Task columns:** Start Time (UTC), Kernel, Exit, Duration(s), Handle, Task ID, TBatch ID.
+
+**Kernel columns:** Kernel Name, Active, NParm, NMetric, Build Time (UTC), Kernel ID.
+
+Table layout uses `tpblog_printf_c` (`src/tpbcli/database/tpbcli-database-ls.c`).
 
 
 ### `database dump`
