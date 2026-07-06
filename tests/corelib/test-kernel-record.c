@@ -144,7 +144,9 @@ test_stream_register_record(void)
     }
 
     if (attr.nparm < 3 || attr.nmetric < 4 ||
-        attr.nheader != attr.nparm + attr.nmetric + TPB_RAF_KERNEL_META_HDR_COUNT) {
+        attr.nheader != attr.nparm + attr.nmetric + TPB_RAF_KERNEL_META_HDR_COUNT ||
+        attr.utc_bits == 0 || entries[0].utc_bits == 0 ||
+        entries[0].utc_bits != attr.utc_bits) {
         tpb_raf_free_headers(attr.headers, attr.nheader);
         free(data);
         free(entries);

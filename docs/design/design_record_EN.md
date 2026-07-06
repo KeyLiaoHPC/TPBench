@@ -400,6 +400,7 @@ typedef struct kernel_attr {
     uint32_t kctrl;                     /**< Kernel control bits (PLI=2) */
     uint32_t nheader;                   /**< # of headers (= nparm + nmetric + 3 metadata) */
     uint32_t active;                    /**< 1 if loadable variant, 0 if inactive/historical */
+    tpb_dtbits_t utc_bits;              /**< Kernel build/registration datetime (UTC) */
 } kernel_attr_t;
 ```
 
@@ -413,7 +414,7 @@ Fixed header members:
     - Record data: unit encoding for each metric (static definitions use `data_size = 0`).
     - ndim >= 1, length determined by metric definition.
 - header[nparm+nmetric .. nparm+nmetric+2]: Compile-history metadata (string payloads)
-    - **`variation`**: kernel name, KernelID, `active`, optional `build_time`, `.so` path
+    - **`variation`**: kernel name, KernelID, `active`, `.so` path
     - **`compilation`**: compiler id/version/path, C flags, kernel-specific flags, CMake build type
     - **`dependency`**: libraries linked above the kernel (e.g. `libtpbench.so`)
     - Payload format: `key=value\n` lines (`format=tpbench.kernel_meta.v1`, `section=<name>`)
@@ -431,6 +432,7 @@ Notes:
 - `derive_to` is all-zero for canonical records; otherwise it points to the canonical `kernel_id`.
 - `inherit_from` is all-zero unless this record was derived from another kernel record (provenance).
 - `active` is stored in both `.tpbe` entries and `.tpbr` attributes. Only one KernelID per kernel name is typically active; older variants are marked inactive when a new `.so` replaces `lib/libtpbk_<name>.so`.
+- `utc_bits` records when the kernel `.so` was registered (build/install time), not task execution time. CLI dump displays it as **`Build datetime (UTC)`**.
 - When a KernelID already exists, registration and metadata updates are skipped unless `TPB_K_OVERRIDE` is set to a truthy value.
 
 #### 2.3.2. Entry Structure (.tpbe)
@@ -457,7 +459,8 @@ Entry member (slim subset of `kernel_attr_t`):
 | nparm | 4 |
 | nmetric | 4 |
 | active | 4 |
-| reserve | 144 (`TPB_RAF_RESERVE_SIZE + 16`) |
+| utc_bits | 8 |
+| reserve | 136 (`TPB_RAF_RESERVE_SIZE + 8`) |
 | **Total** | **264** |
 
 Magic signature:
@@ -502,7 +505,9 @@ File structure:
 +-----------------2468-+
 | active               |  <- 4B
 +-----------------2472-+
-| 188-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`, opaque
+| utc_bits             |  <- 8B
++-----------------2480-+
+| 180-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`, opaque
 +-----------------2660-+
 | fixed_headers[i]     |  <- (nparm + nmetric + 3) x tpb_meta_header_t + user headers
 +-------------metasize-+

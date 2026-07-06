@@ -18,6 +18,7 @@
 
 /* kernel_entry_t.active on-disk offset from entry start */
 #define TPB_KERNEL_ENTRY_ACTIVE_OFF  116
+#define TPB_KERNEL_ENTRY_UTC_OFF     120
 
 /* Local Function Prototypes */
 static int _sf_split_meta_key(const char *full_key, char *section_out,
@@ -124,6 +125,91 @@ tpb_raf_entry_patch_kernel_active(const char *workspace,
             TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }
         if (fwrite(&active, sizeof(active), 1, fp) != 1) {
+            fclose(fp);
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+        }
+    }
+
+    fclose(fp);
+    return TPBE_SUCCESS;
+}
+
+/**
+ * @brief Patch build utc_bits in kernel .tpbe entry for a KernelID.
+ */
+int
+tpb_raf_entry_patch_kernel_utc(const char *workspace,
+                               const unsigned char kernel_id[20],
+                               tpb_dtbits_t utc_bits)
+{
+    char fpath[TPB_RAF_PATH_MAX];
+    int fd;
+    FILE *fp;
+    struct stat st;
+    long fsize;
+    long off;
+    int i;
+    int n;
+    kernel_entry_t *entries;
+
+    if (workspace == NULL || kernel_id == NULL) {
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_NULLPTR_ARG, NULL);
+    }
+
+    if (tpb_raf_entry_list_kernel(workspace, &entries, &n) != TPBE_SUCCESS) {
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+
+    off = -1;
+    for (i = 0; i < n; i++) {
+        if (memcmp(entries[i].kernel_id, kernel_id, 20) == 0) {
+            off = (long)i;
+            break;
+        }
+    }
+    free(entries);
+    if (off < 0) {
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_LIST_NOT_FOUND, NULL);
+    }
+
+    snprintf(fpath, sizeof(fpath), "%s/%s/%s",
+             workspace, TPB_RAF_KERNEL_DIR, TPB_RAF_KERNEL_ENTRY);
+
+    fd = open(fpath, O_RDWR);
+    if (fd < 0) {
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+    if (flock(fd, LOCK_EX) != 0) {
+        close(fd);
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+
+    fp = fdopen(fd, "r+b");
+    if (fp == NULL) {
+        close(fd);
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+
+    if (fstat(fd, &st) != 0) {
+        fclose(fp);
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+    fsize = (long)st.st_size;
+    if (fsize < (long)(2 * TPB_RAF_MAGIC_LEN)) {
+        fclose(fp);
+        TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+    }
+
+    {
+        long entry_off = (long)TPB_RAF_MAGIC_LEN +
+            off * (long)sizeof(kernel_entry_t) +
+            (long)TPB_KERNEL_ENTRY_UTC_OFF;
+
+        if (fseek(fp, entry_off, SEEK_SET) != 0) {
+            fclose(fp);
+            TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+        }
+        if (_tpb_raf_l1_write_u64(fp, utc_bits) != 0) {
             fclose(fp);
             TPB_FAIL(TPB_MOD_RAF_L3_KERNEL, TPBE_FILE_IO_FAIL, NULL);
         }

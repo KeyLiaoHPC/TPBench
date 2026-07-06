@@ -108,6 +108,13 @@ int tpb_raf_entry_patch_kernel_active(const char *workspace,
                                       uint32_t active);
 
 /**
+ * @brief Patch build utc_bits in kernel .tpbe entry for a KernelID.
+ */
+int tpb_raf_entry_patch_kernel_utc(const char *workspace,
+                                   const unsigned char kernel_id[20],
+                                   tpb_dtbits_t utc_bits);
+
+/**
  * @brief Patch active flag in kernel .tpbr fixed attributes for a KernelID.
  */
 int tpb_raf_record_patch_kernel_active(const char *workspace,

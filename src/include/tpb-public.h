@@ -966,6 +966,7 @@ typedef struct kernel_attr {
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nheader;             /**< Number of headers */
     uint32_t active;              /**< 1 if this KernelID is the loadable variant */
+    tpb_dtbits_t utc_bits;        /**< Kernel build/registration datetime (UTC) */
     tpb_meta_header_t *headers;   /**< Header array */
 } kernel_attr_t;
 
@@ -978,7 +979,8 @@ typedef struct kernel_entry {
     uint32_t nparm;               /**< Number of parameters */
     uint32_t nmetric;             /**< Number of metrics */
     uint32_t active;              /**< 1 if loadable, 0 if inactive/historical */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 16]; /**< Reserved */
+    tpb_dtbits_t utc_bits;        /**< Kernel build/registration datetime (UTC) */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 8]; /**< Reserved */
 } kernel_entry_t;
 
 /** @brief Task full attributes (.tpbr meta section) */
@@ -1515,6 +1517,17 @@ void tpb_raf_kernel_variation_summary(const char *payload, char *out,
 int tpb_raf_entry_patch_kernel_active(const char *workspace,
                                       const unsigned char kernel_id[20],
                                       uint32_t active);
+
+/**
+ * @brief Patch build utc_bits in kernel .tpbe entry for a KernelID.
+ * @param workspace Workspace root path.
+ * @param kernel_id 20-byte KernelID.
+ * @param utc_bits Kernel build/registration datetime (UTC).
+ * @return TPBE_SUCCESS or error code.
+ */
+int tpb_raf_entry_patch_kernel_utc(const char *workspace,
+                                   const unsigned char kernel_id[20],
+                                   tpb_dtbits_t utc_bits);
 
 /**
  * @brief Patch active flag in kernel .tpbr fixed attributes.

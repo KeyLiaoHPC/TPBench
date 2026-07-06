@@ -419,7 +419,7 @@ When the KernelID already exists, **`set` skips the update** and prints a warnin
 
 ### 2.4.4 Compile history from CMake
 
-When **`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`** (default), each built kernel target runs a post-build step that calls **`tpbcli kernel set`** with **`variation`**, **`compilation`**, and **`dependency`** keys. Set **`TPB_WORKSPACE`** when building so records land in the intended workspace:
+When **`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`** (default), each built kernel target runs a post-build step that calls **`tpbcli kernel set`** with **`variation`**, **`compilation`**, and **`dependency`** keys. Registration also writes **`utc_bits`** (build datetime) into the kernel `.tpbe` entry and `.tpbr` record; **`tpbcli database dump`** shows it as **`Build datetime (UTC)`**. Set **`TPB_WORKSPACE`** when building so records land in the intended workspace:
 
 ```bash
 export TPB_WORKSPACE=$HOME/my-tpbench-ws

@@ -23,6 +23,7 @@
 #include "rafdb/tpb-raf-types.h"
 #include "rafdb/tpb-sha1.h"
 #include "rafdb/tpb-raf-kernel-meta.h"
+#include "strftime.h"
 
 /* Compile-time TPB_HOME from CMake, may be empty */
 #ifndef TPB_HOME
@@ -240,6 +241,24 @@ _sf_is_zero_id(const unsigned char id[20])
 }
 
 static int
+_sf_kernel_build_utc_bits(tpb_dtbits_t *utc_bits)
+{
+    tpb_datetime_t dt;
+    int err;
+
+    if (utc_bits == NULL) {
+        TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
+    }
+
+    err = tpb_ts_get_datetime(TPBM_TS_UTC, &dt);
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
+
+    err = tpb_ts_datetime_to_bits(&dt, 0, utc_bits);
+    TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
+    return TPBE_SUCCESS;
+}
+
+static int
 _sf_follow_kernel_dup_chain(const char *workspace,
                             const unsigned char start_id[20],
                             unsigned char final_id[20])
@@ -326,10 +345,18 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
             kernel_attr_t attr;
             void *data = NULL;
             uint64_t datasize = 0;
+            tpb_dtbits_t build_utc;
+
+            err = _sf_kernel_build_utc_bits(&build_utc);
+            if (err != TPBE_SUCCESS) {
+                free(entries);
+                TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
+            }
 
             err = tpb_raf_kernel_build_registered_attr(registered, computed_id,
                                                        &attr, &data, &datasize);
             if (err == TPBE_SUCCESS) {
+                attr.utc_bits = build_utc;
                 err = tpb_raf_record_write_kernel(workspace, &attr, data,
                                                   datasize);
             }
@@ -339,6 +366,8 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
                                                           computed_id);
                 (void)tpb_raf_entry_patch_kernel_active(workspace, computed_id, 1);
                 (void)tpb_raf_record_patch_kernel_active(workspace, computed_id, 1);
+                (void)tpb_raf_entry_patch_kernel_utc(workspace, computed_id,
+                                                     build_utc);
             }
         }
         err = _sf_follow_kernel_dup_chain(workspace, computed_id, out_final_id);
@@ -352,6 +381,13 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         kernel_entry_t ent;
         void *data = NULL;
         uint64_t datasize = 0;
+        tpb_dtbits_t build_utc;
+
+        err = _sf_kernel_build_utc_bits(&build_utc);
+        if (err != TPBE_SUCCESS) {
+            free(entries);
+            TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
+        }
 
         err = tpb_raf_kernel_build_registered_attr(registered, computed_id,
                                                    &attr, &data, &datasize);
@@ -360,6 +396,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
             TPB_PROPAGATE(TPB_MOD_DRIVER, err, NULL);
         }
 
+        attr.utc_bits = build_utc;
         err = tpb_raf_record_write_kernel(workspace, &attr, data, datasize);
         tpb_raf_kernel_free_built_attr(&attr, data);
         if (err != TPBE_SUCCESS) {
@@ -374,6 +411,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         ent.nparm = (uint32_t)registered->info.nparms;
         ent.nmetric = (uint32_t)registered->info.nouts;
         ent.active = 1;
+        ent.utc_bits = build_utc;
 
         err = tpb_raf_entry_append_kernel(workspace, &ent);
         if (err != TPBE_SUCCESS) {

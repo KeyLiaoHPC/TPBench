@@ -391,6 +391,7 @@ typedef struct kernel_attr {
     uint32_t kctrl;                     /**< kernel 控制位（PLI=2） */
     uint32_t nheader;                   /**< 头部数量（= nparm + nmetric + 3 个 metadata） */
     uint32_t active;                    /**< 1 表示可加载变体，0 表示 inactive/历史版本 */
+    tpb_dtbits_t utc_bits;              /**< Kernel 构建/注册日期时间（UTC） */
 } kernel_attr_t;
 ```
 
@@ -404,7 +405,7 @@ typedef struct kernel_attr {
     - 记录数据：每个指标的单位编码（静态定义时 `data_size = 0`）。
     - ndim >= 1，长度由指标定义确定。
 - header[nparm+nmetric .. nparm+nmetric+2]: 编译历史 metadata（字符串 payload）
-    - **`variation`**：kernel 名、KernelID、`active`、可选 `build_time`、`.so` 路径
+    - **`variation`**：kernel 名、KernelID、`active`、`.so` 路径
     - **`compilation`**：编译器 id/版本/路径、C 标志、kernel 专用标志、CMake build type
     - **`dependency`**：kernel 之上链接的库（如 `libtpbench.so`）
     - payload 格式：`key=value\n` 行（含 `format=tpbench.kernel_meta.v1`、`section=<name>`）
@@ -422,6 +423,7 @@ KernelID:
 - 对于规范记录，`derive_to` 全为零；否则它指向规范的 `kernel_id`。
 - `inherit_from` 全为零，除非此记录由另一条 kernel 记录派生（溯源）。
 - `active` 同时存在于 `.tpbe` 条目和 `.tpbr` 属性中。每个 kernel 名称通常仅有一个 KernelID 为 active；当新 `.so` 替换 `lib/libtpbk_<name>.so` 时，旧变体标为 inactive。
+- `utc_bits` 记录 kernel `.so` 被注册（构建/安装）的时间，不是 task 执行时间。CLI dump 中显示为 **`Build datetime (UTC)`**。
 - 当 KernelID 已存在时，除非 `TPB_K_OVERRIDE` 为真值，否则跳过注册与 metadata 更新。
 
 #### 2.3.2. 条目结构 (.tpbe)
@@ -448,7 +450,8 @@ KernelID:
 | nparm | 4 |
 | nmetric | 4 |
 | active | 4 |
-| reserve | 144（`TPB_RAF_RESERVE_SIZE + 16`） |
+| utc_bits | 8 |
+| reserve | 136（`TPB_RAF_RESERVE_SIZE + 8`） |
 | **总计** | **264** |
 
 Magic 签名：
@@ -493,7 +496,9 @@ Magic 签名：
 +-----------------2468-+
 | active               |  <- 4B
 +-----------------2472-+
-| 188-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`，不透明保留
+| utc_bits             |  <- 8B
++-----------------2480-+
+| 180-Byte reserve     |  <- `TPB_RAF_KERNEL_ATTR_RESERVE`，不透明保留
 +-----------------2660-+
 | fixed_headers[i]     |  <- (nparm + nmetric + 3) x tpb_meta_header_t + 用户头部
 +-------------metasize-+

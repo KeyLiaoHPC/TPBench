@@ -224,6 +224,22 @@ dump_print_kv_hex20(const char *key, const unsigned char id[20])
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %s\n", key, hex);
 }
 
+static void
+dump_print_kv_build_datetime_utc(const char *key, tpb_dtbits_t utc_bits)
+{
+    tpb_datetime_str_t ts;
+
+    if (utc_bits == 0) {
+        dump_print_kv_str(key, "N/A");
+        return;
+    }
+    if (tpb_ts_bits_to_isoutc(utc_bits, &ts) == 0) {
+        dump_print_kv_str(key, ts.str);
+    } else {
+        dump_print_kv_u64(key, utc_bits);
+    }
+}
+
 static int
 normalize_entry_name(const char *in, char *out, size_t outlen)
 {
@@ -372,6 +388,18 @@ print_ambiguous_id_table(const char *prefix, tpb_raf_id_match_t *matches,
                 }
                 dur_sec = (double)attr.duration / 1e9;
                 have_dur = 1;
+                tpb_raf_free_headers(attr.headers, attr.nheader);
+            }
+        } else if (matches[i].domain == TPB_RAF_DOM_KERNEL) {
+            kernel_attr_t attr;
+            memset(&attr, 0, sizeof(attr));
+            if (tpb_raf_record_read_kernel(workspace, id, &attr,
+                                           NULL, NULL) == TPBE_SUCCESS) {
+                if (attr.utc_bits != 0 &&
+                    tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+                    snprintf(tsbuf, sizeof(tsbuf), "%s", ts.str);
+                    utc_col = tsbuf;
+                }
                 tpb_raf_free_headers(attr.headers, attr.nheader);
             }
         } else {
@@ -802,6 +830,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("kctrl", attr.kctrl);
     dump_print_kv_u32("nheader", attr.nheader);
     dump_print_kv_u32("active", attr.active);
+    dump_print_kv_build_datetime_utc("Build datetime (UTC)", attr.utc_bits);
 
     dump_headers(attr.headers, attr.nheader);
     dump_record_data(attr.headers, attr.nheader, data, datasize);
@@ -927,6 +956,10 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
             dump_print_kv_u32(p, e[i].nparm);
             snprintf(p, sizeof(p), "entry[%d].nmetric", i);
             dump_print_kv_u32(p, e[i].nmetric);
+            snprintf(p, sizeof(p), "entry[%d].active", i);
+            dump_print_kv_u32(p, e[i].active);
+            snprintf(p, sizeof(p), "entry[%d].Build datetime (UTC)", i);
+            dump_print_kv_build_datetime_utc(p, e[i].utc_bits);
         }
         free(e);
         return TPBE_SUCCESS;

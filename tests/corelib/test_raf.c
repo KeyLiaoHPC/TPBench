@@ -311,6 +311,7 @@ test_entry_kernel(void)
     e.kctrl = TPB_KTYPE_PLI;
     e.nparm = 3;
     e.nmetric = 1;
+    e.utc_bits = 12345;
 
     int err = tpb_raf_entry_append_kernel(g_test_dir, &e);
     if (err) { cleanup_test_dir(); return 1; }
@@ -328,7 +329,8 @@ test_entry_kernel(void)
     if (memcmp(entries[0].kernel_id, e.kernel_id, 20) != 0 ||
         memcmp(entries[0].inherit_from, e.inherit_from, 20) != 0 ||
         strcmp(entries[0].kernel_name, "triad") != 0 ||
-        entries[0].nparm != 3 || entries[0].nmetric != 1) {
+        entries[0].nparm != 3 || entries[0].nmetric != 1 ||
+        entries[0].utc_bits != e.utc_bits) {
         free(entries);
         cleanup_test_dir();
         return 1;
@@ -542,6 +544,7 @@ test_record_kernel(void)
     attr.nmetric = 1;
     attr.kctrl = TPB_KTYPE_PLI;
     attr.nheader = 1;
+    attr.utc_bits = 54321;
 
     tpb_meta_header_t h = make_test_header("ntest", 1, 8);
     attr.headers = &h;
@@ -565,6 +568,7 @@ test_record_kernel(void)
     if (memcmp(rattr.derive_to, attr.derive_to, 20) != 0) fail = 1;
     if (memcmp(rattr.inherit_from, attr.inherit_from, 20) != 0) fail = 1;
     if (rattr.nparm != 2 || rattr.nmetric != 1) fail = 1;
+    if (rattr.utc_bits != attr.utc_bits) fail = 1;
     if (rsize != 8) fail = 1;
     if (rdata && *(uint64_t *)rdata != 100) fail = 1;
 

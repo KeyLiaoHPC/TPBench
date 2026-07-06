@@ -1677,7 +1677,9 @@ typedef struct kernel_entry {
     uint32_t kctrl;                 // Kernel control bits
     uint32_t nparm;                 // Number of parameters
     uint32_t nmetric;               // Number of metrics
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 20]; // Reserved (148)
+    uint32_t active;                // 1 if loadable, 0 if inactive/historical
+    tpb_dtbits_t utc_bits;          // Kernel build/registration datetime (UTC)
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE + 8]; // Reserved (136)
 } kernel_entry_t;
 ```
 
