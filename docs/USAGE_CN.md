@@ -46,11 +46,12 @@ $ make
 ```bash
 tpbcli <subcommand> <options>
 ```
-顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。
+顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`runtime environment`（`rtenv`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。
 
 - **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
 - **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。
 - **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期 tbatch 表）或 **`dump`**，且 **`dump`** 须且仅能指定一个选择项（**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`**、**`--entry`**）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
+- **`tpbcli rtenv`**：创建、浏览和加载运行时环境记录，记录应用/库版本和显式环境变量。子命令：**`new`**、**`list`**、**`show`**、**`load`**。
 - **`tpbcli kernel`**：管理工作区内的 kernel 编译历史 —— **`list`** / **`ls`**（扫描并注册 PLI 内核）、**`get`**（只读查询）、**`set`**（写入 metadata），以及构建系统内部使用的 **`backup-inactive`**。
 - **`tpbcli help`**：帮助文档。
 
@@ -273,11 +274,74 @@ $ tpbcli db list --domain kernel -N 5
 $ tpbcli database dump --tbatch-id <40位十六进制>
 ```
 
-## 2.4 tpbcli kernel
+## 2.4 tpbcli rtenv
+
+**`rtenv`** 子命令管理 rafdb 的 `runtime_environment` domain，用于记录
+Environment Modules 风格的软件栈和环境变量。
+
+TPBench 强制要求始终存在一个激活 RTEnv。编译安装的 post-build 脚本会基于编译期
+环境创建 `id == 0` 的**基础环境**;此后每次 `tpbcli rtenv new`（别名 `create`）
+都必须继承当前激活的 RTEnv。
+
+### 2.4.1 创建运行时环境
+
+```bash
+tpbcli rtenv new --name gcc-openmpi --note 'GCC + OpenMPI' \
+  --add-application --name gcc --version 13.2 --note compiler \
+  --add-application --name openmpi --version 5.0.3 --note mpi \
+  --prepend-variable --name PATH --value /opt/gcc/bin \
+  --append-variable --name LD_LIBRARY_PATH --value /opt/gcc/lib64 \
+  --unset-variable --name SOME_VAR_TO_CLEAR
+```
+
+新环境继承当前激活 RTEnv（可用 `--inherit-from <id|name>` 显式指定父环境），只记录
+相对父环境的增量；变量操作模式含 `--variable`（覆盖）、`--prepend-variable`（前置）、
+`--append-variable`（追加）、`--unset-variable`（清除，`mode=3`）。
+
+不带应用或变量选项时，`new` 会打开编辑器编辑模板；编辑器选择顺序为
+`$VISUAL`、`$EDITOR`、`nano`、`vi`。使用 `-o <file>` 只输出模板不写入
+rafdb；使用 `-f <file>` 从模板文件创建记录。
+
+### 2.4.2 浏览运行时环境
+
+```bash
+tpbcli rtenv list
+tpbcli rtenv show -i 0
+tpbcli rtenv show --name gcc-openmpi
+```
+
+`list` 会先显示当前激活的 runtime environment ID；无法解析时显示
+`N/A`。`show` 会沿 `inherit_from` 链把基础环境到目标环境的增量合并后完整展示。
+列表列宽使用 `tpblog_printf_c` 按终端宽度分配，并在列内换行。
+
+### 2.4.3 加载运行时环境
+
+`tpbcli` 子进程不能直接修改父 shell。要让环境变量进入当前 shell，请执行：
+
+```bash
+eval "$(tpbcli rtenv load -i 0)"
+```
+
+或：
+
+```bash
+source <(tpbcli rtenv load --name gcc-openmpi)
+```
+
+`load` 在 stdout 输出 `export` / `unset` 片段并导出 `TPB_RTENV_ID`；日志和错误
+输出到 stderr，避免污染 `eval`。**运行期激活状态只由 `$TPB_RTENV_ID` 承载**
+（`load` 不写回 `config.json`，后者只存基础环境 `base_id`）。
+
+之后 `tpbcli run` / `benchmark` 按 `$TPB_RTENV_ID` 解析激活环境（未设置时回退
+基础环境 `0` 并告警），把该 id 记入 tbatch/task 的 `runtime_environment_id` 外键，
+并回写该环境的 `ntbatch`/`ntask` 计数。通过 `--kenvs` 传入的变量在运行时覆盖
+同名变量，并作为“环境来源输入参数”记入 task。
+
+## 2.5 tpbcli kernel
 
 **`kernel`** 子命令管理 rafdb 中的 Kernel 域记录：已注册参数、指标、编译 metadata 以及每个 KernelID 变体的 **`active`** 状态。
 
-### 2.4.1 列出已注册内核
+### 2.5.1 列出已注册内核
 
 ```bash
 tpbcli kernel list
@@ -286,7 +350,7 @@ tpbcli kernel list
 
 扫描 `lib/libtpbk_*.so`，注册新 KernelID，并打印 **Kernel**、**KernelID**、**Tags**、**Description** 四列表格。已编译内核在前（加载顺序）；**`$TPB_HOME/src/kernels/kernel_list.cmake.in`**（及扫描到的 `tpbk_*.c` 入口）中尚未安装的内核，KernelID 列显示 **`N/A`**。Tags 来自 registry 文件，而非 rafdb 记录。
 
-### 2.4.1a 内核源 registry
+### 2.5.1a 内核源 registry
 
 CPU 内核名称、标签与源码路径在 **`src/kernels/kernel_list.cmake.in`** 中声明（安装于 **`$TPB_HOME/src/kernels/`**）：
 
@@ -298,7 +362,7 @@ stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
 
 **`PATH`** 相对于 `src/kernels/`，目录内须含 **`tpbk_<NAME>.c`**。特殊链接库与构建条件（如 MPI）仍在 **`cmake/TPBenchKernelRegistry.cmake`** 的 **`TPB_CPU_KERNEL_LINK_DEFS`** 中配置。
 
-### 2.4.2 查询 kernel 记录（只读）
+### 2.5.2 查询 kernel 记录（只读）
 
 ```bash
 tpbcli kernel get --kernel <name>
@@ -307,7 +371,7 @@ tpbcli kernel get -v --kernel <name>    # 所有变体，从新到旧
 
 **`get` 不会扫描 `.so`，也不会触发注册。** 仅读取 `rafdb/kernel/kernel.tpbe` 及对应 `.tpbr`。不带 **`-v`** 时显示该名称下最新且 **active** 的记录；若无 active 记录，则显示最新一条并标明 inactive。
 
-### 2.4.3 设置编译 metadata
+### 2.5.3 设置编译 metadata
 
 ```bash
 tpbcli kernel set --kernel <name> \
@@ -330,7 +394,7 @@ tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
 
 当 KernelID 已存在时，除非环境变量 **`TPB_K_OVERRIDE=1`**（或 `true`/`yes`），否则 **`set` 会跳过更新** 并打印 warning。在 **`kernel list`** 时重新注册未变化的 `.so` 同样受此约束。**`tpbcli run`** 不更新 kernel metadata，仅报告是否找到指定 kernel。
 
-### 2.4.4 通过 CMake 记录编译历史
+### 2.5.4 通过 CMake 记录编译历史
 
 **`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`**（默认）时，每个已构建的 kernel 目标会在 post-build 阶段调用 **`tpbcli kernel set`** 写入 **`variation`**、**`compilation`**、**`dependency`**。构建时请设置 **`TPB_WORKSPACE`**，使记录写入预期工作区：
 
@@ -349,7 +413,7 @@ tpbcli kernel get -v --kernel stream
 
 替换 `lib/libtpbk_<name>.so` 前，构建系统会将旧文件移至 **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`**，并将旧 KernelID 标为 **`active=0`**。dynloader 仅扫描 `lib/libtpbk_*.so`（非递归），备份文件不会被加载。
 
-### 2.4.5 初始化树外 kernel 工程
+### 2.5.5 初始化树外 kernel 工程
 
 模板位于 **`${TPB_HOME}/etc/cmake/kernel/`**。
 
@@ -357,7 +421,7 @@ tpbcli kernel get -v --kernel stream
 tpbcli kernel init --dir ./mykern --kernel mykern
 ```
 
-### 2.4.6 构建 kernel
+### 2.5.6 构建 kernel
 
 ```bash
 # 从 registry 构建（--dir 默认为 TPB_HOME）：

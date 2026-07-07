@@ -49,11 +49,12 @@ tpbcli basic format:
 tpbcli <subcommand> <options>
 ```
 
-Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
+Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`runtime environment` (`rtenv`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
 
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
 - **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
 - **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
+- **`tpbcli rtenv`**: Create, browse, and load runtime environment records. Records capture application/library versions and explicit environment variable operations.
 - **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
 
@@ -383,11 +384,83 @@ tpbcli db dump --entry task
 
 **Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
 
-## 2.4 tpbcli kernel
+## 2.4 tpbcli rtenv
+
+The **`rtenv`** subcommand manages the `runtime_environment` rafdb domain. It
+records an Environment Modules-style software stack and the explicit environment
+variables used for later `run` or `benchmark` commands.
+
+TPBench always requires an active RTEnv. The compile/install post-build step
+creates a **base environment** (`id == 0`) from the build-time environment; every
+subsequent `tpbcli rtenv new` (alias `create`) must inherit the currently active
+RTEnv.
+
+### 2.4.1 Create a runtime environment
+
+```bash
+tpbcli rtenv new --name gcc-openmpi --note 'GCC + OpenMPI' \
+  --add-application --name gcc --version 13.2 --note compiler \
+  --add-application --name openmpi --version 5.0.3 --note mpi \
+  --prepend-variable --name PATH --value /opt/gcc/bin \
+  --append-variable --name LD_LIBRARY_PATH --value /opt/gcc/lib64 \
+  --unset-variable --name SOME_VAR_TO_CLEAR
+```
+
+A new environment inherits the active RTEnv (override with `--inherit-from
+<id|name>`) and stores only the delta relative to its parent. Variable modes are
+`--variable` (override), `--prepend-variable`, `--append-variable`, and
+`--unset-variable` (`mode=3`).
+
+When no application or variable options are provided, `new` opens an editor with
+a template. Editor selection order is `$VISUAL`, `$EDITOR`, `nano`, then `vi`.
+Use `-o <file>` to write the template without changing rafdb, or `-f <file>` to
+create a record from a template file.
+
+### 2.4.2 Browse runtime environments
+
+```bash
+tpbcli rtenv list
+tpbcli rtenv show -i 0
+tpbcli rtenv show --name gcc-openmpi
+```
+
+`list` first prints the activated runtime environment ID, or `N/A` when it cannot
+be resolved. `show` merges the delta chain from the base environment to the
+target along `inherit_from` and displays the fully resolved environment. The
+table uses `tpblog_printf_c` proportional columns and wraps long cell content.
+
+### 2.4.3 Load a runtime environment
+
+A `tpbcli` child process cannot directly modify its parent shell. Evaluate the
+generated shell fragment:
+
+```bash
+eval "$(tpbcli rtenv load -i 0)"
+```
+
+or:
+
+```bash
+source <(tpbcli rtenv load --name gcc-openmpi)
+```
+
+`load` writes `export` / `unset` commands to stdout and exports `TPB_RTENV_ID`;
+logs and diagnostics go to stderr so they do not pollute `eval`. **The runtime
+active state is carried solely by `$TPB_RTENV_ID`** (`load` does not write it back
+to `config.json`, which only stores the base environment `base_id`).
+
+Later `tpbcli run` / `benchmark` resolve the active environment from
+`$TPB_RTENV_ID` (falling back to base `0` with a warning when unset), record that
+id in the `runtime_environment_id` foreign key of tbatch/task records, and
+increment the environment's `ntbatch` / `ntask` counters. Variables passed via
+`--kenvs` override same-named variables at runtime and are recorded as
+environment-sourced input parameters in the task record.
+
+## 2.5 tpbcli kernel
 
 The **`kernel`** subcommand manages Kernel Domain records in rafdb: registered parameters, metrics, compile metadata, and **`active`** status for each KernelID variant.
 
-### 2.4.1 List registered kernels
+### 2.5.1 List registered kernels
 
 ```bash
 tpbcli kernel list
@@ -398,7 +471,7 @@ Scans `lib/libtpbk_*.so`, registers any new KernelID, and prints a table with co
 
 Long **Description** and **Tags** cells wrap with the same fixed-width hyphenation rules used by **`kernel get -v`**.
 
-### 2.4.1a Kernel source registry
+### 2.5.1a Kernel source registry
 
 CPU kernel names, tags, and source locations are declared in **`src/kernels/kernel_list.cmake.in`** (installed under **`$TPB_HOME/src/kernels/`**):
 
@@ -412,7 +485,7 @@ stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
 
 When adding a kernel in a nested directory, add a row to **`kernel_list.cmake.in`**, place **`tpbk_<name>.c`** under that path, and (for MPI kernels) add a link-def override if needed. Reconfigure CMake or run **`tpbcli kernel build --kernel <name>`** to build from the staged registry tree.
 
-### 2.4.2 Query kernel records (read-only)
+### 2.5.2 Query kernel records (read-only)
 
 ```bash
 tpbcli kernel get --kernel <name>
@@ -423,7 +496,7 @@ tpbcli kernel get -v --id <hex>         # detailed record by KernelID + versions
 
 **`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it prints only parameter and metric names for the active record (or the newest if none are active). With **`-v`**, it prints the full kernel help layout and a **`Kernel Versions:`** table listing all known IDs and variation tags for that kernel name.
 
-### 2.4.3 Set compile metadata
+### 2.5.3 Set compile metadata
 
 ```bash
 tpbcli kernel set --kernel <name> \
@@ -446,7 +519,7 @@ tpbcli kernel set --kernel stream --key compilation.kernel_cflags -O3
 
 When the KernelID already exists, **`set` skips the update** and prints a warning unless **`TPB_K_OVERRIDE=1`** (or `true`/`yes`) is set in the environment. The same guard applies when re-registering an unchanged `.so` during **`kernel list`**. **`tpbcli run`** does not update kernel metadata; it only reports whether the named kernel was found.
 
-### 2.4.4 Compile history from CMake
+### 2.5.4 Compile history from CMake
 
 When **`TPB_RECORD_KERNEL_COMPILE_HISTORY=ON`** (default), each built kernel target runs a post-build step that calls **`tpbcli kernel set`** with **`variation`**, **`compilation`**, and **`dependency`** keys. Registration also writes **`utc_bits`** (build datetime) into the kernel `.tpbe` entry and `.tpbr` record; **`tpbcli database dump`** shows it as **`Build datetime (UTC)`**. Set **`TPB_WORKSPACE`** when building so records land in the intended workspace:
 
@@ -465,7 +538,7 @@ Rebuilding with the same flags produces the same KernelID; metadata is not overw
 
 Before replacing `lib/libtpbk_<name>.so`, the build moves the previous file to **`lib/inactive/libkernel_<name>_<kernel_id>.so_bak`** and marks the old KernelID **`active=0`**. The dynloader scans only `lib/libtpbk_*.so` (non-recursive); backup files are not loaded.
 
-### 2.4.5 Initialize out-of-tree kernel project
+### 2.5.5 Initialize out-of-tree kernel project
 
 Templates are installed under **`${TPB_HOME}/etc/cmake/kernel/`** (functional CMake package files remain under **`${TPB_HOME}/lib/cmake/TPBench/`**).
 
@@ -476,7 +549,7 @@ tpbcli kernel init --dir ./mykern --kernel mykern
 
 Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (parameter **`n`**, metric **`FOM,COUNT::Value`**).
 
-### 2.4.6 Build kernel(s)
+### 2.5.6 Build kernel(s)
 
 ```bash
 # Build one or more kernels from the registry (default --dir = TPB_HOME):

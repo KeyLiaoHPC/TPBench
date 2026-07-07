@@ -7,7 +7,7 @@ Three-layer layout under `src/corelib/rafdb/`. Public API remains in `src/includ
 | Layer | Constraint | Examples |
 |-------|------------|----------|
 | **L1** | Domain-agnostic; **all cross-domain logic lives here** | magic, generic tpbe/tpbr I/O, domain registry, scan, find_record |
-| **L2** | **Strictly single-domain** | `rafdb-l2-tbatch.c`, `rafdb-l2-kernel.c`, `rafdb-l2-task.c` |
+| **L2** | **Strictly single-domain** | `rafdb-l2-tbatch.c`, `rafdb-l2-kernel.c`, `rafdb-l2-task.c`, `rafdb-l2-runtime-environment.c` |
 | **L3** | **Strictly single-domain**; filename **must include domain** | `rafdb-l3-tbatch-taglink.c`, `rafdb-l3-task-taglink.c`, `rafdb-l3-kernel-kvmeta.c` |
 
 Cross-domain functions (must not appear in L2/L3):
@@ -15,11 +15,15 @@ Cross-domain functions (must not appear in L2/L3):
 - `tpb_raf_find_record` → `rafdb-l1-record-locate.c`
 - `tpb_raf_scan_records_by_id_prefix`, `tpb_raf_resolve_record_file` → `rafdb-l1-scan.c`
 - Domain registry, path building → `rafdb-l1-domain-reg.c`, `rafdb-l1-record-path.c`
+- Numeric-ID path building for `runtime_environment` remains in L1, because it is
+  a domain routing concern rather than RTEnv business logic.
 
 Single-domain decoration (even if data references other domains' IDs):
 
 - `tpb_raf_record_append_tbatch` → `rafdb-l3-tbatch-taglink.c` (modifies tbatch `.tpbr`)
 - `tpb_raf_record_append_task_capsule` → `rafdb-l3-task-taglink.c` (modifies task `.tpbr`)
+- `tpb_raf_record_patch_rtenv_counters` → `rafdb-l3-runtime-environment-counter.c`
+  (modifies runtime_environment `.tpbe` and `.tpbr` counters)
 
 ## File Map
 
@@ -35,11 +39,13 @@ rafdb/
 │   rafdb-l1-scan.c
 ├── L2 Domain
 │   rafdb-l2-tbatch.c, rafdb-l2-kernel.c, rafdb-l2-task.c
+│   rafdb-l2-runtime-environment.c
 │   rafdb-l2-kernel-meta-build.c
 └── L3 Decoration (per domain)
     rafdb-l3-tbatch-taglink.c
     rafdb-l3-task-taglink.c
     rafdb-l3-kernel-kvmeta.c, rafdb-l3-kernel-patch.c
+    rafdb-l3-runtime-environment-counter.c
 ```
 
 ## Dependency Flow
@@ -48,6 +54,7 @@ rafdb/
 flowchart TB
     subgraph callers [Callers]
         CLI[tpbcli/database]
+        RTEnvCLI[tpbcli/rtenv]
         AutoRec[tpb-autorecord.c]
         MPI[stream_mpi]
     end
@@ -56,6 +63,7 @@ flowchart TB
         TB[rafdb-l2-tbatch]
         K[rafdb-l2-kernel]
         T[rafdb-l2-task]
+        RTE[rafdb-l2-runtime-environment]
     end
 
     subgraph L1 [L1 framework]
@@ -69,10 +77,12 @@ flowchart TB
         TBTag[rafdb-l3-tbatch-taglink]
         TTag[rafdb-l3-task-taglink]
         KKv[rafdb-l3-kernel-kvmeta]
+        RTECnt[rafdb-l3-runtime-environment-counter]
     end
 
     CLI --> L1
     CLI --> L2
+    RTEnvCLI --> L2
     AutoRec --> L2
     MPI --> L2
     MPI --> TTag
@@ -82,6 +92,7 @@ flowchart TB
     TB --> TBTag
     T --> TTag
     K --> KKv
+    RTE --> RTECnt
 ```
 
 ## Test Gates
@@ -89,6 +100,6 @@ flowchart TB
 | Phase | Tests |
 |-------|-------|
 | L1 IO | A4.1–3, A4.6–9 |
-| L2 CRUD | A4.10–19 |
+| L2 CRUD | A4.10–19, runtime_environment create/list/read tests |
 | L3 decor | A6, A7, A5 |
-| Integration | C1, stream smoke, stream_mpi mpirun -np 4 (C1.4 manual) |
+| Integration | C1, stream smoke, rtenv load/run counter tests, stream_mpi mpirun -np 4 (C1.4 manual) |
