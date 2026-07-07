@@ -84,6 +84,16 @@ tpb_add_subcase(A4 A4.16 record_task        test-raf corelib)
 tpb_add_subcase(A4 A4.17 header_1d          test-raf corelib)
 tpb_add_subcase(A4 A4.18 header_multidim    test-raf corelib)
 tpb_add_subcase(A4 A4.19 header_mixed       test-raf corelib)
+tpb_add_subcase(A4 A4.20 rtenv_domain_dir    test-raf corelib)
+tpb_add_subcase(A4 A4.21 rtenv_id_alloc      test-raf corelib)
+tpb_add_subcase(A4 A4.22 rtenv_dup_name      test-raf corelib)
+tpb_add_subcase(A4 A4.23 rtenv_entry_roundtrip test-raf corelib)
+tpb_add_subcase(A4 A4.24 rtenv_record_roundtrip test-raf corelib)
+tpb_add_subcase(A4 A4.25 rtenv_decimal_path  test-raf corelib)
+tpb_add_subcase(A4 A4.26 rtenv_counter_patch test-raf corelib)
+tpb_add_subcase(A4 A4.27 rtenv_derive_link   test-raf corelib)
+tpb_add_subcase(A4 A4.28 rtenv_config_base_id test-raf corelib)
+tpb_add_subcase(A4 A4.29 rtenv_resolve_active test-raf corelib)
 
 # --- 1D array write/read test (Pack A5) ---
 add_executable(test-1d-array EXCLUDE_FROM_ALL

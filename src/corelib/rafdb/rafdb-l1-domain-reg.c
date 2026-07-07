@@ -13,6 +13,7 @@ static const tpb_raf_domain_desc_t g_domains[TPB_RAF_L1_DOMAIN_COUNT] = {
         TPB_RAF_TBATCH_ENTRY,
         264,
         236 + TPB_RAF_RESERVE_SIZE,
+        TPB_RAF_IDSTYLE_SHA1_HEX,
     },
     {
         TPB_RAF_DOM_KERNEL,
@@ -20,6 +21,7 @@ static const tpb_raf_domain_desc_t g_domains[TPB_RAF_L1_DOMAIN_COUNT] = {
         TPB_RAF_KERNEL_ENTRY,
         264,
         2448 + TPB_RAF_KERNEL_ATTR_RESERVE,
+        TPB_RAF_IDSTYLE_SHA1_HEX,
     },
     {
         TPB_RAF_DOM_TASK,
@@ -27,6 +29,15 @@ static const tpb_raf_domain_desc_t g_domains[TPB_RAF_L1_DOMAIN_COUNT] = {
         TPB_RAF_TASK_ENTRY,
         232,
         156 + TPB_RAF_RESERVE_SIZE,
+        TPB_RAF_IDSTYLE_SHA1_HEX,
+    },
+    {
+        TPB_RAF_DOM_RTENV,
+        TPB_RAF_RTENV_DIR,
+        TPB_RAF_RTENV_ENTRY,
+        TPB_RAF_RTENV_ENTRY_SIZE,
+        TPB_RAF_RTENV_RECORD_META_SIZE,
+        TPB_RAF_IDSTYLE_DEC_INT32,
     },
 };
 

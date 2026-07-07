@@ -1552,6 +1552,39 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         pos += snprintf(full_cmd + pos, cmd_size - pos,
                         "TPB_KERNEL_ID=%s ", kernel_id_hex);
 
+        {
+            const char *ar_ws = tpb_record_get_workspace();
+
+            if (ar_ws == NULL) {
+                ar_ws = getenv("TPB_WORKSPACE");
+            }
+            if (ar_ws != NULL) {
+                int32_t active_rtenv = 0;
+                int rtenv_err;
+
+                rtenv_err = tpb_rtenv_resolve_active_id(ar_ws, &active_rtenv);
+                if (rtenv_err == TPBE_SUCCESS) {
+                    pos += snprintf(full_cmd + pos, cmd_size - pos,
+                                    "TPB_RTENV_ID=%d ", (int)active_rtenv);
+                }
+            }
+        }
+
+        if (hdl->envpack.n > 0) {
+            int ki;
+
+            pos += snprintf(full_cmd + pos, cmd_size - pos,
+                            "TPB_RTENV_KENV_KEYS=");
+            for (ki = 0; ki < hdl->envpack.n; ki++) {
+                if (ki > 0) {
+                    pos += snprintf(full_cmd + pos, cmd_size - pos, ",");
+                }
+                pos += snprintf(full_cmd + pos, cmd_size - pos, "%s",
+                                hdl->envpack.envs[ki].name);
+            }
+            pos += snprintf(full_cmd + pos, cmd_size - pos, " ");
+        }
+
         /* Inject auto-record env vars if a batch is active */
         const char *ar_ws = tpb_record_get_workspace();
         if (ar_bid != NULL) {

@@ -161,14 +161,17 @@ enum _tpb_module {
     TPB_MOD_RAF_L2_KERNEL,
     TPB_MOD_RAF_L2_TASK,
     TPB_MOD_RAF_L2_TBATCH,
+    TPB_MOD_RAF_L2_RTENV,
     TPB_MOD_RAF_L3_KERNEL,
     TPB_MOD_RAF_L3_TASK,
     TPB_MOD_RAF_L3_TBATCH,
+    TPB_MOD_RAF_L3_RTENV,
     TPB_MOD_RAF_MISC,
     TPB_MOD_CLI_RUN,
     TPB_MOD_CLI_BENCHMARK,
     TPB_MOD_CLI_KERNEL,
-    TPB_MOD_CLI_MISC
+    TPB_MOD_CLI_MISC,
+    TPB_MOD_CLI_RTENV
 };
 typedef enum _tpb_module tpb_module_t;
 
@@ -936,6 +939,7 @@ typedef struct tbatch_attr {
     uint32_t nscore;              /**< Score records in this batch */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
     uint32_t nheader;             /**< Number of headers */
+    int32_t  runtime_environment_id; /**< Active RTEnv FK (tpbr reserve bytes 0-3) */
     tpb_meta_header_t *headers;   /**< Header array */
 } tbatch_attr_t;
 
@@ -950,7 +954,8 @@ typedef struct tbatch_entry {
     uint32_t ntask;               /**< Number of tasks */
     uint32_t nscore;              /**< Number of scores */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; /**< Reserved */
+    int32_t  runtime_environment_id; /**< Active RTEnv FK (reserve bytes 0-3) */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 4]; /**< Reserved tail */
 } tbatch_entry_t;
 
 /** @brief Kernel full attributes (.tpbr meta section) */
@@ -1000,6 +1005,7 @@ typedef struct task_attr {
     uint32_t ninput;                  /**< Input argument headers */
     uint32_t noutput;                 /**< Output metric headers */
     uint32_t nheader;                 /**< Total headers */
+    int32_t  runtime_environment_id;  /**< Active RTEnv FK (tpbr reserve bytes 0-3) */
     uint32_t reserve;                 /**< Padding */
     tpb_meta_header_t *headers;       /**< Header array */
 } task_attr_t;
@@ -1015,7 +1021,8 @@ typedef struct task_entry {
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
     unsigned char derive_to[20];         /**< Merge target: merged TaskRecordID, or zero */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20]; /**< Reserved */
+    int32_t  runtime_environment_id;  /**< Active RTEnv FK (reserve bytes 0-3) */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20 - 4]; /**< Reserved tail */
 } task_entry_t;
 
 /* ===== rafdb Workspace API ===== */
@@ -1056,6 +1063,8 @@ int tpb_raf_init_workspace(const char *workspace_path);
 #define TPB_RAF_DOM_KERNEL    ((uint8_t)0x01)
 /** @brief Task domain (magic byte 4 low nibble) */
 #define TPB_RAF_DOM_TASK      ((uint8_t)0x02)
+/** @brief Runtime environment domain (magic byte 4 low nibble) */
+#define TPB_RAF_DOM_RTENV     ((uint8_t)0x03)
 
 /**
  * @brief Build an 8-byte magic signature.
@@ -1297,6 +1306,163 @@ int tpb_raf_record_read_task(const char *workspace,
  */
 void tpb_raf_free_headers(tpb_meta_header_t *headers,
                             uint32_t nheader);
+
+/* ===== Runtime Environment (rafdb) ===== */
+
+#define TPB_RAF_RTENV_NAME_LEN     256
+#define TPB_RAF_RTENV_HOST_LEN     256
+#define TPB_RAF_RTENV_NOTE_LEN     256
+#define TPB_RAF_RTENV_RESERVE_LEN  1024
+#define TPB_RAF_RTENV_APP_STR_LEN  64
+
+/** @brief Runtime environment .tpbe row (no nheader field) */
+typedef struct tpb_raf_rtenv_entry {
+    int32_t      id;                                      /**< Domain-local ID */
+    char         name[TPB_RAF_RTENV_NAME_LEN];            /**< Unique name */
+    char         hostname[TPB_RAF_RTENV_HOST_LEN];        /**< Creation host */
+    tpb_dtbits_t utc_bits;                                /**< Creation time */
+    int32_t      inherit_from;                            /**< Parent ID or -1 */
+    int32_t      derive_to;                               /**< Latest child ID or -1 */
+    uint32_t     ntask;                                   /**< Task count */
+    uint32_t     ntbatch;                                 /**< TBatch count */
+    char         note[TPB_RAF_RTENV_NOTE_LEN];            /**< Description */
+    uint32_t     napp;                                    /**< Application count */
+    uint32_t     nenv;                                    /**< Env-var count */
+    unsigned char reserve[TPB_RAF_RTENV_RESERVE_LEN];     /**< Reserved */
+} tpb_raf_rtenv_entry_t;
+
+/** @brief Runtime environment .tpbr attributes (includes nheader) */
+typedef struct tpb_raf_rtenv_attr {
+    int32_t      id;                                      /**< Domain-local ID */
+    char         name[TPB_RAF_RTENV_NAME_LEN];            /**< Unique name */
+    char         hostname[TPB_RAF_RTENV_HOST_LEN];        /**< Creation host */
+    tpb_dtbits_t utc_bits;                                /**< Creation time */
+    int32_t      inherit_from;                            /**< Parent ID or -1 */
+    int32_t      derive_to;                               /**< Latest child ID or -1 */
+    uint32_t     ntask;                                   /**< Task count */
+    uint32_t     ntbatch;                                 /**< TBatch count */
+    char         note[TPB_RAF_RTENV_NOTE_LEN];            /**< Description */
+    uint32_t     napp;                                    /**< Application count */
+    uint32_t     nenv;                                    /**< Env-var count */
+    uint32_t     nheader;                                 /**< Meta header count */
+    unsigned char reserve[TPB_RAF_RTENV_RESERVE_LEN];      /**< Reserved */
+} tpb_raf_rtenv_attr_t;
+
+/**
+ * @brief Allocate the next domain-local RTEnv ID (max existing + 1, or 0).
+ * @param workspace Workspace root path
+ * @param id_out Receives next ID
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_rtenv_alloc_next_id(const char *workspace, int32_t *id_out);
+
+/**
+ * @brief Append a runtime environment entry to .tpbe (name must be unique).
+ * @param workspace Workspace root path
+ * @param entry Entry to append
+ * @return 0 on success, TPBE_LIST_DUP if name exists
+ */
+int tpb_raf_entry_append_rtenv(const char *workspace,
+                               const tpb_raf_rtenv_entry_t *entry);
+
+/**
+ * @brief List all runtime environment entries from .tpbe.
+ * @param workspace Workspace root path
+ * @param entries Output array (caller must free)
+ * @param count Output entry count
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_entry_list_rtenv(const char *workspace,
+                             tpb_raf_rtenv_entry_t **entries,
+                             int *count);
+
+/**
+ * @brief Write a runtime environment .tpbr record file.
+ * @param workspace Workspace root path
+ * @param attr Fixed attributes including nheader
+ * @param headers Meta headers (length attr->nheader)
+ * @param data Record payload (may be NULL if datasize==0)
+ * @param datasize Payload size in bytes
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_write_rtenv(const char *workspace,
+                               const tpb_raf_rtenv_attr_t *attr,
+                               const tpb_meta_header_t *headers,
+                               const void *data,
+                               uint64_t datasize);
+
+/**
+ * @brief Read a runtime environment .tpbr record by numeric ID.
+ * @param workspace Workspace root path
+ * @param id Domain-local RTEnv ID
+ * @param attr Output fixed attributes
+ * @param headers Output headers (caller frees with tpb_raf_free_headers)
+ * @param data Output payload (caller must free, may be NULL)
+ * @param datasize Output payload size
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_read_rtenv(const char *workspace,
+                             int32_t id,
+                             tpb_raf_rtenv_attr_t *attr,
+                             tpb_meta_header_t **headers,
+                             void **data,
+                             uint64_t *datasize);
+
+/**
+ * @brief Patch ntask/ntbatch counters in RTEnv .tpbe row and .tpbr record.
+ * @param workspace Workspace root path
+ * @param id RTEnv domain-local ID
+ * @param add_ntask Increment for ntask (may be 0)
+ * @param add_ntbatch Increment for ntbatch (may be 0)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_patch_rtenv_counters(const char *workspace,
+                                        int32_t id,
+                                        uint32_t add_ntask,
+                                        uint32_t add_ntbatch);
+
+/**
+ * @brief Append a child RTEnv ID to parent's DeriveTo link and derive_to field.
+ * @param workspace Workspace root path
+ * @param parent_id Parent RTEnv ID
+ * @param child_id Child RTEnv ID to append
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_record_append_rtenv_derive(const char *workspace,
+                                       int32_t parent_id,
+                                       int32_t child_id);
+
+/**
+ * @brief Read runtime_environment.base_id from etc/config.json.
+ * @param workspace Workspace root path
+ * @param base_id_out Receives base ID (0 if key missing)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out);
+
+/**
+ * @brief Write runtime_environment.base_id into etc/config.json.
+ * @param workspace Workspace root path
+ * @param base_id Base environment ID to store
+ * @return 0 on success, error code otherwise
+ */
+int tpb_raf_config_set_base_id(const char *workspace, int32_t base_id);
+
+/**
+ * @brief Create minimal base RTEnv (id=0) when the domain is empty.
+ * @param workspace Workspace root path
+ * @param id_out Receives created or existing base ID (0)
+ * @return 0 on success, error code otherwise
+ */
+int tpb_rtenv_ensure_base_env(const char *workspace, int32_t *id_out);
+
+/**
+ * @brief Resolve active RTEnv ID from $TPB_RTENV_ID, config base_id, or lazy base.
+ * @param workspace Workspace root path
+ * @param id_out Receives resolved active ID
+ * @return 0 on success, error code otherwise
+ */
+int tpb_rtenv_resolve_active_id(const char *workspace, int32_t *id_out);
 
 /* ===== rafdb ID Generation ===== */
 

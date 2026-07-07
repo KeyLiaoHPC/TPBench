@@ -5,6 +5,7 @@ set(TPBCLI_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/src/tpbcli/run
     ${CMAKE_SOURCE_DIR}/src/tpbcli/benchmark
     ${CMAKE_SOURCE_DIR}/src/tpbcli/database
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/rtenv
     ${CMAKE_SOURCE_DIR}/src/tpbcli/kernel
     ${CMAKE_SOURCE_DIR}/src/tpbcli/help
 )
@@ -33,11 +34,29 @@ add_executable(tpbcli
     database/tpbcli-database.c
     database/tpbcli-database-ls.c
     database/tpbcli-database-dump.c
+    rtenv/tpbcli-rtenv.c
+    rtenv/tpbcli-rtenv-new.c
+    rtenv/tpbcli-rtenv-list.c
+    rtenv/tpbcli-rtenv-show.c
+    rtenv/tpbcli-rtenv-load.c
+    rtenv/tpbcli-rtenv-template.c
 )
 target_include_directories(tpbcli PRIVATE ${TPBCLI_INCLUDE_DIRS})
 target_compile_options(tpbcli PRIVATE -O2)
 target_link_libraries(tpbcli PRIVATE tpbench m)
 tpb_set_install_rpath_tpbench_exe(tpbcli)
+
+option(TPB_CREATE_BASE_RTENV "Create base RTEnv id=0 after tpbcli build" ON)
+if(TPB_CREATE_BASE_RTENV)
+    add_custom_command(TARGET tpbcli POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DTPB_CREATE_BASE_RTENV=${TPB_CREATE_BASE_RTENV}
+            -DTPBCLI=$<TARGET_FILE:tpbcli>
+            -DTPB_HOME=${CMAKE_BINARY_DIR}
+            -P ${CMAKE_SOURCE_DIR}/cmake/TPBenchBaseRtenvRun.cmake
+        COMMENT "Ensure base runtime environment (id=0) in build workspace"
+        VERBATIM)
+endif()
 
 add_executable(tpbcli-pli-launcher pli/tpbcli-pli-launcher.c)
 target_include_directories(tpbcli-pli-launcher PRIVATE

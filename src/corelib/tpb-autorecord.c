@@ -39,6 +39,7 @@ static char s_batch_hostname[64];
 static char s_batch_username[64];
 static uint32_t s_batch_pid;
 static uint32_t s_batch_type;
+static int32_t  s_rtenv_id;
 
 /* Local Function Prototypes */
 
@@ -63,6 +64,110 @@ static int _sf_scan_batch(const char *workspace,
                           tpb_dtbits_t batch_utc_bits,
                           int *ntask_out,
                           int *nkernel_out);
+
+/* Parse comma-separated env keys for kenv recording */
+static int _sf_count_kenv_keys(const char *keys);
+static int _sf_append_kenv_input_headers(const char *keys,
+                                         tpb_meta_header_t **headers,
+                                         uint32_t *nheader,
+                                         void **rec_data,
+                                         uint64_t *rec_datasize);
+
+static int
+_sf_count_kenv_keys(const char *keys)
+{
+    const char *p;
+    int n = 0;
+
+    if (keys == NULL || keys[0] == '\0') {
+        return 0;
+    }
+    n = 1;
+    for (p = keys; *p != '\0'; p++) {
+        if (*p == ',') {
+            n++;
+        }
+    }
+    return n;
+}
+
+static int
+_sf_append_kenv_input_headers(const char *keys,
+                              tpb_meta_header_t **headers,
+                              uint32_t *nheader,
+                              void **rec_data,
+                              uint64_t *rec_datasize)
+{
+    char buf[512];
+    char *save = NULL;
+    char *tok;
+    tpb_meta_header_t *hdrs;
+    void *data;
+    uint64_t dsize;
+    uint32_t n;
+    uint32_t i;
+    uint8_t *ptr;
+
+    n = (uint32_t)_sf_count_kenv_keys(keys);
+    if (n == 0) {
+        return TPBE_SUCCESS;
+    }
+
+    hdrs = (tpb_meta_header_t *)realloc(
+        *headers, (size_t)(*nheader + n) * sizeof(*hdrs));
+    if (!hdrs) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_MALLOC_FAIL, NULL);
+    }
+    *headers = hdrs;
+    dsize = *rec_datasize;
+    data = realloc(*rec_data, (size_t)(dsize + n * 256));
+    if (!data) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_MALLOC_FAIL, NULL);
+    }
+    *rec_data = data;
+    ptr = (uint8_t *)data + dsize;
+
+    snprintf(buf, sizeof(buf), "%s", keys);
+    i = *nheader;
+    tok = strtok_r(buf, ",", &save);
+    while (tok != NULL) {
+        const char *val;
+        size_t vlen;
+
+        while (*tok == ' ' || *tok == '\t') {
+            tok++;
+        }
+        val = getenv(tok);
+        if (val == NULL) {
+            val = "";
+        }
+        vlen = strlen(val) + 1;
+        if (vlen > 256) {
+            vlen = 256;
+        }
+        memset(&hdrs[i], 0, sizeof(hdrs[i]));
+        hdrs[i].block_size = TPB_RAF_HDR_FIXED_SIZE;
+        hdrs[i].ndim = 1;
+        hdrs[i].dimsizes[0] = vlen;
+        hdrs[i].data_size = vlen;
+        hdrs[i].type_bits = (uint32_t)((TPB_PARM_ENV | TPB_STRING_T)
+                                       & (TPB_PARM_SOURCE_MASK
+                                          | TPB_PARM_TYPE_MASK));
+        snprintf(hdrs[i].name, sizeof(hdrs[i].name), "%s", tok);
+        snprintf(hdrs[i].note, sizeof(hdrs[i].note),
+                 "environment-sourced kenv");
+        memcpy(ptr, val, vlen - 1);
+        ptr[vlen - 1] = '\0';
+        ptr += vlen;
+        dsize += vlen;
+        i++;
+        tok = strtok_r(NULL, ",", &save);
+    }
+
+    *nheader = i;
+    *rec_datasize = dsize;
+    return TPBE_SUCCESS;
+}
 
 /* Internal helpers */
 
@@ -243,6 +348,14 @@ tpb_record_begin_batch(uint32_t batch_type)
     s_batch_pid = (uint32_t)getpid();
     s_batch_type = batch_type;
 
+    err = tpb_rtenv_resolve_active_id(s_workspace, &s_rtenv_id);
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, "Auto-record: resolve active RTEnv");
+    if (getenv("TPB_RTENV_ID") == NULL) {
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                   "Auto-record: TPB_RTENV_ID unset; using base RTEnv id=%d\n",
+                   (int)s_rtenv_id);
+    }
+
     err = tpb_raf_gen_tbatch_id(s_batch_utc_bits, s_batch_btime_ns,
                                    s_batch_hostname, s_batch_username,
                                    s_batch_pid, s_tbatch_id);
@@ -266,6 +379,7 @@ tpb_record_begin_batch(uint32_t batch_type)
         skel.ntask = 0;
         skel.nscore = 0;
         skel.batch_type = batch_type;
+        skel.runtime_environment_id = s_rtenv_id;
         skel.nheader = 2;
         memset(h2, 0, sizeof(h2));
         h2[0].block_size = TPB_RAF_HDR_FIXED_SIZE;
@@ -340,6 +454,10 @@ tpb_record_end_batch(int ntask)
             duration, (uint32_t)nkernel, (uint32_t)matched);
     TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
 
+    err = tpb_raf_record_patch_rtenv_counters(s_workspace, s_rtenv_id,
+                                              0, 1);
+    TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
+
     /* Write tbatch entry */
     {
         tbatch_entry_t entry;
@@ -353,6 +471,7 @@ tpb_record_end_batch(int ntask)
         entry.ntask = (uint32_t)matched;
         entry.nscore = 0;
         entry.batch_type = s_batch_type;
+        entry.runtime_environment_id = s_rtenv_id;
 
         err = tpb_raf_entry_append_tbatch(s_workspace, &entry);
         if (err) {
@@ -465,6 +584,17 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     attr.noutput = noutput_written;
     attr.nheader = nheader;
 
+    {
+        int32_t active_id;
+
+        err = tpb_rtenv_resolve_active_id(workspace, &active_id);
+        if (err != TPBE_SUCCESS) {
+            TPB_PROPAGATE(TPB_MOD_RAF_MISC, err,
+                          "Auto-record: resolve active RTEnv for task");
+        }
+        attr.runtime_environment_id = active_id;
+    }
+
     /* Build input + output headers and record data */
     tpb_meta_header_t *headers = NULL;
     void *rec_data = NULL;
@@ -563,6 +693,21 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
         }
     }
 
+    {
+        const char *kenv_keys = getenv("TPB_RTENV_KENV_KEYS");
+        if (kenv_keys != NULL && kenv_keys[0] != '\0') {
+            err = _sf_append_kenv_input_headers(
+                kenv_keys, &headers, &attr.nheader, &rec_data, &rec_datasize);
+            if (err != TPBE_SUCCESS) {
+                free(headers);
+                free(rec_data);
+                TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
+            }
+            attr.ninput += (uint32_t)_sf_count_kenv_keys(kenv_keys);
+            nheader = attr.nheader;
+        }
+    }
+
     attr.headers = headers;
 
     /* Write task record (.tpbr) */
@@ -588,6 +733,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
     entry.duration = 0;
     entry.exit_code = (uint32_t)exit_code;
     entry.handle_index = handle_index;
+    entry.runtime_environment_id = attr.runtime_environment_id;
 
     err = tpb_raf_entry_append_task(workspace, &entry);
     if (err) {
@@ -597,12 +743,18 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                       "Auto-record: failed to append task entry");
     }
 
+    err = tpb_raf_record_patch_rtenv_counters(
+        workspace, attr.runtime_environment_id, 1, 0);
+    if (err) {
+        free(headers);
+        free(rec_data);
+        TPB_PROPAGATE(TPB_MOD_RAF_MISC, err, NULL);
+    }
+
     free(headers);
     free(rec_data);
     return TPBE_SUCCESS;
 }
-
-/* Public wrapper for kernel callers */
 
 int
 tpb_k_write_task(tpb_k_rthdl_t *hdl, int exit_code,

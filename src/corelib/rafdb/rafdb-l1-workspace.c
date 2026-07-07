@@ -20,6 +20,49 @@ static int _sf_dir_exists(const char *path);
 static int _sf_file_exists(const char *path);
 static int _sf_mkdir_recursive(const char *path);
 static int _sf_write_default_config(const char *config_path);
+static int _sf_read_config_name(const char *config_path, char *name_out,
+                                size_t name_len);
+
+static int
+_sf_read_config_name(const char *config_path, char *name_out, size_t name_len)
+{
+    FILE *fp;
+    char line[512];
+
+    if (!name_out || name_len == 0) {
+        return -1;
+    }
+    snprintf(name_out, name_len, "default");
+    fp = fopen(config_path, "r");
+    if (!fp) {
+        return -1;
+    }
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strstr(line, "\"name\"") != NULL &&
+            sscanf(line, " \"%*[^\"]\" : \" %255[^\"]\"", name_out) == 1) {
+            fclose(fp);
+            return 0;
+        }
+        if (strstr(line, "\"name\"") != NULL) {
+            char *q1 = strchr(line, ':');
+            char *q2;
+            if (q1) {
+                q2 = strchr(q1 + 1, '"');
+                if (q2) {
+                    char *q3 = strchr(q2 + 1, '"');
+                    if (q3 && (size_t)(q3 - q2 - 1) < name_len) {
+                        memcpy(name_out, q2 + 1, (size_t)(q3 - q2 - 1));
+                        name_out[q3 - q2 - 1] = '\0';
+                        fclose(fp);
+                        return 0;
+                    }
+                }
+            }
+        }
+    }
+    fclose(fp);
+    return 0;
+}
 
 static int
 _sf_dir_exists(const char *path)
@@ -80,7 +123,9 @@ _sf_write_default_config(const char *config_path)
     if (!fp) {
         return -1;
     }
-    fprintf(fp, "{\n    \"name\": \"default\"\n}\n");
+    fprintf(fp, "{\n    \"name\": \"default\",\n"
+            "    \"runtime_environment\": {\n"
+            "        \"base_id\": 0\n    }\n}\n");
     fclose(fp);
     return 0;
 }
@@ -168,5 +213,77 @@ tpb_raf_init_workspace(const char *workspace_path)
         TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 
+    return TPBE_SUCCESS;
+}
+
+/**
+ * @brief Read runtime_environment.base_id from etc/config.json.
+ */
+int
+tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out)
+{
+    char path[TPB_RAF_PATH_MAX];
+    FILE *fp;
+    char line[512];
+    int found = 0;
+    int32_t val = 0;
+
+    if (!workspace || !base_id_out) {
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
+    }
+
+    snprintf(path, sizeof(path), "%s/%s", workspace, TPB_RAF_CONFIG_REL);
+    fp = fopen(path, "r");
+    if (!fp) {
+        *base_id_out = 0;
+        return TPBE_SUCCESS;
+    }
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        if (strstr(line, "base_id") != NULL &&
+            sscanf(line, " \"base_id\" : %d", &val) == 1) {
+            found = 1;
+            break;
+        }
+        if (strstr(line, "base_id") != NULL &&
+            sscanf(line, " \"base_id\": %d", &val) == 1) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(fp);
+    *base_id_out = found ? val : 0;
+    return TPBE_SUCCESS;
+}
+
+/**
+ * @brief Write runtime_environment.base_id into etc/config.json.
+ */
+int
+tpb_raf_config_set_base_id(const char *workspace, int32_t base_id)
+{
+    char path[TPB_RAF_PATH_MAX];
+    char name[128];
+    FILE *fp;
+
+    if (!workspace) {
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_NULLPTR_ARG, NULL);
+    }
+
+    snprintf(path, sizeof(path), "%s/%s", workspace, TPB_RAF_CONFIG_REL);
+    if (_sf_read_config_name(path, name, sizeof(name)) != 0) {
+        snprintf(name, sizeof(name), "default");
+    }
+
+    fp = fopen(path, "w");
+    if (!fp) {
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
+    }
+    fprintf(fp, "{\n    \"name\": \"%s\",\n"
+            "    \"runtime_environment\": {\n"
+            "        \"base_id\": %d\n    }\n}\n",
+            name, (int)base_id);
+    if (fclose(fp) != 0) {
+        TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
+    }
     return TPBE_SUCCESS;
 }

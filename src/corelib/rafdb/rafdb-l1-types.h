@@ -46,5 +46,12 @@
 #define TPB_RAF_TBATCH_ENTRY   "task_batch.tpbe"
 #define TPB_RAF_KERNEL_ENTRY   "kernel.tpbe"
 #define TPB_RAF_TASK_ENTRY     "task.tpbe"
+#define TPB_RAF_RTENV_DIR      "rafdb/runtime_environment"
+#define TPB_RAF_RTENV_ENTRY    "runtime_environment.tpbe"
+
+/** @brief On-disk .tpbe row size for runtime_environment (bytes) */
+#define TPB_RAF_RTENV_ENTRY_SIZE       1828
+/** @brief On-disk .tpbr fixed meta size before headers (bytes) */
+#define TPB_RAF_RTENV_RECORD_META_SIZE 1832
 
 #endif /* RAFDB_L1_TYPES_H */

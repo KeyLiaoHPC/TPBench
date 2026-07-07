@@ -143,6 +143,35 @@ tpb_add_subcase(B4 B4.12 database_list_count_conflict test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.13 database_list_domain_conflict test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.14 database_list_domain_invalid test-cli-database tpbcli)
 
+# --- rtenv subcommand (Pack B6) ---
+add_executable(test-cli-rtenv EXCLUDE_FROM_ALL
+    test-cli-rtenv.c
+)
+target_compile_definitions(test-cli-rtenv PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+target_include_directories(test-cli-rtenv PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+)
+target_link_libraries(test-cli-rtenv PRIVATE tpbench m)
+add_dependencies(test-cli-rtenv tpbcli)
+set_target_properties(test-cli-rtenv PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B6 B6.1  rtenv_missing_subcmd     test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.2  rtenv_help               test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.3  new_output_template      test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.4  new_from_file            test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.5  new_inline               test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.6  new_bad_template         test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.7  list_activated           test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.8  show_tables              test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.9  load_shell_fragment      test-cli-rtenv tpbcli)
+tpb_add_subcase(B6 B6.10 new_requires_active      test-cli-rtenv tpbcli)
+
 # --- kernel subcommand (Pack B5) ---
 add_executable(test-cli-kernel EXCLUDE_FROM_ALL
     test-cli-kernel.c
@@ -180,7 +209,7 @@ tpb_add_subcase(B5 B5.9 build_unknown_tag test-cli-kernel tpbcli)
 # Aggregate targets
 add_custom_target(test_tpbcli
     DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp
-            test-cli-database test-cli-kernel
+            test-cli-database test-cli-rtenv test-cli-kernel
 )
 
 add_custom_target(check_tpbcli

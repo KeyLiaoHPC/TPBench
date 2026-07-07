@@ -8,6 +8,7 @@ set(TPB_CORELIB_SOURCES
     tpb-argp.c
     tpb-dynloader.c
     tpb-autorecord.c
+    tpb-rtenv.c
     strftime.c
     tpblog/tpb-log.c
     tpblog/tpb-printf.c
@@ -25,7 +26,10 @@ set(TPB_CORELIB_SOURCES
     rafdb/rafdb-l2-kernel.c
     rafdb/rafdb-l2-task.c
     rafdb/rafdb-l2-kernel-meta-build.c
+    rafdb/rafdb-l2-runtime-environment.c
     rafdb/rafdb-l3-tbatch-taglink.c
+    rafdb/rafdb-l3-runtime-environment-counter.c
+    rafdb/rafdb-l3-runtime-environment-derive.c
     rafdb/rafdb-l3-task-taglink.c
     rafdb/rafdb-l3-kernel-kvmeta.c
     rafdb/rafdb-l3-kernel-patch.c

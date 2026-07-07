@@ -110,6 +110,9 @@ tpb_raf_scan_records_by_id_prefix(const char *workspace,
         if (desc == NULL) {
             continue;
         }
+        if (desc->record_id_style == TPB_RAF_IDSTYLE_DEC_INT32) {
+            continue;
+        }
         if (domain_filter != TPB_RAF_DOM_ALL &&
             domain_filter != desc->domain_id) {
             continue;

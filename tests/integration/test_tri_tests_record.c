@@ -420,6 +420,173 @@ test_benchmark_metric_missing_soft_fail(void)
     return (g_fail > 0) ? 1 : 0;
 }
 
+static int
+test_rtenv_fk_and_counter(void)
+{
+    int err;
+    char cmd[2048];
+    tbatch_entry_t *tb = NULL;
+    task_entry_t *tk = NULL;
+    tpb_raf_rtenv_entry_t *re = NULL;
+    int tb_n = 0;
+    int tk_n = 0;
+    int re_n = 0;
+
+    setup_test_dir();
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("rtenv_fk init_workspace", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+    {
+        int32_t base = -1;
+        err = tpb_rtenv_ensure_base_env(g_test_dir, &base);
+        CHECK("rtenv_fk ensure_base", err == 0 && base == 0);
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=0 %s/tpbcli run "
+             "--kernel stream --kargs stream_array_size=32,ntest=10",
+             g_bin_dir, g_test_dir, g_bin_dir);
+    err = run_cmd(cmd);
+    CHECK("rtenv_fk run exit", err == 0);
+
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
+    CHECK("rtenv_fk list tbatch", err == 0 && tb_n == 1);
+    if (err == 0 && tb_n == 1) {
+        CHECK_INT("tbatch rtenv fk", 0, tb[0].runtime_environment_id);
+    }
+
+    err = tpb_raf_entry_list_task(g_test_dir, &tk, &tk_n);
+    CHECK("rtenv_fk list task", err == 0 && tk_n == 1);
+    if (err == 0 && tk_n == 1) {
+        CHECK_INT("task rtenv fk", 0, tk[0].runtime_environment_id);
+    }
+
+    err = tpb_raf_entry_list_rtenv(g_test_dir, &re, &re_n);
+    CHECK("rtenv_fk list rtenv", err == 0 && re_n == 1);
+    if (err == 0 && re_n == 1) {
+        CHECK_INT("rtenv ntask", 1, (int)re[0].ntask);
+        CHECK_INT("rtenv ntbatch", 1, (int)re[0].ntbatch);
+    }
+
+    free(tb);
+    free(tk);
+    free(re);
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
+static int
+test_rtenv_fallback_warn(void)
+{
+    int err;
+    char cmd[2048];
+    tbatch_entry_t *tb = NULL;
+    int tb_n = 0;
+
+    setup_test_dir();
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("rtenv_fallback init", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+    {
+        int32_t base_id = 0;
+
+        (void)tpb_rtenv_ensure_base_env(g_test_dir, &base_id);
+    }
+
+    unsetenv("TPB_RTENV_ID");
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli run --kernel stream "
+             "--kargs stream_array_size=32,ntest=10",
+             g_bin_dir, g_test_dir, g_bin_dir);
+    err = run_cmd(cmd);
+    CHECK("rtenv_fallback run exit", err == 0);
+
+    err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
+    CHECK("rtenv_fallback list tbatch", err == 0 && tb_n == 1);
+    if (err == 0 && tb_n == 1) {
+        CHECK_INT("rtenv_fallback fk", 0, tb[0].runtime_environment_id);
+    }
+
+    free(tb);
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
+static int
+test_rtenv_kenvs_input_param(void)
+{
+    int err;
+    char cmd[2048];
+    task_entry_t *tk = NULL;
+    int tk_n = 0;
+    int found = 0;
+
+    setup_test_dir();
+    err = tpb_raf_init_workspace(g_test_dir);
+    CHECK("rtenv_kenvs init", err == 0);
+    if (err != 0) {
+        cleanup_test_dir();
+        return 1;
+    }
+    {
+        int32_t base_id = 0;
+
+        (void)tpb_rtenv_ensure_base_env(g_test_dir, &base_id);
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=0 "
+             "OMP_NUM_THREADS=4 %s/tpbcli run --kernel stream "
+             "--kargs stream_array_size=32,ntest=10 "
+             "--kenvs OMP_NUM_THREADS=4",
+             g_bin_dir, g_test_dir, g_bin_dir);
+    err = run_cmd(cmd);
+    CHECK("rtenv_kenvs run exit", err == 0);
+
+    err = tpb_raf_entry_list_task(g_test_dir, &tk, &tk_n);
+    CHECK("rtenv_kenvs list task", err == 0 && tk_n == 1);
+    if (err == 0 && tk_n == 1) {
+        task_attr_t attr;
+        void *data = NULL;
+        uint64_t dsize = 0;
+        uint32_t i;
+
+        err = tpb_raf_record_read_task(g_test_dir, tk[0].task_record_id,
+                                       &attr, &data, &dsize);
+        CHECK("rtenv_kenvs read task", err == 0);
+        if (err == 0) {
+            size_t off = 0;
+            uint32_t i;
+
+            for (i = 0; i < attr.nheader; i++) {
+                if (strcmp(attr.headers[i].name, "OMP_NUM_THREADS") == 0) {
+                    const char *val = (const char *)data + off;
+                    if (strcmp(val, "4") == 0 &&
+                        (attr.headers[i].type_bits & TPB_PARM_SOURCE_MASK)
+                        == (TPB_PARM_ENV & TPB_PARM_SOURCE_MASK)) {
+                        found = 1;
+                    }
+                    break;
+                }
+                off += (size_t)attr.headers[i].data_size;
+            }
+        }
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+    }
+    CHECK("rtenv_kenvs header found", found);
+
+    free(tk);
+    cleanup_test_dir();
+    return (g_fail > 0) ? 1 : 0;
+}
+
 typedef struct {
     const char *id;
     const char *name;
@@ -454,6 +621,9 @@ main(int argc, char **argv)
         {"C1.3", "benchmark_begin_batch_fail", test_benchmark_begin_batch_fail},
         {"C1.4", "benchmark_metric_missing_soft_fail",
          test_benchmark_metric_missing_soft_fail},
+        {"C1.5", "rtenv_fk_and_counter", test_rtenv_fk_and_counter},
+        {"C1.6", "rtenv_fallback_warn", test_rtenv_fallback_warn},
+        {"C1.7", "rtenv_kenvs_input_param", test_rtenv_kenvs_input_param},
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int pass = 0, fail = 0;

@@ -104,6 +104,7 @@ static void dump_print_kv_u64(const char *key, uint64_t v);
  * Output: One CSV line to stdout.
  */
 static void dump_print_kv_u32(const char *key, uint32_t v);
+static void dump_print_kv_i32(const char *key, int32_t v);
 
 /*
  * When: String metadata field dump (empty string if val is NULL).
@@ -208,6 +209,12 @@ static void
 dump_print_kv_u32(const char *key, uint32_t v)
 {
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRIu32 "\n", key, v);
+}
+
+static void
+dump_print_kv_i32(const char *key, int32_t v)
+{
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRId32 "\n", key, v);
 }
 
 static void
@@ -794,6 +801,7 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("nkernel", attr.nkernel);
     dump_print_kv_u32("ntask", attr.ntask);
     dump_print_kv_u32("nscore", attr.nscore);
+    dump_print_kv_i32("runtime_environment_id", attr.runtime_environment_id);
     dump_print_kv_u32("batch_type", attr.batch_type);
     dump_print_kv_u32("nheader", attr.nheader);
 
@@ -874,6 +882,7 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("ninput", attr.ninput);
     dump_print_kv_u32("noutput", attr.noutput);
     dump_print_kv_u32("nheader", attr.nheader);
+    dump_print_kv_i32("runtime_environment_id", attr.runtime_environment_id);
     dump_print_kv_u32("reserve", attr.reserve);
 
     dump_headers(attr.headers, attr.nheader);

@@ -99,7 +99,8 @@ tpb_raf_detect_file(const char *filepath,
     }
     if (lo != TPB_RAF_DOM_TBATCH &&
         lo != TPB_RAF_DOM_KERNEL &&
-        lo != TPB_RAF_DOM_TASK) {
+        lo != TPB_RAF_DOM_TASK &&
+        lo != TPB_RAF_DOM_RTENV) {
         TPB_FAIL(TPB_MOD_RAF_L1, TPBE_FILE_IO_FAIL, NULL);
     }
 

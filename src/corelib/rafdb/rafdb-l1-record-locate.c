@@ -32,6 +32,9 @@ tpb_raf_find_record(const char *workspace, const unsigned char id[20],
         if (desc == NULL) {
             continue;
         }
+        if (desc->record_id_style == TPB_RAF_IDSTYLE_DEC_INT32) {
+            continue;
+        }
         _tpb_raf_l1_build_record_path(workspace, desc->domain_id, id,
                                       path, sizeof(path));
         if (stat(path, &st) == 0 && S_ISREG(st.st_mode)) {

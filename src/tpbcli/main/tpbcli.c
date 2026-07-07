@@ -19,6 +19,7 @@
 #include "tpbcli-help.h"
 #include "tpbcli-help-doc.h"
 #include "tpbcli-database.h"
+#include "tpbcli-rtenv.h"
 #include "tpbcli-argp.h"
 
 /* Local Function Prototypes */
@@ -31,6 +32,7 @@ static char **g_top_argv;
 static int _sf_dispatch_run(tpbcli_argnode_t *node, const char *value);
 static int _sf_dispatch_benchmark(tpbcli_argnode_t *node, const char *value);
 static int _sf_dispatch_database(tpbcli_argnode_t *node, const char *value);
+static int _sf_dispatch_rtenv(tpbcli_argnode_t *node, const char *value);
 static int _sf_dispatch_kernel(tpbcli_argnode_t *node, const char *value);
 static int _sf_dispatch_help_cmd(tpbcli_argnode_t *node, const char *value);
 static void _sf_top_help_flag(const tpbcli_argnode_t *node, FILE *out);
@@ -62,7 +64,7 @@ parse_global_cli_prefix(int argc, char **argv, const char **ws_out,
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "tpbcli: unknown option \"%s\"\n", argv[i]);
             tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
                             "Set \"--workspace\" or one of sub applications. \n"
-                            "r[un], b[enchmark], db|database, k[ernel], h[elp].\n");
+                            "r[un], b[enchmark], db|database, rtenv, k[ernel], h[elp].\n");
             TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
         break;
@@ -104,6 +106,18 @@ _sf_dispatch_database(tpbcli_argnode_t *node, const char *value)
     (void)node;
     (void)value;
     err = tpbcli_database(g_top_argc, g_top_argv);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_dispatch_rtenv(tpbcli_argnode_t *node, const char *value)
+{
+    int err;
+
+    (void)node;
+    (void)value;
+    err = tpbcli_rtenv(g_top_argc, g_top_argv);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
     return TPBE_SUCCESS;
 }
@@ -180,6 +194,28 @@ _sf_build_top_arg_tree(tpbcli_argtree_t *tree)
             .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
             .max_chosen = 1,
             .parse_fn = _sf_dispatch_database,
+        }) == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "rtenv",
+            .short_name = NULL,
+            .desc = "Runtime environment management (new, list, show, load)",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_rtenv,
+        }) == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
+    }
+    if (tpbcli_add_arg(root, &(tpbcli_argconf_t){
+            .name = "runtime-environment",
+            .short_name = NULL,
+            .desc = "Alias for rtenv",
+            .type = TPBCLI_ARG_CMD,
+            .flags = TPBCLI_ARGF_EXCLUSIVE | TPBCLI_ARGF_DELEGATE_SUBCMD,
+            .max_chosen = 1,
+            .parse_fn = _sf_dispatch_rtenv,
         }) == NULL) {
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
     }

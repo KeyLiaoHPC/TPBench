@@ -189,6 +189,7 @@ tpb_raf_record_write_tbatch(const char *workspace,
     }
 
     memset(reserve, 0, TPB_RAF_RESERVE_SIZE);
+    memcpy(reserve, &attr->runtime_environment_id, sizeof(int32_t));
     if (fwrite(reserve, 1, TPB_RAF_RESERVE_SIZE, fp)
         != TPB_RAF_RESERVE_SIZE) {
         goto fail;
@@ -394,6 +395,7 @@ tpb_raf_record_read_tbatch(const char *workspace,
         != TPB_RAF_RESERVE_SIZE) {
         goto fail;
     }
+    memcpy(&attr->runtime_environment_id, reserve, sizeof(int32_t));
 
     if (attr->nheader > 0) {
         if (_tpb_raf_l1_read_headers(fp, &attr->headers,

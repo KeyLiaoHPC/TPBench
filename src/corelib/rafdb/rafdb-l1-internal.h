@@ -17,6 +17,8 @@ void _tpb_raf_l1_build_entry_path(const char *workspace, uint8_t domain,
 void _tpb_raf_l1_build_record_path(const char *workspace, uint8_t domain,
                                    const unsigned char id[20],
                                    char *out, size_t outlen);
+void _tpb_raf_l1_build_record_path_int32(const char *workspace, uint8_t domain,
+                                         int32_t id, char *out, size_t outlen);
 
 /* rafdb-l1-record-io.c */
 int _tpb_raf_l1_write_u32(FILE *fp, uint32_t v);

@@ -46,14 +46,17 @@ static const char *tpb_module_names[] = {
     "RAF_L2_KERNEL",
     "RAF_L2_TASK",
     "RAF_L2_TBATCH",
+    "RAF_L2_RTENV",
     "RAF_L3_KERNEL",
     "RAF_L3_TASK",
     "RAF_L3_TBATCH",
+    "RAF_L3_RTENV",
     "RAF_MISC",
     "CLI_RUN",
     "CLI_BENCHMARK",
     "CLI_KERNEL",
-    "CLI_MISC"
+    "CLI_MISC",
+    "CLI_RTENV"
 };
 
 #define TPB_ERR_TABLE_SIZE ((int)(sizeof(tpb_errors) / sizeof(tpb_errors[0])))
