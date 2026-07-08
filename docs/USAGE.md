@@ -294,7 +294,7 @@ You must supply a subcommand: **`list`** (alias **`ls`**) or **`dump`**.
 ### `db list` options
 
 ```
-tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
+tpbcli db list [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environment>] [-n <N> | -N <N>]
 ```
 
 Defaults: **`-dT`** (tbatch) and **`-n 20`** (latest 20 records).
@@ -304,7 +304,8 @@ Defaults: **`-dT`** (tbatch) and **`-n 20`** (latest 20 records).
 | `-dT` | Tbatch domain (default) |
 | `-dt` | Task domain (entry points only; MPI capsules, not per-rank rows) |
 | `-dk` | Kernel domain |
-| `--domain <name>` | Same as `-dT`/`-dt`/`-dk` (`tbatch`, `task`, or `kernel`) |
+| `-dr` | Runtime environment domain |
+| `--domain <name>` | Same as `-dT`/`-dt`/`-dk`/`-dr` (`tbatch`, `task`, `kernel`, or `runtime_environment`; alias `rtenv`) |
 | `-n <N>` | Latest *N* records (newest first) |
 | `-N <N>` | Oldest *N* records (oldest first) |
 
@@ -318,12 +319,16 @@ Record IDs are shown as a 6-digit hex prefix plus `*` (for example `b12a23*`), m
 
 **Kernel columns:** Kernel Name, Active, NParm, NMetric, Build Time (UTC), Kernel ID
 
+**Runtime environment columns:** ID, Name, Hostname, Created UTC, NTask, NTBatch, NApp, NEnv, Note
+
 Examples:
 
 ```bash
 $ tpbcli db list
 $ tpbcli db list -dt -n 10
 $ tpbcli db list --domain kernel -N 5
+$ tpbcli db list -dr -n 10
+$ tpbcli db list --domain runtime_environment
 $ tpbcli database dump --tbatch-id <40_hex_chars>
 ```
 

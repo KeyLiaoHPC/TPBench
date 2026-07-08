@@ -79,16 +79,19 @@ static const char *_sf_conf_not_entry[] = {
     "--score-id", "--file", NULL
 };
 static const char *_sf_conf_list_not_dT[] = {
-    "-dt", "-dk", "--domain", NULL
+    "-dt", "-dk", "-dr", "--domain", NULL
 };
 static const char *_sf_conf_list_not_dt[] = {
-    "-dT", "-dk", "--domain", NULL
+    "-dT", "-dk", "-dr", "--domain", NULL
 };
 static const char *_sf_conf_list_not_dk[] = {
-    "-dT", "-dt", "--domain", NULL
+    "-dT", "-dt", "-dr", "--domain", NULL
+};
+static const char *_sf_conf_list_not_dr[] = {
+    "-dT", "-dt", "-dk", "--domain", NULL
 };
 static const char *_sf_conf_list_not_domain[] = {
-    "-dT", "-dt", "-dk", NULL
+    "-dT", "-dt", "-dk", "-dr", NULL
 };
 static const char *_sf_conf_list_not_n[] = {
     "-N", NULL
@@ -136,8 +139,14 @@ _sf_parse_domain_name(const char *value, uint8_t *domain_out)
         *domain_out = TPB_RAF_DOM_KERNEL;
         return 0;
     }
+    if (strcasecmp(value, "runtime_environment") == 0 ||
+        strcasecmp(value, "rtenv") == 0) {
+        *domain_out = TPB_RAF_DOM_RTENV;
+        return 0;
+    }
     tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT,
-               "error: unknown domain '%s' (use tbatch, task, or kernel)\n",
+               "error: unknown domain '%s' "
+               "(use tbatch, task, kernel, or runtime_environment)\n",
                value);
     TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 }
@@ -158,6 +167,8 @@ _sf_parse_list_domain_flag(tpbcli_argnode_t *node, const char *value)
         domain = TPB_RAF_DOM_TASK;
     } else if (strcmp(node->name, "-dk") == 0) {
         domain = TPB_RAF_DOM_KERNEL;
+    } else if (strcmp(node->name, "-dr") == 0) {
+        domain = TPB_RAF_DOM_RTENV;
     } else {
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
@@ -276,7 +287,7 @@ _sf_build_database_argtree(void *ctx_void)
     list_cmd = tpbcli_add_arg(db_cmd, &(tpbcli_argconf_t){
         .name = "list",
         .short_name = "ls",
-        .desc = "List rafdb index records (tbatch, task, or kernel domain)",
+        .desc = "List rafdb index records (tbatch, task, kernel, or runtime_environment)",
         .type = TPBCLI_ARG_CMD,
         .flags = TPBCLI_ARGF_EXCLUSIVE,
         .max_chosen = 1,
@@ -335,8 +346,9 @@ _sf_build_database_argtree(void *ctx_void)
     ADD_LIST_FLAG("-dT", "List tbatch domain (default)", _sf_conf_list_not_dT);
     ADD_LIST_FLAG("-dt", "List task domain entry points", _sf_conf_list_not_dt);
     ADD_LIST_FLAG("-dk", "List kernel domain", _sf_conf_list_not_dk);
+    ADD_LIST_FLAG("-dr", "List runtime_environment domain", _sf_conf_list_not_dr);
     ADD_LIST_OPT("--domain",
-                 "Domain name: tbatch, task, or kernel",
+                 "Domain name: tbatch, task, kernel, or runtime_environment",
                  _sf_conf_list_not_domain, _sf_parse_list_domain_opt);
     ADD_LIST_OPT("-n", "Show latest N records", _sf_conf_list_not_n,
                  _sf_parse_list_count_newest);
@@ -414,7 +426,7 @@ _sf_emit_database_help(const tpbcli_argnode_t *node, FILE *out)
     fprintf(out, "Database operations for TPBench rafdb results.\n\n");
     fprintf(out, "Commands:\n");
     fprintf(out, "  list, ls    List rafdb index records (default: tbatch, latest 20).\n");
-    fprintf(out, "              Options: -dT|-dt|-dk, --domain, -n, -N.\n");
+    fprintf(out, "              Options: -dT|-dt|-dk|-dr, --domain, -n, -N.\n");
     fprintf(out, "  dump        Dump one record or domain as CSV-style lines.\n");
     fprintf(out, "              Brief selectors: --id, --tbatch-id, "
                    "--kernel-id,\n");

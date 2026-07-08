@@ -29,7 +29,7 @@
 #define TPBLOG_DEFAULT_WIDTH 85
 
 /** @brief Maximum columns supported by tpblog_printf_c. */
-#define TPBLOG_COLUMN_MAX 8
+#define TPBLOG_COLUMN_MAX 9
 
 /**
  * @brief Open or reopen the run log for this process.

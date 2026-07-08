@@ -241,7 +241,7 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [wrapper_app wrapper_args ...] <kernel_entry
 ### `db list` 选项
 
 ```
-tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
+tpbcli db list [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environment>] [-n <N> | -N <N>]
 ```
 
 默认：**`-dT`**（tbatch）与 **`-n 20`**（最近 20 条）。
@@ -251,7 +251,8 @@ tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
 | `-dT` | tbatch 域（默认） |
 | `-dt` | task 域（仅入口点；MPI capsule，不含各 rank 行） |
 | `-dk` | kernel 域 |
-| `--domain <name>` | 与 `-dT`/`-dt`/`-dk` 等价（`tbatch`、`task` 或 `kernel`） |
+| `-dr` | runtime_environment 域 |
+| `--domain <name>` | 与 `-dT`/`-dt`/`-dk`/`-dr` 等价（`tbatch`、`task`、`kernel` 或 `runtime_environment`；别名 `rtenv`） |
 | `-n <N>` | 最近 *N* 条（新的在上） |
 | `-N <N>` | 最旧 *N* 条（旧的在先） |
 
@@ -265,12 +266,16 @@ tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
 
 **kernel 列：** Kernel Name、Active、NParm、NMetric、Build Time (UTC)、Kernel ID
 
+**runtime_environment 列：** ID、Name、Hostname、Created UTC、NTask、NTBatch、NApp、NEnv、Note
+
 示例：
 
 ```bash
 $ tpbcli db list
 $ tpbcli db list -dt -n 10
 $ tpbcli db list --domain kernel -N 5
+$ tpbcli db list -dr -n 10
+$ tpbcli db list --domain runtime_environment
 $ tpbcli database dump --tbatch-id <40位十六进制>
 ```
 

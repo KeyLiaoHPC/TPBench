@@ -27,6 +27,7 @@ static int filter_task_entrypoints(const task_entry_t *src, int nsrc,
 static int list_tbatch(const char *workspace, int count, int from_oldest);
 static int list_task(const char *workspace, int count, int from_oldest);
 static int list_kernel(const char *workspace, int count, int from_oldest);
+static int list_rtenv(const char *workspace, int count, int from_oldest);
 
 static void
 format_id_prefix6(const unsigned char id[20], char *out, size_t outlen)
@@ -475,6 +476,122 @@ list_kernel(const char *workspace, int count, int from_oldest)
     return TPBE_SUCCESS;
 }
 
+static int
+list_rtenv(const char *workspace, int count, int from_oldest)
+{
+    tpb_raf_rtenv_entry_t *entries = NULL;
+    int total = 0;
+    int err;
+    int lo;
+    int hi;
+    int step;
+    int nshow;
+    int i;
+    const char *headers[9];
+    const char *cells[9];
+    float ratios[9] = {6.0f, 18.0f, 14.0f, 20.0f, 8.0f, 8.0f, 6.0f, 6.0f, 14.0f};
+    char c0[16];
+    char c1[TPB_RAF_RTENV_NAME_LEN];
+    char c2[TPB_RAF_RTENV_HOST_LEN];
+    char c3[32];
+    char c4[16];
+    char c5[16];
+    char c6[16];
+    char c7[16];
+    char c8[TPB_RAF_RTENV_NOTE_LEN];
+    tpb_datetime_str_t ts;
+
+    err = tpb_raf_entry_list_rtenv(workspace, &entries, &total);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "tpb_raf_entry_list_rtenv");
+    }
+
+    compute_window(total, count, from_oldest, &lo, &hi, &step, &nshow);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
+               "List of %s %d runtime_environment record%s\n",
+               from_oldest ? "oldest" : "latest",
+               nshow, nshow == 1 ? "" : "s");
+
+    headers[0] = "ID";
+    headers[1] = "Name";
+    headers[2] = "Hostname";
+    headers[3] = "Created UTC";
+    headers[4] = "NTask";
+    headers[5] = "NTBatch";
+    headers[6] = "NApp";
+    headers[7] = "NEnv";
+    headers[8] = "Note";
+    tpblog_printf_c(ratios, 9, TPBCLI_DB_LIST_COL_GAP, headers);
+
+    if (total == 0) {
+        free(entries);
+        return TPBE_SUCCESS;
+    }
+
+    if (step < 0) {
+        for (i = hi; i >= lo; i--) {
+            const tpb_raf_rtenv_entry_t *e = &entries[i];
+
+            snprintf(c0, sizeof(c0), "%d", (int)e->id);
+            snprintf(c1, sizeof(c1), "%s", e->name);
+            snprintf(c2, sizeof(c2), "%s", e->hostname);
+            if (tpb_ts_bits_to_isoutc(e->utc_bits, &ts) != 0) {
+                snprintf(c3, sizeof(c3), "-");
+            } else {
+                snprintf(c3, sizeof(c3), "%s", ts.str);
+            }
+            snprintf(c4, sizeof(c4), "%u", e->ntask);
+            snprintf(c5, sizeof(c5), "%u", e->ntbatch);
+            snprintf(c6, sizeof(c6), "%u", e->napp);
+            snprintf(c7, sizeof(c7), "%u", e->nenv);
+            snprintf(c8, sizeof(c8), "%s", e->note);
+
+            cells[0] = c0;
+            cells[1] = c1;
+            cells[2] = c2;
+            cells[3] = c3;
+            cells[4] = c4;
+            cells[5] = c5;
+            cells[6] = c6;
+            cells[7] = c7;
+            cells[8] = c8;
+            tpblog_printf_c(ratios, 9, TPBCLI_DB_LIST_COL_GAP, cells);
+        }
+    } else {
+        for (i = lo; i <= hi; i++) {
+            const tpb_raf_rtenv_entry_t *e = &entries[i];
+
+            snprintf(c0, sizeof(c0), "%d", (int)e->id);
+            snprintf(c1, sizeof(c1), "%s", e->name);
+            snprintf(c2, sizeof(c2), "%s", e->hostname);
+            if (tpb_ts_bits_to_isoutc(e->utc_bits, &ts) != 0) {
+                snprintf(c3, sizeof(c3), "-");
+            } else {
+                snprintf(c3, sizeof(c3), "%s", ts.str);
+            }
+            snprintf(c4, sizeof(c4), "%u", e->ntask);
+            snprintf(c5, sizeof(c5), "%u", e->ntbatch);
+            snprintf(c6, sizeof(c6), "%u", e->napp);
+            snprintf(c7, sizeof(c7), "%u", e->nenv);
+            snprintf(c8, sizeof(c8), "%s", e->note);
+
+            cells[0] = c0;
+            cells[1] = c1;
+            cells[2] = c2;
+            cells[3] = c3;
+            cells[4] = c4;
+            cells[5] = c5;
+            cells[6] = c6;
+            cells[7] = c7;
+            cells[8] = c8;
+            tpblog_printf_c(ratios, 9, TPBCLI_DB_LIST_COL_GAP, cells);
+        }
+    }
+
+    free(entries);
+    return TPBE_SUCCESS;
+}
+
 /*
  * When: `database list` or `database ls` is selected (see tpbcli_database).
  * Input: workspace — path from tpb_raf_resolve_workspace; domain and window args.
@@ -501,6 +618,8 @@ tpbcli_database_ls(const char *workspace, uint8_t domain,
         err = list_task(workspace, count, from_oldest);
     } else if (domain == TPB_RAF_DOM_KERNEL) {
         err = list_kernel(workspace, count, from_oldest);
+    } else if (domain == TPB_RAF_DOM_RTENV) {
+        err = list_rtenv(workspace, count, from_oldest);
     } else {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Failed\n");

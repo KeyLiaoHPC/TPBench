@@ -142,6 +142,8 @@ tpb_add_subcase(B4 B4.11 database_list_domain_kernel test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.12 database_list_count_conflict test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.13 database_list_domain_conflict test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.14 database_list_domain_invalid test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.15 database_list_domain_rtenv test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.16 database_list_domain_conflict_dr test-cli-database tpbcli)
 
 # --- rtenv subcommand (Pack B6) ---
 add_executable(test-cli-rtenv EXCLUDE_FROM_ALL

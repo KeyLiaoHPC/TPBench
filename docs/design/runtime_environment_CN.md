@@ -357,15 +357,24 @@ ID 分配：
 - 新 ID 为 `max_id + 1`；空域从 `0` 开始。
 - 写入时使用 domain 文件锁，避免并发 `new` 分配重复 ID。
 
-### 6.2 `tpbcli rtenv list`
+### 6.2 `tpbcli rtenv list` 与 `tpbcli db list -dr`
 
-输出当前激活 ID，然后列出 `.tpbe` 内容：
+**`tpbcli rtenv list`** 输出当前激活 ID，然后列出 `.tpbe` 全部内容：
 
 ```text
 Activated runtime environment ID: 0
 
 ID  Name        Hostname    Created UTC           NTask  NTBatch  NApp  NEnv  Note
 0   gcc-openmpi node01      2026-07-07T10:00:00Z      3        1     2     4  GCC 13 + OpenMPI
+```
+
+**`tpbcli db list -dr`**（或 **`--domain runtime_environment`**）是统一的 rafdb
+索引查询入口，列与上表相同，支持 **`-n`/`-N`** 窗口截取，但不显示激活 ID
+行（激活态仍由 `rtenv list` 展示）：
+
+```bash
+tpbcli db list -dr -n 10
+tpbcli db list --domain runtime_environment
 ```
 
 列宽使用 `tpb_log_printf_c` / `tpblog_printf_c` 的比例控制，并在列内换行。

@@ -116,7 +116,8 @@ test_b4_3_list_help(void)
         return 1;
     }
     if (strstr(buf, "-dT") == NULL || strstr(buf, "-dt") == NULL ||
-        strstr(buf, "-dk") == NULL || strstr(buf, "--domain") == NULL ||
+        strstr(buf, "-dk") == NULL || strstr(buf, "-dr") == NULL ||
+        strstr(buf, "--domain") == NULL ||
         strstr(buf, "-n") == NULL || strstr(buf, "-N") == NULL) {
         FAIL("B4.3: missing list domain/count options");
         fprintf(stderr, "    output: %.400s\n", buf);
@@ -354,6 +355,67 @@ test_b4_14_list_domain_invalid(void)
     return 0;
 }
 
+static int
+test_b4_15_list_domain_rtenv(void)
+{
+    char buf[4096];
+    int code;
+
+    code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -dr", buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B4.15: expected exit 0 for -dr");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Created UTC") == NULL ||
+        strstr(buf, "Hostname") == NULL ||
+        strstr(buf, "runtime_environment record") == NULL) {
+        FAIL("B4.15: missing runtime_environment list headers (-dr)");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
+    code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list --domain runtime_environment",
+        buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B4.15: expected exit 0 for --domain runtime_environment");
+        fprintf(stderr, "    exit %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "Created UTC") == NULL ||
+        strstr(buf, "Hostname") == NULL ||
+        strstr(buf, "runtime_environment record") == NULL) {
+        FAIL("B4.15: missing runtime_environment list headers (--domain)");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b4_16_list_domain_conflict_dr(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -dT -dr", buf,
+        sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B4.16: expected nonzero for -dT/-dr conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.16: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -403,6 +465,12 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B4.14") == 0) {
         return test_b4_14_list_domain_invalid();
+    }
+    if (strcmp(id, "B4.15") == 0) {
+        return test_b4_15_list_domain_rtenv();
+    }
+    if (strcmp(id, "B4.16") == 0) {
+        return test_b4_16_list_domain_conflict_dr();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);
