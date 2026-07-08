@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
 #include "tpb-public.h"
@@ -391,7 +390,7 @@ int
 tpbcli_rtenv_resolve_active_id_cli(const char *workspace, int32_t *id_out)
 {
     const char *env_id;
-    int32_t base = 0;
+    int32_t base = 1;
     int err;
 
     if (workspace == NULL || id_out == NULL) {
@@ -508,7 +507,7 @@ tpbcli_rtenv_merge_chain(const char *workspace, int32_t target_id,
             }
         }
         free(ents);
-        if (parent < 0) {
+        if (parent <= 0) {
             break;
         }
         for (j = 0; j < depth - 1; j++) {
@@ -544,10 +543,15 @@ tpbcli_rtenv_write_record(const char *workspace, int32_t id,
     memset(&ent, 0, sizeof(ent));
     ent.id = id;
     snprintf(ent.name, sizeof(ent.name), "%s", name);
+    tpb_datetime_t dt;
+
     if (gethostname(ent.hostname, sizeof(ent.hostname)) != 0) {
         snprintf(ent.hostname, sizeof(ent.hostname), "localhost");
     }
-    ent.utc_bits = (tpb_dtbits_t)time(NULL);
+    if (tpb_ts_get_datetime(TPBM_TS_UTC, &dt) != TPBE_SUCCESS ||
+        tpb_ts_datetime_to_bits(&dt, 0, &ent.utc_bits) != TPBE_SUCCESS) {
+        ent.utc_bits = 0;
+    }
     ent.inherit_from = inherit_from;
     ent.derive_to = -1;
     snprintf(ent.note, sizeof(ent.note), "%s", note);
@@ -640,7 +644,7 @@ tpbcli_rtenv_write_record(const char *workspace, int32_t id,
     if (err != TPBE_SUCCESS) {
         return err;
     }
-    if (inherit_from >= 0) {
+    if (inherit_from > 0) {
         (void)tpb_raf_record_append_rtenv_derive(workspace, inherit_from, id);
     }
     return TPBE_SUCCESS;
@@ -682,7 +686,7 @@ tpbcli_rtenv_resolve_list_active(const char *workspace, int32_t *id_out,
                                  int *found_out)
 {
     const char *env_id;
-    int32_t base = 0;
+    int32_t base = 1;
 
     if (workspace == NULL || found_out == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -703,7 +707,7 @@ tpbcli_rtenv_resolve_list_active(const char *workspace, int32_t *id_out,
         return TPBE_SUCCESS;
     }
     if (tpb_raf_config_get_base_id(workspace, &base) != TPBE_SUCCESS) {
-        base = 0;
+        base = 1;
     }
     if (_sf_rtenv_id_exists(workspace, base)) {
         if (id_out != NULL) {

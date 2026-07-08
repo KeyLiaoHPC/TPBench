@@ -168,6 +168,10 @@ _sf_resolve_inherit(const char *workspace, tpbcli_rtenv_spec_t *spec,
 
     if (spec->has_inherit) {
         v = strtol(spec->inherit_from_text, &end, 10);
+        if (end != spec->inherit_from_text && *end == '\0' && v == 0) {
+            *inherit_out = 0;
+            return TPBE_SUCCESS;
+        }
         if (end != spec->inherit_from_text && *end == '\0' &&
             tpbcli_rtenv_id_exists(workspace, (int32_t)v)) {
             *inherit_out = (int32_t)v;

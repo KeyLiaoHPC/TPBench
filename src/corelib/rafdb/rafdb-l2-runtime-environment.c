@@ -312,7 +312,7 @@ _sf_name_exists(const char *workspace, const char *name)
 }
 
 /**
- * @brief Allocate the next domain-local RTEnv ID (max existing + 1, or 0).
+ * @brief Allocate the next domain-local RTEnv ID (max existing + 1, or 1).
  */
 int
 tpb_raf_rtenv_alloc_next_id(const char *workspace, int32_t *id_out)
@@ -320,7 +320,7 @@ tpb_raf_rtenv_alloc_next_id(const char *workspace, int32_t *id_out)
     char fpath[TPB_RAF_PATH_MAX];
     tpb_raf_rtenv_entry_t *entries = NULL;
     int count = 0;
-    int32_t max_id = -1;
+    int32_t max_id = 0;
     int i;
     int fd;
     int err;

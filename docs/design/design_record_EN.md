@@ -585,7 +585,7 @@ Notes:
 - For an MPI kernel that finalizes a task capsule, each rank's normal task record has `derive_to` set to the **TaskCapsuleRecordID** that groups all ranks for that invocation.
 - `inherit_from` is all-zero unless this record was derived from another task record (provenance).
 
-**Task entry point (`ntask`, CLI):** Physically, `task.tpbe` contains every appended task row. For batch metadata and `tpbcli database ls`, `ntask` counts only rows with `derive_to` all-zero (one logical invocation: a normal single-rank task or a task capsule after MPI finalize). Per-rank rows that point `derive_to` at a capsule ID are not counted. `tpbcli database dump --entry task` lists only entry-point rows and prints `(N task entry points / M total rows)`.
+**Task entry point (`ntask`, CLI):** Physically, `task.tpbe` contains every appended task row. For batch metadata and `tpbcli database ls`, `ntask` counts only rows with `derive_to` all-zero (one logical invocation: a normal single-rank task or a task capsule after MPI finalize). Per-rank rows that point `derive_to` at a capsule ID are not counted. `tpbcli database dump -dt -e` lists only entry-point rows and prints `(N task entry points shown / M total / K rows)`.
 
 #### 2.4.2. Entry Structure (.tpbe)
 
@@ -763,7 +763,7 @@ After an `stream_mpi` run:
 2. Dump the TBatch record to get the `TaskRecordIDs` list (includes capsule IDs):
 
    ```bash
-   tpbcli db dump --tbatch-id <TBatchID>
+   tpbcli db dump -dT -i <TBatchID>
    ```
 
    Look for the `TPBLINK::TaskID` header data which lists the capsule ID(s).
@@ -773,7 +773,7 @@ After an `stream_mpi` run:
 4. Dump the capsule to see all rank TaskRecordIDs:
 
    ```bash
-   tpbcli db dump --task-id <CapsuleID>
+   tpbcli db dump -dt -i <CapsuleID>
    ```
 
    The output includes a `TPBLINK::TaskID` header with a 1-D array of 20-byte SHA1 IDs for all ranks.
@@ -781,7 +781,7 @@ After an `stream_mpi` run:
 5. Pick a rank's TaskRecordID (e.g., rank 0) and dump it:
 
    ```bash
-   tpbcli db dump --task-id <Rank0ID>
+   tpbcli db dump -dt -i <Rank0ID>
    ```
 
    This will show the actual `ntest`, `stream_array_size` arguments and the output metrics (`copy_bw_walltime`, `scale_bw_walltime`, `add_bw_walltime`, `triad_bw_walltime`) from that rank.

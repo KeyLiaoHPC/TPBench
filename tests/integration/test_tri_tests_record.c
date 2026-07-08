@@ -442,11 +442,11 @@ test_rtenv_fk_and_counter(void)
     {
         int32_t base = -1;
         err = tpb_rtenv_ensure_base_env(g_test_dir, &base);
-        CHECK("rtenv_fk ensure_base", err == 0 && base == 0);
+        CHECK("rtenv_fk ensure_base", err == 0 && base == 1);
     }
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=0 %s/tpbcli run "
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=1 %s/tpbcli run "
              "--kernel stream --kargs stream_array_size=32,ntest=10",
              g_bin_dir, g_test_dir, g_bin_dir);
     err = run_cmd(cmd);
@@ -455,13 +455,13 @@ test_rtenv_fk_and_counter(void)
     err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
     CHECK("rtenv_fk list tbatch", err == 0 && tb_n == 1);
     if (err == 0 && tb_n == 1) {
-        CHECK_INT("tbatch rtenv fk", 0, tb[0].runtime_environment_id);
+        CHECK_INT("tbatch rtenv fk", 1, tb[0].runtime_environment_id);
     }
 
     err = tpb_raf_entry_list_task(g_test_dir, &tk, &tk_n);
     CHECK("rtenv_fk list task", err == 0 && tk_n == 1);
     if (err == 0 && tk_n == 1) {
-        CHECK_INT("task rtenv fk", 0, tk[0].runtime_environment_id);
+        CHECK_INT("task rtenv fk", 1, tk[0].runtime_environment_id);
     }
 
     err = tpb_raf_entry_list_rtenv(g_test_dir, &re, &re_n);
@@ -510,7 +510,7 @@ test_rtenv_fallback_warn(void)
     err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
     CHECK("rtenv_fallback list tbatch", err == 0 && tb_n == 1);
     if (err == 0 && tb_n == 1) {
-        CHECK_INT("rtenv_fallback fk", 0, tb[0].runtime_environment_id);
+        CHECK_INT("rtenv_fallback fk", 1, tb[0].runtime_environment_id);
     }
 
     free(tb);
@@ -541,7 +541,7 @@ test_rtenv_kenvs_input_param(void)
     }
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=0 "
+             "TPB_HOME=%s/.. TPB_WORKSPACE=%s TPB_RTENV_ID=1 "
              "OMP_NUM_THREADS=4 %s/tpbcli run --kernel stream "
              "--kargs stream_array_size=32,ntest=10 "
              "--kenvs OMP_NUM_THREADS=4",

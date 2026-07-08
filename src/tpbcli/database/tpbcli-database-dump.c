@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <stdint.h>
 #include <inttypes.h>
 #ifdef __linux__
@@ -19,216 +18,143 @@
 #include "tpb-public.h"
 #include "tpbcli-database.h"
 
-typedef enum {
-    DUMP_T_NONE = 0,
-    DUMP_T_ID_GLOBAL,
-    DUMP_T_TBATCH_ID,
-    DUMP_T_KERNEL_ID,
-    DUMP_T_TASK_ID,
-    DUMP_T_SCORE_ID,
-    DUMP_T_FILE,
-    DUMP_T_ENTRY
-} dump_target_t;
+#define TPBCLI_DB_DUMP_DEFAULT_COUNT 20
 
 /* Local Function Prototypes */
 
-/*
- * When: After `--entry <name>`; normalize user spelling for domain lookup.
- * Input: in — raw entry label; out buffer with capacity outlen.
- * Output: Fills out with lowercased, space/hyphen→underscore name; TPBE_* code.
- */
-static int normalize_entry_name(const char *in, char *out, size_t outlen);
-
-/*
- * When: After normalize_entry_name for `--entry`.
- * Input: norm — normalized entry keyword string.
- * Output: Sets *domain_out to TPB_RAF_DOM_*; TPBE_SUCCESS or TPBE_CLI_FAIL.
- */
-static int entry_name_to_domain(const char *norm, uint8_t *domain_out);
-
-/*
- * When: Resolving `--file` or basename-only paths under workspace.
- * Input: workspace root; inpath as user typed; out buffer outlen bytes.
- * Output: Fills out with absolute path via tpb_raf_resolve_record_file().
- */
-static int resolve_file_path(const char *workspace, const char *inpath,
-                             char *out, size_t outlen);
-
-/*
- * When: Partial id (4–39 hex) needs matching .tpbr files in workspace.
- * Input: workspace; prefix and prefix_len; domain_filter or TPB_RAF_DOM_ALL.
- * Output: Allocated *matches_out and *nmatch_out; caller must free with
- *         tpb_raf_free_id_matches().
- */
+static void compute_window(int total, int count, int from_oldest,
+                           int *lo, int *hi, int *step, int *nshow);
+static int parse_id_hex_arg(const char *in, char *out, size_t outsz,
+                            size_t *out_len);
+static int parse_rtenv_id_arg(const char *in, int32_t *id_out);
 static int scan_tpbr_prefix_matches(const char *workspace,
                                     const char *prefix, size_t prefix_len,
                                     uint8_t domain_filter,
                                     tpb_raf_id_match_t **matches_out,
                                     int *nmatch_out);
-
-/*
- * When: More than one .tpbr shares the same id prefix; tell user full ids.
- * Input: prefix shown to user; matches array and count; workspace for metadata.
- * Output: Prints CSV header + rows to stdout via tpblog_printf_f; no return value.
- */
 static void print_ambiguous_id_table(const char *prefix,
                                      tpb_raf_id_match_t *matches, int nmatch,
                                      const char *workspace);
-
-/*
- * When: Full 20-byte id is known together with its record domain.
- * Input: workspace; domain; id[20] binary record id.
- * Output: Dispatches to tpbr dump; returns TPBE_* from underlying reader.
- */
 static int dump_tpbr_by_domain(const char *workspace, uint8_t domain,
                                const unsigned char id[20]);
-
-/*
- * When: Handling `--id` / `--tbatch-id` / `--kernel-id` / `--task-id` args.
- * Input: workspace; target kind t; arg — hex string after the flag.
- * Output: Dumps one record or prints ambiguity table; returns TPBE_* code.
- */
-static int resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
+static int resolve_hex_arg_and_dump(const char *workspace, uint8_t domain,
                                     const char *arg);
-
-/*
- * When: Emitting one metadata field as "key, value" CSV line (u64).
- * Input: key label; v — numeric value.
- * Output: One line to stdout.
- */
 static void dump_print_kv_u64(const char *key, uint64_t v);
-
-/*
- * When: Same as dump_print_kv_u64 for unsigned 32-bit fields.
- * Input: key; v.
- * Output: One CSV line to stdout.
- */
 static void dump_print_kv_u32(const char *key, uint32_t v);
 static void dump_print_kv_i32(const char *key, int32_t v);
-
-/*
- * When: String metadata field dump (empty string if val is NULL).
- * Input: key; val — C string or NULL.
- * Output: One CSV line to stdout.
- */
 static void dump_print_kv_str(const char *key, const char *val);
-
-/*
- * When: 20-byte binary id shown as 40 hex chars in CSV.
- * Input: key; id[20] raw bytes.
- * Output: One CSV line to stdout.
- */
 static void dump_print_kv_hex20(const char *key, const unsigned char id[20]);
-
-/*
- * When: After loading a .tpbr; dump all tpb_meta_header_t slots as CSV keys.
- * Input: hdrs array; n — number of headers.
- * Output: Many "header[i].field, value" lines to stdout.
- */
+static void dump_print_kv_build_datetime_utc(const char *key,
+                                             tpb_dtbits_t utc_bits);
 static void dump_headers(const tpb_meta_header_t *hdrs, uint32_t n);
-
-/*
- * When: Infer element byte size from header type_bits for array walk.
- * Input: type_bits from tpb_meta_header_t.
- * Output: Non-zero size in bytes (default 8 when nbytes field is zero).
- */
 static size_t dtype_elem_size_from_typebits(uint32_t type_bits);
-
-/*
- * When: Recursively print one multi-dimensional header blob as nested indices.
- * Input: header h; blob; nd; mult/idx scratch; lev recursion level; elem_size.
- * Output: Lines "name[idx]..., elem, elem, ..." to stdout.
- */
 static void dump_header_record_lines(const tpb_meta_header_t *h,
                                      const uint8_t *blob, uint32_t nd,
                                      uint64_t mult[TPBM_DATA_NDIM_MAX],
                                      uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
                                      size_t elem_size);
-
-/*
- * When: Formatting a single scalar/array element according to dtype.
- * Input: p — element bytes; type_bits; elem_size (20 triggers id hex).
- * Output: Prints formatted token to stdout (no trailing newline here).
- */
 static void print_elem_csv(const uint8_t *p, uint32_t type_bits,
                            size_t elem_size);
-
-/*
- * When: After headers; walk record payload blocks per header slot.
- * Input: hdrs, nheader; data blob and datasize from rafdb read.
- * Output: "Record Data" section and per-header CSV lines to stdout.
- */
 static void dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
                              const void *data, uint64_t datasize);
-
-/*
- * When: User targets a tbatch .tpbr by id.
- * Input: workspace; id[20] tbatch record id.
- * Output: Full metadata + record data dump; frees internal allocations.
- */
 static int dump_tpbr_tbatch(const char *workspace,
                             const unsigned char id[20]);
-
-/*
- * When: User targets a kernel .tpbr by id.
- * Input: workspace; id[20] kernel record id.
- * Output: Full metadata + record data dump; frees internal allocations.
- */
 static int dump_tpbr_kernel(const char *workspace,
                             const unsigned char id[20]);
-
-/*
- * When: User targets a task .tpbr by id.
- * Input: workspace; id[20] task record id.
- * Output: Full metadata + record data dump; frees internal allocations.
- */
 static int dump_tpbr_task(const char *workspace,
                           const unsigned char id[20]);
+static int dump_tpbr_rtenv(const char *workspace, int32_t id);
+static int dump_tpbe_domain(const char *workspace, uint8_t domain,
+                            int count, int from_oldest);
 
-/*
- * When: `--entry` or .tpbe file detected; list domain index file contents.
- * Input: workspace; domain — TPB_RAF_DOM_* for which entry file to read.
- * Output: Prints all indexed entries as CSV-like key/value lines.
- */
-static int dump_tpbe_domain(const char *workspace, uint8_t domain);
+static void
+compute_window(int total, int count, int from_oldest,
+               int *lo, int *hi, int *step, int *nshow)
+{
+    int lim;
 
-/*
- * When: `--file` path or basename resolved to a .tpbr or .tpbe under workspace.
- * Input: workspace; filepath as user gave (relative or absolute).
- * Output: Magic detect then tpbe or tpbr dump; TPBE_* on failure.
- */
-static int dump_file_path(const char *workspace, const char *filepath);
+    if (total <= 0) {
+        if (lo != NULL) {
+            *lo = 0;
+        }
+        if (hi != NULL) {
+            *hi = -1;
+        }
+        if (step != NULL) {
+            *step = 1;
+        }
+        if (nshow != NULL) {
+            *nshow = 0;
+        }
+        return;
+    }
+
+    if (count <= 0) {
+        count = TPBCLI_DB_DUMP_DEFAULT_COUNT;
+    }
+    lim = (total < count) ? total : count;
+    if (nshow != NULL) {
+        *nshow = lim;
+    }
+    if (from_oldest) {
+        if (lo != NULL) {
+            *lo = 0;
+        }
+        if (hi != NULL) {
+            *hi = lim - 1;
+        }
+        if (step != NULL) {
+            *step = 1;
+        }
+    } else {
+        if (lo != NULL) {
+            *lo = total - lim;
+        }
+        if (hi != NULL) {
+            *hi = total - 1;
+        }
+        if (step != NULL) {
+            *step = -1;
+        }
+    }
+}
 
 static void
 dump_print_kv_u64(const char *key, uint64_t v)
 {
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRIu64 "\n", key, v);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "%s, %" PRIu64 "\n", key, v);
 }
 
 static void
 dump_print_kv_u32(const char *key, uint32_t v)
 {
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRIu32 "\n", key, v);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "%s, %" PRIu32 "\n", key, v);
 }
 
 static void
 dump_print_kv_i32(const char *key, int32_t v)
 {
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %" PRId32 "\n", key, v);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "%s, %" PRId32 "\n", key, v);
 }
 
 static void
 dump_print_kv_str(const char *key, const char *val)
 {
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %s\n", key, val ? val : "");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "%s, %s\n", key, val ? val : "");
 }
 
 static void
 dump_print_kv_hex20(const char *key, const unsigned char id[20])
 {
     char hex[41];
+
     tpb_raf_id_to_hex(id, hex);
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, %s\n", key, hex);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "%s, %s\n", key, hex);
 }
 
 static void
@@ -247,60 +173,6 @@ dump_print_kv_build_datetime_utc(const char *key, tpb_dtbits_t utc_bits)
     }
 }
 
-static int
-normalize_entry_name(const char *in, char *out, size_t outlen)
-{
-    size_t i, j;
-    if (!in || !out || outlen == 0) {
-        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
-    }
-    for (i = 0, j = 0; in[i] != '\0' && j + 1 < outlen; i++) {
-        char c = in[i];
-        if (c == ' ' || c == '\t' || c == '-') {
-            out[j++] = '_';
-        } else {
-            out[j++] = (char)tolower((unsigned char)c);
-        }
-    }
-    out[j] = '\0';
-    return TPBE_SUCCESS;
-}
-
-static int
-entry_name_to_domain(const char *norm, uint8_t *domain_out)
-{
-    if (!norm || !domain_out) {
-        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
-    }
-    if (strcmp(norm, "task_batch") == 0 ||
-        strcmp(norm, "tbatch") == 0 ||
-        strcmp(norm, "taskbatch") == 0) {
-        *domain_out = TPB_RAF_DOM_TBATCH;
-        return TPBE_SUCCESS;
-    }
-    if (strcmp(norm, "kernel") == 0) {
-        *domain_out = TPB_RAF_DOM_KERNEL;
-        return TPBE_SUCCESS;
-    }
-    if (strcmp(norm, "task") == 0) {
-        *domain_out = TPB_RAF_DOM_TASK;
-        return TPBE_SUCCESS;
-    }
-    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-}
-
-static int
-resolve_file_path(const char *workspace, const char *inpath,
-                  char *out, size_t outlen)
-{
-    return tpb_raf_resolve_record_file(workspace, inpath, out, outlen);
-}
-
-/*
- * When: Validating id strings from CLI or filename stem before hex→binary.
- */
-
-/* Leading/trailing whitespace only; 4-40 hex digits, lowercased. No 0x. */
 static int
 parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
 {
@@ -332,6 +204,32 @@ parse_id_hex_arg(const char *in, char *out, size_t outsz, size_t *out_len)
         out[i] = (char)tolower((unsigned char)out[i]);
     }
     *out_len = n;
+    return TPBE_SUCCESS;
+}
+
+static int
+parse_rtenv_id_arg(const char *in, int32_t *id_out)
+{
+    char *end;
+    long v;
+
+    if (in == NULL || id_out == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
+    }
+    while (*in != '\0' && isspace((unsigned char)*in)) {
+        in++;
+    }
+    if (*in == '\0') {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    v = strtol(in, &end, 10);
+    if (end == in || *end != '\0' || v < 0 || v > INT32_MAX) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "Invalid runtime_environment id (non-negative decimal required): %s\n",
+                   in);
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    *id_out = (int32_t)v;
     return TPBE_SUCCESS;
 }
 
@@ -419,11 +317,13 @@ print_ambiguous_id_table(const char *prefix, tpb_raf_id_match_t *matches,
                 (matches[i].domain == TPB_RAF_DOM_KERNEL) ? "kernel" : "task";
 
             if (have_dur) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT,
                            "%s, %s, %s, %.3f\n",
                            matches[i].id_hex, dname, utc_col, dur_sec);
             } else {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT,
                            "%s, %s, %s, N/A\n",
                            matches[i].id_hex, dname, utc_col);
             }
@@ -441,19 +341,25 @@ dump_tpbr_by_domain(const char *workspace, uint8_t domain,
     if (domain == TPB_RAF_DOM_KERNEL) {
         return dump_tpbr_kernel(workspace, id);
     }
-    return dump_tpbr_task(workspace, id);
+    if (domain == TPB_RAF_DOM_TASK) {
+        return dump_tpbr_task(workspace, id);
+    }
+    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
 }
 
 static int
-resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
+resolve_hex_arg_and_dump(const char *workspace, uint8_t domain,
                          const char *arg)
 {
     char norm[48];
     size_t plen;
     unsigned char id[20];
-    uint8_t dom_filter;
-    uint8_t dom;
     int err;
+
+    if (domain != TPB_RAF_DOM_TBATCH && domain != TPB_RAF_DOM_KERNEL &&
+        domain != TPB_RAF_DOM_TASK) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
 
     if (parse_id_hex_arg(arg, norm, sizeof(norm), &plen) != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
@@ -461,44 +367,18 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
-    switch (t) {
-    case DUMP_T_ID_GLOBAL:
-        dom_filter = TPB_RAF_DOM_ALL;
-        break;
-    case DUMP_T_TBATCH_ID:
-        dom_filter = TPB_RAF_DOM_TBATCH;
-        break;
-    case DUMP_T_KERNEL_ID:
-        dom_filter = TPB_RAF_DOM_KERNEL;
-        break;
-    case DUMP_T_TASK_ID:
-        dom_filter = TPB_RAF_DOM_TASK;
-        break;
-    default:
-        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-    }
-
     if (plen == 40) {
         if (tpb_raf_hex_to_id(norm, id) != TPBE_SUCCESS) {
             TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
-        if (t == DUMP_T_ID_GLOBAL) {
-            err = tpb_raf_find_record(workspace, id, &dom);
-            if (err != TPBE_SUCCESS) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                           "No .tpbr found for id in workspace.\n");
-                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, "tpb_raf_find_record");
-            }
-            return dump_tpbr_by_domain(workspace, dom, id);
-        }
-        return dump_tpbr_by_domain(workspace, dom_filter, id);
+        return dump_tpbr_by_domain(workspace, domain, id);
     }
 
     {
         tpb_raf_id_match_t *matches = NULL;
         int nmatch = 0;
 
-        err = scan_tpbr_prefix_matches(workspace, norm, plen, dom_filter,
+        err = scan_tpbr_prefix_matches(workspace, norm, plen, domain,
                                        &matches, &nmatch);
         if (err != TPBE_SUCCESS) {
             tpb_raf_free_id_matches(matches);
@@ -521,9 +401,8 @@ resolve_hex_arg_and_dump(const char *workspace, dump_target_t t,
             tpb_raf_free_id_matches(matches);
             TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
         }
-        dom = matches[0].domain;
         tpb_raf_free_id_matches(matches);
-        return dump_tpbr_by_domain(workspace, dom, id);
+        return dump_tpbr_by_domain(workspace, domain, id);
     }
 }
 
@@ -543,8 +422,8 @@ dump_headers(const tpb_meta_header_t *hdrs, uint32_t n)
         snprintf(key, sizeof(key), "header[%" PRIu32 "].data_size", i);
         dump_print_kv_u64(key, h->data_size);
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits", i);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s, 0x%08" PRIx32 "\n",
-                   key, h->type_bits);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%s, 0x%08" PRIx32 "\n", key, h->type_bits);
         snprintf(key, sizeof(key), "header[%" PRIu32 "]._reserve", i);
         dump_print_kv_u32(key, h->_reserve);
         snprintf(key, sizeof(key), "header[%" PRIu32 "].uattr_bits", i);
@@ -573,10 +452,83 @@ dtype_elem_size_from_typebits(uint32_t type_bits)
     TPB_DTYPE dt = (TPB_DTYPE)(type_bits & TPB_PARM_TYPE_MASK);
     uint32_t code = (uint32_t)(dt & 0xFFFFu);
     uint32_t nbytes = (code >> 8) & 0xFFu;
+
     if (nbytes == 0) {
         nbytes = 8;
     }
     return (size_t)nbytes;
+}
+
+static void
+print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
+{
+    TPB_DTYPE dt = (TPB_DTYPE)(type_bits & TPB_PARM_TYPE_MASK);
+
+    if (elem_size == 20u) {
+        char hx[41];
+        tpb_raf_id_to_hex(p, hx);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%s", hx);
+        return;
+    }
+
+    switch (dt) {
+    case TPB_INT8_T:
+    case TPB_UINT8_T:
+    case TPB_CHAR_T:
+    case TPB_UNSIGNED_CHAR_T:
+    case TPB_SIGNED_CHAR_T:
+    case TPB_BYTE_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%d", (int)*p);
+        break;
+    case TPB_INT16_T:
+    case TPB_UINT16_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%d", (int)*(const int16_t *)(const void *)p);
+        break;
+    case TPB_INT32_T:
+    case TPB_UINT32_T:
+    case TPB_INT_T:
+    case TPB_UNSIGNED_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%d", (int)*(const int32_t *)(const void *)p);
+        break;
+    case TPB_INT64_T:
+    case TPB_UINT64_T:
+    case TPB_LONG_T:
+    case TPB_UNSIGNED_LONG_T:
+    case TPB_LONG_LONG_T:
+    case TPB_UNSIGNED_LONG_LONG_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%" PRId64, (int64_t)*(const int64_t *)(const void *)p);
+        break;
+    case TPB_FLOAT_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%.8g", (double)*(const float *)(const void *)p);
+        break;
+    case TPB_DOUBLE_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%.16g", *(const double *)(const void *)p);
+        break;
+    case TPB_LONG_DOUBLE_T:
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%.16Lg", (long double)*(const long double *)(const void *)p);
+        break;
+    default:
+        if (elem_size > 0) {
+            size_t k;
+            for (k = 0; k < elem_size; k++) {
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, "%s%02x",
+                           k ? "" : "0x", (unsigned)p[k]);
+            }
+        } else {
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                       "0");
+        }
+        break;
+    }
 }
 
 static void
@@ -593,20 +545,25 @@ dump_header_record_lines(const tpb_meta_header_t *h, const uint8_t *blob,
         for (k = 1; k < nd; k++) {
             fix += idx[k] * mult[k];
         }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s", h->name);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%s", h->name);
         for (k = nd; k-- > 1u; ) {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "[%" PRIu64 "]", idx[k]);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                       "[%" PRIu64 "]", idx[k]);
         }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "[], ");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "[], ");
         for (i0 = 0; i0 < h->dimsizes[0]; i0++) {
             uint64_t L = fix + i0;
             if (i0 > 0) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ", ");
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, ", ");
             }
             print_elem_csv(blob + (size_t)(L * elem_size),
                            h->type_bits, elem_size);
         }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "\n");
         return;
     }
     {
@@ -621,72 +578,6 @@ dump_header_record_lines(const tpb_meta_header_t *h, const uint8_t *blob,
 }
 
 static void
-print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
-{
-    TPB_DTYPE dt = (TPB_DTYPE)(type_bits & TPB_PARM_TYPE_MASK);
-
-    if (elem_size == 20u) {
-        char hx[41];
-        tpb_raf_id_to_hex(p, hx);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s", hx);
-        return;
-    }
-
-    switch (dt) {
-    case TPB_INT8_T:
-    case TPB_UINT8_T:
-    case TPB_CHAR_T:
-    case TPB_UNSIGNED_CHAR_T:
-    case TPB_SIGNED_CHAR_T:
-    case TPB_BYTE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*p);
-        break;
-    case TPB_INT16_T:
-    case TPB_UINT16_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*(const int16_t *)(const void *)p);
-        break;
-    case TPB_INT32_T:
-    case TPB_UINT32_T:
-    case TPB_INT_T:
-    case TPB_UNSIGNED_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%d", (int)*(const int32_t *)(const void *)p);
-        break;
-    case TPB_INT64_T:
-    case TPB_UINT64_T:
-    case TPB_LONG_T:
-    case TPB_UNSIGNED_LONG_T:
-    case TPB_LONG_LONG_T:
-    case TPB_UNSIGNED_LONG_LONG_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%" PRId64,
-                   (int64_t)*(const int64_t *)(const void *)p);
-        break;
-    case TPB_FLOAT_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.8g",
-                   (double)*(const float *)(const void *)p);
-        break;
-    case TPB_DOUBLE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.16g",
-                   *(const double *)(const void *)p);
-        break;
-    case TPB_LONG_DOUBLE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%.16Lg",
-                   (long double)*(const long double *)(const void *)p);
-        break;
-    default:
-        if (elem_size > 0) {
-            size_t k;
-            for (k = 0; k < elem_size; k++) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s%02x",
-                           k ? "" : "0x", (unsigned)p[k]);
-            }
-        } else {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "0");
-        }
-        break;
-    }
-}
-
-static void
 dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
                  const void *data, uint64_t datasize)
 {
@@ -694,7 +585,8 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
     uint64_t off = 0;
     uint32_t hi;
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Record Data\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Record Data\n");
 
     for (hi = 0; hi < nheader; hi++) {
         const tpb_meta_header_t *h = &hdrs[hi];
@@ -749,15 +641,18 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
         if (nd <= 1) {
             uint64_t d0 = nd == 0 ? 1u : h->dimsizes[0];
             uint64_t i0;
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "%s[], ", h->name);
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                       "%s[], ", h->name);
             for (i0 = 0; i0 < d0; i0++) {
                 if (i0 > 0) {
-                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, ", ");
+                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                               TPBLOG_FLAG_DIRECT, ", ");
                 }
                 print_elem_csv(blob + (size_t)(i0 * elem_size),
                                h->type_bits, elem_size);
             }
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "\n");
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                       "\n");
             continue;
         }
 
@@ -784,7 +679,8 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
                                         &data, &datasize);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Metadata\n");
     dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -826,7 +722,8 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
                                        &data, &datasize);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Metadata\n");
     dump_print_kv_hex20("kernel_id", attr.kernel_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -862,7 +759,8 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
                                      &data, &datasize);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metadata\n");
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Metadata\n");
     dump_print_kv_hex20("task_record_id", attr.task_record_id);
     dump_print_kv_hex20("derive_to", attr.derive_to);
     dump_print_kv_hex20("inherit_from", attr.inherit_from);
@@ -894,52 +792,103 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
 }
 
 static int
-dump_tpbe_domain(const char *workspace, uint8_t domain)
+dump_tpbr_rtenv(const char *workspace, int32_t id)
+{
+    tpb_raf_rtenv_attr_t attr;
+    tpb_meta_header_t *hdrs = NULL;
+    void *data = NULL;
+    uint64_t datasize = 0;
+    tpb_datetime_str_t ts;
+    int err;
+
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_rtenv(workspace, id, &attr, &hdrs, &data, &datasize);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Metadata\n");
+    dump_print_kv_i32("id", attr.id);
+    dump_print_kv_str("name", attr.name);
+    dump_print_kv_str("hostname", attr.hostname);
+    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+        dump_print_kv_str("start_utc", ts.str);
+    } else {
+        dump_print_kv_u64("utc_bits", attr.utc_bits);
+    }
+    dump_print_kv_i32("inherit_from", attr.inherit_from);
+    dump_print_kv_i32("derive_to", attr.derive_to);
+    dump_print_kv_u32("ntask", attr.ntask);
+    dump_print_kv_u32("ntbatch", attr.ntbatch);
+    dump_print_kv_str("note", attr.note);
+    dump_print_kv_u32("napp", attr.napp);
+    dump_print_kv_u32("nenv", attr.nenv);
+    dump_print_kv_u32("nheader", attr.nheader);
+
+    dump_headers(hdrs, attr.nheader);
+    dump_record_data(hdrs, attr.nheader, data, datasize);
+
+    free(data);
+    tpb_raf_free_headers(hdrs, attr.nheader);
+    return TPBE_SUCCESS;
+}
+
+static int
+dump_tpbe_domain(const char *workspace, uint8_t domain,
+                 int count, int from_oldest)
 {
     int err;
-    int n, i;
+    int n;
+    int lo, hi, step, nshow;
+    int i, k;
     const char *fname = NULL;
 
     if (domain == TPB_RAF_DOM_KERNEL) {
         fname = "kernel.tpbe";
     } else if (domain == TPB_RAF_DOM_TASK) {
         fname = "task.tpbe";
+    } else if (domain == TPB_RAF_DOM_RTENV) {
+        fname = "runtime_environment.tpbe";
     } else {
         fname = "task_batch.tpbe";
     }
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Entry File: %s\n", fname);
+    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+               "Entry File: %s\n", fname);
 
     if (domain == TPB_RAF_DOM_TBATCH) {
         tbatch_entry_t *e = NULL;
+
         err = tpb_raf_entry_list_tbatch(workspace, &e, &n);
         TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
-        for (i = 0; i < n; i++) {
+        compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "(%d of %d entries)\n", nshow, n);
+        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
             char p[80];
             tpb_datetime_str_t ts;
-            snprintf(p, sizeof(p), "entry[%d].tbatch_id", i);
+
+            snprintf(p, sizeof(p), "entry[%d].tbatch_id", k);
             dump_print_kv_hex20(p, e[i].tbatch_id);
-            snprintf(p, sizeof(p), "entry[%d].inherit_from", i);
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", k);
             dump_print_kv_hex20(p, e[i].inherit_from);
-            snprintf(p, sizeof(p), "entry[%d].start_utc", i);
+            snprintf(p, sizeof(p), "entry[%d].start_utc", k);
             if (tpb_ts_bits_to_isoutc(e[i].start_utc_bits, &ts) == 0) {
                 dump_print_kv_str(p, ts.str);
             } else {
-                snprintf(p, sizeof(p), "entry[%d].start_utc_bits", i);
+                snprintf(p, sizeof(p), "entry[%d].start_utc_bits", k);
                 dump_print_kv_u64(p, e[i].start_utc_bits);
             }
-            snprintf(p, sizeof(p), "entry[%d].duration", i);
+            snprintf(p, sizeof(p), "entry[%d].duration", k);
             dump_print_kv_u64(p, e[i].duration);
-            snprintf(p, sizeof(p), "entry[%d].hostname", i);
+            snprintf(p, sizeof(p), "entry[%d].hostname", k);
             dump_print_kv_str(p, e[i].hostname);
-            snprintf(p, sizeof(p), "entry[%d].nkernel", i);
+            snprintf(p, sizeof(p), "entry[%d].nkernel", k);
             dump_print_kv_u32(p, e[i].nkernel);
-            snprintf(p, sizeof(p), "entry[%d].ntask", i);
+            snprintf(p, sizeof(p), "entry[%d].ntask", k);
             dump_print_kv_u32(p, e[i].ntask);
-            snprintf(p, sizeof(p), "entry[%d].nscore", i);
+            snprintf(p, sizeof(p), "entry[%d].nscore", k);
             dump_print_kv_u32(p, e[i].nscore);
-            snprintf(p, sizeof(p), "entry[%d].batch_type", i);
+            snprintf(p, sizeof(p), "entry[%d].batch_type", k);
             dump_print_kv_u32(p, e[i].batch_type);
         }
         free(e);
@@ -948,27 +897,75 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 
     if (domain == TPB_RAF_DOM_KERNEL) {
         kernel_entry_t *e = NULL;
+
         err = tpb_raf_entry_list_kernel(workspace, &e, &n);
         TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "(%d entries)\n", n);
-        for (i = 0; i < n; i++) {
+        compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "(%d of %d entries)\n", nshow, n);
+        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
             char p[80];
-            snprintf(p, sizeof(p), "entry[%d].kernel_id", i);
+
+            snprintf(p, sizeof(p), "entry[%d].kernel_id", k);
             dump_print_kv_hex20(p, e[i].kernel_id);
-            snprintf(p, sizeof(p), "entry[%d].inherit_from", i);
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", k);
             dump_print_kv_hex20(p, e[i].inherit_from);
-            snprintf(p, sizeof(p), "entry[%d].kernel_name", i);
+            snprintf(p, sizeof(p), "entry[%d].kernel_name", k);
             dump_print_kv_str(p, e[i].kernel_name);
-            snprintf(p, sizeof(p), "entry[%d].kctrl", i);
+            snprintf(p, sizeof(p), "entry[%d].kctrl", k);
             dump_print_kv_u32(p, e[i].kctrl);
-            snprintf(p, sizeof(p), "entry[%d].nparm", i);
+            snprintf(p, sizeof(p), "entry[%d].nparm", k);
             dump_print_kv_u32(p, e[i].nparm);
-            snprintf(p, sizeof(p), "entry[%d].nmetric", i);
+            snprintf(p, sizeof(p), "entry[%d].nmetric", k);
             dump_print_kv_u32(p, e[i].nmetric);
-            snprintf(p, sizeof(p), "entry[%d].active", i);
+            snprintf(p, sizeof(p), "entry[%d].active", k);
             dump_print_kv_u32(p, e[i].active);
-            snprintf(p, sizeof(p), "entry[%d].Build datetime (UTC)", i);
+            snprintf(p, sizeof(p), "entry[%d].Build datetime (UTC)", k);
             dump_print_kv_build_datetime_utc(p, e[i].utc_bits);
+        }
+        free(e);
+        return TPBE_SUCCESS;
+    }
+
+    if (domain == TPB_RAF_DOM_RTENV) {
+        tpb_raf_rtenv_entry_t *e = NULL;
+
+        err = tpb_raf_entry_list_rtenv(workspace, &e, &n);
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+        compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "(%d of %d entries)\n", nshow, n);
+        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
+            char p[96];
+            tpb_datetime_str_t ts;
+
+            snprintf(p, sizeof(p), "entry[%d].id", k);
+            dump_print_kv_i32(p, e[i].id);
+            snprintf(p, sizeof(p), "entry[%d].name", k);
+            dump_print_kv_str(p, e[i].name);
+            snprintf(p, sizeof(p), "entry[%d].hostname", k);
+            dump_print_kv_str(p, e[i].hostname);
+            snprintf(p, sizeof(p), "entry[%d].start_utc", k);
+            if (tpb_ts_bits_to_isoutc(e[i].utc_bits, &ts) == 0) {
+                dump_print_kv_str(p, ts.str);
+            } else {
+                snprintf(p, sizeof(p), "entry[%d].utc_bits", k);
+                dump_print_kv_u64(p, e[i].utc_bits);
+            }
+            snprintf(p, sizeof(p), "entry[%d].inherit_from", k);
+            dump_print_kv_i32(p, e[i].inherit_from);
+            snprintf(p, sizeof(p), "entry[%d].derive_to", k);
+            dump_print_kv_i32(p, e[i].derive_to);
+            snprintf(p, sizeof(p), "entry[%d].ntask", k);
+            dump_print_kv_u32(p, e[i].ntask);
+            snprintf(p, sizeof(p), "entry[%d].ntbatch", k);
+            dump_print_kv_u32(p, e[i].ntbatch);
+            snprintf(p, sizeof(p), "entry[%d].note", k);
+            dump_print_kv_str(p, e[i].note);
+            snprintf(p, sizeof(p), "entry[%d].napp", k);
+            dump_print_kv_u32(p, e[i].napp);
+            snprintf(p, sizeof(p), "entry[%d].nenv", k);
+            dump_print_kv_u32(p, e[i].nenv);
         }
         free(e);
         return TPBE_SUCCESS;
@@ -976,9 +973,10 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
 
     {
         task_entry_t *e = NULL;
+        int *vis_idx = NULL;
         unsigned char z20[20] = {0};
-        int k;
         int nvis;
+        int vi;
 
         err = tpb_raf_entry_list_task(workspace, &e, &n);
         TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
@@ -988,201 +986,96 @@ dump_tpbe_domain(const char *workspace, uint8_t domain)
                 nvis++;
             }
         }
+        if (nvis > 0) {
+            vis_idx = (int *)malloc((size_t)nvis * sizeof(int));
+            if (vis_idx == NULL) {
+                free(e);
+                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_MALLOC_FAIL, NULL);
+            }
+            vi = 0;
+            for (i = 0; i < n; i++) {
+                if (memcmp(e[i].derive_to, z20, 20) == 0) {
+                    vis_idx[vi++] = i;
+                }
+            }
+        }
+        compute_window(nvis, count, from_oldest, &lo, &hi, &step, &nshow);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-            "(%d task entry points / %d total rows)\n", nvis, n);
-        k = 0;
-        for (i = 0; i < n; i++) {
+                   "(%d task entry points shown / %d total / %d rows)\n",
+                   nshow, nvis, n);
+        for (i = lo, k = 0; vis_idx != NULL && (step > 0 ? i <= hi : i >= hi);
+             i += step, k++) {
             char p[96];
             tpb_datetime_str_t ts;
+            int src = vis_idx[i];
 
-            if (memcmp(e[i].derive_to, z20, 20) != 0) {
-                continue;
-            }
             snprintf(p, sizeof(p), "entry[%d].task_record_id", k);
-            dump_print_kv_hex20(p, e[i].task_record_id);
+            dump_print_kv_hex20(p, e[src].task_record_id);
             snprintf(p, sizeof(p), "entry[%d].inherit_from", k);
-            dump_print_kv_hex20(p, e[i].inherit_from);
+            dump_print_kv_hex20(p, e[src].inherit_from);
             snprintf(p, sizeof(p), "entry[%d].derive_to", k);
-            dump_print_kv_hex20(p, e[i].derive_to);
+            dump_print_kv_hex20(p, e[src].derive_to);
             snprintf(p, sizeof(p), "entry[%d].tbatch_id", k);
-            dump_print_kv_hex20(p, e[i].tbatch_id);
+            dump_print_kv_hex20(p, e[src].tbatch_id);
             snprintf(p, sizeof(p), "entry[%d].kernel_id", k);
-            dump_print_kv_hex20(p, e[i].kernel_id);
+            dump_print_kv_hex20(p, e[src].kernel_id);
             snprintf(p, sizeof(p), "entry[%d].start_utc", k);
-            if (tpb_ts_bits_to_isoutc(e[i].utc_bits, &ts) == 0) {
+            if (tpb_ts_bits_to_isoutc(e[src].utc_bits, &ts) == 0) {
                 dump_print_kv_str(p, ts.str);
             } else {
                 snprintf(p, sizeof(p), "entry[%d].utc_bits", k);
-                dump_print_kv_u64(p, e[i].utc_bits);
+                dump_print_kv_u64(p, e[src].utc_bits);
             }
             snprintf(p, sizeof(p), "entry[%d].duration", k);
-            dump_print_kv_u64(p, e[i].duration);
+            dump_print_kv_u64(p, e[src].duration);
             snprintf(p, sizeof(p), "entry[%d].exit_code", k);
-            dump_print_kv_u32(p, e[i].exit_code);
+            dump_print_kv_u32(p, e[src].exit_code);
             snprintf(p, sizeof(p), "entry[%d].handle_index", k);
-            dump_print_kv_u32(p, e[i].handle_index);
-            k++;
+            dump_print_kv_u32(p, e[src].handle_index);
         }
+        free(vis_idx);
         free(e);
     }
     return TPBE_SUCCESS;
 }
 
-static int
-dump_file_path(const char *workspace, const char *filepath)
-{
-    char resolved[PATH_MAX];
-    uint8_t ftype, domain;
-    int err;
-    unsigned char id[20];
-    char base[256];
-    const char *bn;
-
-    err = resolve_file_path(workspace, filepath, resolved, sizeof(resolved));
-    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
-
-    err = tpb_raf_detect_file(resolved, &ftype, &domain);
-    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
-
-    if (ftype == TPB_RAF_FTYPE_ENTRY) {
-        return dump_tpbe_domain(workspace, domain);
-    }
-
-    bn = strrchr(resolved, '/');
-    bn = bn ? bn + 1 : resolved;
-    snprintf(base, sizeof(base), "%s", bn);
-    {
-        char *dot = strstr(base, ".tpbr");
-        if (dot) {
-            *dot = '\0';
-        }
-    }
-    if (tpb_raf_hex_to_id(base, id) == TPBE_SUCCESS) {
-        /* full 40-char id */
-    } else {
-        char norm[48];
-        size_t plen;
-        tpb_raf_id_match_t *matches = NULL;
-        int nmatch = 0;
-        int scan_err;
-
-        if (parse_id_hex_arg(base, norm, sizeof(norm), &plen) != TPBE_SUCCESS ||
-            plen >= 40) {
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-        }
-        scan_err = scan_tpbr_prefix_matches(workspace, norm, plen, domain,
-                                            &matches, &nmatch);
-        if (scan_err != TPBE_SUCCESS) {
-            tpb_raf_free_id_matches(matches);
-            return scan_err;
-        }
-        if (nmatch == 0) {
-            tpb_raf_free_id_matches(matches);
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-        }
-        if (nmatch > 1) {
-            print_ambiguous_id_table(norm, matches, nmatch, workspace);
-            tpb_raf_free_id_matches(matches);
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-        }
-        if (tpb_raf_hex_to_id(matches[0].id_hex, id) != TPBE_SUCCESS) {
-            tpb_raf_free_id_matches(matches);
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-        }
-        tpb_raf_free_id_matches(matches);
-    }
-
-    if (domain == TPB_RAF_DOM_TBATCH) {
-        return dump_tpbr_tbatch(workspace, id);
-    }
-    if (domain == TPB_RAF_DOM_KERNEL) {
-        return dump_tpbr_kernel(workspace, id);
-    }
-    return dump_tpbr_task(workspace, id);
-}
-
 /**
- * @brief Run database dump from resolved selector and value.
+ * @brief Run database dump from resolved domain and mode flags.
  */
 int
 tpbcli_database_dump_resolved(const char *workspace,
-                              const char *selector_name,
-                              const char *primary_value,
-                              const char *entry_value)
+                              uint8_t domain,
+                              int entry_mode,
+                              const char *id_value,
+                              int count,
+                              int from_oldest)
 {
-    dump_target_t t;
-    char buf[PATH_MAX];
-    char entrybuf[256];
-    uint8_t dom;
-
-    (void)entry_value;
+    int32_t rtenv_id;
+    int err;
 
     if (workspace == NULL) {
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
     }
 
-    if (selector_name == NULL || primary_value == NULL) {
-        t = DUMP_T_NONE;
-    } else if (strcmp(selector_name, "--id") == 0) {
-        t = DUMP_T_ID_GLOBAL;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--tbatch-id") == 0) {
-        t = DUMP_T_TBATCH_ID;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--kernel-id") == 0) {
-        t = DUMP_T_KERNEL_ID;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--task-id") == 0) {
-        t = DUMP_T_TASK_ID;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--score-id") == 0) {
-        t = DUMP_T_SCORE_ID;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--file") == 0) {
-        t = DUMP_T_FILE;
-        snprintf(buf, sizeof(buf), "%s", primary_value);
-    } else if (strcmp(selector_name, "--entry") == 0) {
-        t = DUMP_T_ENTRY;
-        snprintf(entrybuf, sizeof(entrybuf), "%s", primary_value);
-        buf[0] = '\0';
-    } else {
-        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    if (entry_mode) {
+        return dump_tpbe_domain(workspace, domain, count, from_oldest);
     }
 
-    if (t == DUMP_T_NONE) {
+    if (id_value == NULL || id_value[0] == '\0') {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "Usage: tpbcli database dump "
-                   "[--id <hex>|--tbatch-id <hex>|--kernel-id <hex>|"
-                   "--task-id <hex>|--score-id <hex>|--file <path>|"
-                   "--entry <name>]\n"
-                   "Enter a ID, a file name in the workspace, or a full path to a tpbe or tpbr file.\n");
+                   "[-dT|-dt|-dk|-dr | --domain <name>] "
+                   "(-i|--id <id> | -e) [-n <N> | -N <N>]\n");
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
 
-    if (t == DUMP_T_SCORE_ID) {
-        (void)buf;
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_TSTAG,
-                   "Score records are not implemented in rafdb yet.\n");
-        return TPBE_SUCCESS;
-    }
-
-    if (t == DUMP_T_ENTRY) {
-        char norm[256];
-        if (normalize_entry_name(entrybuf, norm, sizeof(norm)) != TPBE_SUCCESS) {
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    if (domain == TPB_RAF_DOM_RTENV) {
+        err = parse_rtenv_id_arg(id_value, &rtenv_id);
+        if (err != TPBE_SUCCESS) {
+            return err;
         }
-        if (entry_name_to_domain(norm, &dom) != TPBE_SUCCESS) {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "Unknown entry name \"%s\". Try: task_batch, kernel, task\n",
-                       entrybuf);
-            TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-        }
-        return dump_tpbe_domain(workspace, dom);
+        return dump_tpbr_rtenv(workspace, rtenv_id);
     }
 
-    if (t == DUMP_T_FILE) {
-        return dump_file_path(workspace, buf);
-    }
-
-    return resolve_hex_arg_and_dump(workspace, t, buf);
+    return resolve_hex_arg_and_dump(workspace, domain, id_value);
 }

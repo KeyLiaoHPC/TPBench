@@ -132,16 +132,16 @@ tail -80 "$LOG_FILE"
 
 ```bash
 # Capsule lists member rank TaskIDs
-tpbcli db dump --task-id <CapsuleID>
+tpbcli db dump -dt -i <CapsuleID>
 
 # Per-rank timings (FOM summary is in rank-0 log output, not always in .tpbr dump)
-tpbcli db dump --task-id <Rank0TaskID>
+tpbcli db dump -dt -i <Rank0TaskID>
 ```
 
 Resolve capsule ID from a batch:
 
 ```bash
-tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
+tpbcli db dump -dT -i <TBatchID> | grep -A1 "Record Data"
 ```
 
 More detail: [docs/USAGE.md](docs/USAGE.md) §2.3 (database) and §2.4.6 (`kernel build`).

@@ -125,7 +125,7 @@ _sf_write_default_config(const char *config_path)
     }
     fprintf(fp, "{\n    \"name\": \"default\",\n"
             "    \"runtime_environment\": {\n"
-            "        \"base_id\": 0\n    }\n}\n");
+            "        \"base_id\": 1\n    }\n}\n");
     fclose(fp);
     return 0;
 }
@@ -235,7 +235,7 @@ tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out)
     snprintf(path, sizeof(path), "%s/%s", workspace, TPB_RAF_CONFIG_REL);
     fp = fopen(path, "r");
     if (!fp) {
-        *base_id_out = 0;
+        *base_id_out = 1;
         return TPBE_SUCCESS;
     }
     while (fgets(line, sizeof(line), fp) != NULL) {
@@ -251,7 +251,7 @@ tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out)
         }
     }
     fclose(fp);
-    *base_id_out = found ? val : 0;
+    *base_id_out = found ? val : 1;
     return TPBE_SUCCESS;
 }
 

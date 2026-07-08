@@ -54,6 +54,7 @@ static int test_rtenv_counter_patch(void);
 static int test_rtenv_derive_link(void);
 static int test_rtenv_config_base_id(void);
 static int test_rtenv_resolve_active(void);
+static int test_rtenv_build_snapshot(void);
 
 static int
 run_pack(const char *prefix, test_case_t *cases,
@@ -844,7 +845,7 @@ make_rtenv_entry(int32_t id, const char *name)
     snprintf(e.name, sizeof(e.name), "%s", name);
     snprintf(e.hostname, sizeof(e.hostname), "testhost");
     e.utc_bits = 1000;
-    e.inherit_from = -1;
+    e.inherit_from = 0;
     e.derive_to = -1;
     snprintf(e.note, sizeof(e.note), "note-%d", id);
     return e;
@@ -861,25 +862,12 @@ test_rtenv_id_alloc(void)
     setup_test_dir();
 
     err = tpb_raf_rtenv_alloc_next_id(g_test_dir, &next_id);
-    if (err || next_id != 0) {
-        cleanup_test_dir();
-        return 1;
-    }
-
-    e = make_rtenv_entry(0, "base");
-    err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
-    if (err) {
-        cleanup_test_dir();
-        return 1;
-    }
-
-    err = tpb_raf_rtenv_alloc_next_id(g_test_dir, &next_id);
     if (err || next_id != 1) {
         cleanup_test_dir();
         return 1;
     }
 
-    e = make_rtenv_entry(1, "child");
+    e = make_rtenv_entry(1, "base");
     err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
     if (err) {
         cleanup_test_dir();
@@ -888,6 +876,19 @@ test_rtenv_id_alloc(void)
 
     err = tpb_raf_rtenv_alloc_next_id(g_test_dir, &next_id);
     if (err || next_id != 2) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    e = make_rtenv_entry(2, "child");
+    err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = tpb_raf_rtenv_alloc_next_id(g_test_dir, &next_id);
+    if (err || next_id != 3) {
         cleanup_test_dir();
         return 1;
     }
@@ -904,14 +905,14 @@ test_rtenv_dup_name(void)
     int err;
 
     setup_test_dir();
-    e = make_rtenv_entry(0, "dup-name");
+    e = make_rtenv_entry(1, "dup-name");
     err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
     if (err) {
         cleanup_test_dir();
         return 1;
     }
 
-    e.id = 1;
+    e.id = 2;
     err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
     if (err == TPBE_SUCCESS || TPBE_CAUSE(err) != TPBE_LIST_DUP) {
         cleanup_test_dir();
@@ -932,7 +933,7 @@ test_rtenv_entry_roundtrip(void)
     int err;
 
     setup_test_dir();
-    e = make_rtenv_entry(0, "roundtrip");
+    e = make_rtenv_entry(1, "roundtrip");
     e.napp = 2;
     e.nenv = 3;
     err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
@@ -948,7 +949,7 @@ test_rtenv_entry_roundtrip(void)
         return 1;
     }
 
-    if (entries[0].id != 0 ||
+    if (entries[0].id != 1 ||
         strcmp(entries[0].name, "roundtrip") != 0 ||
         entries[0].napp != 2 ||
         entries[0].nenv != 3) {
@@ -982,7 +983,7 @@ test_rtenv_record_roundtrip(void)
     int fail = 0;
 
     setup_test_dir();
-    ent = make_rtenv_entry(0, "rec-test");
+    ent = make_rtenv_entry(1, "rec-test");
     ent.napp = 1;
     ent.nenv = 1;
     err = tpb_raf_entry_append_rtenv(g_test_dir, &ent);
@@ -992,7 +993,7 @@ test_rtenv_record_roundtrip(void)
     }
 
     memset(&attr, 0, sizeof(attr));
-    attr.id = 0;
+    attr.id = 1;
     snprintf(attr.name, sizeof(attr.name), "%s", ent.name);
     snprintf(attr.hostname, sizeof(attr.hostname), "%s", ent.hostname);
     attr.utc_bits = ent.utc_bits;
@@ -1053,7 +1054,7 @@ test_rtenv_record_roundtrip(void)
         return 1;
     }
 
-    err = tpb_raf_record_read_rtenv(g_test_dir, 0, &attr,
+    err = tpb_raf_record_read_rtenv(g_test_dir, 1, &attr,
                                     &rheaders, &rdata, &rsize);
     if (err) {
         cleanup_test_dir();
@@ -1098,7 +1099,7 @@ test_rtenv_decimal_path(void)
     setup_test_dir();
 
     memset(&attr, 0, sizeof(attr));
-    attr.id = 0;
+    attr.id = 1;
     snprintf(attr.name, sizeof(attr.name), "path-test");
     attr.nheader = 0;
 
@@ -1109,7 +1110,7 @@ test_rtenv_decimal_path(void)
     }
 
     snprintf(fpath, sizeof(fpath), "%s/%s/%010d.tpbr",
-             g_test_dir, TPB_RAF_RTENV_DIR, 0);
+             g_test_dir, TPB_RAF_RTENV_DIR, 1);
     {
         struct stat st;
         if (stat(fpath, &st) != 0 || !S_ISREG(st.st_mode)) {
@@ -1163,19 +1164,19 @@ test_rtenv_counter_patch(void)
     int err;
 
     setup_test_dir();
-    e = make_rtenv_entry(0, "ctr");
+    e = make_rtenv_entry(1, "ctr");
     err = tpb_raf_entry_append_rtenv(g_test_dir, &e);
     if (err) {
         cleanup_test_dir();
         return 1;
     }
-    err = write_min_rtenv_record(0, "ctr");
+    err = write_min_rtenv_record(1, "ctr");
     if (err) {
         cleanup_test_dir();
         return 1;
     }
 
-    err = tpb_raf_record_patch_rtenv_counters(g_test_dir, 0, 2, 1);
+    err = tpb_raf_record_patch_rtenv_counters(g_test_dir, 1, 2, 1);
     if (err) {
         cleanup_test_dir();
         return 1;
@@ -1195,7 +1196,7 @@ test_rtenv_counter_patch(void)
         void *data = NULL;
         uint64_t dsize = 0;
 
-        err = tpb_raf_record_read_rtenv(g_test_dir, 0, &attr,
+        err = tpb_raf_record_read_rtenv(g_test_dir, 1, &attr,
                                         &hdrs, &data, &dsize);
         if (err || attr.ntask != 2 || attr.ntbatch != 1) {
             free(data);
@@ -1225,26 +1226,26 @@ test_rtenv_derive_link(void)
     int err;
 
     setup_test_dir();
-    pe = make_rtenv_entry(0, "parent");
-    ce = make_rtenv_entry(1, "child1");
+    pe = make_rtenv_entry(1, "parent");
+    ce = make_rtenv_entry(2, "child1");
     if (tpb_raf_entry_append_rtenv(g_test_dir, &pe) != TPBE_SUCCESS ||
         tpb_raf_entry_append_rtenv(g_test_dir, &ce) != TPBE_SUCCESS) {
         cleanup_test_dir();
         return 1;
     }
-    if (write_min_rtenv_record(0, "parent") != TPBE_SUCCESS) {
+    if (write_min_rtenv_record(1, "parent") != TPBE_SUCCESS) {
         cleanup_test_dir();
         return 1;
     }
 
-    err = tpb_raf_record_append_rtenv_derive(g_test_dir, 0, 1);
+    err = tpb_raf_record_append_rtenv_derive(g_test_dir, 1, 2);
     if (err) {
         cleanup_test_dir();
         return 1;
     }
 
-    err = tpb_raf_record_read_rtenv(g_test_dir, 0, &attr, &hdrs, &data, &dsize);
-    if (err || attr.derive_to != 1) {
+    err = tpb_raf_record_read_rtenv(g_test_dir, 1, &attr, &hdrs, &data, &dsize);
+    if (err || attr.derive_to != 2) {
         free(data);
         tpb_raf_free_headers(hdrs, attr.nheader);
         cleanup_test_dir();
@@ -1268,7 +1269,7 @@ test_rtenv_derive_link(void)
     }
     {
         const int32_t *ids = (const int32_t *)data;
-        if (ids[0] != 1) {
+        if (ids[0] != 2) {
             free(data);
             tpb_raf_free_headers(hdrs, attr.nheader);
             cleanup_test_dir();
@@ -1278,19 +1279,19 @@ test_rtenv_derive_link(void)
     free(data);
     tpb_raf_free_headers(hdrs, attr.nheader);
 
-    ce = make_rtenv_entry(2, "child2");
+    ce = make_rtenv_entry(3, "child2");
     if (tpb_raf_entry_append_rtenv(g_test_dir, &ce) != TPBE_SUCCESS) {
         cleanup_test_dir();
         return 1;
     }
-    err = tpb_raf_record_append_rtenv_derive(g_test_dir, 0, 2);
+    err = tpb_raf_record_append_rtenv_derive(g_test_dir, 1, 3);
     if (err) {
         cleanup_test_dir();
         return 1;
     }
 
-    err = tpb_raf_record_read_rtenv(g_test_dir, 0, &attr, &hdrs, &data, &dsize);
-    if (err || attr.derive_to != 2) {
+    err = tpb_raf_record_read_rtenv(g_test_dir, 1, &attr, &hdrs, &data, &dsize);
+    if (err || attr.derive_to != 3) {
         free(data);
         tpb_raf_free_headers(hdrs, attr.nheader);
         cleanup_test_dir();
@@ -1314,7 +1315,7 @@ test_rtenv_derive_link(void)
     }
     {
         const int32_t *ids = (const int32_t *)data;
-        if (ids[0] != 1 || ids[1] != 2) {
+        if (ids[0] != 2 || ids[1] != 3) {
             free(data);
             tpb_raf_free_headers(hdrs, attr.nheader);
             cleanup_test_dir();
@@ -1340,7 +1341,7 @@ test_rtenv_config_base_id(void)
 
     setup_test_dir();
     if (tpb_raf_config_get_base_id(g_test_dir, &base_id) != TPBE_SUCCESS ||
-        base_id != 0) {
+        base_id != 1) {
         cleanup_test_dir();
         return 1;
     }
@@ -1386,31 +1387,31 @@ test_rtenv_resolve_active(void)
     int err;
 
     setup_test_dir();
-    e = make_rtenv_entry(0, "active0");
+    e = make_rtenv_entry(1, "active0");
     if (tpb_raf_entry_append_rtenv(g_test_dir, &e) != TPBE_SUCCESS) {
         cleanup_test_dir();
         return 1;
     }
 
-    if (setenv("TPB_RTENV_ID", "0", 1) != 0) {
+    if (setenv("TPB_RTENV_ID", "1", 1) != 0) {
         cleanup_test_dir();
         return 1;
     }
     err = tpb_rtenv_resolve_active_id(g_test_dir, &active);
     unsetenv("TPB_RTENV_ID");
-    if (err != TPBE_SUCCESS || active != 0) {
+    if (err != TPBE_SUCCESS || active != 1) {
         cleanup_test_dir();
         return 1;
     }
 
-    if (tpb_raf_config_set_base_id(g_test_dir, 0) != TPBE_SUCCESS) {
+    if (tpb_raf_config_set_base_id(g_test_dir, 1) != TPBE_SUCCESS) {
         cleanup_test_dir();
         return 1;
     }
     unsetenv("TPB_RTENV_ID");
     active = -1;
     err = tpb_rtenv_resolve_active_id(g_test_dir, &active);
-    if (err != TPBE_SUCCESS || active != 0) {
+    if (err != TPBE_SUCCESS || active != 1) {
         cleanup_test_dir();
         return 1;
     }
@@ -1419,7 +1420,7 @@ test_rtenv_resolve_active(void)
     setup_test_dir();
     active = -1;
     err = tpb_rtenv_resolve_active_id(g_test_dir, &active);
-    if (err != TPBE_SUCCESS || active != 0) {
+    if (err != TPBE_SUCCESS || active != 1) {
         cleanup_test_dir();
         return 1;
     }
@@ -1427,12 +1428,72 @@ test_rtenv_resolve_active(void)
         tpb_raf_rtenv_entry_t *entries = NULL;
         int count = 0;
         err = tpb_raf_entry_list_rtenv(g_test_dir, &entries, &count);
-        if (err != TPBE_SUCCESS || count != 1 || entries[0].id != 0) {
+        if (err != TPBE_SUCCESS || count != 1 || entries[0].id != 1) {
             free(entries);
             cleanup_test_dir();
             return 1;
         }
         free(entries);
+    }
+
+    cleanup_test_dir();
+    return 0;
+}
+
+/* A4.30: rtenv_build_snapshot */
+static int
+test_rtenv_build_snapshot(void)
+{
+    int32_t id = -1;
+    int32_t base_id = -1;
+    tpb_raf_rtenv_entry_t *entries = NULL;
+    int count = 0;
+    int err;
+
+    setup_test_dir();
+    err = tpb_rtenv_snapshot_build_env(g_test_dir, 1, &id);
+    if (err != TPBE_SUCCESS || id != 1) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = tpb_raf_entry_list_rtenv(g_test_dir, &entries, &count);
+    if (err != TPBE_SUCCESS || count != 1 || entries[0].id != 1 ||
+        entries[0].inherit_from != 0 || entries[0].nenv == 0 ||
+        strcmp(entries[0].name, "base") != 0 ||
+        entries[0].utc_bits == 0 ||
+        strcmp(entries[0].hostname, "localhost") == 0) {
+        free(entries);
+        cleanup_test_dir();
+        return 1;
+    }
+    free(entries);
+
+    err = tpb_raf_config_get_base_id(g_test_dir, &base_id);
+    if (err != TPBE_SUCCESS || base_id != 1) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    id = -1;
+    err = tpb_rtenv_snapshot_build_env(g_test_dir, 1, &id);
+    if (err != TPBE_SUCCESS || id != 2) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = tpb_raf_entry_list_rtenv(g_test_dir, &entries, &count);
+    if (err != TPBE_SUCCESS || count != 2 || strcmp(entries[1].name, "base_1") != 0) {
+        free(entries);
+        cleanup_test_dir();
+        return 1;
+    }
+    free(entries);
+
+    err = tpb_raf_config_get_base_id(g_test_dir, &base_id);
+    if (err != TPBE_SUCCESS || base_id != 2) {
+        cleanup_test_dir();
+        return 1;
     }
 
     cleanup_test_dir();
@@ -1471,6 +1532,7 @@ main(int argc, char **argv)
         { "A4.27", "rtenv_derive_link",   test_rtenv_derive_link },
         { "A4.28", "rtenv_config_base_id", test_rtenv_config_base_id },
         { "A4.29", "rtenv_resolve_active", test_rtenv_resolve_active },
+        { "A4.30", "rtenv_build_snapshot", test_rtenv_build_snapshot },
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int fail = run_pack("A4", cases, n, filter);

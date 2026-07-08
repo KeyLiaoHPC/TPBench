@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Frontend: tpbcli
+
+- **Breaking:** `tpbcli db dump` now mirrors `db list` domain flags: requires `-dT`/`-dt`/`-dk`/`-dr` or `--domain`, plus either `-i`/`--id` (single `.tpbr`) or `-e` (`.tpbe` index with optional `-n`/`-N`). Removed `--id`, `--tbatch-id`, `--kernel-id`, `--task-id`, `--score-id`, `--file`, and `--entry` selectors. RTEnv is supported via `-dr`.
+- **Breaking (API):** `tpbcli_database_dump_resolved(workspace, domain, entry_mode, id_value, count, from_oldest)` replaces the previous selector-based signature.
+- **Tests:** Pack **B4** extended with B4.17–B4.24 for dump domain/mode validation and rtenv dump paths.
+
 ### Build
 
 - **Breaking:** PLI kernels ship as a single shared library per kernel: `lib/libtpbk_<name>.so` (CPU, MPI, and ROCm). Per-kernel `.tpbx` executables and the old dual `.so` + `.tpbx` layout are removed.

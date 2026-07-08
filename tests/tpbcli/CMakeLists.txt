@@ -120,6 +120,7 @@ add_executable(test-cli-database EXCLUDE_FROM_ALL
 )
 target_compile_definitions(test-cli-database PRIVATE
     "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+    "TPB_TEST_WORKSPACE=\"${CMAKE_BINARY_DIR}\""
 )
 add_dependencies(test-cli-database tpbcli)
 set_target_properties(test-cli-database PROPERTIES
@@ -144,6 +145,14 @@ tpb_add_subcase(B4 B4.13 database_list_domain_conflict test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.14 database_list_domain_invalid test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.15 database_list_domain_rtenv test-cli-database tpbcli)
 tpb_add_subcase(B4 B4.16 database_list_domain_conflict_dr test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.17 database_dump_domain_id_prefix test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.18 database_dump_missing_domain test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.19 database_dump_missing_mode test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.20 database_dump_id_entry_conflict test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.21 database_dump_domain_conflict test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.22 database_dump_rtenv_entry test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.23 database_dump_rtenv_record test-cli-database tpbcli)
+tpb_add_subcase(B4 B4.24 database_dump_count_conflict test-cli-database tpbcli)
 
 # --- rtenv subcommand (Pack B6) ---
 add_executable(test-cli-rtenv EXCLUDE_FROM_ALL

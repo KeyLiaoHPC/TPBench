@@ -274,25 +274,30 @@ Table layout uses `tpblog_printf_c` (`src/tpbcli/database/tpbcli-database-ls.c`)
 
 #### Mandatory
 
-Exactly **one** selector (mutually exclusive):
-
+**Domain** (one of, mutually exclusive; no default):
 
 | Option | Purpose |
 | ------ | ------- |
-| `--id <hex>` | Global SHA-1 search (4–40 hex digits) across domains. |
-| `--tbatch-id <hex>` | Dump tbatch record by ID. |
-| `--kernel-id <hex>` | Dump kernel record by ID. |
-| `--task-id <hex>` | Dump task record by ID. |
-| `--score-id <hex>` | Accepted, but score domain is not implemented yet (prints note, exits 0). |
-| `--file <path>` | Dump a `.tpbr`/`.tpbe` file (basename under workspace or full path). |
-| `--entry <name>` | Dump domain index CSV. Candidates: `task_batch`, `kernel`, `task`. |
+| `-dT` | Tbatch domain. |
+| `-dt` | Task domain (entry points only with `-e`). |
+| `-dk` | Kernel domain. |
+| `-dr` | Runtime environment domain. |
+| `--domain <name>` | `tbatch`, `task`, `kernel`, `runtime_environment` (alias `rtenv`). |
 
+**Mode** (one of, mutually exclusive):
+
+| Option | Purpose |
+| ------ | ------- |
+| `-i` / `--id <id>` | Dump one `.tpbr` in the selected domain (SHA-1 hex for tbatch/kernel/task; decimal for rtenv). |
+| `-e` | Dump `.tpbe` index rows (CSV-style). |
 
 #### Optional
 
 
 | Option | Purpose |
 | ------ | ------- |
+| `-n <N>` | With `-e`: latest *N* index rows (default 20). |
+| `-N <N>` | With `-e`: oldest *N* index rows. |
 | `--help` / `-h` | Dump option help. |
 
 
@@ -308,6 +313,7 @@ Exactly **one** selector (mutually exclusive):
 
 ```bash
 ./build/bin/tpbcli db list
-./build/bin/tpbcli database dump --entry kernel
-./build/bin/tpbcli database dump --tbatch-id abcdef0123456789abcd
+./build/bin/tpbcli database dump -dk -e
+./build/bin/tpbcli database dump -dT -i abcdef0123456789abcdef0123456789abcdef
+./build/bin/tpbcli database dump -dr -i 0
 ```

@@ -53,7 +53,7 @@ Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchm
 
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
 - **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
-- **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent tbatch table) or **`dump`** with exactly one selector among **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`**, **`--entry`**. Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
+- **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent index tables) or **`dump`** (domain + `-i`/`--id` for one `.tpbr`, or `-e` for `.tpbe` index). Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
 - **`tpbcli rtenv`**: Create, browse, and load runtime environment records. Records capture application/library versions and explicit environment variable operations.
 - **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
@@ -289,7 +289,7 @@ Synonyms: **`tpbcli database`**, **`tpbcli db`**.
 You must supply a subcommand: **`list`** (alias **`ls`**) or **`dump`**.
 
 - **`tpbcli db list`** — List rafdb index records (default: tbatch domain, latest 20). Options select domain and how many rows to show.
-- **`tpbcli db dump`** — Requires exactly one of: **`--id`**, **`--tbatch-id`**, **`--kernel-id`**, **`--task-id`**, **`--score-id`**, **`--file`** *path*, **`--entry`** *name* (see **`dump --help`** for semantics). Selectors are mutually exclusive.
+- **`tpbcli db dump`** — Requires a **domain** (`-dT`/`-dt`/`-dk`/`-dr` or `--domain`) and either **`-i`/`--id`** (single `.tpbr` record) or **`-e`** (`.tpbe` index; optional `-n`/`-N`, default latest 20). Domain flags and `-i`/`-e` are mutually exclusive where noted (see **`dump --help`**).
 
 ### `db list` options
 
@@ -329,7 +329,44 @@ $ tpbcli db list -dt -n 10
 $ tpbcli db list --domain kernel -N 5
 $ tpbcli db list -dr -n 10
 $ tpbcli db list --domain runtime_environment
-$ tpbcli database dump --tbatch-id <40_hex_chars>
+```
+
+### `db dump` options
+
+```
+tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environment|rtenv>]
+              (-i|--id <id> | -e)
+              [-n <N> | -N <N>]
+```
+
+**Required:** one domain selector (no default). **Required:** either `-i`/`--id` or `-e` (mutually exclusive).
+
+| Option | Meaning |
+|--------|---------|
+| `-dT` | Tbatch domain |
+| `-dt` | Task domain (entry points only when using `-e`) |
+| `-dk` | Kernel domain |
+| `-dr` | Runtime environment domain |
+| `--domain <name>` | Same as `-dT`/`-dt`/`-dk`/`-dr` (`tbatch`, `task`, `kernel`, `runtime_environment`; alias `rtenv`) |
+| `-i` / `--id <id>` | Dump one `.tpbr` record in the selected domain. SHA-1 hex (4–40 digits) for tbatch/kernel/task; decimal for rtenv |
+| `-e` | Dump `.tpbe` index rows (CSV-style) instead of a single `.tpbr` |
+| `-n <N>` | With `-e`: latest *N* index rows (default 20) |
+| `-N <N>` | With `-e`: oldest *N* index rows |
+
+Domain selectors are mutually exclusive. **`-i`/`--id`** and **`-e`** are mutually exclusive. **`-n`** and **`-N`** are mutually exclusive.
+
+Examples:
+
+```bash
+# Single .tpbr record
+tpbcli db dump -dT -i <40_hex_chars>
+tpbcli db dump -dt -i <CapsuleID>
+tpbcli db dump -dr -i 0
+
+# .tpbe index (default latest 20)
+tpbcli db dump -dk -e
+tpbcli db dump --domain runtime_environment -e -n 10
+tpbcli db dump -dt -e -N 5
 ```
 
 ### 2.3.1 Quick Results Access
@@ -356,35 +393,38 @@ For MPI kernels like `stream_mpi`:
 - To get the capsule ID from a TBatchID:
 
 ```bash
-tpbcli db dump --tbatch-id <TBatchID> | grep -A1 "Record Data"
+tpbcli db dump -dT -i <TBatchID> | grep -A1 "Record Data"
 ```
 
 - The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.
 - For aggregate metrics (recommended), use the capsule record:
 
 ```bash
-tpbcli db dump --task-id <CapsuleID>
+tpbcli db dump -dt -i <CapsuleID>
 ```
 
 This outputs the capsule metadata and the list of member task IDs. The actual performance numbers are in the individual rank task records. Use the member IDs to dump specific ranks:
 
 ```bash
-tpbcli db dump --task-id <Rank0TaskID>
+tpbcli db dump -dt -i <Rank0TaskID>
 ```
 
 ### 2.3.3 Raw Record Exploration
 
-The `--entry` option shows summary information without needing a specific ID:
+The **`-e`** flag dumps `.tpbe` index rows without a specific record ID:
 
 ```bash
-# List all task batch entries
-tpbcli db dump --entry task_batch
+# Recent task batch index rows
+tpbcli db dump -dT -e
 
-# List all kernel definitions
-tpbcli db dump --entry kernel
+# Recent kernel definitions
+tpbcli db dump -dk -e
 
-# List all task entry points (capsules and standalone tasks)
-tpbcli db dump --entry task
+# Recent task entry points (capsules and standalone tasks)
+tpbcli db dump -dt -e
+
+# Runtime environment index
+tpbcli db dump -dr -e
 ```
 
 **Note:** `.tpbr` files contain binary record data. For automated analysis, consider parsing these with a script using the `rafdb` API or converting to JSON/CSV via custom tools.
@@ -395,10 +435,13 @@ The **`rtenv`** subcommand manages the `runtime_environment` rafdb domain. It
 records an Environment Modules-style software stack and the explicit environment
 variables used for later `run` or `benchmark` commands.
 
-TPBench always requires an active RTEnv. The compile/install post-build step
-creates a **base environment** (`id == 0`) from the build-time environment; every
-subsequent `tpbcli rtenv new` (alias `create`) must inherit the currently active
-RTEnv.
+TPBench always requires an active RTEnv. Each **`tpbcli`** link in the main build
+runs post-build **`tpbcli rtenv init-base`**, which appends a **root environment
+snapshot** (`inherit_from == 0`) with the build-time process environment (real
+hostname, timestamp, all `environ` variables as override). The first snapshot uses
+`id == 1` and name `base`; later builds use `base_1`, `base_2`, … and update
+`etc/config.json` **`base_id`** to the new record. Every subsequent
+`tpbcli rtenv new` (alias `create`) must inherit the currently active RTEnv.
 
 ### 2.4.1 Create a runtime environment
 
@@ -425,7 +468,7 @@ create a record from a template file.
 
 ```bash
 tpbcli rtenv list
-tpbcli rtenv show -i 0
+tpbcli rtenv show -i 1
 tpbcli rtenv show --name gcc-openmpi
 ```
 
@@ -440,7 +483,7 @@ A `tpbcli` child process cannot directly modify its parent shell. Evaluate the
 generated shell fragment:
 
 ```bash
-eval "$(tpbcli rtenv load -i 0)"
+eval "$(tpbcli rtenv load -i 1)"
 ```
 
 or:

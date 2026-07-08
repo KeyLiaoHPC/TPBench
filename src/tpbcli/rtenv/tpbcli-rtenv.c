@@ -98,7 +98,7 @@ _sf_add_rtenv_subcommands(tpbcli_argnode_t *parent, void *ctx)
     }
     if (tpbcli_add_arg(parent, &(tpbcli_argconf_t){
             .name = "init-base",
-            .desc = "Create base RTEnv id=0 when domain is empty",
+            .desc = "Record build-time environment snapshot (root, inherit_from=0)",
             .type = TPBCLI_ARG_CMD,
             .flags = TPBCLI_ARGF_EXCLUSIVE,
             .max_chosen = 1,
@@ -290,8 +290,8 @@ tpbcli_rtenv(int argc, char **argv)
 
     if (cli_ctx.want_init_base) {
         int32_t id;
-        err = tpb_rtenv_ensure_base_env(workspace, &id);
-        TPB_PROPAGATE(TPB_MOD_CLI_RTENV, err, "tpb_rtenv_ensure_base_env");
+        err = tpb_rtenv_snapshot_build_env(workspace, 1, &id);
+        TPB_PROPAGATE(TPB_MOD_CLI_RTENV, err, "tpb_rtenv_snapshot_build_env");
         return TPBE_SUCCESS;
     }
     if (cli_ctx.want_new) {

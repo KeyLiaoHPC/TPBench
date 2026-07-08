@@ -1777,7 +1777,7 @@ These helpers support `tpbcli database dump` and `tpbcli kernel` without exposin
 
 | Function | Purpose |
 |----------|---------|
-| `tpb_raf_resolve_record_file()` | Resolve `--file` paths for dump (workspace-relative or absolute) |
+| `tpb_raf_resolve_record_file()` | Resolve record file paths (workspace-relative or absolute) |
 | `tpb_raf_scan_records_by_id_prefix()` | Scan tbatch/kernel/task domains for hex ID prefix matches |
 | `tpb_raf_free_id_matches()` | Free scan result array |
 | `tpb_raf_hash_file()` | SHA-1 hash of a kernel `.so` or other file |

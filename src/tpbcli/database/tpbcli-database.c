@@ -25,8 +25,6 @@ static tpbcli_argtree_t *_sf_build_database_argtree(void *ctx);
 static void _sf_emit_database_help(const tpbcli_argnode_t *node, FILE *out);
 static int _sf_parse_database_dump_cmd(tpbcli_argnode_t *node,
                                         const char *value);
-static int _sf_parse_database_dump_opt(tpbcli_argnode_t *node,
-                                       const char *value);
 static int _sf_parse_database_list_cmd(tpbcli_argnode_t *node,
                                        const char *value);
 static int _sf_parse_list_domain_flag(tpbcli_argnode_t *node,
@@ -37,47 +35,36 @@ static int _sf_parse_list_count_newest(tpbcli_argnode_t *node,
                                        const char *value);
 static int _sf_parse_list_count_oldest(tpbcli_argnode_t *node,
                                        const char *value);
+static int _sf_parse_dump_domain_flag(tpbcli_argnode_t *node,
+                                      const char *value);
+static int _sf_parse_dump_domain_opt(tpbcli_argnode_t *node,
+                                     const char *value);
+static int _sf_parse_dump_id_opt(tpbcli_argnode_t *node, const char *value);
+static int _sf_parse_dump_entry_flag(tpbcli_argnode_t *node,
+                                     const char *value);
+static int _sf_parse_dump_count_newest(tpbcli_argnode_t *node,
+                                       const char *value);
+static int _sf_parse_dump_count_oldest(tpbcli_argnode_t *node,
+                                       const char *value);
 static int _sf_parse_positive_int(const char *value, int *out);
 static int _sf_parse_domain_name(const char *value, uint8_t *domain_out);
 
 typedef struct database_cli_ctx {
     int          want_list;
     int          want_dump;
-    const char  *dump_selector;
-    char         primary_buf[PATH_MAX];
     uint8_t      list_domain;
     int          list_count;
     int          list_from_oldest;
+    uint8_t      dump_domain;
+    int          dump_domain_set;
+    int          dump_entry_mode;
+    int          dump_have_id;
+    char         dump_id_buf[PATH_MAX];
+    int          dump_count;
+    int          dump_from_oldest;
+    int          dump_count_set;
 } database_cli_ctx_t;
 
-static const char *_sf_conf_not_id[] = {
-    "--tbatch-id", "--kernel-id", "--task-id", "--score-id",
-    "--file", "--entry", NULL
-};
-static const char *_sf_conf_not_tbatch[] = {
-    "--id", "--kernel-id", "--task-id", "--score-id",
-    "--file", "--entry", NULL
-};
-static const char *_sf_conf_not_kernel[] = {
-    "--id", "--tbatch-id", "--task-id", "--score-id",
-    "--file", "--entry", NULL
-};
-static const char *_sf_conf_not_task[] = {
-    "--id", "--tbatch-id", "--kernel-id", "--score-id",
-    "--file", "--entry", NULL
-};
-static const char *_sf_conf_not_score[] = {
-    "--id", "--tbatch-id", "--kernel-id", "--task-id",
-    "--file", "--entry", NULL
-};
-static const char *_sf_conf_not_file[] = {
-    "--id", "--tbatch-id", "--kernel-id", "--task-id",
-    "--score-id", "--entry", NULL
-};
-static const char *_sf_conf_not_entry[] = {
-    "--id", "--tbatch-id", "--kernel-id", "--task-id",
-    "--score-id", "--file", NULL
-};
 static const char *_sf_conf_list_not_dT[] = {
     "-dt", "-dk", "-dr", "--domain", NULL
 };
@@ -97,6 +84,33 @@ static const char *_sf_conf_list_not_n[] = {
     "-N", NULL
 };
 static const char *_sf_conf_list_not_N[] = {
+    "-n", NULL
+};
+static const char *_sf_conf_dump_not_dT[] = {
+    "-dt", "-dk", "-dr", "--domain", NULL
+};
+static const char *_sf_conf_dump_not_dt[] = {
+    "-dT", "-dk", "-dr", "--domain", NULL
+};
+static const char *_sf_conf_dump_not_dk[] = {
+    "-dT", "-dt", "-dr", "--domain", NULL
+};
+static const char *_sf_conf_dump_not_dr[] = {
+    "-dT", "-dt", "-dk", "--domain", NULL
+};
+static const char *_sf_conf_dump_not_domain[] = {
+    "-dT", "-dt", "-dk", "-dr", NULL
+};
+static const char *_sf_conf_dump_not_i[] = {
+    "-e", NULL
+};
+static const char *_sf_conf_dump_not_e[] = {
+    "--id", NULL
+};
+static const char *_sf_conf_dump_not_n[] = {
+    "-N", NULL
+};
+static const char *_sf_conf_dump_not_N[] = {
     "-n", NULL
 };
 
@@ -196,6 +210,79 @@ _sf_parse_list_domain_opt(tpbcli_argnode_t *node, const char *value)
 }
 
 static int
+_sf_parse_dump_domain_flag(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    uint8_t domain;
+
+    (void)value;
+    if (ctx == NULL || node->name == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    if (strcmp(node->name, "-dT") == 0) {
+        domain = TPB_RAF_DOM_TBATCH;
+    } else if (strcmp(node->name, "-dt") == 0) {
+        domain = TPB_RAF_DOM_TASK;
+    } else if (strcmp(node->name, "-dk") == 0) {
+        domain = TPB_RAF_DOM_KERNEL;
+    } else if (strcmp(node->name, "-dr") == 0) {
+        domain = TPB_RAF_DOM_RTENV;
+    } else {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    ctx->dump_domain = domain;
+    ctx->dump_domain_set = 1;
+    return 0;
+}
+
+static int
+_sf_parse_dump_domain_opt(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    uint8_t domain;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_domain_name(value, &domain);
+    if (err != 0) {
+        return err;
+    }
+    ctx->dump_domain = domain;
+    ctx->dump_domain_set = 1;
+    return 0;
+}
+
+static int
+_sf_parse_dump_id_opt(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+
+    (void)node;
+    if (ctx == NULL || value == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    snprintf(ctx->dump_id_buf, sizeof(ctx->dump_id_buf), "%s", value);
+    ctx->dump_have_id = 1;
+    return 0;
+}
+
+static int
+_sf_parse_dump_entry_flag(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+
+    (void)value;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    ctx->dump_entry_mode = 1;
+    return 0;
+}
+
+static int
 _sf_parse_list_count_newest(tpbcli_argnode_t *node, const char *value)
 {
     database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
@@ -228,6 +315,44 @@ _sf_parse_list_count_oldest(tpbcli_argnode_t *node, const char *value)
         return err;
     }
     ctx->list_from_oldest = 1;
+    return 0;
+}
+
+static int
+_sf_parse_dump_count_newest(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_positive_int(value, &ctx->dump_count);
+    if (err != 0) {
+        return err;
+    }
+    ctx->dump_from_oldest = 0;
+    ctx->dump_count_set = 1;
+    return 0;
+}
+
+static int
+_sf_parse_dump_count_oldest(tpbcli_argnode_t *node, const char *value)
+{
+    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
+    int err;
+
+    (void)node;
+    if (ctx == NULL) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+    err = _sf_parse_positive_int(value, &ctx->dump_count);
+    if (err != 0) {
+        return err;
+    }
+    ctx->dump_from_oldest = 1;
+    ctx->dump_count_set = 1;
     return 0;
 }
 
@@ -359,7 +484,7 @@ _sf_build_database_argtree(void *ctx_void)
 
     dump_cmd = tpbcli_add_arg(db_cmd, &(tpbcli_argconf_t){
         .name = "dump",
-        .desc = "Dump one .tpbr/.tpbe record or domain as CSV-style lines",
+        .desc = "Dump one .tpbr record or .tpbe index as CSV-style lines",
         .type = TPBCLI_ARG_CMD,
         .flags = TPBCLI_ARGF_EXCLUSIVE,
         .max_chosen = 1,
@@ -383,15 +508,15 @@ _sf_build_database_argtree(void *ctx_void)
         return NULL;
     }
 
-#define ADD_DUMP_OPT(_nm, _desc, _conf)                                        \
+#define ADD_DUMP_FLAG(_nm, _desc, _conf, _fn)                                  \
     do {                                                                     \
         if (tpbcli_add_arg(dump_cmd, &(tpbcli_argconf_t){                     \
                 .name = (_nm),                                               \
                 .desc = (_desc),                                             \
-                .type = TPBCLI_ARG_OPT,                                      \
+                .type = TPBCLI_ARG_FLAG,                                     \
                 .max_chosen = 1,                                             \
                 .conflict_opts = (_conf),                                    \
-                .parse_fn = _sf_parse_database_dump_opt,                       \
+                .parse_fn = (_fn),                                           \
                 .user_data = ctx,                                            \
             }) == NULL) {                                                    \
             tpbcli_argtree_destroy(tree);                                    \
@@ -399,20 +524,45 @@ _sf_build_database_argtree(void *ctx_void)
         }                                                                    \
     } while (0)
 
-    ADD_DUMP_OPT("--id", "Global id search (SHA-1 hex, 4-40 digits)",
-                 _sf_conf_not_id);
-    ADD_DUMP_OPT("--tbatch-id", "Tbatch record id (SHA-1 hex)",
-                 _sf_conf_not_tbatch);
-    ADD_DUMP_OPT("--kernel-id", "Kernel record id (SHA-1 hex)",
-                 _sf_conf_not_kernel);
-    ADD_DUMP_OPT("--task-id", "Task record id (SHA-1 hex)",
-                 _sf_conf_not_task);
-    ADD_DUMP_OPT("--score-id", "Score record id (not implemented in rafdb)",
-                 _sf_conf_not_score);
-    ADD_DUMP_OPT("--file", "Path to a .tpbr/.tpbe file (full path or basename)",
-                 _sf_conf_not_file);
-    ADD_DUMP_OPT("--entry", "Dump domain index: task_batch, kernel, or task",
-                 _sf_conf_not_entry);
+#define ADD_DUMP_OPT(_nm, _sn, _desc, _conf, _fn)                              \
+    do {                                                                     \
+        if (tpbcli_add_arg(dump_cmd, &(tpbcli_argconf_t){                     \
+                .name = (_nm),                                               \
+                .short_name = (_sn),                                         \
+                .desc = (_desc),                                             \
+                .type = TPBCLI_ARG_OPT,                                      \
+                .max_chosen = 1,                                             \
+                .conflict_opts = (_conf),                                    \
+                .parse_fn = (_fn),                                           \
+                .user_data = ctx,                                            \
+            }) == NULL) {                                                    \
+            tpbcli_argtree_destroy(tree);                                    \
+            return NULL;                                                     \
+        }                                                                    \
+    } while (0)
+
+    ADD_DUMP_FLAG("-dT", "Dump tbatch domain", _sf_conf_dump_not_dT,
+                  _sf_parse_dump_domain_flag);
+    ADD_DUMP_FLAG("-dt", "Dump task domain entry points", _sf_conf_dump_not_dt,
+                  _sf_parse_dump_domain_flag);
+    ADD_DUMP_FLAG("-dk", "Dump kernel domain", _sf_conf_dump_not_dk,
+                  _sf_parse_dump_domain_flag);
+    ADD_DUMP_FLAG("-dr", "Dump runtime_environment domain", _sf_conf_dump_not_dr,
+                  _sf_parse_dump_domain_flag);
+    ADD_DUMP_OPT("--domain",
+                 NULL,
+                 "Domain name: tbatch, task, kernel, or runtime_environment",
+                 _sf_conf_dump_not_domain, _sf_parse_dump_domain_opt);
+    ADD_DUMP_OPT("--id", "-i",
+                 "Record id (SHA-1 hex for tbatch/kernel/task; decimal for rtenv)",
+                 _sf_conf_dump_not_i, _sf_parse_dump_id_opt);
+    ADD_DUMP_FLAG("-e", "Dump .tpbe index instead of .tpbr record",
+                  _sf_conf_dump_not_e, _sf_parse_dump_entry_flag);
+    ADD_DUMP_OPT("-n", NULL, "Show latest N .tpbe entries", _sf_conf_dump_not_n,
+                 _sf_parse_dump_count_newest);
+    ADD_DUMP_OPT("-N", NULL, "Show oldest N .tpbe entries", _sf_conf_dump_not_N,
+                 _sf_parse_dump_count_oldest);
+#undef ADD_DUMP_FLAG
 #undef ADD_DUMP_OPT
 
     return tree;
@@ -427,11 +577,9 @@ _sf_emit_database_help(const tpbcli_argnode_t *node, FILE *out)
     fprintf(out, "Commands:\n");
     fprintf(out, "  list, ls    List rafdb index records (default: tbatch, latest 20).\n");
     fprintf(out, "              Options: -dT|-dt|-dk|-dr, --domain, -n, -N.\n");
-    fprintf(out, "  dump        Dump one record or domain as CSV-style lines.\n");
-    fprintf(out, "              Brief selectors: --id, --tbatch-id, "
-                   "--kernel-id,\n");
-    fprintf(out, "              --task-id, --score-id, --file <path>, "
-                   "--entry <name>.\n");
+    fprintf(out, "  dump        Dump one .tpbr record or .tpbe index as CSV-style lines.\n");
+    fprintf(out, "              Requires domain (-dT|-dt|-dk|-dr or --domain) and\n");
+    fprintf(out, "              either -i|--id <id> or -e (index mode).\n");
     fprintf(out, "              Use \"tpbcli database dump --help\" for full option help.\n\n");
     fprintf(out, "Options:\n");
     fprintf(out, "  --help, -h    Show this help.\n\n");
@@ -447,19 +595,6 @@ _sf_parse_database_dump_cmd(tpbcli_argnode_t *node, const char *value)
     if (ctx != NULL) {
         ctx->want_dump = 1;
     }
-    return 0;
-}
-
-static int
-_sf_parse_database_dump_opt(tpbcli_argnode_t *node, const char *value)
-{
-    database_cli_ctx_t *ctx = (database_cli_ctx_t *)node->user_data;
-
-    if (ctx == NULL || node->name == NULL || value == NULL) {
-        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
-    }
-    ctx->dump_selector = node->name;
-    snprintf(ctx->primary_buf, sizeof(ctx->primary_buf), "%s", value);
     return 0;
 }
 
@@ -490,6 +625,8 @@ tpbcli_database(int argc, char **argv)
     cli_ctx.list_domain = TPB_RAF_DOM_TBATCH;
     cli_ctx.list_count = TPBCLI_DB_LIST_DEFAULT_COUNT;
     cli_ctx.list_from_oldest = 0;
+    cli_ctx.dump_count = TPBCLI_DB_LIST_DEFAULT_COUNT;
+    cli_ctx.dump_from_oldest = 0;
 
     tree = _sf_build_database_argtree(&cli_ctx);
     if (tree == NULL) {
@@ -525,9 +662,30 @@ tpbcli_database(int argc, char **argv)
                                   cli_ctx.list_from_oldest);
     }
 
-    return tpbcli_database_dump_resolved(workspace, cli_ctx.dump_selector,
-                                         cli_ctx.dump_selector != NULL
-                                             ? cli_ctx.primary_buf
+    if (!cli_ctx.dump_domain_set) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "error: missing required domain "
+                   "(use -dT|-dt|-dk|-dr or --domain)\n");
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+
+    if (!cli_ctx.dump_entry_mode && !cli_ctx.dump_have_id) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "error: missing required -i|--id or -e\n");
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+
+    if (!cli_ctx.dump_entry_mode && cli_ctx.dump_count_set) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "error: -n|-N is only valid with -e (index mode)\n");
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+    }
+
+    return tpbcli_database_dump_resolved(workspace, cli_ctx.dump_domain,
+                                         cli_ctx.dump_entry_mode,
+                                         cli_ctx.dump_have_id
+                                             ? cli_ctx.dump_id_buf
                                              : NULL,
-                                         NULL);
+                                         cli_ctx.dump_count,
+                                         cli_ctx.dump_from_oldest);
 }

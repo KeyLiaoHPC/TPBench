@@ -46,7 +46,7 @@ target_compile_options(tpbcli PRIVATE -O2)
 target_link_libraries(tpbcli PRIVATE tpbench m)
 tpb_set_install_rpath_tpbench_exe(tpbcli)
 
-option(TPB_CREATE_BASE_RTENV "Create base RTEnv id=0 after tpbcli build" ON)
+option(TPB_CREATE_BASE_RTENV "Record build-time RTEnv snapshot after tpbcli build" ON)
 if(TPB_CREATE_BASE_RTENV)
     add_custom_command(TARGET tpbcli POST_BUILD
         COMMAND ${CMAKE_COMMAND}
@@ -54,7 +54,7 @@ if(TPB_CREATE_BASE_RTENV)
             -DTPBCLI=$<TARGET_FILE:tpbcli>
             -DTPB_HOME=${CMAKE_BINARY_DIR}
             -P ${CMAKE_SOURCE_DIR}/cmake/TPBenchBaseRtenvRun.cmake
-        COMMENT "Ensure base runtime environment (id=0) in build workspace"
+        COMMENT "Record build-time runtime environment snapshot in build workspace"
         VERBATIM)
 endif()
 

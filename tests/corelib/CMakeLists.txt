@@ -94,6 +94,7 @@ tpb_add_subcase(A4 A4.26 rtenv_counter_patch test-raf corelib)
 tpb_add_subcase(A4 A4.27 rtenv_derive_link   test-raf corelib)
 tpb_add_subcase(A4 A4.28 rtenv_config_base_id test-raf corelib)
 tpb_add_subcase(A4 A4.29 rtenv_resolve_active test-raf corelib)
+tpb_add_subcase(A4 A4.30 rtenv_build_snapshot test-raf corelib)
 
 # --- 1D array write/read test (Pack A5) ---
 add_executable(test-1d-array EXCLUDE_FROM_ALL

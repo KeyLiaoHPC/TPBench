@@ -50,7 +50,7 @@ tpbcli <subcommand> <options>
 
 - **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
 - **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。
-- **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期 tbatch 表）或 **`dump`**，且 **`dump`** 须且仅能指定一个选择项（**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`**、**`--entry`**）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
+- **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期索引表）或 **`dump`**（须指定 **domain**，再加 **`-i`/`--id`** 导出单条 `.tpbr`，或 **`-e`** 导出 `.tpbe` 索引）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
 - **`tpbcli rtenv`**：创建、浏览和加载运行时环境记录，记录应用/库版本和显式环境变量。子命令：**`new`**、**`list`**、**`show`**、**`load`**。
 - **`tpbcli kernel`**：管理工作区内的 kernel 编译历史 —— **`list`** / **`ls`**（扫描并注册 PLI 内核）、**`get`**（只读查询）、**`set`**（写入 metadata），以及构建系统内部使用的 **`backup-inactive`**。
 - **`tpbcli help`**：帮助文档。
@@ -236,7 +236,7 @@ TPBENCH_TIMER=<timer> [ENV=VAL ...] [wrapper_app wrapper_args ...] <kernel_entry
 必须再指定子命令：**`list`**（别名 **`ls`**）或 **`dump`**。
 
 - **`tpbcli db list`** — 列出 rafdb 索引记录（默认：tbatch 域、最近 20 条）。可通过选项选择域与条数。
-- **`tpbcli db dump`** — 须且仅能指定以下之一：**`--id`**、**`--tbatch-id`**、**`--kernel-id`**、**`--task-id`**、**`--score-id`**、**`--file`** *路径*、**`--entry`** *名称*（详见 **`dump --help`**）。各选择项互斥。
+- **`tpbcli db dump`** — 须指定 **domain**（**`-dT`/`-dt`/`-dk`/`-dr`** 或 **`--domain`**），且 **`-i`/`--id`**（单条 `.tpbr`）与 **`-e`**（`.tpbe` 索引；可选 **`-n`/`-N`**，默认最近 20 条）二选一。详见 **`dump --help`**。
 
 ### `db list` 选项
 
@@ -276,7 +276,44 @@ $ tpbcli db list -dt -n 10
 $ tpbcli db list --domain kernel -N 5
 $ tpbcli db list -dr -n 10
 $ tpbcli db list --domain runtime_environment
-$ tpbcli database dump --tbatch-id <40位十六进制>
+```
+
+### `db dump` 选项
+
+```
+tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environment|rtenv>]
+              (-i|--id <id> | -e)
+              [-n <N> | -N <N>]
+```
+
+**必填：** 一个 domain 选择项（无默认值）。**必填：** `-i`/`--id` 或 `-e`（互斥）。
+
+| 选项 | 含义 |
+|------|------|
+| `-dT` | tbatch 域 |
+| `-dt` | task 域（`-e` 时仅入口点） |
+| `-dk` | kernel 域 |
+| `-dr` | runtime_environment 域 |
+| `--domain <name>` | 与 `-dT`/`-dt`/`-dk`/`-dr` 等价（`tbatch`、`task`、`kernel`、`runtime_environment`；别名 `rtenv`） |
+| `-i` / `--id <id>` | 导出所选域的一条 `.tpbr`。tbatch/kernel/task 为 SHA-1 十六进制（4–40 位）；rtenv 为十进制 |
+| `-e` | 导出 `.tpbe` 索引行（CSV 风格），而非单条 `.tpbr` |
+| `-n <N>` | 配合 `-e`：最近 *N* 条（默认 20） |
+| `-N <N>` | 配合 `-e`：最旧 *N* 条 |
+
+域选择项互斥；**`-i`/`--id`** 与 **`-e`** 互斥；**`-n`** 与 **`-N`** 互斥。
+
+示例：
+
+```bash
+# 单条 .tpbr
+tpbcli db dump -dT -i <40位十六进制>
+tpbcli db dump -dt -i <CapsuleID>
+tpbcli db dump -dr -i 0
+
+# .tpbe 索引（默认最近 20 条）
+tpbcli db dump -dk -e
+tpbcli db dump --domain runtime_environment -e -n 10
+tpbcli db dump -dt -e -N 5
 ```
 
 ## 2.4 tpbcli rtenv
@@ -284,9 +321,12 @@ $ tpbcli database dump --tbatch-id <40位十六进制>
 **`rtenv`** 子命令管理 rafdb 的 `runtime_environment` domain，用于记录
 Environment Modules 风格的软件栈和环境变量。
 
-TPBench 强制要求始终存在一个激活 RTEnv。编译安装的 post-build 脚本会基于编译期
-环境创建 `id == 0` 的**基础环境**;此后每次 `tpbcli rtenv new`（别名 `create`）
-都必须继承当前激活的 RTEnv。
+TPBench 强制要求始终存在一个激活 RTEnv。主工程每次链接 **`tpbcli`** 时，
+post-build 会执行 **`tpbcli rtenv init-base`**，追加一条**根环境快照**
+（`inherit_from == 0`），写入编译进程的真实 hostname、时间戳及全部 `environ`
+变量（均为 override）。首次快照为 `id == 1`、name `base`；再次编译则生成
+`base_1`、`base_2` … 并更新 `etc/config.json` 的 **`base_id`**。此后每次
+`tpbcli rtenv new`（别名 `create`）都必须继承当前激活的 RTEnv。
 
 ### 2.4.1 创建运行时环境
 
@@ -311,7 +351,7 @@ rafdb；使用 `-f <file>` 从模板文件创建记录。
 
 ```bash
 tpbcli rtenv list
-tpbcli rtenv show -i 0
+tpbcli rtenv show -i 1
 tpbcli rtenv show --name gcc-openmpi
 ```
 
@@ -324,7 +364,7 @@ tpbcli rtenv show --name gcc-openmpi
 `tpbcli` 子进程不能直接修改父 shell。要让环境变量进入当前 shell，请执行：
 
 ```bash
-eval "$(tpbcli rtenv load -i 0)"
+eval "$(tpbcli rtenv load -i 1)"
 ```
 
 或：

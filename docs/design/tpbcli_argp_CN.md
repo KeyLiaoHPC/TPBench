@@ -99,7 +99,10 @@ root "tpbcli"（形式根；首个匹配的 token 为 database|db）
  |    |    +-- FLAG "--help" / "-h"
  |    +-- CMD "dump"
  |    |    +-- FLAG "--help" / "-h"
- |    |    +-- OPT "--id"、"--tbatch-id"、… "--entry"  （conflict_opts 互斥）
+ |    |    +-- FLAG "-dT"、"-dt"、"-dk"、"-dr"、OPT "--domain"  （conflict_opts 互斥）
+ |    |    +-- OPT "--id" / "-i"  （与 "-e" 冲突）
+ |    |    +-- FLAG "-e"  （与 "--id" 冲突）
+ |    |    +-- OPT "-n"、"-N"  （conflict_opts 互斥；运行时仅配合 "-e"）
 ```
 
 顶层 `tpbcli.c` 仅为 `database`/`db` 注册 `TPBCLI_ARGF_DELEGATE_SUBCMD` 与派发回调；上述内层结构由 [`tpbcli-database.c`](../../src/tpbcli-database.c) 维护。

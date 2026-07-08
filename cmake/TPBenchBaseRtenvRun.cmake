@@ -1,5 +1,5 @@
 # TPBenchBaseRtenvRun.cmake
-# Idempotently create base runtime environment (id=0) in the build workspace.
+# Idempotently record build-time runtime environment snapshot in build workspace.
 
 if(NOT TPB_CREATE_BASE_RTENV)
     return()

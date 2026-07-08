@@ -1321,7 +1321,7 @@ typedef struct tpb_raf_rtenv_entry {
     char         name[TPB_RAF_RTENV_NAME_LEN];            /**< Unique name */
     char         hostname[TPB_RAF_RTENV_HOST_LEN];        /**< Creation host */
     tpb_dtbits_t utc_bits;                                /**< Creation time */
-    int32_t      inherit_from;                            /**< Parent ID or -1 */
+    int32_t inherit_from;                            /**< Parent ID or 0 if root */
     int32_t      derive_to;                               /**< Latest child ID or -1 */
     uint32_t     ntask;                                   /**< Task count */
     uint32_t     ntbatch;                                 /**< TBatch count */
@@ -1337,7 +1337,7 @@ typedef struct tpb_raf_rtenv_attr {
     char         name[TPB_RAF_RTENV_NAME_LEN];            /**< Unique name */
     char         hostname[TPB_RAF_RTENV_HOST_LEN];        /**< Creation host */
     tpb_dtbits_t utc_bits;                                /**< Creation time */
-    int32_t      inherit_from;                            /**< Parent ID or -1 */
+    int32_t inherit_from;                            /**< Parent ID or 0 if root */
     int32_t      derive_to;                               /**< Latest child ID or -1 */
     uint32_t     ntask;                                   /**< Task count */
     uint32_t     ntbatch;                                 /**< TBatch count */
@@ -1435,7 +1435,7 @@ int tpb_raf_record_append_rtenv_derive(const char *workspace,
 /**
  * @brief Read runtime_environment.base_id from etc/config.json.
  * @param workspace Workspace root path
- * @param base_id_out Receives base ID (0 if key missing)
+ * @param base_id_out Receives base ID (1 if key missing)
  * @return 0 on success, error code otherwise
  */
 int tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out);
@@ -1449,9 +1449,19 @@ int tpb_raf_config_get_base_id(const char *workspace, int32_t *base_id_out);
 int tpb_raf_config_set_base_id(const char *workspace, int32_t base_id);
 
 /**
- * @brief Create minimal base RTEnv (id=0) when the domain is empty.
+ * @brief Record build-time environment snapshot as a root RTEnv entry.
  * @param workspace Workspace root path
- * @param id_out Receives created or existing base ID (0)
+ * @param always_new Non-zero to always append a new root snapshot
+ * @param id_out Receives created or existing base ID
+ * @return 0 on success, error code otherwise
+ */
+int tpb_rtenv_snapshot_build_env(const char *workspace, int always_new,
+                                 int32_t *id_out);
+
+/**
+ * @brief Ensure a base RTEnv exists (lazy snapshot when domain is empty).
+ * @param workspace Workspace root path
+ * @param id_out Receives existing or created base ID
  * @return 0 on success, error code otherwise
  */
 int tpb_rtenv_ensure_base_env(const char *workspace, int32_t *id_out);
@@ -1729,6 +1739,27 @@ int tpb_raf_kernel_update_meta_key(const char *workspace,
                                    const unsigned char kernel_id[20],
                                    const char *full_key,
                                    const char *value);
+
+/** @brief Mode flag: current UTC datetime for tpb_ts_get_datetime() */
+#define TPBM_TS_UTC 0x01u
+
+/**
+ * @brief Get current UTC or local datetime components.
+ * @param mode TPBM_TS_UTC or TPBM_TS_LOCAL
+ * @param dt Output datetime structure
+ * @return 0 on success, error code otherwise
+ */
+int tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt);
+
+/**
+ * @brief Pack datetime components into tpb_dtbits_t.
+ * @param dt Input datetime
+ * @param tz_bias_min Timezone bias in minutes (0 for UTC)
+ * @param bits_out Output encoded bits
+ * @return 0 on success, error code otherwise
+ */
+int tpb_ts_datetime_to_bits(const tpb_datetime_t *dt, int16_t tz_bias_min,
+                            tpb_dtbits_t *bits_out);
 
 /**
  * @brief Convert 64-bit datetime bits to ISO 8601 UTC string.

@@ -43,6 +43,8 @@ run_cmd_capture(const char *cmd, char *outbuf, size_t outbuf_sz)
     if (outbuf != NULL && outbuf_sz > 0) {
         size_t n = fread(outbuf, 1, outbuf_sz - 1, fp);
         outbuf[n] = '\0';
+        while (fgetc(fp) != EOF) {
+        }
     } else {
         while (fgetc(fp) != EOF) {
         }
@@ -59,11 +61,38 @@ run_cmd_capture(const char *cmd, char *outbuf, size_t outbuf_sz)
 static void
 setup_workspace(void)
 {
-    int32_t id;
+    tpb_raf_rtenv_entry_t ent;
+    tpb_raf_rtenv_attr_t attr;
+    tpb_datetime_t dt;
 
     snprintf(g_ws, sizeof(g_ws), "/tmp/tpb_rtenv_cli_%d", (int)getpid());
     tpb_raf_init_workspace(g_ws);
-    (void)tpb_rtenv_ensure_base_env(g_ws, &id);
+
+    memset(&ent, 0, sizeof(ent));
+    ent.id = 1;
+    snprintf(ent.name, sizeof(ent.name), "base");
+    snprintf(ent.hostname, sizeof(ent.hostname), "testhost");
+    if (tpb_ts_get_datetime(TPBM_TS_UTC, &dt) == TPBE_SUCCESS) {
+        (void)tpb_ts_datetime_to_bits(&dt, 0, &ent.utc_bits);
+    }
+    ent.inherit_from = 0;
+    ent.derive_to = -1;
+    snprintf(ent.note, sizeof(ent.note), "test base env");
+
+    (void)tpb_raf_entry_append_rtenv(g_ws, &ent);
+
+    memset(&attr, 0, sizeof(attr));
+    attr.id = 1;
+    snprintf(attr.name, sizeof(attr.name), "base");
+    snprintf(attr.hostname, sizeof(attr.hostname), "testhost");
+    attr.utc_bits = ent.utc_bits;
+    attr.inherit_from = 0;
+    attr.derive_to = -1;
+    snprintf(attr.note, sizeof(attr.note), "test base env");
+    attr.nheader = 0;
+
+    (void)tpb_raf_record_write_rtenv(g_ws, &attr, NULL, NULL, 0);
+    (void)tpb_raf_config_set_base_id(g_ws, 1);
 }
 
 static void
@@ -198,7 +227,7 @@ test_b6_4_new_from_file(void)
     fclose(fp);
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new -f '%s'",
              g_ws, tmpl);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
@@ -227,7 +256,7 @@ test_b6_5_new_inline(void)
     setup_workspace();
     before = count_rtenv_entries();
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new --name inline-env --note inline "
              "--add-application --name gcc --version 13.2 --note cc "
              "--append-variable --name LD_LIBRARY_PATH --value /opt/lib",
@@ -264,7 +293,7 @@ test_b6_6_new_bad_template(void)
     fprintf(fp, "--name 'bad-env'\nTHIS_IS_NOT_A_VALID_LINE\n");
     fclose(fp);
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new -f '%s'",
              g_ws, tmpl);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
@@ -308,8 +337,8 @@ test_b6_7_list_activated(void)
         cleanup_workspace();
         return 1;
     }
-    if (strstr(buf, "Activated runtime environment ID: 0") == NULL) {
-        FAIL("B6.7: expected activated id 0 from base_id");
+    if (strstr(buf, "Activated runtime environment ID: 1") == NULL) {
+        FAIL("B6.7: expected activated id 1 from base_id");
         fprintf(stderr, "    output: %.400s\n", buf);
         cleanup_workspace();
         return 1;
@@ -328,7 +357,7 @@ test_b6_8_show_tables(void)
 
     setup_workspace();
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new --name show-me --note sn "
              "--add-application --name app1 --version 1.0 --note an "
              "--variable --name FOO --value bar",
@@ -336,7 +365,7 @@ test_b6_8_show_tables(void)
     (void)run_cmd_capture(cmd, buf, sizeof(buf));
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv show -i 1",
+             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv show -i 2",
              g_ws);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
@@ -378,13 +407,13 @@ test_b6_9_load_shell_fragment(void)
     fclose(fp);
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new -f '%s'",
              g_ws, tmpl);
     (void)run_cmd_capture(cmd, buf, sizeof(buf));
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv load -i 1",
+             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv load -i 2",
              g_ws);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code == 0) {
@@ -401,13 +430,13 @@ test_b6_9_load_shell_fragment(void)
             "--variable --name='GOOD_VAR' --value='1'\n");
     fclose(fp);
     snprintf(cmd, sizeof(cmd),
-             "TPB_RTENV_ID=0 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
+             "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
              "rtenv new -f '%s'",
              g_ws, tmpl);
     (void)run_cmd_capture(cmd, buf, sizeof(buf));
 
     snprintf(cmd, sizeof(cmd),
-             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv load -i 2",
+             "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv load -i 3",
              g_ws);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {

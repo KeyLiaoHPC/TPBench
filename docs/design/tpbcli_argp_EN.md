@@ -99,7 +99,10 @@ root "tpbcli" (synthetic; first token consumed is database|db)
  |    |    +-- FLAG "--help" / "-h"
  |    +-- CMD "dump"
  |    |    +-- FLAG "--help" / "-h"
- |    |    +-- OPT "--id", "--tbatch-id", … "--entry"  (mutual conflict_opts)
+ |    |    +-- FLAG "-dT", "-dt", "-dk", "-dr", OPT "--domain"  (mutual conflict_opts)
+ |    |    +-- OPT "--id" / "-i"  (conflicts with "-e")
+ |    |    +-- FLAG "-e"  (conflicts with "--id")
+ |    |    +-- OPT "-n", "-N"  (mutual conflict_opts; only with "-e" at runtime)
 ```
 
 The top-level `tpbcli.c` tree only registers `database`/`db` with `TPBCLI_ARGF_DELEGATE_SUBCMD` and a dispatch callback; the inner structure above is maintained in [`tpbcli-database.c`](../../src/tpbcli-database.c).

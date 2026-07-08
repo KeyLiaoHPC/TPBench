@@ -9,7 +9,7 @@
 #include <stdint.h>
 
 #define TPBCLI_RTENV_MAX_APP   32
-#define TPBCLI_RTENV_MAX_VAR   64
+#define TPBCLI_RTENV_MAX_VAR   128
 
 typedef struct tpbcli_rtenv_app {
     char name[64];

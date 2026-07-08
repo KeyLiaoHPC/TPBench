@@ -271,25 +271,29 @@ tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
 
 #### 必选项
 
-**恰好一个**选择器（互斥）：
+**domain**（互斥，须显式指定，无默认值）：
 
+| 项 | 用途 |
+| --- | --- |
+| `-dT` | tbatch 域。 |
+| `-dt` | task 域（`-e` 时仅入口点）。 |
+| `-dk` | kernel 域。 |
+| `-dr` | runtime_environment 域。 |
+| `--domain <name>` | `tbatch`、`task`、`kernel`、`runtime_environment`（别名 `rtenv`）。 |
 
-| 项                   | 用途                                          |
-| ------------------- | ------------------------------------------- |
-| `--id <hex>`        | 全局 SHA-1 搜索（4–40 位十六进制），跨域查找。               |
-| `--tbatch-id <hex>` | 按 ID 导出 tbatch 记录。                          |
-| `--kernel-id <hex>` | 按 ID 导出 kernel 记录。                          |
-| `--task-id <hex>`   | 按 ID 导出 task 记录。                            |
-| `--score-id <hex>`  | 接受该参数，但 score 域尚未实现（打印提示后以 0 退出）。           |
-| `--file <path>`     | 导出 `.tpbr`/`.tpbe` 文件（工作区内 basename 或完整路径）。 |
-| `--entry <name>`    | 导出域索引 CSV。候选：`task_batch`、`kernel`、`task`。  |
+**模式**（互斥，二选一）：
 
+| 项 | 用途 |
+| --- | --- |
+| `-i` / `--id <id>` | 导出所选域的一条 `.tpbr`（tbatch/kernel/task 为 SHA-1 十六进制；rtenv 为十进制）。 |
+| `-e` | 导出 `.tpbe` 索引行（CSV 风格）。 |
 
 #### 可选项
 
-
-| 项               | 用途         |
-| --------------- | ---------- |
+| 项 | 用途 |
+| --- | --- |
+| `-n <N>` | 配合 `-e`：最近 *N* 条（默认 20）。 |
+| `-N <N>` | 配合 `-e`：最旧 *N* 条。 |
 | `--help` / `-h` | dump 选项帮助。 |
 
 
@@ -305,7 +309,8 @@ tpbcli db list [-dT|-dt|-dk | --domain <tbatch|task|kernel>] [-n <N> | -N <N>]
 
 ```bash
 ./build/bin/tpbcli db list
-./build/bin/tpbcli database dump --entry kernel
-./build/bin/tpbcli database dump --tbatch-id abcdef0123456789abcd
+./build/bin/tpbcli database dump -dk -e
+./build/bin/tpbcli database dump -dT -i abcdef0123456789abcdef0123456789abcdef
+./build/bin/tpbcli database dump -dr -i 0
 ```
 
