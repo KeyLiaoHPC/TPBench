@@ -40,6 +40,26 @@ $ make
 
 注意：SIMD 选项需要编译器和目标平台支持相应的指令集。启用 AVX-512 或 AVX2 时，建议同时添加 `-march=native` 编译选项以获得最佳性能。
 
+**3）安装到 TPB_HOME**
+
+将可执行文件、库与模板安装到 **`TPB_HOME`**（TPBench 安装根目录）。若环境中未设置 **`TPB_HOME`**，安装时的 rafdb 同步步骤默认使用 **`$HOME/.tpbench`** 并打印提示信息。
+
+```bash
+export TPB_HOME="${TPB_HOME:-$HOME/.tpbench}"
+cmake --build build
+cmake --install build --prefix "${TPB_HOME}"
+```
+
+Post-build 会将 kernel 编译元数据与构建期运行时环境快照写入 **构建目录**（`build/rafdb/`）。**全量** **`cmake --install`**（非 **`--component tpbench_kernels`**）时，仅将 **`rafdb/kernel/`** 与 **`rafdb/runtime_environment/`** 拷贝到 **`$TPB_HOME/rafdb/`**，并合并 **`runtime_environment.base_id`** 到 **`$TPB_HOME/etc/config.json`**。不会拷贝 **`rafdb/task/`**、**`rafdb/task_batch/`**、**`rafdb/log/`** 中的运行记录。
+
+| 情况 | 行为 |
+| -------- | -------- |
+| `$TPB_HOME/rafdb/` 无 `.tpbe`/`.tpbr` 数据 | 从构建目录拷贝元数据 |
+| `$TPB_HOME/rafdb/` 某 metadata 域已有数据 | 跳过该域覆盖，仅拷贝空域。使用 **`TPB_INSTALL_RAFDB=YES`** 可备份并替换 |
+| 强制或禁用 | **`TPB_INSTALL_RAFDB=YES`** 或 **`-DTPB_INSTALL_RAFDB=YES`** 始终备份并拷贝；**`NO`** 永不拷贝 |
+
+安装步骤**不读取、不修改 `TPB_WORKSPACE`**。运行 benchmark 时请单独设置 **`TPB_WORKSPACE`** 存放评测结果。**`cmake --install --prefix`** 应与 **`TPB_HOME`** 一致；不一致时会打印警告。
+
 # 2 使用 tpbcli 
 ## 2.1 简介
 `tpbcli` 的基本格式：

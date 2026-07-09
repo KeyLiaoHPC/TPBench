@@ -548,6 +548,11 @@ test_b4_22_dump_rtenv_entry(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+    if (strstr(buf, "entry[0].id,") == NULL) {
+        FAIL("B4.22: missing rtenv entry rows (default -n window)");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
     PASS();
     return 0;
 }
@@ -556,6 +561,8 @@ static int
 test_b4_23_dump_rtenv_record(void)
 {
     char buf[8192];
+    const char *nenv_line;
+    int nenv_val;
     int code = run_cmd_capture(
         "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
         "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1", buf,
@@ -571,6 +578,41 @@ test_b4_23_dump_rtenv_record(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+    nenv_line = strstr(buf, "nenv, ");
+    if (nenv_line == NULL) {
+        FAIL("B4.23: missing nenv in metadata");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    nenv_val = atoi(nenv_line + strlen("nenv, "));
+    if (nenv_val <= 0) {
+        FAIL("B4.23: expected nenv > 0 from post-build snapshot");
+        fprintf(stderr, "    nenv=%d\n", nenv_val);
+        return 1;
+    }
+
+    code = run_cmd_capture(
+        "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
+        "| grep -F 'key[0]'",
+        buf, sizeof(buf));
+    if (code != 0 || strstr(buf, "key[0]") == NULL) {
+        FAIL("B4.23: missing key[0] in Record Data");
+        fprintf(stderr, "    exit %d output: %.400s\n", code, buf);
+        return 1;
+    }
+
+    code = run_cmd_capture(
+        "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
+        "| grep -F 'application[],'",
+        buf, sizeof(buf));
+    if (code == 0) {
+        FAIL("B4.23: zero-length application header must not appear in Record Data");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
     PASS();
     return 0;
 }

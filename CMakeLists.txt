@@ -31,6 +31,9 @@ option(TPB_ENABLE_OPENMP "Add OpenMP compile/link to built kernel targets" OFF)
 option(TPB_SHOW_DEBUG "Enable kernel debug logging (TPB_K_DEBUG)" OFF)
 option(TPB_RECORD_KERNEL_COMPILE_HISTORY
        "Run post-build metadata registration for built kernel .so targets" ON)
+set(TPB_INSTALL_RAFDB "AUTO" CACHE STRING
+    "rafdb metadata install sync: AUTO (empty copy / nonempty ask or skip), YES, NO")
+set_property(CACHE TPB_INSTALL_RAFDB PROPERTY STRINGS AUTO YES NO)
 
 # Apply SIMD compile definitions
 if(TPB_USE_AVX512)
@@ -245,26 +248,6 @@ if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-# Workspace layout under install root (DESTDIR + CMAKE_INSTALL_PREFIX at install time).
-# Creates dirs only; does not touch rafdb files. etc/config.json only if missing.
-install(CODE "
-  if(NOT \"\$ENV{DESTDIR}\" STREQUAL \"\")
-    set(_tpb_install_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
-  else()
-    set(_tpb_install_root \"\${CMAKE_INSTALL_PREFIX}\")
-  endif()
-  file(MAKE_DIRECTORY
-    \"\${_tpb_install_root}/etc\"
-    \"\${_tpb_install_root}/rafdb/task_batch\"
-    \"\${_tpb_install_root}/rafdb/kernel\"
-    \"\${_tpb_install_root}/rafdb/task\"
-    \"\${_tpb_install_root}/rafdb/log\")
-  if(NOT EXISTS \"\${_tpb_install_root}/etc/config.json\")
-    file(WRITE \"\${_tpb_install_root}/etc/config.json\"
-      \"{\\n    \\\"name\\\": \\\"default\\\"\\n}\\n\")
-  endif()
-")
-
 # Install core library
 install(TARGETS tpbench
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -308,6 +291,35 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/
 # Registry template for out-of-tree builds (also copied by kernel build CLI)
 install(FILES ${CMAKE_SOURCE_DIR}/cmake/templates/kernel/CMakeLists.registry.txt
         DESTINATION etc/cmake/kernel)
+
+# Workspace layout + rafdb metadata sync (run last, after all file installs).
+# Creates dirs only; does not touch existing rafdb data files. etc/config.json only if missing.
+install(CODE "
+  if(NOT \"\$ENV{DESTDIR}\" STREQUAL \"\")
+    set(_tpb_install_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
+  else()
+    set(_tpb_install_root \"\${CMAKE_INSTALL_PREFIX}\")
+  endif()
+  file(MAKE_DIRECTORY
+    \"\${_tpb_install_root}/etc\"
+    \"\${_tpb_install_root}/rafdb/task_batch\"
+    \"\${_tpb_install_root}/rafdb/kernel\"
+    \"\${_tpb_install_root}/rafdb/task\"
+    \"\${_tpb_install_root}/rafdb/log\"
+    \"\${_tpb_install_root}/rafdb/runtime_environment\")
+  if(NOT EXISTS \"\${_tpb_install_root}/etc/config.json\")
+    file(WRITE \"\${_tpb_install_root}/etc/config.json\"
+      \"{\\n    \\\"name\\\": \\\"default\\\"\\n}\\n\")
+  endif()
+")
+
+# Sync build-tree rafdb metadata (kernel/, runtime_environment/) into TPB_HOME.
+# Skipped for --component installs. Does not read or write TPB_WORKSPACE.
+install(CODE "
+  set(TBP_BUILD_DIR \"${CMAKE_BINARY_DIR}\")
+  set(TPB_INSTALL_RAFDB \"${TPB_INSTALL_RAFDB}\")
+")
+install(SCRIPT "${CMAKE_SOURCE_DIR}/cmake/TPBenchInstallRafdb.cmake")
 
 # Copy YAML and kernel templates to build/etc for build-tree testing
 add_custom_target(copy_yaml_files ALL

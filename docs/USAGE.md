@@ -40,6 +40,26 @@ $ make
 
 Note: SIMD options require compiler and target platform support for the corresponding instruction sets. When enabling AVX-512 or AVX2, it is recommended to also add the `-march=native` compilation option for optimal performance.
 
+**3) Install to TPB_HOME**
+
+Install binaries, libraries, and templates under **`TPB_HOME`** (the TPBench installation root). If **`TPB_HOME`** is not set in the environment, the install sync step defaults to **`$HOME/.tpbench`** and prints a status notice.
+
+```bash
+export TPB_HOME="${TPB_HOME:-$HOME/.tpbench}"
+cmake --build build
+cmake --install build --prefix "${TPB_HOME}"
+```
+
+Post-build steps write kernel compile metadata and the build-time runtime environment snapshot into the **build tree** (`build/rafdb/`). On a full **`cmake --install`** (not **`--component tpbench_kernels`**), TPBench copies only **`rafdb/kernel/`** and **`rafdb/runtime_environment/`** into **`$TPB_HOME/rafdb/`**, and merges **`runtime_environment.base_id`** into **`$TPB_HOME/etc/config.json`**. Run logs and benchmark records under **`rafdb/task/`**, **`rafdb/task_batch/`**, and **`rafdb/log/`** are not copied.
+
+| Situation | Behavior |
+| -------- | -------- |
+| `$TPB_HOME/rafdb/` has no `.tpbe`/`.tpbr` data | Copy metadata from the build tree |
+| `$TPB_HOME/rafdb/` already has data in a metadata domain | Skip overwrite for that domain; copy only into empty domains. Use **`TPB_INSTALL_RAFDB=YES`** to backup and replace |
+| Force or disable | **`TPB_INSTALL_RAFDB=YES`** or **`-DTPB_INSTALL_RAFDB=YES`** to always backup and copy; **`NO`** to never copy |
+
+**`TPB_WORKSPACE`** is not read or modified by the install step. Use **`TPB_WORKSPACE`** separately when running benchmarks to store run results. **`cmake --install --prefix`** should match **`TPB_HOME`**; a warning is printed if they differ.
+
 # 2 Use tpbcli
 
 ## 2.1 Introduction

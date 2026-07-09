@@ -56,6 +56,16 @@ add_test(
 set_tests_properties(integration.C5.1_kernel_list_registry PROPERTIES
     LABELS "integration")
 
+# --- Integration: rafdb metadata install sync (Pack C6) ---
+if(TARGET tpbk_stream)
+    add_test(
+        NAME integration.C6.1_install_rafdb_sync
+        COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_install_rafdb_sync.sh"
+    )
+    set_tests_properties(integration.C6.1_install_rafdb_sync PROPERTIES
+        LABELS "integration")
+endif()
+
 # Aggregate targets (tri-record only when stream kernel is in the build)
 set(_tpb_integration_depends "")
 if(TARGET tpbk_stream)

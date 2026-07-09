@@ -20,6 +20,15 @@
 
 #define TPBCLI_DB_DUMP_DEFAULT_COUNT 20
 
+/*
+ * Iterate .tpbe window indices: latest (-n, step=-1) starts at hi;
+ * oldest (-N, step=1) starts at lo. Matches tpbcli-database-ls.c.
+ */
+#define TPBCLI_DUMP_TPBE_FOREACH(i, lo, hi, step, k)                          \
+    for ((i) = ((step) < 0 ? (hi) : (lo)), (k) = 0;                          \
+         (step) > 0 ? ((i) <= (hi)) : ((i) >= (lo));                          \
+         (i) += (step), (k)++)
+
 /* Local Function Prototypes */
 
 static void compute_window(int total, int count, int from_oldest,
@@ -598,7 +607,10 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
         size_t elem_size;
         const uint8_t *blob;
 
-        if (dsz == 0 || off + dsz > datasize) {
+        if (dsz == 0) {
+            continue;
+        }
+        if (off + dsz > datasize) {
             break;
         }
         blob = base + off;
@@ -863,7 +875,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain,
         compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "(%d of %d entries)\n", nshow, n);
-        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
+        TPBCLI_DUMP_TPBE_FOREACH(i, lo, hi, step, k) {
             char p[80];
             tpb_datetime_str_t ts;
 
@@ -903,7 +915,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain,
         compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "(%d of %d entries)\n", nshow, n);
-        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
+        TPBCLI_DUMP_TPBE_FOREACH(i, lo, hi, step, k) {
             char p[80];
 
             snprintf(p, sizeof(p), "entry[%d].kernel_id", k);
@@ -935,7 +947,7 @@ dump_tpbe_domain(const char *workspace, uint8_t domain,
         compute_window(n, count, from_oldest, &lo, &hi, &step, &nshow);
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "(%d of %d entries)\n", nshow, n);
-        for (i = lo, k = 0; step > 0 ? i <= hi : i >= hi; i += step, k++) {
+        TPBCLI_DUMP_TPBE_FOREACH(i, lo, hi, step, k) {
             char p[96];
             tpb_datetime_str_t ts;
 
@@ -1003,11 +1015,15 @@ dump_tpbe_domain(const char *workspace, uint8_t domain,
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                    "(%d task entry points shown / %d total / %d rows)\n",
                    nshow, nvis, n);
-        for (i = lo, k = 0; vis_idx != NULL && (step > 0 ? i <= hi : i >= hi);
-             i += step, k++) {
+        TPBCLI_DUMP_TPBE_FOREACH(i, lo, hi, step, k) {
             char p[96];
             tpb_datetime_str_t ts;
-            int src = vis_idx[i];
+            int src;
+
+            if (vis_idx == NULL) {
+                break;
+            }
+            src = vis_idx[i];
 
             snprintf(p, sizeof(p), "entry[%d].task_record_id", k);
             dump_print_kv_hex20(p, e[src].task_record_id);

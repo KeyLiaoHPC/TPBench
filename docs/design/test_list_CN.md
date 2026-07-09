@@ -131,7 +131,7 @@
 | B4.20 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -i X -e` 报告 `-i`/`-e` 冲突。 |
 | B4.21 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -dk` 报告 domain 冲突。 |
 | B4.22 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -e` 输出 rtenv `.tpbe` 头。 |
-| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 0` 输出 rtenv `.tpbr` Metadata。 |
+| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` Metadata 与 Record Data（跳过 `data_size == 0` 的 header）。 |
 | B4.24 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dk -e -n 3 -N 3` 报告 count 冲突。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |
 | B5.2 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel get` 不修改 kernel.tpbe entry 数量。 |

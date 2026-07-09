@@ -9,8 +9,10 @@ set(_tpb_env_cmd ${CMAKE_COMMAND} -E env)
 if(DEFINED TPB_HOME AND NOT TPB_HOME STREQUAL "")
     list(APPEND _tpb_env_cmd TPB_HOME=${TPB_HOME})
 endif()
-if(DEFINED ENV{TPB_WORKSPACE})
+if(DEFINED ENV{TPB_WORKSPACE} AND NOT "$ENV{TPB_WORKSPACE}" STREQUAL "")
     list(APPEND _tpb_env_cmd TPB_WORKSPACE=$ENV{TPB_WORKSPACE})
+elseif(DEFINED TPB_HOME AND NOT TPB_HOME STREQUAL "")
+    list(APPEND _tpb_env_cmd TPB_WORKSPACE=${TPB_HOME})
 endif()
 
 execute_process(
