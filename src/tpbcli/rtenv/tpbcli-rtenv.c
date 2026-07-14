@@ -247,6 +247,18 @@ _sf_emit_rtenv_help(const tpbcli_argnode_t *node, FILE *out)
     fprintf(out, "  list, ls     List RTEnv entries and show activated ID.\n");
     fprintf(out, "  show         Show merged attributes, applications, and variables.\n");
     fprintf(out, "  load         Output shell exports for eval/source.\n\n");
+    fprintf(out, "Create options (new|create):\n");
+    fprintf(out, "  -n, --name                 Environment name\n");
+    fprintf(out, "  -N, --note                 Environment note\n");
+    fprintf(out, "  -app, --application        Add application (-n name -v version -N note)\n");
+    fprintf(out, "  -evo, --env-var-overwrite  Add variable (on_set=overwrite; -k -v)\n");
+    fprintf(out, "  -evp, --env-var-prepend    Add variable (on_set=prepend; -k -v)\n");
+    fprintf(out, "  -eva, --env-var-append     Add variable (on_set=append; -k -v)\n");
+    fprintf(out, "  -k, --key                  Variable key (after -evo|-evp|-eva)\n");
+    fprintf(out, "  -v, --value                Variable value or application version\n");
+    fprintf(out, "  -o, --output-file          Write template only (no rafdb write)\n");
+    fprintf(out, "  -f, --input-file           Create from template file\n");
+    fprintf(out, "      --inherit-from         Parent RTEnv id or name\n\n");
     fprintf(out, "Use \"tpbcli rtenv <command> --help\" for command-specific help.\n");
 }
 

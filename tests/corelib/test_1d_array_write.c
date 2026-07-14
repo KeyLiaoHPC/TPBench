@@ -151,9 +151,9 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
                 nout, rattr.noutput);
         ret = 1;
     }
-    if (rattr.nheader != rattr.ninput + rattr.noutput) {
+    if (rattr.nheader != rattr.ninput + rattr.noutput + 3u) {
         fprintf(stderr, "  FAIL: nheader expected %u, got %u\n",
-                rattr.ninput + rattr.noutput, rattr.nheader);
+                rattr.ninput + rattr.noutput + 3u, rattr.nheader);
         ret = 1;
     }
 
@@ -449,9 +449,9 @@ test_write_read_skip_unalloc_output(void)
                     rattr.noutput);
                 ret = 1;
             }
-            if (rattr.nheader != rattr.ninput + rattr.noutput) {
+            if (rattr.nheader != rattr.ninput + rattr.noutput + 3u) {
                 fprintf(stderr, "  FAIL: nheader expected %u, got %u\n",
-                    rattr.ninput + rattr.noutput, rattr.nheader);
+                    rattr.ninput + rattr.noutput + 3u, rattr.nheader);
                 ret = 1;
             }
 

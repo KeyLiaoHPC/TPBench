@@ -458,31 +458,48 @@ variables used for later `run` or `benchmark` commands.
 TPBench always requires an active RTEnv. Each **`tpbcli`** link in the main build
 runs post-build **`tpbcli rtenv init-base`**, which appends a **root environment
 snapshot** (`inherit_from == 0`) with the build-time process environment (real
-hostname, timestamp, all `environ` variables as override). The first snapshot uses
-`id == 1` and name `base`; later builds use `base_1`, `base_2`, … and update
-`etc/config.json` **`base_id`** to the new record. Every subsequent
-`tpbcli rtenv new` (alias `create`) must inherit the currently active RTEnv.
+hostname, timestamp, all `environ` variables with `on_set=ignore` and
+`on_get=ignore`). The first snapshot uses `id == 1` and name `base`; later builds
+use `base_1`, `base_2`, … and update `etc/config.json` **`base_id`** to the new
+record. Every subsequent `tpbcli rtenv new` (alias `create`) must inherit the
+currently active RTEnv.
 
 ### 2.4.1 Create a runtime environment
 
 ```bash
-tpbcli rtenv new --name gcc-openmpi --note 'GCC + OpenMPI' \
-  --add-application --name gcc --version 13.2 --note compiler \
-  --add-application --name openmpi --version 5.0.3 --note mpi \
-  --prepend-variable --name PATH --value /opt/gcc/bin \
-  --append-variable --name LD_LIBRARY_PATH --value /opt/gcc/lib64 \
-  --unset-variable --name SOME_VAR_TO_CLEAR
+tpbcli rtenv new -n gcc-openmpi -N 'GCC + OpenMPI' \
+  -app -n gcc -v 13.2 -N compiler \
+  -app -n openmpi -v 5.0.3 -N mpi \
+  -evp -k PATH -v /opt/gcc/bin \
+  -eva -k LD_LIBRARY_PATH -v /opt/gcc/lib64 \
+  -evo -k SOME_VAR -v ''
 ```
 
 A new environment inherits the active RTEnv (override with `--inherit-from
-<id|name>`) and stores only the delta relative to its parent. Variable modes are
-`--variable` (override), `--prepend-variable`, `--append-variable`, and
-`--unset-variable` (`mode=3`).
+<id|name>`) and stores only the delta relative to its parent. Inline variable
+options map to `on_set`: `-evo|--env-var-overwrite`, `-evp|--env-var-prepend`,
+`-eva|--env-var-append` (each followed by `-k` / `-v`). Clear a variable with
+`-evo -k KEY -v ''`. Each variable also has an `on_get` policy
+(`ignore` / `warn` / `fail` / `overwrite`) used when recording the process
+environment at kernel init; template files use `var=<on_get>:<on_set>:...`.
 
 When no application or variable options are provided, `new` opens an editor with
-a template. Editor selection order is `$VISUAL`, `$EDITOR`, `nano`, then `vi`.
-Use `-o <file>` to write the template without changing rafdb, or `-f <file>` to
-create a record from a template file.
+a template, or use `-o <file>` to export the active merged view without
+writing rafdb. Use `-f <file>` to create a record from a template file.
+
+Template format (`-o` / `-f`):
+
+```text
+inherit_from=<id>
+name=<environment_name>
+note=<note>
+application=<name>:<version>:<note>
+var=<on_get>:<on_set>:<key>[:<value_segment>...]
+```
+
+Colon splitting inside `application=` / `var=` is quote-aware (`'...'` or
+`"..."`). Value segments within a key use `:` (PATH-style); keys and segments
+must not contain `;`.
 
 ### 2.4.2 Browse runtime environments
 
@@ -494,8 +511,10 @@ tpbcli rtenv show --name gcc-openmpi
 
 `list` first prints the activated runtime environment ID, or `N/A` when it cannot
 be resolved. `show` merges the delta chain from the base environment to the
-target along `inherit_from` and displays the fully resolved environment. The
-table uses `tpblog_printf_c` proportional columns and wraps long cell content.
+target along `inherit_from` and displays Applications (merged) and Environment
+Variables (merged) tables with `On_set`, `On_get`, `Key`, and `Value` columns.
+The Value column uses `tpblog_printf_c` proportional width and wraps without
+hyphen continuation.
 
 ### 2.4.3 Load a runtime environment
 
@@ -512,17 +531,21 @@ or:
 source <(tpbcli rtenv load --name gcc-openmpi)
 ```
 
-`load` writes `export` / `unset` commands to stdout and exports `TPB_RTENV_ID`;
-logs and diagnostics go to stderr so they do not pollute `eval`. **The runtime
+`load` writes `export` commands to stdout according to each variable's `on_set`
+(`ignore` emits nothing; `overwrite` with empty value emits `export KEY=''`).
+Logs and diagnostics go to stderr so they do not pollute `eval`. **The runtime
 active state is carried solely by `$TPB_RTENV_ID`** (`load` does not write it back
 to `config.json`, which only stores the base environment `base_id`).
 
 Later `tpbcli run` / `benchmark` resolve the active environment from
-`$TPB_RTENV_ID` (falling back to base `0` with a warning when unset), record that
-id in the `runtime_environment_id` foreign key of tbatch/task records, and
-increment the environment's `ntbatch` / `ntask` counters. Variables passed via
-`--kenvs` override same-named variables at runtime and are recorded as
-environment-sourced input parameters in the task record.
+`$TPB_RTENV_ID` (falling back to base with a warning when unset), increment the
+environment's `ntbatch` / `ntask` counters, and record the **actual process
+environment** on each task via three meta headers:
+`environment_variable_key`, `environment_variable_count`, and
+`environment_variable_value` (captured at `tpb_k_corelib_init` using each
+variable's `on_get` policy). Variables passed via `--kenvs` are applied using
+`on_set` when the key is declared in the active merged RTEnv; otherwise they are
+set directly and still appear in the task environment snapshot.
 
 ## 2.5 tpbcli kernel
 

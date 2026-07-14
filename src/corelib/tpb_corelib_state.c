@@ -169,6 +169,20 @@ tpb_corelib_init(const char *tpb_workspace_path)
 int
 tpb_k_corelib_init(const char *tpb_workspace_path)
 {
-    return _tpb_init_corelib(tpb_workspace_path,
-        TPB_CORELIB_CTX_CALLER_KERNEL);
+    char workspace[PATH_MAX];
+    int err;
+
+    err = _tpb_init_corelib(tpb_workspace_path,
+                            TPB_CORELIB_CTX_CALLER_KERNEL);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
+    /* Snapshot environ after driver/kenvs applied; used when writing task.tpbr. */
+    err = tpb_raf_resolve_workspace(workspace, sizeof(workspace));
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_MISC, err, NULL);
+    }
+    err = tpb_rtenv_capture_environ_snapshot(workspace);
+    TPB_PROPAGATE(TPB_MOD_MISC, err, "capture environ for task");
+    return TPBE_SUCCESS;
 }

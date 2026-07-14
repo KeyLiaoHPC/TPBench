@@ -205,14 +205,19 @@ tpbcli_rtenv_load(int argc, char **argv, const char *workspace)
                        merged.vars[i].key);
             TPB_FAIL(TPB_MOD_CLI_RTENV, TPBE_CLI_FAIL, NULL);
         }
-        if (merged.vars[i].mode == 3) {
-            printf("unset %s\n", merged.vars[i].key);
-        } else if (merged.vars[i].mode == 1) {
+        switch (merged.vars[i].on_set) {
+        case TPB_RTENV_ON_SET_IGNORE:
+            break;
+        case TPB_RTENV_ON_SET_PREPEND:
             _sf_emit_prepend(merged.vars[i].key, merged.vars[i].value);
-        } else if (merged.vars[i].mode == 2) {
+            break;
+        case TPB_RTENV_ON_SET_APPEND:
             _sf_emit_append(merged.vars[i].key, merged.vars[i].value);
-        } else {
+            break;
+        case TPB_RTENV_ON_SET_OVERWRITE:
+        default:
             _sf_emit_export(merged.vars[i].key, merged.vars[i].value);
+            break;
         }
     }
     return TPBE_SUCCESS;

@@ -7,6 +7,7 @@
 #define TPBCLI_RTENV_TEMPLATE_H
 
 #include <stdint.h>
+#include <stdio.h>
 
 #define TPBCLI_RTENV_MAX_APP   32
 #define TPBCLI_RTENV_MAX_VAR   128
@@ -20,7 +21,8 @@ typedef struct tpbcli_rtenv_app {
 typedef struct tpbcli_rtenv_var {
     char key[256];
     char value[4096];
-    uint32_t mode;
+    uint32_t on_set;
+    uint32_t on_get;
 } tpbcli_rtenv_var_t;
 
 typedef struct tpbcli_rtenv_spec {
@@ -43,11 +45,14 @@ typedef struct tpbcli_rtenv_merged {
 } tpbcli_rtenv_merged_t;
 
 int tpbcli_rtenv_write_template(const tpbcli_rtenv_spec_t *spec, FILE *fp);
+int tpbcli_rtenv_write_active_template(const char *workspace, FILE *fp);
 int tpbcli_rtenv_parse_template_file(const char *path, tpbcli_rtenv_spec_t *spec,
                                      int *error_line);
 int tpbcli_rtenv_resolve_active_id_cli(const char *workspace, int32_t *id_out);
 int tpbcli_rtenv_merge_chain(const char *workspace, int32_t target_id,
                              tpbcli_rtenv_merged_t *out);
+int tpbcli_rtenv_merged_to_spec(const tpbcli_rtenv_merged_t *merged,
+                                tpbcli_rtenv_spec_t *spec);
 int tpbcli_rtenv_write_record(const char *workspace, int32_t id,
                               const char *name, const char *note,
                               int32_t inherit_from,

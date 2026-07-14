@@ -1884,6 +1884,76 @@ int main(void) {
 
 ---
 
+## Runtime Environment (RTEnv)
+
+### `on_set` / `on_get` encodings
+
+| Macro | Value | Template string |
+|-------|-------|-----------------|
+| `TPB_RTENV_ON_SET_IGNORE` | 0 | `ignore` |
+| `TPB_RTENV_ON_SET_OVERWRITE` | 1 | `overwrite` |
+| `TPB_RTENV_ON_SET_PREPEND` | 2 | `prepend` |
+| `TPB_RTENV_ON_SET_APPEND` | 3 | `append` |
+| `TPB_RTENV_ON_GET_IGNORE` | 0 | `ignore` |
+| `TPB_RTENV_ON_GET_WARN` | 1 | `warn` |
+| `TPB_RTENV_ON_GET_FAIL` | 2 | `fail` |
+| `TPB_RTENV_ON_GET_OVERWRITE` | 3 | `overwrite` |
+
+`on_set` applies when loading an RTEnv or applying `--kenvs`. `on_get` applies when
+capturing the process environment at `tpb_k_corelib_init`.
+
+### `tpb_rtenv_merge_chain`
+
+```c
+int tpb_rtenv_merge_chain(const char *workspace, int32_t target_id,
+                          tpb_rtenv_merged_t *out);
+```
+
+Merge the `inherit_from` chain for `target_id` into `out`.
+
+### `tpb_rtenv_apply_onset`
+
+```c
+int tpb_rtenv_apply_onset(const char *key, const char *record_val,
+                          uint32_t on_set, char *out, size_t outlen);
+```
+
+Apply `on_set` to produce the effective value (shared by `rtenv load` and `--kenvs`).
+
+### `tpb_rtenv_capture_environ_snapshot`
+
+```c
+int tpb_rtenv_capture_environ_snapshot(const char *workspace);
+void tpb_rtenv_clear_environ_snapshot(void);
+```
+
+Scan `environ` at kernel init using active merged RTEnv `on_get` policies. Cached until
+cleared or overwritten.
+
+### `tpb_rtenv_append_env_snapshot_headers`
+
+```c
+int tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
+                                          uint32_t *nheader,
+                                          void **data, uint64_t *data_size);
+```
+
+Append `environment_variable_key`, `environment_variable_count`, and
+`environment_variable_value` meta headers from the cached snapshot.
+
+### Task environment headers
+
+Each task record includes three fixed meta headers (even when empty):
+
+- `environment_variable_key` — `;`-joined key names
+- `environment_variable_count` — segment count per key (`:` splits values within a key)
+- `environment_variable_value` — `;`-joined value segments
+
+Task/tbatch attributes no longer store `runtime_environment_id`; the snapshot headers
+are the authoritative environment record.
+
+---
+
 ## Thread Safety
 
 TPBench library functions are generally not thread-safe. Concurrent calls from multiple threads must be synchronized by the caller.

@@ -10,11 +10,17 @@
 #include "tpb-public.h"
 #include "tpbcli-rtenv-template.h"
 
+#define TPBCLI_RTENV_SHOW_GAP 2
+
+static const float s_app_col_ratios[] = { 0.08f, 0.30f, 0.22f, 0.40f };
+static const float s_var_col_ratios[] = { 0.08f, 0.14f, 0.14f, 0.18f, 0.46f };
+
 /* Local Function Prototypes */
 
 static int _sf_parse_selector(int argc, char **argv, const char *workspace,
                               int32_t *id_out);
-static const char *_sf_mode_name(uint32_t mode);
+static const char *_sf_on_set_name(uint32_t v);
+static const char *_sf_on_get_name(uint32_t v);
 
 static int
 _sf_parse_selector(int argc, char **argv, const char *workspace,
@@ -39,7 +45,7 @@ _sf_parse_selector(int argc, char **argv, const char *workspace,
             }
             if (tpbcli_rtenv_find_id_by_name(workspace, argv[++i], &id) !=
                 TPBE_SUCCESS) {
-                TPB_FAIL(TPB_MOD_CLI_RTENV, TPBE_LIST_NOT_FOUND, "RTEnv name");
+                TPB_FAIL(TPB_MOD_CLI_RTENV, TPBE_LIST_NOT_FOUND, "RTEnv id");
             }
             have_id = 1;
         }
@@ -66,13 +72,25 @@ _sf_parse_selector(int argc, char **argv, const char *workspace,
 }
 
 static const char *
-_sf_mode_name(uint32_t mode)
+_sf_on_set_name(uint32_t v)
 {
-    switch (mode) {
-    case 0: return "override";
-    case 1: return "prepend";
-    case 2: return "append";
-    case 3: return "unset";
+    switch (v) {
+    case TPB_RTENV_ON_SET_IGNORE: return "ignore";
+    case TPB_RTENV_ON_SET_OVERWRITE: return "overwrite";
+    case TPB_RTENV_ON_SET_PREPEND: return "prepend";
+    case TPB_RTENV_ON_SET_APPEND: return "append";
+    default: return "?";
+    }
+}
+
+static const char *
+_sf_on_get_name(uint32_t v)
+{
+    switch (v) {
+    case TPB_RTENV_ON_GET_IGNORE: return "ignore";
+    case TPB_RTENV_ON_GET_WARN: return "warn";
+    case TPB_RTENV_ON_GET_FAIL: return "fail";
+    case TPB_RTENV_ON_GET_OVERWRITE: return "overwrite";
     default: return "?";
     }
 }
@@ -87,6 +105,9 @@ tpbcli_rtenv_show(int argc, char **argv, const char *workspace)
     int count = 0;
     int i;
     int err;
+    const char *hdrs[4];
+    char idbuf[16];
+    uint32_t wrap_flags[5];
 
     err = _sf_parse_selector(argc, argv, workspace, &id);
     if (err != TPBE_SUCCESS) {
@@ -135,28 +156,62 @@ tpbcli_rtenv_show(int argc, char **argv, const char *workspace)
     free(entries);
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Applications (merged):\n");
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Name\tVersion\tNote\n");
+               "Applications (merged)\n");
+    hdrs[0] = "ID";
+    hdrs[1] = "Name";
+    hdrs[2] = "Version";
+    hdrs[3] = "Note";
+    tpblog_printf_c(s_app_col_ratios, 4, TPBCLI_RTENV_SHOW_GAP, hdrs);
     for (i = 0; i < merged.napp; i++) {
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                   TPBLOG_FLAG_DIRECT, "%s\t%s\t%s\n",
-                   merged.apps[i].name, merged.apps[i].version,
-                   merged.apps[i].note);
+        char row[4][256];
+
+        snprintf(idbuf, sizeof(idbuf), "%d", i + 1);
+        snprintf(row[0], sizeof(row[0]), "%5s", idbuf);
+        snprintf(row[1], sizeof(row[1]), "%s", merged.apps[i].name);
+        snprintf(row[2], sizeof(row[2]), "%s", merged.apps[i].version);
+        snprintf(row[3], sizeof(row[3]), "%s", merged.apps[i].note);
+        hdrs[0] = row[0];
+        hdrs[1] = row[1];
+        hdrs[2] = row[2];
+        hdrs[3] = row[3];
+        tpblog_printf_c(s_app_col_ratios, 4, TPBCLI_RTENV_SHOW_GAP, hdrs);
     }
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "\nEnvironment variables (merged):\n");
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Key\tMode\tValue\n");
-    for (i = 0; i < merged.nenv; i++) {
-        if (merged.vars[i].mode == 3) {
-            continue;
+               "\nEnvironment Variables (merged)\n");
+    {
+        const char *vhdrs[5];
+
+        vhdrs[0] = "ID";
+        vhdrs[1] = "On_set";
+        vhdrs[2] = "On_get";
+        vhdrs[3] = "Key";
+        vhdrs[4] = "Value";
+        tpblog_printf_c(s_var_col_ratios, 5, TPBCLI_RTENV_SHOW_GAP, vhdrs);
+        wrap_flags[0] = TPBLOG_WRAP_HYPHEN;
+        wrap_flags[1] = TPBLOG_WRAP_HYPHEN;
+        wrap_flags[2] = TPBLOG_WRAP_HYPHEN;
+        wrap_flags[3] = TPBLOG_WRAP_HYPHEN;
+        wrap_flags[4] = TPBLOG_WRAP_NO_HYPHEN;
+        for (i = 0; i < merged.nenv; i++) {
+            char row[5][4096];
+
+            snprintf(idbuf, sizeof(idbuf), "%d", i + 1);
+            snprintf(row[0], sizeof(row[0]), "%5s", idbuf);
+            snprintf(row[1], sizeof(row[1]), "%s",
+                     _sf_on_set_name(merged.vars[i].on_set));
+            snprintf(row[2], sizeof(row[2]), "%s",
+                     _sf_on_get_name(merged.vars[i].on_get));
+            snprintf(row[3], sizeof(row[3]), "%s", merged.vars[i].key);
+            snprintf(row[4], sizeof(row[4]), "%s", merged.vars[i].value);
+            vhdrs[0] = row[0];
+            vhdrs[1] = row[1];
+            vhdrs[2] = row[2];
+            vhdrs[3] = row[3];
+            vhdrs[4] = row[4];
+            tpblog_printf_c_flags(s_var_col_ratios, 5, TPBCLI_RTENV_SHOW_GAP,
+                                  vhdrs, wrap_flags);
         }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                   TPBLOG_FLAG_DIRECT, "%s\t%s\t%s\n",
-                   merged.vars[i].key, _sf_mode_name(merged.vars[i].mode),
-                   merged.vars[i].value);
     }
 
     tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,

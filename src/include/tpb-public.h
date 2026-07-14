@@ -830,6 +830,19 @@ void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
 void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
                      const char *const *cells);
 
+/** @brief Wrap long cell text with hyphenation when breaking mid-word (default). */
+#define TPBLOG_WRAP_HYPHEN    0u
+/** @brief Wrap long cell text without appending a hyphen at line breaks. */
+#define TPBLOG_WRAP_NO_HYPHEN 1u
+
+/**
+ * @brief Like tpblog_printf_c with per-column wrap behaviour control.
+ * @param wrap_flags Per-column flags: TPBLOG_WRAP_HYPHEN or TPBLOG_WRAP_NO_HYPHEN.
+ */
+void tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
+                           const char *const *cells,
+                           const uint32_t *wrap_flags);
+
 /**
  * @brief Set output formatting arguments for CLI display.
  * @param unit_cast Enable unit casting (0 or 1).
@@ -939,7 +952,6 @@ typedef struct tbatch_attr {
     uint32_t nscore;              /**< Score records in this batch */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
     uint32_t nheader;             /**< Number of headers */
-    int32_t  runtime_environment_id; /**< Active RTEnv FK (tpbr reserve bytes 0-3) */
     tpb_meta_header_t *headers;   /**< Header array */
 } tbatch_attr_t;
 
@@ -954,8 +966,7 @@ typedef struct tbatch_entry {
     uint32_t ntask;               /**< Number of tasks */
     uint32_t nscore;              /**< Number of scores */
     uint32_t batch_type;          /**< 0=run, 1=benchmark */
-    int32_t  runtime_environment_id; /**< Active RTEnv FK (reserve bytes 0-3) */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 4]; /**< Reserved tail */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE]; /**< Reserved tail */
 } tbatch_entry_t;
 
 /** @brief Kernel full attributes (.tpbr meta section) */
@@ -1005,7 +1016,6 @@ typedef struct task_attr {
     uint32_t ninput;                  /**< Input argument headers */
     uint32_t noutput;                 /**< Output metric headers */
     uint32_t nheader;                 /**< Total headers */
-    int32_t  runtime_environment_id;  /**< Active RTEnv FK (tpbr reserve bytes 0-3) */
     uint32_t reserve;                 /**< Padding */
     tpb_meta_header_t *headers;       /**< Header array */
 } task_attr_t;
@@ -1021,8 +1031,7 @@ typedef struct task_entry {
     uint32_t exit_code;               /**< Exit code */
     uint32_t handle_index;            /**< Handle index */
     unsigned char derive_to[20];         /**< Merge target: merged TaskRecordID, or zero */
-    int32_t  runtime_environment_id;  /**< Active RTEnv FK (reserve bytes 0-3) */
-    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20 - 4]; /**< Reserved tail */
+    unsigned char reserve[TPB_RAF_RESERVE_SIZE - 20]; /**< Reserved tail */
 } task_entry_t;
 
 /* ===== rafdb Workspace API ===== */
@@ -1314,6 +1323,37 @@ void tpb_raf_free_headers(tpb_meta_header_t *headers,
 #define TPB_RAF_RTENV_NOTE_LEN     256
 #define TPB_RAF_RTENV_RESERVE_LEN  1024
 #define TPB_RAF_RTENV_APP_STR_LEN  64
+#define TPB_RTENV_MERGED_MAX_VAR   512
+
+/** on_set: applied at rtenv load and for --kenvs when key is declared. */
+#define TPB_RTENV_ON_SET_IGNORE    0u
+#define TPB_RTENV_ON_SET_OVERWRITE 1u
+#define TPB_RTENV_ON_SET_PREPEND   2u
+#define TPB_RTENV_ON_SET_APPEND    3u
+
+/** on_get: applied when scanning environ at tpb_k_corelib_init. */
+#define TPB_RTENV_ON_GET_IGNORE    0u
+#define TPB_RTENV_ON_GET_WARN      1u
+#define TPB_RTENV_ON_GET_FAIL      2u
+#define TPB_RTENV_ON_GET_OVERWRITE 3u
+
+/** @brief One merged RTEnv variable (inherit chain resolved). */
+typedef struct tpb_rtenv_merged_var {
+    char     key[256];
+    char     value[4096];
+    uint32_t on_set;
+    uint32_t on_get;
+} tpb_rtenv_merged_var_t;
+
+/** @brief Merged application + variable view for active RTEnv chain. */
+typedef struct tpb_rtenv_merged {
+    char     apps_name[32][64];
+    char     apps_version[32][64];
+    char     apps_note[32][64];
+    int      napp;
+    tpb_rtenv_merged_var_t vars[TPB_RTENV_MERGED_MAX_VAR];
+    int      nenv;
+} tpb_rtenv_merged_t;
 
 /** @brief Runtime environment .tpbe row (no nheader field) */
 typedef struct tpb_raf_rtenv_entry {
@@ -1473,6 +1513,51 @@ int tpb_rtenv_ensure_base_env(const char *workspace, int32_t *id_out);
  * @return 0 on success, error code otherwise
  */
 int tpb_rtenv_resolve_active_id(const char *workspace, int32_t *id_out);
+
+/**
+ * @brief Merge RTEnv inherit chain for target id (root to leaf).
+ */
+int tpb_rtenv_merge_chain(const char *workspace, int32_t target_id,
+                          tpb_rtenv_merged_t *out);
+
+/**
+ * @brief Find merged variable by key; returns NULL if absent.
+ */
+const tpb_rtenv_merged_var_t *
+tpb_rtenv_merged_find(const tpb_rtenv_merged_t *merged, const char *key);
+
+/**
+ * @brief Apply on_set to combine record value with current process value.
+ * @param key Env var name (for prepend/append reads getenv).
+ * @param record_val Value from RTEnv record.
+ * @param on_set One of TPB_RTENV_ON_SET_*.
+ * @param out Output buffer for resulting value.
+ * @param outlen Size of out.
+ * @return TPBE_SUCCESS, or TPBE_CLI_FAIL if on_set is ignore (out unchanged).
+ */
+int tpb_rtenv_apply_onset(const char *key, const char *record_val,
+                           uint32_t on_set, char *out, size_t outlen);
+
+/**
+ * @brief Scan process environ at kernel init; apply on_get vs active RTEnv.
+ * Snapshot is stored until tpb_rtenv_clear_environ_snapshot().
+ */
+int tpb_rtenv_capture_environ_snapshot(const char *workspace);
+
+/** @brief Release environ snapshot buffers (safe if none). */
+void tpb_rtenv_clear_environ_snapshot(void);
+
+/**
+ * @brief Append three environment_variable_* meta headers from snapshot.
+ * @param headers Reallocated header array (may be NULL if only env headers).
+ * @param nheader In/out header count.
+ * @param rec_data Reallocated payload.
+ * @param rec_datasize In/out payload size.
+ */
+int tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
+                                          uint32_t *nheader,
+                                          void **rec_data,
+                                          uint64_t *rec_datasize);
 
 /* ===== rafdb ID Generation ===== */
 

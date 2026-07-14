@@ -969,11 +969,12 @@ test_rtenv_record_roundtrip(void)
 {
     tpb_raf_rtenv_entry_t ent;
     tpb_raf_rtenv_attr_t attr;
-    tpb_meta_header_t hdrs[4];
+    tpb_meta_header_t hdrs[5];
     char app_data[192];
     char key_data[] = "PATH";
     char val_data[] = "/usr/bin";
-    uint32_t mode_data = 0;
+    uint32_t on_set_data = TPB_RTENV_ON_SET_OVERWRITE;
+    uint32_t on_get_data = TPB_RTENV_ON_GET_OVERWRITE;
     unsigned char payload[256];
     size_t off = 0;
     tpb_meta_header_t *rheaders = NULL;
@@ -1000,7 +1001,7 @@ test_rtenv_record_roundtrip(void)
     attr.inherit_from = ent.inherit_from;
     attr.napp = 1;
     attr.nenv = 1;
-    attr.nheader = 4;
+    attr.nheader = 5;
 
     memset(app_data, 0, sizeof(app_data));
     snprintf(app_data, 64, "gcc");
@@ -1036,7 +1037,14 @@ test_rtenv_record_roundtrip(void)
     hdrs[3].data_size = sizeof(uint32_t);
     hdrs[3].type_bits = (uint32_t)(TPB_UINT32_T & TPB_PARM_TYPE_MASK);
     hdrs[3].block_size = TPB_RAF_HDR_FIXED_SIZE;
-    snprintf(hdrs[3].name, TPBM_NAME_STR_MAX_LEN, "mode[0]");
+    snprintf(hdrs[3].name, TPBM_NAME_STR_MAX_LEN, "on_set[0]");
+
+    hdrs[4].ndim = 1;
+    hdrs[4].dimsizes[0] = sizeof(uint32_t);
+    hdrs[4].data_size = sizeof(uint32_t);
+    hdrs[4].type_bits = (uint32_t)(TPB_UINT32_T & TPB_PARM_TYPE_MASK);
+    hdrs[4].block_size = TPB_RAF_HDR_FIXED_SIZE;
+    snprintf(hdrs[4].name, TPBM_NAME_STR_MAX_LEN, "on_get[0]");
 
     memcpy(payload + off, app_data, sizeof(app_data));
     off += sizeof(app_data);
@@ -1044,8 +1052,10 @@ test_rtenv_record_roundtrip(void)
     off += sizeof(key_data);
     memcpy(payload + off, val_data, sizeof(val_data));
     off += sizeof(val_data);
-    memcpy(payload + off, &mode_data, sizeof(mode_data));
-    off += sizeof(mode_data);
+    memcpy(payload + off, &on_set_data, sizeof(on_set_data));
+    off += sizeof(on_set_data);
+    memcpy(payload + off, &on_get_data, sizeof(on_get_data));
+    off += sizeof(on_get_data);
 
     err = tpb_raf_record_write_rtenv(g_test_dir, &attr, hdrs,
                                      payload, (uint64_t)off);
@@ -1061,7 +1071,7 @@ test_rtenv_record_roundtrip(void)
         return 1;
     }
 
-    if (attr.nheader != 4 || attr.napp != 1 || attr.nenv != 1) {
+    if (attr.nheader != 5 || attr.napp != 1 || attr.nenv != 1) {
         fail = 1;
     }
     if (strcmp(rheaders[0].name, "application") != 0) {
@@ -1073,7 +1083,10 @@ test_rtenv_record_roundtrip(void)
     if (strcmp(rheaders[2].name, "value[0]") != 0) {
         fail = 1;
     }
-    if (strcmp(rheaders[3].name, "mode[0]") != 0) {
+    if (strcmp(rheaders[3].name, "on_set[0]") != 0) {
+        fail = 1;
+    }
+    if (strcmp(rheaders[4].name, "on_get[0]") != 0) {
         fail = 1;
     }
     if (rsize != (uint64_t)off) {

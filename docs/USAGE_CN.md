@@ -344,28 +344,42 @@ Environment Modules 风格的软件栈和环境变量。
 TPBench 强制要求始终存在一个激活 RTEnv。主工程每次链接 **`tpbcli`** 时，
 post-build 会执行 **`tpbcli rtenv init-base`**，追加一条**根环境快照**
 （`inherit_from == 0`），写入编译进程的真实 hostname、时间戳及全部 `environ`
-变量（均为 override）。首次快照为 `id == 1`、name `base`；再次编译则生成
-`base_1`、`base_2` … 并更新 `etc/config.json` 的 **`base_id`**。此后每次
-`tpbcli rtenv new`（别名 `create`）都必须继承当前激活的 RTEnv。
+变量（`on_set=ignore`、`on_get=ignore`）。首次快照为 `id == 1`、name `base`；
+再次编译则生成 `base_1`、`base_2` … 并更新 `etc/config.json` 的 **`base_id`**。
+此后每次 `tpbcli rtenv new`（别名 `create`）都必须继承当前激活的 RTEnv。
 
 ### 2.4.1 创建运行时环境
 
 ```bash
-tpbcli rtenv new --name gcc-openmpi --note 'GCC + OpenMPI' \
-  --add-application --name gcc --version 13.2 --note compiler \
-  --add-application --name openmpi --version 5.0.3 --note mpi \
-  --prepend-variable --name PATH --value /opt/gcc/bin \
-  --append-variable --name LD_LIBRARY_PATH --value /opt/gcc/lib64 \
-  --unset-variable --name SOME_VAR_TO_CLEAR
+tpbcli rtenv new -n gcc-openmpi -N 'GCC + OpenMPI' \
+  -app -n gcc -v 13.2 -N compiler \
+  -app -n openmpi -v 5.0.3 -N mpi \
+  -evp -k PATH -v /opt/gcc/bin \
+  -eva -k LD_LIBRARY_PATH -v /opt/gcc/lib64 \
+  -evo -k SOME_VAR -v ''
 ```
 
 新环境继承当前激活 RTEnv（可用 `--inherit-from <id|name>` 显式指定父环境），只记录
-相对父环境的增量；变量操作模式含 `--variable`（覆盖）、`--prepend-variable`（前置）、
-`--append-variable`（追加）、`--unset-variable`（清除，`mode=3`）。
+相对父环境的增量。命令行变量选项：`-evo|--env-var-overwrite`、
+`-evp|--env-var-prepend`、`-eva|--env-var-append`（各跟 `-k` / `-v`）。清空变量用
+`-evo -k KEY -v ''`。`on_get` 在 kernel init 采集时生效；模板文件用
+`var=<on_get>:<on_set>:...` 行。
 
-不带应用或变量选项时，`new` 会打开编辑器编辑模板；编辑器选择顺序为
-`$VISUAL`、`$EDITOR`、`nano`、`vi`。使用 `-o <file>` 只输出模板不写入
-rafdb；使用 `-f <file>` 从模板文件创建记录。
+不带应用或变量选项时，`new` 会打开编辑器；`-o <file>` 导出当前 active 合并视图
+（不写入 rafdb）；`-f <file>` 从模板文件创建记录。
+
+模板格式（`-o` / `-f`）：
+
+```text
+inherit_from=<id>
+name=<environment_name>
+note=<note>
+application=<name>:<version>:<note>
+var=<on_get>:<on_set>:<key>[:<value_segment>...]
+```
+
+`application=` / `var=` 内冒号按引号感知切分；同一 key 的 value 段用 `:` 连接，
+key 与段内不得含 `;`。
 
 ### 2.4.2 浏览运行时环境
 
@@ -375,9 +389,10 @@ tpbcli rtenv show -i 1
 tpbcli rtenv show --name gcc-openmpi
 ```
 
-`list` 会先显示当前激活的 runtime environment ID；无法解析时显示
-`N/A`。`show` 会沿 `inherit_from` 链把基础环境到目标环境的增量合并后完整展示。
-列表列宽使用 `tpblog_printf_c` 按终端宽度分配，并在列内换行。
+`list` 会先显示当前激活的 runtime environment ID；无法解析时显示 `N/A`。
+`show` 沿 `inherit_from` 链合并后展示 Applications (merged) 与 Environment
+Variables (merged) 表，列含 `On_set`、`On_get`、`Key`、`Value`；Value 列定宽换行且
+无连字符折行。
 
 ### 2.4.3 加载运行时环境
 
@@ -393,14 +408,16 @@ eval "$(tpbcli rtenv load -i 1)"
 source <(tpbcli rtenv load --name gcc-openmpi)
 ```
 
-`load` 在 stdout 输出 `export` / `unset` 片段并导出 `TPB_RTENV_ID`；日志和错误
-输出到 stderr，避免污染 `eval`。**运行期激活状态只由 `$TPB_RTENV_ID` 承载**
-（`load` 不写回 `config.json`，后者只存基础环境 `base_id`）。
+`load` 按各变量 `on_set` 在 stdout 输出 `export`（`ignore` 不输出；overwrite
+空值输出 `export KEY=''`）；日志到 stderr。**运行期激活状态只由 `$TPB_RTENV_ID`
+承载**（`load` 不写回 `config.json`）。
 
 之后 `tpbcli run` / `benchmark` 按 `$TPB_RTENV_ID` 解析激活环境（未设置时回退
-基础环境 `0` 并告警），把该 id 记入 tbatch/task 的 `runtime_environment_id` 外键，
-并回写该环境的 `ntbatch`/`ntask` 计数。通过 `--kenvs` 传入的变量在运行时覆盖
-同名变量，并作为“环境来源输入参数”记入 task。
+基础环境并告警），回写 RTEnv 的 `ntbatch`/`ntask` 计数，并在每条 task 写入三条
+环境快照 header：`environment_variable_key`、`environment_variable_count`、
+`environment_variable_value`（init 时按 `on_get` 采集全 `environ`）。`--kenvs` 在
+active 合并 RTEnv 中有声明时按该条 `on_set` 合成后注入，否则直接 `setenv`，均进入
+上述三条 header。
 
 ## 2.5 tpbcli kernel
 

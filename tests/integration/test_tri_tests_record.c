@@ -421,7 +421,59 @@ test_benchmark_metric_missing_soft_fail(void)
 }
 
 static int
-test_rtenv_fk_and_counter(void)
+_sf_task_env_has(const char *workspace,
+                 const unsigned char task_id[20],
+                 const char *expect_key,
+                 const char *expect_val)
+{
+    task_attr_t attr;
+    void *data = NULL;
+    uint64_t dsize = 0;
+    int found_key_hdr = 0;
+    int found_val_hdr = 0;
+    int key_ok = 0;
+    int val_ok = 0;
+    int err;
+    uint32_t i;
+    size_t off;
+
+    err = tpb_raf_record_read_task(workspace, task_id, &attr, &data, &dsize);
+    if (err != 0) {
+        return 0;
+    }
+    for (i = 0, off = 0; i < attr.nheader; i++) {
+        if (strcmp(attr.headers[i].name, "environment_variable_key") == 0) {
+            const char *kb = (const char *)data + off;
+            found_key_hdr = 1;
+            if (expect_key == NULL || strstr(kb, expect_key) != NULL) {
+                key_ok = 1;
+            }
+        } else if (strcmp(attr.headers[i].name,
+                          "environment_variable_value") == 0) {
+            const char *vb = (const char *)data + off;
+            found_val_hdr = 1;
+            if (expect_val == NULL || strstr(vb, expect_val) != NULL) {
+                val_ok = 1;
+            }
+        }
+        off += (size_t)attr.headers[i].data_size;
+    }
+    tpb_raf_free_headers(attr.headers, attr.nheader);
+    free(data);
+    if (!found_key_hdr || !found_val_hdr) {
+        return 0;
+    }
+    if (expect_key == NULL) {
+        return val_ok;
+    }
+    if (expect_val == NULL) {
+        return key_ok;
+    }
+    return key_ok && val_ok;
+}
+
+static int
+test_rtenv_counter_and_task_env(void)
 {
     int err;
     char cmd[2048];
@@ -453,15 +505,13 @@ test_rtenv_fk_and_counter(void)
     CHECK("rtenv_fk run exit", err == 0);
 
     err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
-    CHECK("rtenv_fk list tbatch", err == 0 && tb_n == 1);
-    if (err == 0 && tb_n == 1) {
-        CHECK_INT("tbatch rtenv fk", 1, tb[0].runtime_environment_id);
-    }
+    CHECK("rtenv_counter list tbatch", err == 0 && tb_n == 1);
 
     err = tpb_raf_entry_list_task(g_test_dir, &tk, &tk_n);
-    CHECK("rtenv_fk list task", err == 0 && tk_n == 1);
+    CHECK("rtenv_counter list task", err == 0 && tk_n == 1);
     if (err == 0 && tk_n == 1) {
-        CHECK_INT("task rtenv fk", 1, tk[0].runtime_environment_id);
+        CHECK("task env headers present",
+              _sf_task_env_has(g_test_dir, tk[0].task_record_id, NULL, NULL));
     }
 
     err = tpb_raf_entry_list_rtenv(g_test_dir, &re, &re_n);
@@ -509,9 +559,6 @@ test_rtenv_fallback_warn(void)
 
     err = tpb_raf_entry_list_tbatch(g_test_dir, &tb, &tb_n);
     CHECK("rtenv_fallback list tbatch", err == 0 && tb_n == 1);
-    if (err == 0 && tb_n == 1) {
-        CHECK_INT("rtenv_fallback fk", 1, tb[0].runtime_environment_id);
-    }
 
     free(tb);
     cleanup_test_dir();
@@ -525,7 +572,6 @@ test_rtenv_kenvs_input_param(void)
     char cmd[2048];
     task_entry_t *tk = NULL;
     int tk_n = 0;
-    int found = 0;
 
     setup_test_dir();
     err = tpb_raf_init_workspace(g_test_dir);
@@ -552,35 +598,13 @@ test_rtenv_kenvs_input_param(void)
     err = tpb_raf_entry_list_task(g_test_dir, &tk, &tk_n);
     CHECK("rtenv_kenvs list task", err == 0 && tk_n == 1);
     if (err == 0 && tk_n == 1) {
-        task_attr_t attr;
-        void *data = NULL;
-        uint64_t dsize = 0;
-        uint32_t i;
-
-        err = tpb_raf_record_read_task(g_test_dir, tk[0].task_record_id,
-                                       &attr, &data, &dsize);
-        CHECK("rtenv_kenvs read task", err == 0);
-        if (err == 0) {
-            size_t off = 0;
-            uint32_t i;
-
-            for (i = 0; i < attr.nheader; i++) {
-                if (strcmp(attr.headers[i].name, "OMP_NUM_THREADS") == 0) {
-                    const char *val = (const char *)data + off;
-                    if (strcmp(val, "4") == 0 &&
-                        (attr.headers[i].type_bits & TPB_PARM_SOURCE_MASK)
-                        == (TPB_PARM_ENV & TPB_PARM_SOURCE_MASK)) {
-                        found = 1;
-                    }
-                    break;
-                }
-                off += (size_t)attr.headers[i].data_size;
-            }
-        }
-        tpb_raf_free_headers(attr.headers, attr.nheader);
-        free(data);
+        CHECK("rtenv_kenvs env key",
+              _sf_task_env_has(g_test_dir, tk[0].task_record_id,
+                               "OMP_NUM_THREADS", NULL));
+        CHECK("rtenv_kenvs env value",
+              _sf_task_env_has(g_test_dir, tk[0].task_record_id,
+                               NULL, "4"));
     }
-    CHECK("rtenv_kenvs header found", found);
 
     free(tk);
     cleanup_test_dir();
@@ -621,7 +645,7 @@ main(int argc, char **argv)
         {"C1.3", "benchmark_begin_batch_fail", test_benchmark_begin_batch_fail},
         {"C1.4", "benchmark_metric_missing_soft_fail",
          test_benchmark_metric_missing_soft_fail},
-        {"C1.5", "rtenv_fk_and_counter", test_rtenv_fk_and_counter},
+        {"C1.5", "rtenv_counter_and_task_env", test_rtenv_counter_and_task_env},
         {"C1.6", "rtenv_fallback_warn", test_rtenv_fallback_warn},
         {"C1.7", "rtenv_kenvs_input_param", test_rtenv_kenvs_input_param},
     };

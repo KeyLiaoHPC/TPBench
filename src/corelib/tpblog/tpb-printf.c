@@ -329,6 +329,14 @@ void
 tpblog_printf_c(const float *col_ratios, int ncol, int gap,
                 const char *const *cells)
 {
+    tpblog_printf_c_flags(col_ratios, ncol, gap, cells, NULL);
+}
+
+void
+tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
+                      const char *const *cells,
+                      const uint32_t *wrap_flags)
+{
     const char *lines[TPBLOG_COLUMN_MAX][64];
     int line_count[TPBLOG_COLUMN_MAX];
     char line_bufs[TPBLOG_COLUMN_MAX][64][256];
@@ -354,6 +362,8 @@ tpblog_printf_c(const float *col_ratios, int ncol, int gap,
         size_t pos = 0;
         size_t len = strlen(text);
         int ln = 0;
+        int no_hyphen = (wrap_flags != NULL &&
+                         wrap_flags[c] == TPBLOG_WRAP_NO_HYPHEN);
 
         line_count[c] = 0;
         while (pos < len && ln < 64) {
@@ -384,12 +394,17 @@ tpblog_printf_c(const float *col_ratios, int ncol, int gap,
                 }
             }
             if (!found_space) {
-                chunk = (size_t)(widths[c] - 1);
+                chunk = (size_t)(widths[c] - (no_hyphen ? 0 : 1));
                 if ((int)chunk < 1) {
                     chunk = 1;
                 }
-                snprintf(line_bufs[c][ln], sizeof(line_bufs[c][ln]),
-                         "%.*s-", (int)chunk, text + pos);
+                if (no_hyphen) {
+                    snprintf(line_bufs[c][ln], sizeof(line_bufs[c][ln]),
+                             "%.*s", (int)chunk, text + pos);
+                } else {
+                    snprintf(line_bufs[c][ln], sizeof(line_bufs[c][ln]),
+                             "%.*s-", (int)chunk, text + pos);
+                }
                 pos += chunk;
                 ln++;
                 continue;

@@ -1570,23 +1570,16 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
             }
         }
 
-        if (hdl->envpack.n > 0) {
-            int ki;
-
-            pos += snprintf(full_cmd + pos, cmd_size - pos,
-                            "TPB_RTENV_KENV_KEYS=");
-            for (ki = 0; ki < hdl->envpack.n; ki++) {
-                if (ki > 0) {
-                    pos += snprintf(full_cmd + pos, cmd_size - pos, ",");
-                }
-                pos += snprintf(full_cmd + pos, cmd_size - pos, "%s",
-                                hdl->envpack.envs[ki].name);
-            }
-            pos += snprintf(full_cmd + pos, cmd_size - pos, " ");
-        }
-
         /* Inject auto-record env vars if a batch is active */
         const char *ar_ws = tpb_record_get_workspace();
+        int32_t active_rtenv = 0;
+
+        if (ar_ws == NULL) {
+            ar_ws = getenv("TPB_WORKSPACE");
+        }
+        if (ar_ws != NULL) {
+            (void)tpb_rtenv_resolve_active_id(ar_ws, &active_rtenv);
+        }
         if (ar_bid != NULL) {
             pos += snprintf(full_cmd + pos, cmd_size - pos,
                             "TPB_TBATCH_ID=%s ", ar_bid);
@@ -1599,8 +1592,34 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
         }
 
         for (int i = 0; i < hdl->envpack.n; i++) {
+            const char *ename = hdl->envpack.envs[i].name;
+            const char *eval = hdl->envpack.envs[i].value;
+            char applied[4096];
+            const char *emit_val = eval;
+
+            if (ar_ws != NULL) {
+                tpb_rtenv_merged_t merged;
+                const tpb_rtenv_merged_var_t *decl;
+
+                if (tpb_rtenv_resolve_active_id(ar_ws, &active_rtenv) ==
+                        TPBE_SUCCESS &&
+                    tpb_rtenv_merge_chain(ar_ws, active_rtenv, &merged) ==
+                        TPBE_SUCCESS) {
+                    decl = tpb_rtenv_merged_find(&merged, ename);
+                    if (decl != NULL) {
+                        if (tpb_rtenv_apply_onset(ename, eval, decl->on_set,
+                                                  applied,
+                                                  sizeof(applied)) ==
+                            TPBE_SUCCESS) {
+                            emit_val = applied;
+                        } else if (decl->on_set == TPB_RTENV_ON_SET_IGNORE) {
+                            continue;
+                        }
+                    }
+                }
+            }
             pos += snprintf(full_cmd + pos, cmd_size - pos, "%s=%s ",
-                            hdl->envpack.envs[i].name, hdl->envpack.envs[i].value);
+                            ename, emit_val);
         }
 
         for (int i = 0; i < hdl->wrapperpack.nlinks; i++) {

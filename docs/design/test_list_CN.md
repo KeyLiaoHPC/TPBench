@@ -133,6 +133,7 @@
 | B4.22 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -e` 输出 rtenv `.tpbe` 头。 |
 | B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` Metadata 与 Record Data（跳过 `data_size == 0` 的 header）。 |
 | B4.24 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dk -e -n 3 -N 3` 报告 count 冲突。 |
+| B6.1–B6.10 | `tpbcli/rtenv/` | 验证 `rtenv` 子命令：模板 `name=`/`var=` 解析、`show` 定列宽与 `On_set`/`On_get`、`load` 按 `on_set` 输出 export、`-f` 从文件创建记录。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |
 | B5.2 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel get` 不修改 kernel.tpbe entry 数量。 |
 | B5.3 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel set` 后 `get -v` 显示 kernel 信息和列名，无旧 type 包装。 |
@@ -159,6 +160,9 @@
 | C1.2 | `corelib/tpb-autorecord.c`, `corelib/rafdb/`, `tpbcli/benchmark/` | 验证 YAML 驱动的 benchmark 产生 1 个 BENCHMARK 类型 tbatch 且 1 条 task 正确链接。 |
 | C1.3 | `corelib/rafdb/`, `tpbcli/benchmark/` | 验证只读 task_batch 目录导致 benchmark 报 "begin_batch failed" 错误。 |
 | C1.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `kernels/streaming_memory_access_mpi/` | **手工/CI 可选：** `tpbcli kernel build stream_mpi` + `mpirun -np 4 --map-by core --bind-to core` 运行后 `db list` 显示 1 条 task capsule（4 rank 聚合）。 |
+| C1.5 | `corelib/tpb-autorecord.c`, `corelib/tpb-rtenv.c` | 验证 run 后 RTEnv `ntask`/`ntbatch` 计数递增，task 含 `environment_variable_*` 三条 header（无 FK）。 |
+| C1.6 | `corelib/tpb-rtenv.c`, `tpbcli/run/` | 验证未设置 `$TPB_RTENV_ID` 时 run 回退基础环境并完成记录。 |
+| C1.7 | `corelib/tpb-driver.c`, `corelib/tpb-rtenv.c` | 验证 `--kenvs` 变量出现在 task 环境快照 header 中。 |
 | C3.1 | `corelib/tpb-autorecord.c`, `cmake/TPBenchKernelRegistry.cmake` | 验证 stream kernel 分别以 -O2 和 -O3 编译后 `kernel get -v` 显示 ≥2 个版本行。 |
 | C4.1 | `cmake/`, root `CMakeLists.txt` | 验证 CMake 包安装后 `build/lib/cmake/TPBench/` 包含 Config.cmake 和 Kernel.cmake，模板存在于 `build/etc/cmake/kernel/`。 |
 | C4.2 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证同名模板从两个目录构建后 active 版本可切换，非活跃版本存入 `lib/inactive/`，版本计数正确跟踪。 |

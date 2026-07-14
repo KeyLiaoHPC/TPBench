@@ -171,7 +171,7 @@ test_b6_3_new_output_template(void)
     snprintf(tmpl, sizeof(tmpl), "%s/rtenv_template.txt", g_ws);
     snprintf(cmd, sizeof(cmd),
              "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv new -o '%s' "
-             "--name tmpl-env --note t",
+             "-n tmpl-env -N t",
              g_ws, tmpl);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     after = count_rtenv_entries();
@@ -221,9 +221,10 @@ test_b6_4_new_from_file(void)
         return 1;
     }
     fprintf(fp,
-            "--name 'from-file-env'\n"
-            "--note 'nf'\n"
-            "--add-application --name='gcc' --version='13.2' --note='cc'\n");
+            "inherit_from=1\n"
+            "name=from-file-env\n"
+            "note=nf\n"
+            "application=gcc:13.2:cc\n");
     fclose(fp);
 
     snprintf(cmd, sizeof(cmd),
@@ -257,9 +258,9 @@ test_b6_5_new_inline(void)
     before = count_rtenv_entries();
     snprintf(cmd, sizeof(cmd),
              "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
-             "rtenv new --name inline-env --note inline "
-             "--add-application --name gcc --version 13.2 --note cc "
-             "--append-variable --name LD_LIBRARY_PATH --value /opt/lib",
+             "rtenv new -n inline-env -N inline "
+             "-app -n gcc -v 13.2 -N cc "
+             "-eva -k LD_LIBRARY_PATH -v /opt/lib",
              g_ws);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     after = count_rtenv_entries();
@@ -358,9 +359,9 @@ test_b6_8_show_tables(void)
     setup_workspace();
     snprintf(cmd, sizeof(cmd),
              "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
-             "rtenv new --name show-me --note sn "
-             "--add-application --name app1 --version 1.0 --note an "
-             "--variable --name FOO --value bar",
+             "rtenv new -n show-me -N sn "
+             "-app -n app1 -v 1.0 -N an "
+             "-evo -k FOO -v bar",
              g_ws);
     (void)run_cmd_capture(cmd, buf, sizeof(buf));
 
@@ -373,8 +374,9 @@ test_b6_8_show_tables(void)
         cleanup_workspace();
         return 1;
     }
-    if (strstr(buf, "Applications (merged):") == NULL ||
-        strstr(buf, "Environment variables (merged):") == NULL ||
+    if (strstr(buf, "Applications (merged)") == NULL ||
+        strstr(buf, "Environment Variables (merged)") == NULL ||
+        strstr(buf, "On_set") == NULL ||
         strstr(buf, "app1") == NULL || strstr(buf, "FOO") == NULL) {
         FAIL("B6.8: missing merged tables");
         fprintf(stderr, "    output: %.600s\n", buf);
@@ -399,11 +401,9 @@ test_b6_9_load_shell_fragment(void)
     snprintf(tmpl, sizeof(tmpl), "%s/rtenv_load.txt", g_ws);
     fp = fopen(tmpl, "w");
     fprintf(fp,
-            "--name 'load-env'\n"
-            "--note 'ld'\n"
-            "--variable --name='GOOD_VAR' --value='1'\n"
-            "--unset-variable --name='OLD_VAR'\n"
-            "--variable --name='9BAD' --value='x'\n");
+            "inherit_from=1\n"
+            "name=load-env\n"
+            "var=overwrite:overwrite:9BAD:x\n");
     fclose(fp);
 
     snprintf(cmd, sizeof(cmd),
@@ -425,9 +425,9 @@ test_b6_9_load_shell_fragment(void)
     snprintf(tmpl, sizeof(tmpl), "%s/rtenv_load_ok.txt", g_ws);
     fp = fopen(tmpl, "w");
     fprintf(fp,
-            "--name 'load-ok'\n"
-            "--unset-variable --name='OLD_VAR'\n"
-            "--variable --name='GOOD_VAR' --value='1'\n");
+            "inherit_from=1\n"
+            "name=load-ok\n"
+            "var=overwrite:overwrite:GOOD_VAR:1\n");
     fclose(fp);
     snprintf(cmd, sizeof(cmd),
              "TPB_RTENV_ID=1 TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" "
@@ -446,8 +446,8 @@ test_b6_9_load_shell_fragment(void)
         return 1;
     }
     if (strstr(buf, "export TPB_RTENV_ID=") == NULL ||
-        strstr(buf, "unset OLD_VAR") == NULL) {
-        FAIL("B6.9: missing export/unset fragment");
+        strstr(buf, "export GOOD_VAR=") == NULL) {
+        FAIL("B6.9: missing export fragment");
         fprintf(stderr, "    output: %.500s\n", buf);
         cleanup_workspace();
         return 1;
@@ -470,8 +470,7 @@ test_b6_10_new_requires_active(void)
 
     snprintf(cmd, sizeof(cmd),
              "TPB_WORKSPACE=\"%s\" \"" TPB_TEST_TPBCLI_STR "\" rtenv new "
-             "--name orphan --note x "
-             "--variable --name A --value B",
+             "-n orphan -N x -evo -k A -v B",
              ws_empty);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code == 0) {

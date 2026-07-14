@@ -709,7 +709,6 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("nkernel", attr.nkernel);
     dump_print_kv_u32("ntask", attr.ntask);
     dump_print_kv_u32("nscore", attr.nscore);
-    dump_print_kv_i32("runtime_environment_id", attr.runtime_environment_id);
     dump_print_kv_u32("batch_type", attr.batch_type);
     dump_print_kv_u32("nheader", attr.nheader);
 
@@ -792,7 +791,6 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
     dump_print_kv_u32("ninput", attr.ninput);
     dump_print_kv_u32("noutput", attr.noutput);
     dump_print_kv_u32("nheader", attr.nheader);
-    dump_print_kv_i32("runtime_environment_id", attr.runtime_environment_id);
     dump_print_kv_u32("reserve", attr.reserve);
 
     dump_headers(attr.headers, attr.nheader);
