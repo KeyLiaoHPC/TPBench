@@ -62,6 +62,13 @@ static void dump_header_record_lines(const tpb_meta_header_t *h,
                                      uint64_t mult[TPBM_DATA_NDIM_MAX],
                                      uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
                                      size_t elem_size);
+static void dump_header_record_string_lines(const tpb_meta_header_t *h,
+                                            const uint8_t *blob, uint32_t nd,
+                                            uint64_t mult[TPBM_DATA_NDIM_MAX],
+                                            uint64_t idx[TPBM_DATA_NDIM_MAX],
+                                            int lev, size_t cell_bytes);
+static void print_string_csv(const char *s, size_t maxlen);
+static int is_string_dtype(uint32_t type_bits);
 static void print_elem_csv(const uint8_t *p, uint32_t type_bits,
                            size_t elem_size);
 static void dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
@@ -468,6 +475,95 @@ dtype_elem_size_from_typebits(uint32_t type_bits)
     return (size_t)nbytes;
 }
 
+static int
+is_string_dtype(uint32_t type_bits)
+{
+    return ((type_bits & TPB_PARM_TYPE_MASK) == TPB_STRING_T);
+}
+
+/*
+ * Print one STRING cell (dimsizes[0] bytes max). Quote CSV field when needed.
+ * STRING payloads use dimsizes[0] as per-cell byte length, not sizeof(char).
+ */
+static void
+print_string_csv(const char *s, size_t maxlen)
+{
+    size_t len = 0;
+    int need_quote = 0;
+
+    if (s == NULL || maxlen == 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "");
+        return;
+    }
+    while (len < maxlen && s[len] != '\0') {
+        unsigned char c = (unsigned char)s[len];
+
+        if (c == ',' || c == '"' || c < 32u) {
+            need_quote = 1;
+        }
+        len++;
+    }
+    if (need_quote) {
+        size_t i;
+
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "\"");
+        for (i = 0; i < len; i++) {
+            if (s[i] == '"') {
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, "\"\"");
+            } else {
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, "%c", s[i]);
+            }
+        }
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "\"");
+    } else {
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%.*s", (int)len, s);
+    }
+}
+
+static void
+dump_header_record_string_lines(const tpb_meta_header_t *h, const uint8_t *blob,
+                                uint32_t nd, uint64_t mult[TPBM_DATA_NDIM_MAX],
+                                uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
+                                size_t cell_bytes)
+{
+    if (lev == 0) {
+        uint64_t fix = 0;
+        uint32_t k;
+
+        for (k = 1; k < nd; k++) {
+            fix += idx[k] * mult[k];
+        }
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "%s", h->name);
+        for (k = nd; k-- > 1u; ) {
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                       "[%" PRIu64 "]", idx[k]);
+        }
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "[], ");
+        print_string_csv((const char *)(blob + fix * cell_bytes), cell_bytes);
+        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                   "\n");
+        return;
+    }
+    {
+        uint64_t t;
+        uint64_t kmax = h->dimsizes[lev];
+
+        for (t = 0; t < kmax; t++) {
+            idx[lev] = t;
+            dump_header_record_string_lines(h, blob, nd, mult, idx, lev - 1,
+                                            cell_bytes);
+        }
+    }
+}
+
 static void
 print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
 {
@@ -648,6 +744,30 @@ dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
         mult[0] = 1u;
         for (j = 1; j < nd; j++) {
             mult[j] = mult[j - 1] * h->dimsizes[j - 1];
+        }
+
+        if (is_string_dtype(h->type_bits)) {
+            size_t cell_bytes = (size_t)h->dimsizes[0];
+
+            if (cell_bytes == 0) {
+                continue;
+            }
+            if (nd <= 1) {
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, "%s[], ", h->name);
+                print_string_csv((const char *)blob, (size_t)dsz);
+                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
+                           TPBLOG_FLAG_DIRECT, "\n");
+                continue;
+            }
+            {
+                uint64_t idx[TPBM_DATA_NDIM_MAX];
+
+                memset(idx, 0, sizeof(idx));
+                dump_header_record_string_lines(h, blob, nd, mult, idx,
+                                                (int)nd - 1, cell_bytes);
+            }
+            continue;
         }
 
         if (nd <= 1) {

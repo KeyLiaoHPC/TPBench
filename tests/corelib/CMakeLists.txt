@@ -205,10 +205,28 @@ tpb_add_subcase(A9 A9.5 unknown_msg      test-errcode corelib)
 tpb_add_subcase(A9 A9.6 module_name      test-errcode corelib)
 tpb_add_subcase(A9 A9.7 success_plain    test-errcode corelib)
 
+# --- environment snapshot encoding (Pack A10) ---
+add_executable(test-rtenv-env-snapshot EXCLUDE_FROM_ALL
+    test_tpb_rtenv_env_snapshot.c
+)
+target_include_directories(test-rtenv-env-snapshot PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-rtenv-env-snapshot PRIVATE tpbench m)
+set_target_properties(test-rtenv-env-snapshot PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A10 A10.1 single_key           test-rtenv-env-snapshot corelib)
+tpb_add_subcase(A10 A10.2 path_segments        test-rtenv-env-snapshot corelib)
+tpb_add_subcase(A10 A10.3 multi_key_mixed      test-rtenv-env-snapshot corelib)
+tpb_add_subcase(A10 A10.4 empty_value          test-rtenv-env-snapshot corelib)
+tpb_add_subcase(A10 A10.5 semicolon_in_value   test-rtenv-env-snapshot corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
-            test-kernel-record test-tpblog test-errcode
+            test-kernel-record test-tpblog test-errcode test-rtenv-env-snapshot
 )
 
 add_custom_target(check_corelib

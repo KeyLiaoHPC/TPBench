@@ -601,7 +601,17 @@ test_b4_23_dump_rtenv_record(void)
         fprintf(stderr, "    exit %d output: %.400s\n", code, buf);
         return 1;
     }
+    {
+        const char *key_val = strstr(buf, "key[0][], ");
 
+        if (key_val == NULL || strstr(key_val, "0x") != NULL) {
+            FAIL("B4.23: key[0] must be human-readable STRING, not hex bytes");
+            fprintf(stderr, "    output: %.400s\n", buf);
+            return 1;
+        }
+    }
+
+    memset(buf, 0, sizeof(buf));
     code = run_cmd_capture(
         "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
         "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "

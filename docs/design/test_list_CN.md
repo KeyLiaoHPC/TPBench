@@ -72,6 +72,11 @@
 | A8.6 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 列格式化输出包含预期的单元格文本。 |
 | A8.7 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 在 10 字符宽度下渲染 8 列仍显示所有单元格。 |
 | A8.8 | `corelib/tpblog/tpb-printf.h` | 验证 `tpblog_snprintf` 宏格式化输出正确。 |
+| A10.1 | `corelib/tpb-rtenv.c` | 验证环境快照单 key 编码（`:` 连接 key/value 段）与 count 解码往返。 |
+| A10.2 | `corelib/tpb-rtenv.c` | 验证 PATH 式多段 value（`count=2`）扁平存储与解码拼回。 |
+| A10.3 | `corelib/tpb-rtenv.c` | 验证多 key 混合段数时按 key→count→value 顺序解码。 |
+| A10.4 | `corelib/tpb-rtenv.c` | 验证空 value（`count=0`）不消费 value 段。 |
+| A10.5 | `corelib/tpb-rtenv.c` | 验证 value 段内可含 `;`（连接符仅为 `:`）。 |
 
 ## B 类 — CLI 单元与功能测试
 
@@ -131,7 +136,7 @@
 | B4.20 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -i X -e` 报告 `-i`/`-e` 冲突。 |
 | B4.21 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -dk` 报告 domain 冲突。 |
 | B4.22 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -e` 输出 rtenv `.tpbe` 头。 |
-| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` Metadata 与 Record Data（跳过 `data_size == 0` 的 header）。 |
+| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` Metadata 与 Record Data；`key[0]` 为可读 STRING（非逐字节 hex）。 |
 | B4.24 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dk -e -n 3 -N 3` 报告 count 冲突。 |
 | B6.1–B6.10 | `tpbcli/rtenv/` | 验证 `rtenv` 子命令：模板 `name=`/`var=` 解析、`show` 定列宽与 `On_set`/`On_get`、`load` 按 `on_set` 输出 export、`-f` 从文件创建记录。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |
@@ -162,7 +167,7 @@
 | C1.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `kernels/streaming_memory_access_mpi/` | **手工/CI 可选：** `tpbcli kernel build stream_mpi` + `mpirun -np 4 --map-by core --bind-to core` 运行后 `db list` 显示 1 条 task capsule（4 rank 聚合）。 |
 | C1.5 | `corelib/tpb-autorecord.c`, `corelib/tpb-rtenv.c` | 验证 run 后 RTEnv `ntask`/`ntbatch` 计数递增，task 含 `environment_variable_*` 三条 header（无 FK）。 |
 | C1.6 | `corelib/tpb-rtenv.c`, `tpbcli/run/` | 验证未设置 `$TPB_RTENV_ID` 时 run 回退基础环境并完成记录。 |
-| C1.7 | `corelib/tpb-driver.c`, `corelib/tpb-rtenv.c` | 验证 `--kenvs` 变量出现在 task 环境快照 header 中。 |
+| C1.7 | `corelib/tpb-driver.c`, `corelib/tpb-rtenv.c` | 验证 `--kenvs` 变量出现在 task 环境快照 header 中，且 key 以 `:` 连接、`count` 与 value 段一致。 |
 | C3.1 | `corelib/tpb-autorecord.c`, `cmake/TPBenchKernelRegistry.cmake` | 验证 stream kernel 分别以 -O2 和 -O3 编译后 `kernel get -v` 显示 ≥2 个版本行。 |
 | C4.1 | `cmake/`, root `CMakeLists.txt` | 验证 CMake 包安装后 `build/lib/cmake/TPBench/` 包含 Config.cmake 和 Kernel.cmake，模板存在于 `build/etc/cmake/kernel/`。 |
 | C4.2 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证同名模板从两个目录构建后 active 版本可切换，非活跃版本存入 `lib/inactive/`，版本计数正确跟踪。 |

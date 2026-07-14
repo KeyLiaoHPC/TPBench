@@ -1945,9 +1945,11 @@ Append `environment_variable_key`, `environment_variable_count`, and
 
 Each task record includes three fixed meta headers (even when empty):
 
-- `environment_variable_key` — `;`-joined key names
-- `environment_variable_count` — segment count per key (`:` splits values within a key)
-- `environment_variable_value` — `;`-joined value segments
+- `environment_variable_key` — `:`-joined key names (keys must not contain `:`)
+- `environment_variable_count` — segment count per key (`:` splits values at capture time)
+- `environment_variable_value` — `:`-joined value segments in key order
+
+Decode by walking keys in order: for each key `i`, consume `count[i]` segments from the flat value blob, then rejoin with `:` to restore the original value.
 
 Task/tbatch attributes no longer store `runtime_environment_id`; the snapshot headers
 are the authoritative environment record.

@@ -724,9 +724,9 @@ _sf_append_segment_to_blob(char **blob, size_t *cap, size_t *len,
     if (seg == NULL) {
         return TPBE_SUCCESS;
     }
-    if (strchr(seg, ';') != NULL) {
+    if (memchr(seg, ':', seglen) != NULL) {
         TPB_FAIL(TPB_MOD_MISC, TPBE_CLI_FAIL,
-                 "environment value segment must not contain ';'");
+                 "environment value segment must not contain ':'");
     }
     need = *len + add + (*len > 0 ? 1 : 0) + 1;
     if (need > *cap) {
@@ -742,7 +742,7 @@ _sf_append_segment_to_blob(char **blob, size_t *cap, size_t *len,
         *cap = nc;
     }
     if (*len > 0) {
-        (*blob)[(*len)++] = ';';
+        (*blob)[(*len)++] = ':';
     }
     memcpy(*blob + *len, seg, seglen);
     *len += seglen;
@@ -760,9 +760,9 @@ _sf_snapshot_append_key(const char *key, const char *val)
     int32_t *nc;
     size_t kadd;
 
-    if (strchr(key, ';') != NULL) {
+    if (strchr(key, ':') != NULL) {
         TPB_FAIL(TPB_MOD_MISC, TPBE_CLI_FAIL,
-                 "environment variable key must not contain ';'");
+                 "environment variable key must not contain ':'");
     }
     kadd = strlen(key) + (s_env_snap.key_len > 0 ? 1 : 0) + 1;
     if (s_env_snap.key_len + kadd > s_env_snap.key_cap) {
@@ -780,7 +780,7 @@ _sf_snapshot_append_key(const char *key, const char *val)
         s_env_snap.key_cap = nc_cap;
     }
     if (s_env_snap.key_len > 0) {
-        s_env_snap.key_blob[s_env_snap.key_len++] = ';';
+        s_env_snap.key_blob[s_env_snap.key_len++] = ':';
     }
     memcpy(s_env_snap.key_blob + s_env_snap.key_len, key, strlen(key));
     s_env_snap.key_len += strlen(key);

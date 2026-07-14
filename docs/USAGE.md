@@ -375,6 +375,8 @@ tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environme
 
 Domain selectors are mutually exclusive. **`-i`/`--id`** and **`-e`** are mutually exclusive. **`-n`** and **`-N`** are mutually exclusive.
 
+**Record Data** lines follow each header's `type_bits`: `TPB_STRING_T` payloads print as text (one cell per `dimsizes[0]` bytes); integer and floating types print as decimal; 20-byte IDs remain hex. Task `environment_variable_*` headers therefore appear as readable strings and integer counts (`key` and flat value segments joined with `:`; decode with `count` per key).
+
 Examples:
 
 ```bash
@@ -498,8 +500,9 @@ var=<on_get>:<on_set>:<key>[:<value_segment>...]
 ```
 
 Colon splitting inside `application=` / `var=` is quote-aware (`'...'` or
-`"..."`). Value segments within a key use `:` (PATH-style); keys and segments
-must not contain `;`.
+`"..."`). Value segments within a key use `:` (PATH-style). RTEnv template keys
+must not contain `:`; task snapshot value segments must not contain `:` (segments
+are produced by splitting on `:` at capture time).
 
 ### 2.4.2 Browse runtime environments
 

@@ -322,6 +322,8 @@ tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environme
 
 域选择项互斥；**`-i`/`--id`** 与 **`-e`** 互斥；**`-n`** 与 **`-N`** 互斥。
 
+**Record Data** 按 header 的 `type_bits` 格式化：`TPB_STRING_T` 以文本输出（每格 `dimsizes[0]` 字节）；整型与浮点以十进制输出；20 字节 ID 仍为十六进制。task 的 `environment_variable_*` 因此显示为可读字符串与整数计数（key 与扁平 value 段以 `:` 连接；按 `count` 解码各 key）。
+
 示例：
 
 ```bash
@@ -378,8 +380,8 @@ application=<name>:<version>:<note>
 var=<on_get>:<on_set>:<key>[:<value_segment>...]
 ```
 
-`application=` / `var=` 内冒号按引号感知切分；同一 key 的 value 段用 `:` 连接，
-key 与段内不得含 `;`。
+`application=` / `var=` 内冒号按引号感知切分；同一 key 的 value 段用 `:` 连接。
+RTEnv 模板 key 不得含 `:`；task 快照 value 段内不得含 `:`（段由采集时按 `:` 切分）。
 
 ### 2.4.2 浏览运行时环境
 

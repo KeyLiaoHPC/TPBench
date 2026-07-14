@@ -473,6 +473,101 @@ _sf_task_env_has(const char *workspace,
 }
 
 static int
+_sf_key_index_colon(const char *key_blob, const char *want)
+{
+    const char *p;
+    const char *start;
+    int idx = 0;
+    size_t wlen;
+
+    if (key_blob == NULL || want == NULL) {
+        return -1;
+    }
+    wlen = strlen(want);
+    start = key_blob;
+    for (p = key_blob; ; p++) {
+        if (*p == ':' || *p == '\0') {
+            if ((size_t)(p - start) == wlen && memcmp(start, want, wlen) == 0) {
+                return idx;
+            }
+            if (*p == '\0') {
+                break;
+            }
+            idx++;
+            start = p + 1;
+        }
+    }
+    return -1;
+}
+
+static int
+_sf_task_env_colon_format_ok(const char *workspace,
+                             const unsigned char task_id[20],
+                             const char *want_key,
+                             const char *expect_val,
+                             int32_t expect_count)
+{
+    task_attr_t attr;
+    void *data = NULL;
+    uint64_t dsize = 0;
+    const char *kb = NULL;
+    const int32_t *counts = NULL;
+    size_t nkeys = 0;
+    const char *vb = NULL;
+    int ki;
+    int err;
+    uint32_t i;
+    size_t off;
+
+    err = tpb_raf_record_read_task(workspace, task_id, &attr, &data, &dsize);
+    if (err != 0) {
+        return 0;
+    }
+    for (i = 0, off = 0; i < attr.nheader; i++) {
+        if (strcmp(attr.headers[i].name, "environment_variable_key") == 0) {
+            kb = (const char *)data + off;
+        } else if (strcmp(attr.headers[i].name,
+                          "environment_variable_count") == 0) {
+            counts = (const int32_t *)((const char *)data + off);
+            nkeys = (size_t)attr.headers[i].dimsizes[0];
+        } else if (strcmp(attr.headers[i].name,
+                          "environment_variable_value") == 0) {
+            vb = (const char *)data + off;
+        }
+        off += (size_t)attr.headers[i].data_size;
+    }
+    if (kb == NULL || counts == NULL || vb == NULL) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        return 0;
+    }
+    if (strchr(kb, ';') != NULL) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        return 0;
+    }
+    ki = _sf_key_index_colon(kb, want_key);
+    if (ki < 0 || (size_t)ki >= nkeys) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        return 0;
+    }
+    if (counts[ki] != expect_count) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        return 0;
+    }
+    if (expect_val != NULL && strstr(vb, expect_val) == NULL) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        return 0;
+    }
+    tpb_raf_free_headers(attr.headers, attr.nheader);
+    free(data);
+    return 1;
+}
+
+static int
 test_rtenv_counter_and_task_env(void)
 {
     int err;
@@ -604,6 +699,9 @@ test_rtenv_kenvs_input_param(void)
         CHECK("rtenv_kenvs env value",
               _sf_task_env_has(g_test_dir, tk[0].task_record_id,
                                NULL, "4"));
+        CHECK("rtenv_kenvs colon format",
+              _sf_task_env_colon_format_ok(g_test_dir, tk[0].task_record_id,
+                                           "OMP_NUM_THREADS", "4", 1));
     }
 
     free(tk);
