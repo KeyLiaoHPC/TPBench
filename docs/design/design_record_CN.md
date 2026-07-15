@@ -1041,3 +1041,17 @@ Start Time (UTC)     TBatch ID                                 Type        NTask
 | NKernel | `nkernel` | 整数 |
 | NScore | `nscore` | 整数（目前始终为 0） |
 | Duration (s) | `duration` 纳秒 | 秒，3 位小数 |
+
+## 7. CLI dump 可读布局（`.tpbr`，`-i`）
+
+`tpbcli db dump -i` 输出与文件分段 magic 对应的人类可读视图：
+
+| 文件区域 | dump 输出 |
+|----------|-----------|
+| START magic | **Section: Metadata** 前的 `0x E1 54 …` 行 |
+| 固定属性 + `header[i]` | **Attributes** / **Headers** 子块；等宽 `name = value`；`type_bits` / `uattr_bits` 括号解码 |
+| SPLIT magic | **Section: Record Data** 前的 magic 行 |
+| 数据区 | 按 header 轴标题（省略零轴）；最内维单行：`[i][j][]: v0, v1, …` |
+| END magic | magic 行 + **END OF FILE** |
+
+`tpbcli db dump -e`（`.tpbe` 索引）仍为 CSV 风格 `key, value`。

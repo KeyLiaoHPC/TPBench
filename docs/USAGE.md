@@ -375,7 +375,9 @@ tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environme
 
 Domain selectors are mutually exclusive. **`-i`/`--id`** and **`-e`** are mutually exclusive. **`-n`** and **`-N`** are mutually exclusive.
 
-**Record Data** lines follow each header's `type_bits`: `TPB_STRING_T` payloads print as text (one cell per `dimsizes[0]` bytes); integer and floating types print as decimal; 20-byte IDs remain hex. Task `environment_variable_*` headers therefore appear as readable strings and integer counts (`key` and flat value segments joined with `:`; decode with `count` per key).
+**`.tpbr` layout (`-i`):** Human-readable sections with full-width `=` / `-` rules, on-disk magic lines (`0x E1 54 …` byte-spaced), equal-width `name = value` metadata rows, decoded `type_bits` / `uattr_bits` in parentheses, and Record Data axis slices (`[i][j][]: v0, v1, …` on one line per innermost dimension). **`.tpbe` layout (`-e`):** unchanged CSV-style `key, value` rows.
+
+**Record Data** lines follow each header's `type_bits`: `TPB_STRING_T` payloads print as text (one cell per `dimsizes[0]` bytes); integer and floating types print as decimal; 20-byte IDs remain hex. Task `environment_variable_*` headers therefore appear as readable strings and integer counts.
 
 Examples:
 
@@ -415,7 +417,7 @@ For MPI kernels like `stream_mpi`:
 - To get the capsule ID from a TBatchID:
 
 ```bash
-tpbcli db dump -dT -i <TBatchID> | grep -A1 "Record Data"
+tpbcli db dump -dT -i <TBatchID> | grep -F 'Section: Record Data' -A20
 ```
 
 - The capsule's `.tpbr` file contains an array of all rank TaskRecordIDs. Individual rank records have `derive_to` pointing to the capsule.

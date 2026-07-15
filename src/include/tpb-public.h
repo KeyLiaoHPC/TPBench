@@ -844,6 +844,24 @@ void tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
                            const uint32_t *wrap_flags);
 
 /**
+ * @brief Print a full terminal-width horizontal rule line.
+ * @param fill Character repeated across the line (e.g. '=' or '-').
+ */
+void tpblog_print_hline(char fill);
+
+/**
+ * @brief Print one key = value row with fixed key column and no hyphenation.
+ *
+ * Uses a three-column layout (key, "=", value). Long keys or values wrap inside
+ * their columns without trailing hyphens (TPBLOG_WRAP_NO_HYPHEN).
+ *
+ * @param key Field name; may wrap within key_width.
+ * @param value Pre-formatted value string.
+ * @param key_width Width of the key column in characters (caller clamps).
+ */
+void tpblog_print_kv_eq(const char *key, const char *value, int key_width);
+
+/**
  * @brief Set output formatting arguments for CLI display.
  * @param unit_cast Enable unit casting (0 or 1).
  * @param sigbit_trim Significant bits for trimming (0 = no trim).
@@ -1062,6 +1080,27 @@ int tpb_raf_init_workspace(const char *workspace_path);
 
 /* ===== rafdb Magic API ===== */
 
+/** @brief Length of an 8-byte rafdb magic signature */
+#define TPB_RAF_MAGIC_LEN     8
+/** @brief Magic signature byte 0 (template E1 54 50 42 … 31 E0) */
+#define TPB_RAF_MAGIC_B0      0xE1
+/** @brief Magic signature byte 1 ('T') */
+#define TPB_RAF_MAGIC_B1      0x54
+/** @brief Magic signature byte 2 ('P') */
+#define TPB_RAF_MAGIC_B2      0x50
+/** @brief Magic signature byte 3 ('B') */
+#define TPB_RAF_MAGIC_B3      0x42
+/** @brief Magic signature byte 6 ('1') */
+#define TPB_RAF_MAGIC_B6      0x31
+/** @brief Magic signature byte 7 */
+#define TPB_RAF_MAGIC_B7      0xE0
+/** @brief Record start position marker (byte 5, 'S') */
+#define TPB_RAF_POS_START     0x53
+/** @brief Metadata / record-data split marker (byte 5, 'D') */
+#define TPB_RAF_POS_SPLIT     0x44
+/** @brief Record end marker (byte 5, 'E') */
+#define TPB_RAF_POS_END       0x45
+
 /** @brief Entry file (.tpbe) type nibble for magic byte 4 (high nibble) */
 #define TPB_RAF_FTYPE_ENTRY   ((uint8_t)0xE0)
 /** @brief Record file (.tpbr) type nibble for magic byte 4 (high nibble) */
@@ -1107,6 +1146,30 @@ int tpb_raf_validate_magic(const unsigned char magic[8],
 int tpb_raf_detect_file(const char *filepath,
                           uint8_t *ftype_out,
                           uint8_t *domain_out);
+
+/**
+ * @brief Read START/SPLIT/END magic bytes from an on-disk .tpbr file.
+ *
+ * Opens the record read-only, copies the three 8-byte signatures from the file
+ * (does not reconstruct them), and validates ftype/domain/position. Skips the
+ * metadata and payload blobs using metasize/datasize fields only.
+ *
+ * @param workspace   Workspace root path.
+ * @param domain      TPB_RAF_DOM_* selector.
+ * @param id20        20-byte record id for tbatch/kernel/task; NULL for rtenv.
+ * @param rtenv_id    Numeric id when domain is TPB_RAF_DOM_RTENV (ignored otherwise).
+ * @param start_magic Output START signature (8 bytes).
+ * @param split_magic Output SPLIT signature (8 bytes).
+ * @param end_magic   Output END signature (8 bytes).
+ * @return TPBE_SUCCESS or TPBE_FILE_IO_FAIL.
+ */
+int tpb_raf_record_peek_magics(const char *workspace,
+                               uint8_t domain,
+                               const unsigned char id20[20],
+                               int32_t rtenv_id,
+                               unsigned char start_magic[8],
+                               unsigned char split_magic[8],
+                               unsigned char end_magic[8]);
 
 /* ===== rafdb Entry API (.tpbe) ===== */
 

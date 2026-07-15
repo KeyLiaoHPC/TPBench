@@ -288,7 +288,7 @@ Table layout uses `tpblog_printf_c` (`src/tpbcli/database/tpbcli-database-ls.c`)
 
 | Option | Purpose |
 | ------ | ------- |
-| `-i` / `--id <id>` | Dump one `.tpbr` in the selected domain (SHA-1 hex for tbatch/kernel/task; decimal for rtenv). |
+| `-i` / `--id <id>` | Dump one `.tpbr` in the selected domain (SHA-1 hex for tbatch/kernel/task; decimal for rtenv). Human-readable layout with magic lines and `name = value` metadata. |
 | `-e` | Dump `.tpbe` index rows (CSV-style). |
 
 #### Optional

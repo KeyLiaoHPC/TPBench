@@ -136,7 +136,7 @@
 | B4.20 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -i X -e` 报告 `-i`/`-e` 冲突。 |
 | B4.21 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dT -dk` 报告 domain 冲突。 |
 | B4.22 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -e` 输出 rtenv `.tpbe` 头。 |
-| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` Metadata 与 Record Data；`key[0]` 为可读 STRING（非逐字节 hex）。 |
+| B4.23 | `tpbcli/database/tpbcli-database-dump.c` | 验证 `database dump -dr -i 1` 输出 rtenv `.tpbr` 可读布局（Section/magic/KV `=`/END OF FILE）；Record Data 中 `key[0]` 为可读 STRING（非逐字节 hex）。 |
 | B4.24 | `tpbcli/database/tpbcli-database.c` | 验证 `database dump -dk -e -n 3 -N 3` 报告 count 冲突。 |
 | B6.1–B6.10 | `tpbcli/rtenv/` | 验证 `rtenv` 子命令：模板 `name=`/`var=` 解析、`show` 定列宽与 `On_set`/`On_get`、`load` 按 `on_set` 输出 export、`-f` 从文件创建记录。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |

@@ -241,6 +241,24 @@ void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
 
 Terminal width from `ioctl` on stdout (default 85). See design doc for width/degenerate rules.
 
+### `tpblog_print_hline`
+
+Print a full terminal-width horizontal rule (one repeated character plus newline).
+
+```c
+void tpblog_print_hline(char fill);
+```
+
+### `tpblog_print_kv_eq`
+
+Print one `key = value` row with a fixed key column and no hyphenation when wrapping.
+
+```c
+void tpblog_print_kv_eq(const char *key, const char *value, int key_width);
+```
+
+Used by `tpbcli db dump -i` for `.tpbr` metadata blocks. Unlike `tpblog_printf_c`, long keys or values wrap inside their columns without trailing hyphens.
+
 ### `tpblog_snprintf`
 
 ```c
@@ -1300,6 +1318,31 @@ int tpb_raf_validate_magic(const unsigned char magic[8],
 **Returns:**
 - `1` if valid
 - `0` if invalid
+
+---
+
+#### `tpb_raf_record_peek_magics`
+
+Read the three on-disk `.tpbr` magic signatures (START / SPLIT / END) without parsing metadata or payload. Used by `tpbcli db dump -i` to print file-authoritative magic lines. Locates SPLIT by scanning; END is at SPLIT + 8 + `datasize`.
+
+```c
+int tpb_raf_record_peek_magics(const char *workspace,
+                               uint8_t domain,
+                               const unsigned char id20[20],
+                               int32_t rtenv_id,
+                               unsigned char start_magic[8],
+                               unsigned char split_magic[8],
+                               unsigned char end_magic[8]);
+```
+
+**Parameters:**
+- `workspace`: Workspace root path
+- `domain`: `TPB_RAF_DOM_*` selector
+- `id20`: 20-byte record id for tbatch/kernel/task; NULL when domain is `TPB_RAF_DOM_RTENV`
+- `rtenv_id`: Numeric id when domain is RTEnv (ignored otherwise)
+- `start_magic`, `split_magic`, `end_magic`: Output buffers (8 bytes each)
+
+**Returns:** `TPBE_SUCCESS` or `TPBE_FILE_IO_FAIL`
 
 ---
 

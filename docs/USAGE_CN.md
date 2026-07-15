@@ -322,7 +322,9 @@ tpbcli db dump [-dT|-dt|-dk|-dr | --domain <tbatch|task|kernel|runtime_environme
 
 域选择项互斥；**`-i`/`--id`** 与 **`-e`** 互斥；**`-n`** 与 **`-N`** 互斥。
 
-**Record Data** 按 header 的 `type_bits` 格式化：`TPB_STRING_T` 以文本输出（每格 `dimsizes[0]` 字节）；整型与浮点以十进制输出；20 字节 ID 仍为十六进制。task 的 `environment_variable_*` 因此显示为可读字符串与整数计数（key 与扁平 value 段以 `:` 连接；按 `count` 解码各 key）。
+**`.tpbr` 布局（`-i`）：** 满行 `=` / `-` 分隔、文件真实 magic 行（`0x E1 54 …` 按字节空格）、等宽 `name = value` 元数据、`type_bits` / `uattr_bits` 括号语义解码、Record Data 按轴单行输出（如 `[i][j][]: v0, v1, …`）。**`.tpbe` 布局（`-e`）：** 仍为 CSV 风格 `key, value`。
+
+**Record Data** 按 header 的 `type_bits` 格式化：`TPB_STRING_T` 以文本输出（每格 `dimsizes[0]` 字节）；整型与浮点以十进制输出；20 字节 ID 仍为十六进制。task 的 `environment_variable_*` 因此显示为可读字符串与整数计数。
 
 示例：
 

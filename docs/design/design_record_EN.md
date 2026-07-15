@@ -1154,3 +1154,17 @@ Tools should document default mode, split rules, and fuzzy metric if results mus
 ### 6.6. Example (STREAM-style Names)
 
 Examples: `Time::Copy`, `Time::Triad`, `Bandwidth::Triad`. Layout and units use `ndim`, `dimnames`, `dimsizes`, and kernel metadata; `tpbcli database dump` prints names as stored.
+
+### 6.7. CLI dump layout (`.tpbr`, `-i`)
+
+`tpbcli db dump -i` prints a human-readable view aligned with on-disk section markers:
+
+| File region | Dump output |
+|-------------|-------------|
+| START magic | `0x E1 54 …` line before **Section: Metadata** |
+| Fixed attributes + `header[i]` | **Attributes** / **Headers** subsections; `name = value` rows; `type_bits` / `uattr_bits` decoded in parentheses |
+| SPLIT magic | Magic line before **Section: Record Data** |
+| Payload blobs | Per-header axis title (non-zero `dimsizes` only); innermost dimension on one line: `[i][j][]: v0, v1, …` |
+| END magic | Magic line + **END OF FILE** |
+
+`tpbcli db dump -e` (`.tpbe` index) remains CSV-style `key, value` rows.

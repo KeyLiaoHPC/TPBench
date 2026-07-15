@@ -1,6 +1,6 @@
 /*
  * tpbcli-database-dump.c
- * `tpbcli database dump` — CSV-style dump of rafdb .tpbr/.tpbe files.
+ * `tpbcli database dump` — human-readable .tpbr and CSV-style .tpbe output.
  */
 
 #include <ctype.h>
@@ -17,6 +17,7 @@
 
 #include "tpb-public.h"
 #include "tpbcli-database.h"
+#include "tpbcli-database-dump-fmt.h"
 
 #define TPBCLI_DB_DUMP_DEFAULT_COUNT 20
 
@@ -55,24 +56,6 @@ static void dump_print_kv_str(const char *key, const char *val);
 static void dump_print_kv_hex20(const char *key, const unsigned char id[20]);
 static void dump_print_kv_build_datetime_utc(const char *key,
                                              tpb_dtbits_t utc_bits);
-static void dump_headers(const tpb_meta_header_t *hdrs, uint32_t n);
-static size_t dtype_elem_size_from_typebits(uint32_t type_bits);
-static void dump_header_record_lines(const tpb_meta_header_t *h,
-                                     const uint8_t *blob, uint32_t nd,
-                                     uint64_t mult[TPBM_DATA_NDIM_MAX],
-                                     uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
-                                     size_t elem_size);
-static void dump_header_record_string_lines(const tpb_meta_header_t *h,
-                                            const uint8_t *blob, uint32_t nd,
-                                            uint64_t mult[TPBM_DATA_NDIM_MAX],
-                                            uint64_t idx[TPBM_DATA_NDIM_MAX],
-                                            int lev, size_t cell_bytes);
-static void print_string_csv(const char *s, size_t maxlen);
-static int is_string_dtype(uint32_t type_bits);
-static void print_elem_csv(const uint8_t *p, uint32_t type_bits,
-                           size_t elem_size);
-static void dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
-                             const void *data, uint64_t datasize);
 static int dump_tpbr_tbatch(const char *workspace,
                             const unsigned char id[20]);
 static int dump_tpbr_kernel(const char *workspace,
@@ -422,418 +405,61 @@ resolve_hex_arg_and_dump(const char *workspace, uint8_t domain,
     }
 }
 
-static void
-dump_headers(const tpb_meta_header_t *hdrs, uint32_t n)
-{
-    uint32_t i, j;
-
-    for (i = 0; i < n; i++) {
-        const tpb_meta_header_t *h = &hdrs[i];
-        char key[320];
-
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].block_size", i);
-        dump_print_kv_u32(key, h->block_size);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].ndim", i);
-        dump_print_kv_u32(key, h->ndim);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].data_size", i);
-        dump_print_kv_u64(key, h->data_size);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits", i);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%s, 0x%08" PRIx32 "\n", key, h->type_bits);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "]._reserve", i);
-        dump_print_kv_u32(key, h->_reserve);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].uattr_bits", i);
-        dump_print_kv_u64(key, h->uattr_bits);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].name", i);
-        dump_print_kv_str(key, h->name);
-        snprintf(key, sizeof(key), "header[%" PRIu32 "].note", i);
-        dump_print_kv_str(key, h->note);
-
-        for (j = 0; j < (uint32_t)TPBM_DATA_NDIM_MAX; j++) {
-            snprintf(key, sizeof(key), "header[%" PRIu32 "].dimsizes[%" PRIu32 "]",
-                     i, j);
-            dump_print_kv_u64(key, h->dimsizes[j]);
-        }
-        for (j = 0; j < (uint32_t)TPBM_DATA_NDIM_MAX; j++) {
-            snprintf(key, sizeof(key), "header[%" PRIu32 "].dimnames[%" PRIu32 "]",
-                     i, j);
-            dump_print_kv_str(key, h->dimnames[j]);
-        }
-    }
-}
-
-static size_t
-dtype_elem_size_from_typebits(uint32_t type_bits)
-{
-    TPB_DTYPE dt = (TPB_DTYPE)(type_bits & TPB_PARM_TYPE_MASK);
-    uint32_t code = (uint32_t)(dt & 0xFFFFu);
-    uint32_t nbytes = (code >> 8) & 0xFFu;
-
-    if (nbytes == 0) {
-        nbytes = 8;
-    }
-    return (size_t)nbytes;
-}
-
-static int
-is_string_dtype(uint32_t type_bits)
-{
-    return ((type_bits & TPB_PARM_TYPE_MASK) == TPB_STRING_T);
-}
-
-/*
- * Print one STRING cell (dimsizes[0] bytes max). Quote CSV field when needed.
- * STRING payloads use dimsizes[0] as per-cell byte length, not sizeof(char).
- */
-static void
-print_string_csv(const char *s, size_t maxlen)
-{
-    size_t len = 0;
-    int need_quote = 0;
-
-    if (s == NULL || maxlen == 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "");
-        return;
-    }
-    while (len < maxlen && s[len] != '\0') {
-        unsigned char c = (unsigned char)s[len];
-
-        if (c == ',' || c == '"' || c < 32u) {
-            need_quote = 1;
-        }
-        len++;
-    }
-    if (need_quote) {
-        size_t i;
-
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "\"");
-        for (i = 0; i < len; i++) {
-            if (s[i] == '"') {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, "\"\"");
-            } else {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, "%c", s[i]);
-            }
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "\"");
-    } else {
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%.*s", (int)len, s);
-    }
-}
-
-static void
-dump_header_record_string_lines(const tpb_meta_header_t *h, const uint8_t *blob,
-                                uint32_t nd, uint64_t mult[TPBM_DATA_NDIM_MAX],
-                                uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
-                                size_t cell_bytes)
-{
-    if (lev == 0) {
-        uint64_t fix = 0;
-        uint32_t k;
-
-        for (k = 1; k < nd; k++) {
-            fix += idx[k] * mult[k];
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%s", h->name);
-        for (k = nd; k-- > 1u; ) {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "[%" PRIu64 "]", idx[k]);
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "[], ");
-        print_string_csv((const char *)(blob + fix * cell_bytes), cell_bytes);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "\n");
-        return;
-    }
-    {
-        uint64_t t;
-        uint64_t kmax = h->dimsizes[lev];
-
-        for (t = 0; t < kmax; t++) {
-            idx[lev] = t;
-            dump_header_record_string_lines(h, blob, nd, mult, idx, lev - 1,
-                                            cell_bytes);
-        }
-    }
-}
-
-static void
-print_elem_csv(const uint8_t *p, uint32_t type_bits, size_t elem_size)
-{
-    TPB_DTYPE dt = (TPB_DTYPE)(type_bits & TPB_PARM_TYPE_MASK);
-
-    if (elem_size == 20u) {
-        char hx[41];
-        tpb_raf_id_to_hex(p, hx);
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%s", hx);
-        return;
-    }
-
-    switch (dt) {
-    case TPB_INT8_T:
-    case TPB_UINT8_T:
-    case TPB_CHAR_T:
-    case TPB_UNSIGNED_CHAR_T:
-    case TPB_SIGNED_CHAR_T:
-    case TPB_BYTE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%d", (int)*p);
-        break;
-    case TPB_INT16_T:
-    case TPB_UINT16_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%d", (int)*(const int16_t *)(const void *)p);
-        break;
-    case TPB_INT32_T:
-    case TPB_UINT32_T:
-    case TPB_INT_T:
-    case TPB_UNSIGNED_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%d", (int)*(const int32_t *)(const void *)p);
-        break;
-    case TPB_INT64_T:
-    case TPB_UINT64_T:
-    case TPB_LONG_T:
-    case TPB_UNSIGNED_LONG_T:
-    case TPB_LONG_LONG_T:
-    case TPB_UNSIGNED_LONG_LONG_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%" PRId64, (int64_t)*(const int64_t *)(const void *)p);
-        break;
-    case TPB_FLOAT_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%.8g", (double)*(const float *)(const void *)p);
-        break;
-    case TPB_DOUBLE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%.16g", *(const double *)(const void *)p);
-        break;
-    case TPB_LONG_DOUBLE_T:
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%.16Lg", (long double)*(const long double *)(const void *)p);
-        break;
-    default:
-        if (elem_size > 0) {
-            size_t k;
-            for (k = 0; k < elem_size; k++) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, "%s%02x",
-                           k ? "" : "0x", (unsigned)p[k]);
-            }
-        } else {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "0");
-        }
-        break;
-    }
-}
-
-static void
-dump_header_record_lines(const tpb_meta_header_t *h, const uint8_t *blob,
-                         uint32_t nd, uint64_t mult[TPBM_DATA_NDIM_MAX],
-                         uint64_t idx[TPBM_DATA_NDIM_MAX], int lev,
-                         size_t elem_size)
-{
-    if (lev == 0) {
-        uint64_t i0;
-        uint64_t fix = 0;
-        uint32_t k;
-
-        for (k = 1; k < nd; k++) {
-            fix += idx[k] * mult[k];
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "%s", h->name);
-        for (k = nd; k-- > 1u; ) {
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "[%" PRIu64 "]", idx[k]);
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "[], ");
-        for (i0 = 0; i0 < h->dimsizes[0]; i0++) {
-            uint64_t L = fix + i0;
-            if (i0 > 0) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, ", ");
-            }
-            print_elem_csv(blob + (size_t)(L * elem_size),
-                           h->type_bits, elem_size);
-        }
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                   "\n");
-        return;
-    }
-    {
-        uint64_t t;
-        uint64_t kmax = h->dimsizes[lev];
-        for (t = 0; t < kmax; t++) {
-            idx[lev] = t;
-            dump_header_record_lines(h, blob, nd, mult, idx,
-                                     lev - 1, elem_size);
-        }
-    }
-}
-
-static void
-dump_record_data(const tpb_meta_header_t *hdrs, uint32_t nheader,
-                 const void *data, uint64_t datasize)
-{
-    const uint8_t *base = (const uint8_t *)data;
-    uint64_t off = 0;
-    uint32_t hi;
-
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Record Data\n");
-
-    for (hi = 0; hi < nheader; hi++) {
-        const tpb_meta_header_t *h = &hdrs[hi];
-        uint64_t dsz = h->data_size;
-        uint32_t nd = h->ndim;
-        uint64_t total_el = 1;
-        uint32_t j;
-        uint64_t mult[TPBM_DATA_NDIM_MAX];
-        size_t elem_size;
-        const uint8_t *blob;
-
-        if (dsz == 0) {
-            continue;
-        }
-        if (off + dsz > datasize) {
-            break;
-        }
-        blob = base + off;
-        off += dsz;
-
-        if (nd > TPBM_DATA_NDIM_MAX) {
-            nd = TPBM_DATA_NDIM_MAX;
-        }
-
-        for (j = 0; j < nd; j++) {
-            uint64_t d = h->dimsizes[j];
-            if (d == 0) {
-                total_el = 0;
-                break;
-            }
-            if (total_el > UINT64_MAX / d) {
-                total_el = 0;
-                break;
-            }
-            total_el *= d;
-        }
-
-        if (total_el == 0) {
-            continue;
-        }
-
-        elem_size = (size_t)(dsz / total_el);
-        if (elem_size == 0 || (uint64_t)elem_size * total_el != dsz) {
-            elem_size = dtype_elem_size_from_typebits(h->type_bits);
-            if (elem_size == 0 || (uint64_t)elem_size * total_el != dsz) {
-                elem_size = 1;
-            }
-        }
-
-        mult[0] = 1u;
-        for (j = 1; j < nd; j++) {
-            mult[j] = mult[j - 1] * h->dimsizes[j - 1];
-        }
-
-        if (is_string_dtype(h->type_bits)) {
-            size_t cell_bytes = (size_t)h->dimsizes[0];
-
-            if (cell_bytes == 0) {
-                continue;
-            }
-            if (nd <= 1) {
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, "%s[], ", h->name);
-                print_string_csv((const char *)blob, (size_t)dsz);
-                tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                           TPBLOG_FLAG_DIRECT, "\n");
-                continue;
-            }
-            {
-                uint64_t idx[TPBM_DATA_NDIM_MAX];
-
-                memset(idx, 0, sizeof(idx));
-                dump_header_record_string_lines(h, blob, nd, mult, idx,
-                                                (int)nd - 1, cell_bytes);
-            }
-            continue;
-        }
-
-        if (nd <= 1) {
-            uint64_t d0 = nd == 0 ? 1u : h->dimsizes[0];
-            uint64_t i0;
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "%s[], ", h->name);
-            for (i0 = 0; i0 < d0; i0++) {
-                if (i0 > 0) {
-                    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO,
-                               TPBLOG_FLAG_DIRECT, ", ");
-                }
-                print_elem_csv(blob + (size_t)(i0 * elem_size),
-                               h->type_bits, elem_size);
-            }
-            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                       "\n");
-            continue;
-        }
-
-        {
-            uint64_t idx[TPBM_DATA_NDIM_MAX];
-            memset(idx, 0, sizeof(idx));
-            dump_header_record_lines(h, blob, nd, mult, idx,
-                                     (int)nd - 1, elem_size);
-        }
-    }
-}
-
 static int
 dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
 {
+    unsigned char start_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char split_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char end_magic[TPB_RAF_MAGIC_LEN];
     tbatch_attr_t attr;
+    tpbcli_dump_kv_row_t rows[16];
     void *data = NULL;
     uint64_t datasize = 0;
     tpb_datetime_str_t ts;
+    char id_hex[41];
+    int nr = 0;
     int err;
 
-    memset(&attr, 0, sizeof(attr));
-    err = tpb_raf_record_read_tbatch(workspace, id, &attr,
-                                        &data, &datasize);
+    err = tpb_raf_record_peek_magics(workspace, TPB_RAF_DOM_TBATCH, id, 0,
+                                     start_magic, split_magic, end_magic);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Metadata\n");
-    dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
-    dump_print_kv_hex20("derive_to", attr.derive_to);
-    dump_print_kv_hex20("inherit_from", attr.inherit_from);
-    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
-        dump_print_kv_str("start_utc", ts.str);
-    } else {
-        dump_print_kv_u64("utc_bits", attr.utc_bits);
-    }
-    dump_print_kv_u64("btime", attr.btime);
-    dump_print_kv_u64("duration", attr.duration);
-    dump_print_kv_str("hostname", attr.hostname);
-    dump_print_kv_str("username", attr.username);
-    dump_print_kv_u32("front_pid", attr.front_pid);
-    dump_print_kv_u32("nkernel", attr.nkernel);
-    dump_print_kv_u32("ntask", attr.ntask);
-    dump_print_kv_u32("nscore", attr.nscore);
-    dump_print_kv_u32("batch_type", attr.batch_type);
-    dump_print_kv_u32("nheader", attr.nheader);
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_tbatch(workspace, id, &attr, &data, &datasize);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    dump_headers(attr.headers, attr.nheader);
-    dump_record_data(attr.headers, attr.nheader, data, datasize);
+    tpb_raf_id_to_hex(id, id_hex);
+    tpbcli_dump_fmt_print_domain_banner(TPB_RAF_DOM_TBATCH, id_hex);
+    tpbcli_dump_fmt_print_magic_line(start_magic);
+    tpbcli_dump_fmt_print_section_banner("Metadata");
+
+    tpbcli_dump_fmt_print_subsection("Attributes");
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "tbatch_id", attr.tbatch_id);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "derive_to", attr.derive_to);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "inherit_from", attr.inherit_from);
+    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+        tpbcli_dump_fmt_kv_set_str(&rows[nr++], "start_utc", ts.str);
+    } else {
+        tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "utc_bits", attr.utc_bits);
+    }
+    tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "btime", attr.btime);
+    tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "duration", attr.duration);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "hostname", attr.hostname);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "username", attr.username);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "front_pid", attr.front_pid);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nkernel", attr.nkernel);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "ntask", attr.ntask);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nscore", attr.nscore);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "batch_type", attr.batch_type);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nheader", attr.nheader);
+    tpbcli_dump_fmt_print_kv_block(rows, nr);
+
+    tpbcli_dump_fmt_print_headers(attr.headers, attr.nheader);
+
+    tpbcli_dump_fmt_print_magic_line(split_magic);
+    tpbcli_dump_fmt_print_section_banner("Record Data");
+    tpbcli_dump_fmt_print_record_data(attr.headers, attr.nheader, data, datasize);
+    tpbcli_dump_fmt_print_file_end(end_magic);
 
     free(data);
     tpb_raf_free_headers(attr.headers, attr.nheader);
@@ -843,33 +469,53 @@ dump_tpbr_tbatch(const char *workspace, const unsigned char id[20])
 static int
 dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
 {
+    unsigned char start_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char split_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char end_magic[TPB_RAF_MAGIC_LEN];
     kernel_attr_t attr;
+    tpbcli_dump_kv_row_t rows[16];
     void *data = NULL;
     uint64_t datasize = 0;
+    tpb_datetime_str_t ts;
+    char id_hex[41];
+    int nr = 0;
     int err;
 
-    memset(&attr, 0, sizeof(attr));
-    err = tpb_raf_record_read_kernel(workspace, id, &attr,
-                                       &data, &datasize);
+    err = tpb_raf_record_peek_magics(workspace, TPB_RAF_DOM_KERNEL, id, 0,
+                                     start_magic, split_magic, end_magic);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Metadata\n");
-    dump_print_kv_hex20("kernel_id", attr.kernel_id);
-    dump_print_kv_hex20("derive_to", attr.derive_to);
-    dump_print_kv_hex20("inherit_from", attr.inherit_from);
-    dump_print_kv_str("kernel_name", attr.kernel_name);
-    dump_print_kv_str("version", attr.version);
-    dump_print_kv_str("description", attr.description);
-    dump_print_kv_u32("nparm", attr.nparm);
-    dump_print_kv_u32("nmetric", attr.nmetric);
-    dump_print_kv_u32("kctrl", attr.kctrl);
-    dump_print_kv_u32("nheader", attr.nheader);
-    dump_print_kv_u32("active", attr.active);
-    dump_print_kv_build_datetime_utc("Build datetime (UTC)", attr.utc_bits);
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_kernel(workspace, id, &attr, &data, &datasize);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    dump_headers(attr.headers, attr.nheader);
-    dump_record_data(attr.headers, attr.nheader, data, datasize);
+    tpb_raf_id_to_hex(id, id_hex);
+    tpbcli_dump_fmt_print_domain_banner(TPB_RAF_DOM_KERNEL, id_hex);
+    tpbcli_dump_fmt_print_magic_line(start_magic);
+    tpbcli_dump_fmt_print_section_banner("Metadata");
+
+    tpbcli_dump_fmt_print_subsection("Attributes");
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "kernel_id", attr.kernel_id);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "derive_to", attr.derive_to);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "inherit_from", attr.inherit_from);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "kernel_name", attr.kernel_name);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "version", attr.version);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "description", attr.description);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nparm", attr.nparm);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nmetric", attr.nmetric);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "kctrl", attr.kctrl);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nheader", attr.nheader);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "active", attr.active);
+    tpbcli_dump_fmt_kv_set_build_datetime(&rows[nr++], "Build datetime (UTC)",
+                                          attr.utc_bits);
+    tpbcli_dump_fmt_print_kv_block(rows, nr);
+
+    tpbcli_dump_fmt_print_headers(attr.headers, attr.nheader);
+
+    tpbcli_dump_fmt_print_magic_line(split_magic);
+    tpbcli_dump_fmt_print_section_banner("Record Data");
+    tpbcli_dump_fmt_print_record_data(attr.headers, attr.nheader, data, datasize);
+    tpbcli_dump_fmt_print_file_end(end_magic);
 
     free(data);
     tpb_raf_free_headers(attr.headers, attr.nheader);
@@ -879,42 +525,61 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
 static int
 dump_tpbr_task(const char *workspace, const unsigned char id[20])
 {
+    unsigned char start_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char split_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char end_magic[TPB_RAF_MAGIC_LEN];
     task_attr_t attr;
+    tpbcli_dump_kv_row_t rows[20];
     void *data = NULL;
     uint64_t datasize = 0;
     tpb_datetime_str_t ts;
+    char id_hex[41];
+    int nr = 0;
     int err;
 
-    memset(&attr, 0, sizeof(attr));
-    err = tpb_raf_record_read_task(workspace, id, &attr,
-                                     &data, &datasize);
+    err = tpb_raf_record_peek_magics(workspace, TPB_RAF_DOM_TASK, id, 0,
+                                     start_magic, split_magic, end_magic);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Metadata\n");
-    dump_print_kv_hex20("task_record_id", attr.task_record_id);
-    dump_print_kv_hex20("derive_to", attr.derive_to);
-    dump_print_kv_hex20("inherit_from", attr.inherit_from);
-    dump_print_kv_hex20("tbatch_id", attr.tbatch_id);
-    dump_print_kv_hex20("kernel_id", attr.kernel_id);
-    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
-        dump_print_kv_str("start_utc", ts.str);
-    } else {
-        dump_print_kv_u64("utc_bits", attr.utc_bits);
-    }
-    dump_print_kv_u64("btime", attr.btime);
-    dump_print_kv_u64("duration", attr.duration);
-    dump_print_kv_u32("exit_code", attr.exit_code);
-    dump_print_kv_u32("handle_index", attr.handle_index);
-    dump_print_kv_u32("pid", attr.pid);
-    dump_print_kv_u32("tid", attr.tid);
-    dump_print_kv_u32("ninput", attr.ninput);
-    dump_print_kv_u32("noutput", attr.noutput);
-    dump_print_kv_u32("nheader", attr.nheader);
-    dump_print_kv_u32("reserve", attr.reserve);
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_task(workspace, id, &attr, &data, &datasize);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    dump_headers(attr.headers, attr.nheader);
-    dump_record_data(attr.headers, attr.nheader, data, datasize);
+    tpb_raf_id_to_hex(id, id_hex);
+    tpbcli_dump_fmt_print_domain_banner(TPB_RAF_DOM_TASK, id_hex);
+    tpbcli_dump_fmt_print_magic_line(start_magic);
+    tpbcli_dump_fmt_print_section_banner("Metadata");
+
+    tpbcli_dump_fmt_print_subsection("Attributes");
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "task_record_id",
+                                 attr.task_record_id);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "derive_to", attr.derive_to);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "inherit_from", attr.inherit_from);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "tbatch_id", attr.tbatch_id);
+    tpbcli_dump_fmt_kv_set_hex20(&rows[nr++], "kernel_id", attr.kernel_id);
+    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+        tpbcli_dump_fmt_kv_set_str(&rows[nr++], "start_utc", ts.str);
+    } else {
+        tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "utc_bits", attr.utc_bits);
+    }
+    tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "btime", attr.btime);
+    tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "duration", attr.duration);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "exit_code", attr.exit_code);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "handle_index", attr.handle_index);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "pid", attr.pid);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "tid", attr.tid);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "ninput", attr.ninput);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "noutput", attr.noutput);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nheader", attr.nheader);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "reserve", attr.reserve);
+    tpbcli_dump_fmt_print_kv_block(rows, nr);
+
+    tpbcli_dump_fmt_print_headers(attr.headers, attr.nheader);
+
+    tpbcli_dump_fmt_print_magic_line(split_magic);
+    tpbcli_dump_fmt_print_section_banner("Record Data");
+    tpbcli_dump_fmt_print_record_data(attr.headers, attr.nheader, data, datasize);
+    tpbcli_dump_fmt_print_file_end(end_magic);
 
     free(data);
     tpb_raf_free_headers(attr.headers, attr.nheader);
@@ -924,38 +589,58 @@ dump_tpbr_task(const char *workspace, const unsigned char id[20])
 static int
 dump_tpbr_rtenv(const char *workspace, int32_t id)
 {
+    unsigned char start_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char split_magic[TPB_RAF_MAGIC_LEN];
+    unsigned char end_magic[TPB_RAF_MAGIC_LEN];
     tpb_raf_rtenv_attr_t attr;
     tpb_meta_header_t *hdrs = NULL;
+    tpbcli_dump_kv_row_t rows[16];
     void *data = NULL;
     uint64_t datasize = 0;
     tpb_datetime_str_t ts;
+    char id_buf[32];
+    int nr = 0;
     int err;
 
-    memset(&attr, 0, sizeof(attr));
-    err = tpb_raf_record_read_rtenv(workspace, id, &attr, &hdrs, &data, &datasize);
+    err = tpb_raf_record_peek_magics(workspace, TPB_RAF_DOM_RTENV, NULL, id,
+                                     start_magic, split_magic, end_magic);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-               "Metadata\n");
-    dump_print_kv_i32("id", attr.id);
-    dump_print_kv_str("name", attr.name);
-    dump_print_kv_str("hostname", attr.hostname);
-    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
-        dump_print_kv_str("start_utc", ts.str);
-    } else {
-        dump_print_kv_u64("utc_bits", attr.utc_bits);
-    }
-    dump_print_kv_i32("inherit_from", attr.inherit_from);
-    dump_print_kv_i32("derive_to", attr.derive_to);
-    dump_print_kv_u32("ntask", attr.ntask);
-    dump_print_kv_u32("ntbatch", attr.ntbatch);
-    dump_print_kv_str("note", attr.note);
-    dump_print_kv_u32("napp", attr.napp);
-    dump_print_kv_u32("nenv", attr.nenv);
-    dump_print_kv_u32("nheader", attr.nheader);
+    memset(&attr, 0, sizeof(attr));
+    err = tpb_raf_record_read_rtenv(workspace, id, &attr, &hdrs, &data,
+                                    &datasize);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
 
-    dump_headers(hdrs, attr.nheader);
-    dump_record_data(hdrs, attr.nheader, data, datasize);
+    snprintf(id_buf, sizeof(id_buf), "%" PRId32, id);
+    tpbcli_dump_fmt_print_domain_banner(TPB_RAF_DOM_RTENV, id_buf);
+    tpbcli_dump_fmt_print_magic_line(start_magic);
+    tpbcli_dump_fmt_print_section_banner("Metadata");
+
+    tpbcli_dump_fmt_print_subsection("Attributes");
+    tpbcli_dump_fmt_kv_set_i32(&rows[nr++], "id", attr.id);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "name", attr.name);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "hostname", attr.hostname);
+    if (tpb_ts_bits_to_isoutc(attr.utc_bits, &ts) == 0) {
+        tpbcli_dump_fmt_kv_set_str(&rows[nr++], "start_utc", ts.str);
+    } else {
+        tpbcli_dump_fmt_kv_set_u64(&rows[nr++], "utc_bits", attr.utc_bits);
+    }
+    tpbcli_dump_fmt_kv_set_i32(&rows[nr++], "inherit_from", attr.inherit_from);
+    tpbcli_dump_fmt_kv_set_i32(&rows[nr++], "derive_to", attr.derive_to);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "ntask", attr.ntask);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "ntbatch", attr.ntbatch);
+    tpbcli_dump_fmt_kv_set_str(&rows[nr++], "note", attr.note);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "napp", attr.napp);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nenv", attr.nenv);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nheader", attr.nheader);
+    tpbcli_dump_fmt_print_kv_block(rows, nr);
+
+    tpbcli_dump_fmt_print_headers(hdrs, attr.nheader);
+
+    tpbcli_dump_fmt_print_magic_line(split_magic);
+    tpbcli_dump_fmt_print_section_banner("Record Data");
+    tpbcli_dump_fmt_print_record_data(hdrs, attr.nheader, data, datasize);
+    tpbcli_dump_fmt_print_file_end(end_magic);
 
     free(data);
     tpb_raf_free_headers(hdrs, attr.nheader);

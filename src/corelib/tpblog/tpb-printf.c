@@ -457,3 +457,105 @@ tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
         _sf_dual_write("\n");
     }
 }
+
+void
+tpblog_print_hline(char fill)
+{
+    int width = _tpblog_terminal_width();
+    char line[512];
+    int i;
+
+    if (width <= 0) {
+        width = 85;
+    }
+    if (width >= (int)sizeof(line)) {
+        width = (int)sizeof(line) - 2;
+    }
+    for (i = 0; i < width; i++) {
+        line[i] = fill;
+    }
+    line[width] = '\n';
+    line[width + 1] = '\0';
+    _sf_dual_write(line);
+}
+
+void
+tpblog_print_kv_eq(const char *key, const char *value, int key_width)
+{
+    size_t kpos = 0;
+    size_t vpos = 0;
+    size_t klen;
+    size_t vlen;
+    int total;
+    int val_width;
+    int first = 1;
+    char line_buf[4096];
+
+    if (key == NULL) {
+        key = "";
+    }
+    if (value == NULL) {
+        value = "";
+    }
+    if (key_width < 1) {
+        key_width = 8;
+    }
+
+    klen = strlen(key);
+    vlen = strlen(value);
+    total = _tpblog_terminal_width();
+    if (total < 20) {
+        total = 85;
+    }
+    val_width = total - key_width - 3;
+    if (val_width < 8) {
+        val_width = 8;
+    }
+
+    while (kpos < klen || vpos < vlen || first) {
+        size_t kchunk = 0;
+        size_t vchunk = 0;
+
+        if (!first) {
+            _sf_dual_write("\n");
+        }
+        first = 0;
+
+        if (kpos < klen) {
+            kchunk = klen - kpos;
+            if (kchunk > (size_t)key_width) {
+                kchunk = (size_t)key_width;
+            }
+        }
+        if (vpos < vlen) {
+            vchunk = vlen - vpos;
+            if (vchunk > (size_t)val_width) {
+                vchunk = (size_t)val_width;
+            }
+        }
+
+        if (kpos >= klen && vpos < vlen) {
+            /* Value continuation: indent under value column, no extra '='. */
+            snprintf(line_buf, sizeof(line_buf), "%*s%.*s",
+                     key_width + 3, "",
+                     (int)vchunk, value + vpos);
+        } else if (kpos < klen && vpos >= vlen) {
+            snprintf(line_buf, sizeof(line_buf), "%.*s%*s = ",
+                     (int)kchunk, key + kpos,
+                     (int)(key_width - (int)kchunk), "");
+        } else {
+            snprintf(line_buf, sizeof(line_buf), "%.*s%*s = %.*s",
+                     (int)kchunk, key + kpos,
+                     (int)(key_width - (int)kchunk), "",
+                     (int)vchunk, value + vpos);
+        }
+        _sf_dual_write(line_buf);
+
+        kpos += kchunk;
+        vpos += vchunk;
+        if (kchunk == 0 && vchunk == 0) {
+            break;
+        }
+    }
+    _sf_dual_write("\n");
+}

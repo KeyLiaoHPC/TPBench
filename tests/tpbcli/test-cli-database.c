@@ -573,18 +573,51 @@ test_b4_23_dump_rtenv_record(void)
         fprintf(stderr, "    exit %d\n", code);
         return 1;
     }
-    if (strstr(buf, "Metadata") == NULL || strstr(buf, "id, 1") == NULL) {
+    if (strstr(buf, "Section: Metadata") == NULL ||
+        strstr(buf, "id           = 1") == NULL) {
         FAIL("B4.23: missing rtenv .tpbr metadata");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    nenv_line = strstr(buf, "nenv, ");
+    if (strstr(buf, "0x E1 54 50 42") == NULL) {
+        FAIL("B4.23: missing tpbr START magic line");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
+        "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
+        "| tail -5",
+        buf, sizeof(buf));
+    if (code != 0 || strstr(buf, "END OF FILE") == NULL) {
+        FAIL("B4.23: missing tpbr END OF FILE trailer");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
+        "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
+        "| grep -F 'nenv'",
+        buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B4.23: missing nenv in metadata");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    nenv_line = strstr(buf, "nenv         = ");
+    if (nenv_line == NULL) {
+        nenv_line = strstr(buf, "nenv = ");
+    }
     if (nenv_line == NULL) {
         FAIL("B4.23: missing nenv in metadata");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    nenv_val = atoi(nenv_line + strlen("nenv, "));
+    nenv_val = atoi(nenv_line + strcspn(nenv_line, "=") + 1);
     if (nenv_val <= 0) {
         FAIL("B4.23: expected nenv > 0 from post-build snapshot");
         fprintf(stderr, "    nenv=%d\n", nenv_val);
@@ -594,28 +627,24 @@ test_b4_23_dump_rtenv_record(void)
     code = run_cmd_capture(
         "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
         "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
-        "| grep -F 'key[0]'",
+        "| grep -F '[]: SHELL'",
         buf, sizeof(buf));
-    if (code != 0 || strstr(buf, "key[0]") == NULL) {
-        FAIL("B4.23: missing key[0] in Record Data");
+    if (code != 0 || strstr(buf, "[]: SHELL") == NULL) {
+        FAIL("B4.23: missing key[0] STRING payload in Record Data");
         fprintf(stderr, "    exit %d output: %.400s\n", code, buf);
         return 1;
     }
-    {
-        const char *key_val = strstr(buf, "key[0][], ");
-
-        if (key_val == NULL || strstr(key_val, "0x") != NULL) {
-            FAIL("B4.23: key[0] must be human-readable STRING, not hex bytes");
-            fprintf(stderr, "    output: %.400s\n", buf);
-            return 1;
-        }
+    if (strstr(buf, "0x") != NULL) {
+        FAIL("B4.23: key[0] must be human-readable STRING, not hex bytes");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
     }
 
     memset(buf, 0, sizeof(buf));
     code = run_cmd_capture(
         "TPB_WORKSPACE=\"" TPB_TEST_WORKSPACE "\" "
         "\"" TPB_TEST_TPBCLI_STR "\" database dump -dr -i 1 2>&1 "
-        "| grep -F 'application[],'",
+        "| grep -F 'application ['",
         buf, sizeof(buf));
     if (code == 0) {
         FAIL("B4.23: zero-length application header must not appear in Record Data");

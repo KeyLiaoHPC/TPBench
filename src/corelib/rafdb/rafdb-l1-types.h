@@ -10,18 +10,7 @@
 #include <limits.h>
 #include "../../include/tpb-public.h"
 
-/* Magic signature template: E1 54 50 42 <X> <Y> 31 E0 */
-#define TPB_RAF_MAGIC_LEN     8
-#define TPB_RAF_MAGIC_B0      0xE1
-#define TPB_RAF_MAGIC_B1      0x54  /* 'T' */
-#define TPB_RAF_MAGIC_B2      0x50  /* 'P' */
-#define TPB_RAF_MAGIC_B3      0x42  /* 'B' */
-#define TPB_RAF_MAGIC_B6      0x31  /* '1' */
-#define TPB_RAF_MAGIC_B7      0xE0
-
-#define TPB_RAF_POS_START     0x53  /* 'S' */
-#define TPB_RAF_POS_SPLIT     0x44  /* 'D' */
-#define TPB_RAF_POS_END       0x45  /* 'E' */
+/* Magic / position constants: TPB_RAF_MAGIC_* and TPB_RAF_POS_* in tpb-public.h */
 
 #define TPB_RAF_ENTRY_SIZE    264
 

@@ -34,6 +34,7 @@ add_executable(tpbcli
     database/tpbcli-database.c
     database/tpbcli-database-ls.c
     database/tpbcli-database-dump.c
+    database/tpbcli-database-dump-fmt.c
     rtenv/tpbcli-rtenv.c
     rtenv/tpbcli-rtenv-new.c
     rtenv/tpbcli-rtenv-list.c

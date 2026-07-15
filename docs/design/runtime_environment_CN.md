@@ -77,8 +77,8 @@ ${TPB_WORKSPACE}/rafdb/runtime_environment/
 
 - `.tpbe` 中的 `id` 是 `int32`。
 - `.tpbr` 文件名为 10 位零填充十进制 ID，后缀 `.tpbr`。
-- `tpbcli db dump -dr -i <id>` 导出 RTEnv `.tpbr`；`tpbcli db dump -dr -e` 导出
-  `.tpbe` 索引。亦可使用 `tpbcli rtenv show -i <id>`。
+- `tpbcli db dump -dr -i <id>` 导出 RTEnv `.tpbr`（等宽布局、magic 行、解码后的 bits）；`tpbcli db dump -dr -e` 导出
+  `.tpbe` 索引（CSV 风格）。亦可使用 `tpbcli rtenv show -i <id>`。
 - rafdb L1 domain registry 需要允许该 domain 使用 numeric-id path builder。
 
 新增 magic domain nibble：

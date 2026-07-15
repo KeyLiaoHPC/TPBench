@@ -27,6 +27,7 @@ set(TPB_CORELIB_SOURCES
     rafdb/rafdb-l2-task.c
     rafdb/rafdb-l2-kernel-meta-build.c
     rafdb/rafdb-l2-runtime-environment.c
+    rafdb/rafdb-l2-record-peek-magics.c
     rafdb/rafdb-l3-tbatch-taglink.c
     rafdb/rafdb-l3-runtime-environment-counter.c
     rafdb/rafdb-l3-runtime-environment-derive.c
