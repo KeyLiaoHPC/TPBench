@@ -915,6 +915,9 @@ tpb_rtenv_capture_environ_snapshot(const char *workspace)
     return TPBE_SUCCESS;
 }
 
+/**
+ * @brief Append TPB_TASK_ENV_SNAPSHOT_HDR_COUNT environment snapshot headers.
+ */
 int
 tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
                                       uint32_t *nheader,
@@ -940,7 +943,9 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
              * sizeof(int32_t);
 
     hdrs = (tpb_meta_header_t *)realloc(
-        *headers, (size_t)(*nheader + 3) * sizeof(tpb_meta_header_t));
+        *headers,
+        (size_t)(*nheader + TPB_TASK_ENV_SNAPSHOT_HDR_COUNT)
+            * sizeof(tpb_meta_header_t));
     if (hdrs == NULL) {
         TPB_FAIL(TPB_MOD_MISC, TPBE_MALLOC_FAIL, NULL);
     }
@@ -953,14 +958,15 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     }
     *rec_data = data;
 
-    memset(&hdrs[base], 0, 3 * sizeof(tpb_meta_header_t));
+    memset(&hdrs[base], 0,
+           TPB_TASK_ENV_SNAPSHOT_HDR_COUNT * sizeof(tpb_meta_header_t));
     hdrs[base].block_size = TPB_RAF_HDR_FIXED_SIZE;
     hdrs[base].ndim = 1;
     hdrs[base].dimsizes[0] = kb_len;
     hdrs[base].data_size = kb_len;
     hdrs[base].type_bits = (uint32_t)(TPB_STRING_T & TPB_PARM_TYPE_MASK);
-    snprintf(hdrs[base].name, sizeof(hdrs[base].name),
-             "environment_variable_key");
+    snprintf(hdrs[base].name, sizeof(hdrs[base].name), "%s",
+             TPB_TASK_HDR_ENV_KEY);
     if (s_env_snap.key_blob != NULL && s_env_snap.key_len > 0) {
         memcpy((uint8_t *)data + dsize, s_env_snap.key_blob, kb_len - 1);
     }
@@ -972,8 +978,8 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     hdrs[base + 1].dimsizes[0] = (uint64_t)s_env_snap.nkeys;
     hdrs[base + 1].data_size = cb_len;
     hdrs[base + 1].type_bits = (uint32_t)(TPB_INT32_T & TPB_PARM_TYPE_MASK);
-    snprintf(hdrs[base + 1].name, sizeof(hdrs[base + 1].name),
-             "environment_variable_count");
+    snprintf(hdrs[base + 1].name, sizeof(hdrs[base + 1].name), "%s",
+             TPB_TASK_HDR_ENV_COUNT);
     if (s_env_snap.nkeys > 0 && s_env_snap.counts != NULL) {
         memcpy((uint8_t *)data + dsize, s_env_snap.counts, cb_len);
     } else {
@@ -986,15 +992,15 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     hdrs[base + 2].dimsizes[0] = vb_len;
     hdrs[base + 2].data_size = vb_len;
     hdrs[base + 2].type_bits = (uint32_t)(TPB_STRING_T & TPB_PARM_TYPE_MASK);
-    snprintf(hdrs[base + 2].name, sizeof(hdrs[base + 2].name),
-             "environment_variable_value");
+    snprintf(hdrs[base + 2].name, sizeof(hdrs[base + 2].name), "%s",
+             TPB_TASK_HDR_ENV_VALUE);
     if (s_env_snap.value_blob != NULL && s_env_snap.value_len > 0) {
         memcpy((uint8_t *)data + dsize, s_env_snap.value_blob, vb_len - 1);
     }
     ((char *)data)[dsize + vb_len - 1] = '\0';
     dsize += vb_len;
 
-    *nheader = base + 3;
+    *nheader = base + TPB_TASK_ENV_SNAPSHOT_HDR_COUNT;
     *rec_datasize = dsize;
     return TPBE_SUCCESS;
 }

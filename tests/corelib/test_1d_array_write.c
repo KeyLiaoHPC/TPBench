@@ -49,6 +49,34 @@ elem_size_for_dtype(TPB_DTYPE dtype)
     }
 }
 
+/**
+ * @brief Verify the three environment snapshot headers exist by name.
+ *
+ * Does not require an exact nheader; optional trailing headers are allowed.
+ */
+static int
+_sf_task_env_snapshot_headers_ok(const task_attr_t *attr)
+{
+    int found_key = 0;
+    int found_count = 0;
+    int found_value = 0;
+    uint32_t i;
+
+    if (attr == NULL || attr->headers == NULL) {
+        return 0;
+    }
+    for (i = 0; i < attr->nheader; i++) {
+        if (strcmp(attr->headers[i].name, TPB_TASK_HDR_ENV_KEY) == 0) {
+            found_key = 1;
+        } else if (strcmp(attr->headers[i].name, TPB_TASK_HDR_ENV_COUNT) == 0) {
+            found_count = 1;
+        } else if (strcmp(attr->headers[i].name, TPB_TASK_HDR_ENV_VALUE) == 0) {
+            found_value = 1;
+        }
+    }
+    return found_key && found_count && found_value;
+}
+
 static int
 do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
                    const char **names, const char *tag)
@@ -151,9 +179,20 @@ do_write_read_test(int nout, TPB_DTYPE *dtypes, int *counts,
                 nout, rattr.noutput);
         ret = 1;
     }
-    if (rattr.nheader != rattr.ninput + rattr.noutput + 3u) {
-        fprintf(stderr, "  FAIL: nheader expected %u, got %u\n",
-                rattr.ninput + rattr.noutput + 3u, rattr.nheader);
+    /*
+     * Lower bound on nheader: env snapshot headers follow input/output; more
+     * fixed or user headers may trail without breaking readers.
+     */
+    if (rattr.nheader < rattr.ninput + rattr.noutput +
+            TPB_TASK_ENV_SNAPSHOT_HDR_COUNT) {
+        fprintf(stderr, "  FAIL: nheader expected >= %u, got %u\n",
+                rattr.ninput + rattr.noutput + TPB_TASK_ENV_SNAPSHOT_HDR_COUNT,
+                rattr.nheader);
+        ret = 1;
+    }
+    if (!ret && !_sf_task_env_snapshot_headers_ok(&rattr)) {
+        fprintf(stderr,
+                "  FAIL: missing one or more environment_variable_* headers\n");
         ret = 1;
     }
 
@@ -449,9 +488,21 @@ test_write_read_skip_unalloc_output(void)
                     rattr.noutput);
                 ret = 1;
             }
-            if (rattr.nheader != rattr.ninput + rattr.noutput + 3u) {
-                fprintf(stderr, "  FAIL: nheader expected %u, got %u\n",
-                    rattr.ninput + rattr.noutput + 3u, rattr.nheader);
+            /*
+             * Lower bound on nheader; required env headers checked by name.
+             */
+            if (rattr.nheader < rattr.ninput + rattr.noutput +
+                    TPB_TASK_ENV_SNAPSHOT_HDR_COUNT) {
+                fprintf(stderr, "  FAIL: nheader expected >= %u, got %u\n",
+                    rattr.ninput + rattr.noutput +
+                        TPB_TASK_ENV_SNAPSHOT_HDR_COUNT,
+                    rattr.nheader);
+                ret = 1;
+            }
+            if (!ret && !_sf_task_env_snapshot_headers_ok(&rattr)) {
+                fprintf(stderr,
+                    "  FAIL: missing one or more environment_variable_* "
+                    "headers\n");
                 ret = 1;
             }
 

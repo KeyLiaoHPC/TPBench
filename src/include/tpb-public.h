@@ -1611,7 +1611,11 @@ int tpb_rtenv_capture_environ_snapshot(const char *workspace);
 void tpb_rtenv_clear_environ_snapshot(void);
 
 /**
- * @brief Append three environment_variable_* meta headers from snapshot.
+ * @brief Append TPB_TASK_ENV_SNAPSHOT_HDR_COUNT environment snapshot headers.
+ *
+ * Appends after any headers already in *headers (typically input/output).
+ * Extra trailing headers may be added later without breaking readers.
+ *
  * @param headers Reallocated header array (may be NULL if only env headers).
  * @param nheader In/out header count.
  * @param rec_data Reallocated payload.
@@ -1775,6 +1779,17 @@ int tpb_raf_hash_file(const char *filepath, unsigned char sha1_out[20]);
 #define TPB_RAF_KERNEL_HDR_VARIATION    "variation"
 #define TPB_RAF_KERNEL_HDR_COMPILATION  "compilation"
 #define TPB_RAF_KERNEL_HDR_DEPENDENCY   "dependency"
+
+/**
+ * Number of fixed environment snapshot headers appended after input/output
+ * headers in task .tpbr (see tpb_rtenv_append_env_snapshot_headers).
+ */
+#define TPB_TASK_ENV_SNAPSHOT_HDR_COUNT 3
+
+/** Environment snapshot header names in task .tpbr */
+#define TPB_TASK_HDR_ENV_KEY            "environment_variable_key"
+#define TPB_TASK_HDR_ENV_COUNT          "environment_variable_count"
+#define TPB_TASK_HDR_ENV_VALUE          "environment_variable_value"
 
 /** Environment variable: allow overwriting an existing KernelID record */
 #define TPB_K_OVERRIDE_ENV              "TPB_K_OVERRIDE"

@@ -34,6 +34,36 @@ cleanup_test_dir(void)
     system(cmd);
 }
 
+/**
+ * @brief Verify variation/compilation/dependency exist after parm/metric headers.
+ *
+ * Uses name lookup only; trailing fixed or user meta headers are allowed.
+ */
+static int
+_sf_kernel_meta_headers_ok(const kernel_attr_t *attr)
+{
+    int idx_var;
+    int idx_comp;
+    int idx_dep;
+    uint32_t meta_base;
+
+    if (attr == NULL || attr->headers == NULL) {
+        return 0;
+    }
+    meta_base = attr->nparm + attr->nmetric;
+    idx_var = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_VARIATION);
+    idx_comp = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_COMPILATION);
+    idx_dep = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_DEPENDENCY);
+    if (idx_var < 0 || idx_comp < 0 || idx_dep < 0) {
+        return 0;
+    }
+    if ((uint32_t)idx_var < meta_base || (uint32_t)idx_comp < meta_base ||
+        (uint32_t)idx_dep < meta_base) {
+        return 0;
+    }
+    return 1;
+}
+
 static int
 test_build_attr_counts(void)
 {
@@ -73,14 +103,22 @@ test_build_attr_counts(void)
     if (err != TPBE_SUCCESS) {
         return 1;
     }
-    if (attr.nparm != 2 || attr.nmetric != 1 ||
-        attr.nheader != 2 + 1 + TPB_RAF_KERNEL_META_HDR_COUNT) {
+    if (attr.nparm != 2 || attr.nmetric != 1) {
+        tpb_raf_kernel_free_built_attr(&attr, data);
+        return 1;
+    }
+    /*
+     * Lower bound on nheader only: exact equality would fail when extra fixed
+     * or user meta headers are appended after variation/compilation/dependency.
+     */
+    if (attr.nheader < attr.nparm + attr.nmetric +
+            TPB_RAF_KERNEL_META_HDR_COUNT) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
     }
     if (strcmp(attr.headers[0].name, "ntest") != 0 ||
-        strcmp(attr.headers[2].name, "bandwidth") != 0 ||
-        strcmp(attr.headers[5].name, TPB_RAF_KERNEL_HDR_DEPENDENCY) != 0) {
+        strcmp(attr.headers[attr.nparm].name, "bandwidth") != 0 ||
+        !_sf_kernel_meta_headers_ok(&attr)) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
     }
@@ -143,8 +181,13 @@ test_stream_register_record(void)
         return 1;
     }
 
+    /*
+     * nheader is a lower bound; required meta headers are checked by name.
+     */
     if (attr.nparm < 3 || attr.nmetric < 4 ||
-        attr.nheader != attr.nparm + attr.nmetric + TPB_RAF_KERNEL_META_HDR_COUNT ||
+        attr.nheader < attr.nparm + attr.nmetric +
+            TPB_RAF_KERNEL_META_HDR_COUNT ||
+        !_sf_kernel_meta_headers_ok(&attr) ||
         attr.utc_bits == 0 || entries[0].utc_bits == 0 ||
         entries[0].utc_bits != attr.utc_bits) {
         tpb_raf_free_headers(attr.headers, attr.nheader);

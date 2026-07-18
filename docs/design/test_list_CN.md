@@ -62,8 +62,8 @@
 | A6.7 | `corelib/rafdb/rafdb-l3-task-taglink.c` | 验证三条 task 追加至 capsule，载荷为 80 字节且顺序保持。 |
 | A6.8 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `rafdb-l1-entry.c` | 验证两个独立进程可分别追加 task 至同一 capsule（跨 PID 锁）。 |
 | A6.9 | `corelib/tpb-autorecord.c` | 验证 `tpb_k_sync_capsule_task` 返回与创建时相同的 capsule ID。 |
-| A7.1 | `corelib/rafdb/rafdb-l2-kernel-meta-build.c` | 验证 `tpb_raf_kernel_build_registered_attr` 正确统计 parm 和 metric 数量。 |
-| A7.2 | `corelib/tpb-autorecord.c`, `kernels/simple/tpbk_stream.c` | 验证真实 stream kernel 注册后 record 包含 ≥3 个 parm 和 ≥4 个 metric。 |
+| A7.1 | `corelib/rafdb/rafdb-l2-kernel-meta-build.c` | 验证 `tpb_raf_kernel_build_registered_attr` 正确统计 parm 和 metric 数量；`nheader` 为下限（含固定 meta），必选 meta header 按名校验。 |
+| A7.2 | `corelib/tpb-autorecord.c`, `kernels/simple/tpbk_stream.c` | 验证真实 stream kernel 注册后 record 包含 ≥3 个 parm 和 ≥4 个 metric；`nheader` 为下限，variation/compilation/dependency 按名存在。 |
 | A8.1 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 初始化后日志文件包含 "TPBench Run Log" 和会话头。 |
 | A8.2 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 重新初始化时追加内容且不重写文件头。 |
 | A8.3 | `corelib/tpblog/tpb-printf.h` | 验证 tpblog 输出同时出现在 stdout 和日志文件中。 |
