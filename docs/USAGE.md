@@ -643,7 +643,7 @@ export TPB_HOME=/path/to/tpbench    # or rely on $HOME/.tpbench default
 tpbcli kernel init --dir ./mykern --kernel mykern
 ```
 
-Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (parameter **`n`**, metric **`FOM,COUNT::Value`**).
+Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (argument **`n`**, metric name **`Value`** with tags **`FOM,COUNT`**).
 
 ### 2.5.6 Build kernel(s)
 

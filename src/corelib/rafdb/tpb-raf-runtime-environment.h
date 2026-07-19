@@ -25,7 +25,7 @@ typedef struct rtenv_entry_disk {
 } __attribute__((packed)) rtenv_entry_disk_t;
 
 /** @brief L3 derive link header name on parent .tpbr */
-#define TPB_RAF_RTENV_HDR_DERIVE_TO  "TPBLINK::DeriveTo"
+#define TPB_RAF_RTENV_HDR_DERIVE_TO  "DeriveTo"
 
 /** @brief Application table header name */
 #define TPB_RAF_RTENV_HDR_APPLICATION "application"

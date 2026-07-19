@@ -429,7 +429,7 @@ list_kernel(const char *workspace, int count, int from_oldest)
             snprintf(c0, sizeof(c0), "%s",
                      e->kernel_name[0] != '\0' ? e->kernel_name : "-");
             snprintf(c1, sizeof(c1), "%s", e->active ? "yes" : "no");
-            snprintf(c2, sizeof(c2), "%u", e->nparm);
+            snprintf(c2, sizeof(c2), "%u", e->narg);
             snprintf(c3, sizeof(c3), "%u", e->nmetric);
             if (tpb_ts_bits_to_isoutc(e->utc_bits, &ts) != 0) {
                 snprintf(c4, sizeof(c4), "-");
@@ -453,7 +453,7 @@ list_kernel(const char *workspace, int count, int from_oldest)
             snprintf(c0, sizeof(c0), "%s",
                      e->kernel_name[0] != '\0' ? e->kernel_name : "-");
             snprintf(c1, sizeof(c1), "%s", e->active ? "yes" : "no");
-            snprintf(c2, sizeof(c2), "%u", e->nparm);
+            snprintf(c2, sizeof(c2), "%u", e->narg);
             snprintf(c3, sizeof(c3), "%u", e->nmetric);
             if (tpb_ts_bits_to_isoutc(e->utc_bits, &ts) != 0) {
                 snprintf(c4, sizeof(c4), "-");

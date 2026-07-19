@@ -713,7 +713,7 @@ SHA1("taskcapsule" + <utc_bits> + <btime> + <hostname> + <username>
 
 **固定 header（单条）：**
 
-- **名称：** `TPBLINK::TaskID`
+- **名称：** `TaskID`（`tag=TPBLINK`）
 - **语义：** 20 字节 task record ID 的一维数组；追加时使用文件锁原地增长（实现：`rafdb-l3-task-taglink.c`）。
 
 **tbatch 域 TPBLINK：** tbatch `.tpbr` 通过 `TPBLINK::TaskID` / `TPBLINK::KernelID` 链接 task 与 kernel（实现：`rafdb-l3-tbatch-taglink.c`）。

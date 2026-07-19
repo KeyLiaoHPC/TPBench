@@ -21,11 +21,12 @@
 #include "tpb-driver.h"
 #include "tpb-types.h"
 #include "tpb-unitcast.h"
+#include "tpb-tag-norm.h"
 #include "tpb_corelib_state.h"
 #include "rafdb/tpb-raf-types.h"
 
 /* Local Function Prototypes */
-static int _sf_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize);
+static int _sf_format_parm_value(const tpb_rt_arg_t *parm, char *buf, size_t bufsize);
 static int _sf_format_sigfig(double value, char *buf, size_t bufsize, int sigbit);
 static inline TPB_UNIT_T _sf_get_uname(TPB_UNIT_T unit);
 static void _sf_init_cliout(void);
@@ -127,7 +128,7 @@ _sf_print_dhline(int width)
 }
 
 static int
-_sf_format_parm_value(const tpb_rt_parm_t *parm, char *buf, size_t bufsize)
+_sf_format_parm_value(const tpb_rt_arg_t *parm, char *buf, size_t bufsize)
 {
     TPB_DTYPE type_only = parm->ctrlbits & TPB_PARM_TYPE_MASK;
 
@@ -393,8 +394,19 @@ tpb_cliout_results(tpb_k_rthdl_t *handle)
         int trim_disabled = (out->unit & TPB_UATTR_TRIM_MASK) == TPB_UATTR_TRIM_N;  /* TRIM_N means bit is set */
         TPB_UNIT_T base_unit = out->unit & ~TPB_UATTR_MASK;  /* Strip attributes */
 
-        /* Print metrics name */
-        tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "Metrics: %s\n", out->name);
+        /* Print local name and display-formatted tags on separate lines. */
+        {
+            char tags_disp[TPBM_NAME_STR_MAX_LEN * 2];
+
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                            "Name: %s\n", out->name);
+            if (_sf_format_tags_display(tags_disp, sizeof(tags_disp),
+                                        out->tag) != 0) {
+                tags_disp[0] = '\0';
+            }
+            tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
+                            "Tags: %s\n", tags_disp);
+        }
 
         /* Determine display unit */
         TPB_UNIT_T display_unit = base_unit;

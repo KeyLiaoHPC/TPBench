@@ -408,7 +408,7 @@ _sf_resolve_kernel_id_for_workspace(const char *workspace,
         memcpy(ent.kernel_id, computed_id, 20);
         snprintf(ent.kernel_name, sizeof(ent.kernel_name), "%s", kernel_name);
         ent.kctrl = (uint32_t)registered->info.kctrl;
-        ent.nparm = (uint32_t)registered->info.nparms;
+        ent.narg = (uint32_t)registered->info.nargs;
         ent.nmetric = (uint32_t)registered->info.nouts;
         ent.active = 1;
         ent.utc_bits = build_utc;

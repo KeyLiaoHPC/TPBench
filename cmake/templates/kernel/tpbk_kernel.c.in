@@ -26,14 +26,14 @@ tpbk_pli_register_@KERNEL_NAME@(void)
         return err;
     }
 
-    err = tpb_k_add_parm("n", "Number of iterations", "10",
-                         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                         (int64_t)1, (int64_t)1000000);
+    err = tpb_k_add_arg("n", NULL, "Number of iterations", "10",
+                        TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                        (int64_t)1, (int64_t)1000000);
     if (err != 0) {
         return err;
     }
 
-    err = tpb_k_add_output("FOM,COUNT::Value",
+    err = tpb_k_add_output("Value", "FOM,COUNT",
                            "Sum of integers from 1 through n.",
                            TPB_DOUBLE_T,
                            TPB_UNAME_UNDEF | TPB_UBASE_BASE |
@@ -64,7 +64,7 @@ _tpbk_run_@KERNEL_NAME@(void)
         return TPBE_KERN_ARG_FAIL;
     }
 
-    err = tpb_k_alloc_output("FOM,COUNT::Value", 1, (void **)&value);
+    err = tpb_k_alloc_output("Value", 1, (void **)&value);
     if (err != 0) {
         return err;
     }

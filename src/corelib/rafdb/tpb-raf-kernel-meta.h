@@ -27,7 +27,7 @@ int tpb_raf_kernel_override_enabled(void);
 /**
  * @brief Build kernel_attr_t headers and default-value data from a registered kernel.
  *
- * Sets nheader = nparm + nmetric + TPB_RAF_KERNEL_META_HDR_COUNT and initializes
+ * Sets nheader = narg + nmetric + TPB_RAF_KERNEL_META_HDR_COUNT and initializes
  * variation/compilation/dependency string headers (empty kv except variation defaults).
  *
  * @param kernel Registered kernel (must not be NULL).

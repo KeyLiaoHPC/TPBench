@@ -20,7 +20,12 @@
 #define TPB_SHA1_DIGEST_LEN     20
 #define TPB_SHA1_HEX_LEN        40
 
-#define TPB_RAF_HDR_FIXED_SIZE 2840
+/*
+ * Fixed on-disk header size upper bound (ndim == TPBM_DATA_NDIM_MAX):
+ * 32 (scalars) + 256 (name) + 256 (tag) + 2048 (note) + 7*8 + 7*64 = 3096.
+ * Breaking vs older 2840-byte layout (no tag field); clear rafdb before use.
+ */
+#define TPB_RAF_HDR_FIXED_SIZE 3096
 
 #define TPB_RAF_KERNEL_ATTR_RESERVE  (TPB_RAF_RESERVE_SIZE + 52)
 

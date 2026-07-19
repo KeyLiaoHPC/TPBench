@@ -223,10 +223,28 @@ tpb_add_subcase(A10 A10.3 multi_key_mixed      test-rtenv-env-snapshot corelib)
 tpb_add_subcase(A10 A10.4 empty_value          test-rtenv-env-snapshot corelib)
 tpb_add_subcase(A10 A10.5 semicolon_in_value   test-rtenv-env-snapshot corelib)
 
+# --- header tag normalize (Pack A11) ---
+add_executable(test-tag-norm EXCLUDE_FROM_ALL
+    test_tag_norm.c
+)
+target_include_directories(test-tag-norm PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-tag-norm PRIVATE tpbench m)
+set_target_properties(test-tag-norm PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(A11 A11.1 normalize   test-tag-norm corelib)
+tpb_add_subcase(A11 A11.2 validate    test-tag-norm corelib)
+tpb_add_subcase(A11 A11.3 display     test-tag-norm corelib)
+tpb_add_subcase(A11 A11.4 idempotent  test-tag-norm corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
             test-kernel-record test-tpblog test-errcode test-rtenv-env-snapshot
+            test-tag-norm
 )
 
 add_custom_target(check_corelib

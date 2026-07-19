@@ -50,7 +50,7 @@ _sf_kernel_meta_headers_ok(const kernel_attr_t *attr)
     if (attr == NULL || attr->headers == NULL) {
         return 0;
     }
-    meta_base = attr->nparm + attr->nmetric;
+    meta_base = attr->narg + attr->nmetric;
     idx_var = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_VARIATION);
     idx_comp = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_COMPILATION);
     idx_dep = tpb_raf_kernel_find_header(attr, TPB_RAF_KERNEL_HDR_DEPENDENCY);
@@ -68,7 +68,7 @@ static int
 test_build_attr_counts(void)
 {
     tpb_kernel_t k;
-    tpb_rt_parm_t parms[2];
+    tpb_rt_arg_t parms[2];
     tpb_k_output_t outs[1];
     kernel_attr_t attr;
     void *data = NULL;
@@ -81,21 +81,24 @@ test_build_attr_counts(void)
     snprintf(k.info.name, sizeof(k.info.name), "%s", "demo");
     snprintf(k.info.note, sizeof(k.info.note), "%s", "demo kernel");
     k.info.kctrl = TPB_KTYPE_PLI;
-    k.info.nparms = 2;
-    k.info.parms = parms;
+    k.info.nargs = 2;
+    k.info.args = parms;
     k.info.nouts = 1;
     k.info.outs = outs;
 
     memset(parms, 0, sizeof(parms));
     snprintf(parms[0].name, sizeof(parms[0].name), "%s", "ntest");
+    snprintf(parms[0].tag, sizeof(parms[0].tag), "%s", TPB_TAG_ARG);
     parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T;
     parms[0].value.i64 = 10;
     snprintf(parms[1].name, sizeof(parms[1].name), "%s", "size");
+    snprintf(parms[1].tag, sizeof(parms[1].tag), "%s", TPB_TAG_ARG);
     parms[1].ctrlbits = TPB_PARM_CLI | TPB_UINT32_T;
     parms[1].value.u64 = 1024;
 
     memset(outs, 0, sizeof(outs));
     snprintf(outs[0].name, sizeof(outs[0].name), "%s", "bandwidth");
+    snprintf(outs[0].tag, sizeof(outs[0].tag), "%s", "BANDWIDTH,TPBOUT");
     outs[0].dtype = TPB_DOUBLE_T;
     outs[0].unit = TPB_UNIT_MBPS;
 
@@ -103,7 +106,7 @@ test_build_attr_counts(void)
     if (err != TPBE_SUCCESS) {
         return 1;
     }
-    if (attr.nparm != 2 || attr.nmetric != 1) {
+    if (attr.narg != 2 || attr.nmetric != 1) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
     }
@@ -111,13 +114,15 @@ test_build_attr_counts(void)
      * Lower bound on nheader only: exact equality would fail when extra fixed
      * or user meta headers are appended after variation/compilation/dependency.
      */
-    if (attr.nheader < attr.nparm + attr.nmetric +
+    if (attr.nheader < attr.narg + attr.nmetric +
             TPB_RAF_KERNEL_META_HDR_COUNT) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
     }
     if (strcmp(attr.headers[0].name, "ntest") != 0 ||
-        strcmp(attr.headers[attr.nparm].name, "bandwidth") != 0 ||
+        strcmp(attr.headers[0].tag, TPB_TAG_ARG) != 0 ||
+        strcmp(attr.headers[attr.narg].name, "bandwidth") != 0 ||
+        strcmp(attr.headers[attr.narg].tag, "BANDWIDTH,TPBOUT") != 0 ||
         !_sf_kernel_meta_headers_ok(&attr)) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
@@ -184,8 +189,8 @@ test_stream_register_record(void)
     /*
      * nheader is a lower bound; required meta headers are checked by name.
      */
-    if (attr.nparm < 3 || attr.nmetric < 4 ||
-        attr.nheader < attr.nparm + attr.nmetric +
+    if (attr.narg < 3 || attr.nmetric < 4 ||
+        attr.nheader < attr.narg + attr.nmetric +
             TPB_RAF_KERNEL_META_HDR_COUNT ||
         !_sf_kernel_meta_headers_ok(&attr) ||
         attr.utc_bits == 0 || entries[0].utc_bits == 0 ||

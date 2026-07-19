@@ -1038,7 +1038,7 @@ ID Generation:
 
 ### 3.4. Header Serialization
 
-On-disk format per `tpb_meta_header_t` (fixed 2840 bytes):
+On-disk format per `tpb_meta_header_t` (fixed 3096 bytes upper bound; breaking vs older 2840):
 
 ```
 block_size       (4B)
@@ -1047,7 +1047,8 @@ data_size        (8B)
 type_bits        (4B)   -- TPB_PARM_SOURCE_MASK | TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK
 _reserve         (4B)   -- reserved padding
 uattr_bits       (8B)   -- metric unit encoding (TPB_UNIT_T)
-name             (256B)
+name             (256B) -- local name (no embedded tags)
+tag              (256B) -- normalized tags (may be empty); NEW (incompatible with pre-tag .tpbr)
 note             (2048B)
 dimsizes[0..6]   (56B)  -- 7 x uint64_t, only first ndim slots are meaningful
 dimnames[0..6]   (448B) -- 7 x 64-byte strings, parallel to dimsizes
@@ -1109,27 +1110,34 @@ A hybrid kernel (multi-process x multi-thread) may use capsules per process then
 
 ### 6.1. Role
 
-`tpb_meta_header_t.name` and related names are human-readable labels for dumps, tools, and cross-kernel comparison. A full name includes two parts: optional **tags** and non-empty **local_name**.
+`tpb_meta_header_t.name` is the stable local label used for lookup, dumps, scoring, and cross-kernel comparison. `tpb_meta_header_t.tag` holds optional classification tags (separate field).
 
 ### 6.2. Canonical Layout
 
+- **name:** non-empty local name; no `:` characters; ≤255 characters; unique across a kernel's arguments and outputs.
+- **tag:** optional comma-separated tokens stored without spaces after normalize (uppercase, deduped, sorted ascending). Display printers may insert `", "` between tokens.
+
 ```
-Tag1,Tag2,...::local_name
+name = Triad bandwidth
+tag  = BANDWIDTH,FOM,TPBOUT   (storage)
+Tags: BANDWIDTH, FOM, TPBOUT  (CLI display)
 ```
 
-Optional **tag prefix**: comma-separated uppercase tags from 6.4 (`Time::Triad`; `BANDWIDTH,FOM::Triad`). **`::`** separates prefix from **`local_name`** only—no extra `::` or lone `:` in `local_name`. Keep `local_name` stable across releases.
+Kernel registration: `tpb_k_add_arg(name, user_tag, …)` / `tpb_k_add_output(name, user_tag, …)`. System appends role tags **TPBARG** (argument) or **TPBOUT** (output), then normalizes. User tag text ≤191 characters (room for system tags).
 
 ### 6.3. Lexical Rules
 
-Prefer letters, digits, underscores in `local_name`. **Comma** separates tags only. Avoid raw `"` in names if CSV consumers quote fields (escape per consumer). For matching behavior, see 6.5.
+Prefer letters, digits, underscores, and spaces in `name`. **Comma** separates tag tokens only. Avoid `:` in name or tag.
 
 ### 6.4. Reserved Tag Vocabulary
 
 | Tag | Meaning |
 | --- | --- |
-| **TPBLINK** | Internal linkage (e.g. `TPBLINK::TaskID`). |
+| **TPBARG** | System role: kernel argument (CLI/recorded input). |
+| **TPBOUT** | System role: kernel output metric. |
+| **TPBLINK** | Internal linkage (name=`TaskID` / `KernelID` / `DeriveTo`). |
 | **FOM** | Figure of merit; primary outcome metrics. |
-| **INPARM** | Input snapshot recorded as data. |
+| **INPARM** | Input snapshot recorded as data (output column). |
 | **EVENT** | In-run samples (counters, markers). |
 | **PERF** | Performance-related metrics, figures, indicators, and counters. |
 | **POWER** | Energy / power. |
@@ -1144,16 +1152,11 @@ Reuse these before adding new tags; extend the table in this document when neede
 
 ### 6.5. Lookup and Search Behavior
 
-Letter matching is **case-insensitive**.
-
-- **Fuzzy (default).** No `::` in the query: match only the stored **local name** (suffix after `::`); tag prefix ignored; fuzzy metric is tool-defined (e.g. `triad` → `FOM::tirad`, `BANDWIDTH,FOM::Triad`). With `::`: fuzzy match on **local name**; each tag token in the query prefix must appear in the stored tag prefix (e.g. `FoM::TrIAd` vs `BANDWIDTH,FOM::Triad`).
-- **Accurate (opt-in).** No fuzzy edits: after case-fold, compared spans must match exactly (full `tpb_meta_header_t.name` vs query, or exact tag + local parts—tool documents which).
-
-Tools should document default mode, split rules, and fuzzy metric if results must reproduce.
+Runtime APIs match **name** exactly (`strcmp`). Tag is not part of the lookup key. Tools that previously matched `Tag::Name` strings should match local `name` (and optionally filter on `tag`).
 
 ### 6.6. Example (STREAM-style Names)
 
-Examples: `Time::Copy`, `Time::Triad`, `Bandwidth::Triad`. Layout and units use `ndim`, `dimnames`, `dimsizes`, and kernel metadata; `tpbcli database dump` prints names as stored.
+Examples: name=`Copy` tag=`EVENT,TIME,TPBOUT`; name=`Triad bandwidth` tag=`BANDWIDTH,FOM,TPBOUT`. `tpbcli run` prints `Name:` / `Tags:` lines; `tpbcli database dump` prints both fields as stored.
 
 ### 6.7. CLI dump layout (`.tpbr`, `-i`)
 

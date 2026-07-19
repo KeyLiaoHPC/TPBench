@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Records / headers (breaking)
+
+- **Breaking:** `tpb_meta_header_t` stores separate `name` and `tag` fields (256 bytes each). On-disk header layout grows (`TPB_RAF_HDR_FIXED_SIZE` 2840→3096). **Clear existing rafdb** (`rm -rf ~/.tpbench/rafdb` or workspace rafdb) before use; old `.tpbr` files are not readable.
+- **Breaking (API):** `tpb_k_add_parm` replaced by `tpb_k_add_arg(name, tag, note, …)`; `tpb_k_add_output(name, tag, note, …)`. Lookup (`alloc_output` / `get_arg` / `--kargs`) uses local **name** only. Runtime type `tpb_rt_arg_t`; kernel attr/entry field `narg` (was `nparm`).
+- **Tags:** User tags (≤191 chars) plus system role tags `TPBARG` (arguments) / `TPBOUT` (outputs); stored form is deduped, uppercase, comma-joined, sorted ascending. Link headers use `tag=TPBLINK` with local names `TaskID` / `KernelID` / `DeriveTo`.
+- **CLI output:** Result block prints `Name:` and `Tags:` (display uses `", "` between tags) instead of `Metrics: Tag::Name`.
+- **Tests:** Pack **A11** covers tag normalize/validate/display.
+
 ### Frontend: tpbcli
 
 - **Breaking:** `tpbcli db dump` now mirrors `db list` domain flags: requires `-dT`/`-dt`/`-dk`/`-dr` or `--domain`, plus either `-i`/`--id` (single `.tpbr`) or `-e` (`.tpbe` index with optional `-n`/`-N`). Removed `--id`, `--tbatch-id`, `--kernel-id`, `--task-id`, `--score-id`, `--file`, and `--entry` selectors. RTEnv is supported via `-dr`.

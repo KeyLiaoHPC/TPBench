@@ -128,7 +128,7 @@ tpb_raf_record_write_kernel(const char *workspace,
     if (fwrite(attr->description, 1, 2048, fp) != 2048) {
         goto fail;
     }
-    if (_tpb_raf_l1_write_u32(fp, attr->nparm) != 0) {
+    if (_tpb_raf_l1_write_u32(fp, attr->narg) != 0) {
         goto fail;
     }
     if (_tpb_raf_l1_write_u32(fp, attr->nmetric) != 0) {
@@ -237,7 +237,7 @@ tpb_raf_record_read_kernel(const char *workspace,
     if (fread(attr->description, 1, 2048, fp) != 2048) {
         goto fail;
     }
-    if (_tpb_raf_l1_read_u32(fp, &attr->nparm) != 0) {
+    if (_tpb_raf_l1_read_u32(fp, &attr->narg) != 0) {
         goto fail;
     }
     if (_tpb_raf_l1_read_u32(fp, &attr->nmetric) != 0) {

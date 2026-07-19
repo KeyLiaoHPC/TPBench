@@ -13,12 +13,12 @@
 #include "tpb-raf-kernel-meta.h"
 
 /* Local Function Prototypes */
-static int _sf_append_parm_value(uint8_t **ptr, const tpb_rt_parm_t *parm,
+static int _sf_append_parm_value(uint8_t **ptr, const tpb_rt_arg_t *parm,
                                  uint32_t elem_size);
 static void _sf_fill_metric_header(tpb_meta_header_t *h,
                                    const tpb_k_output_t *out);
 static void _sf_fill_parm_header(tpb_meta_header_t *h,
-                                 const tpb_rt_parm_t *parm);
+                                 const tpb_rt_arg_t *parm);
 static void _sf_fill_string_header(tpb_meta_header_t *h, const char *name,
                                    const char *payload);
 static int _sf_init_meta_payload(char **payload_buf, size_t *payload_cap,
@@ -31,7 +31,7 @@ static const char *g_meta_hdr_names[TPB_RAF_KERNEL_META_HDR_COUNT] = {
 };
 
 static void
-_sf_fill_parm_header(tpb_meta_header_t *h, const tpb_rt_parm_t *parm)
+_sf_fill_parm_header(tpb_meta_header_t *h, const tpb_rt_arg_t *parm)
 {
     uint32_t type_code;
     uint32_t elem_size;
@@ -49,6 +49,7 @@ _sf_fill_parm_header(tpb_meta_header_t *h, const tpb_rt_parm_t *parm)
     h->type_bits = (uint32_t)(parm->ctrlbits &
         (TPB_PARM_SOURCE_MASK | TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK));
     snprintf(h->name, sizeof(h->name), "%s", parm->name);
+    snprintf(h->tag, sizeof(h->tag), "%s", parm->tag);
     snprintf(h->note, sizeof(h->note), "%s", parm->note);
 }
 
@@ -68,11 +69,12 @@ _sf_fill_metric_header(tpb_meta_header_t *h, const tpb_k_output_t *out)
     }
     h->uattr_bits = (uint64_t)out->unit;
     snprintf(h->name, sizeof(h->name), "%s", out->name);
+    snprintf(h->tag, sizeof(h->tag), "%s", out->tag);
     snprintf(h->note, sizeof(h->note), "%s", out->note);
 }
 
 static int
-_sf_append_parm_value(uint8_t **ptr, const tpb_rt_parm_t *parm,
+_sf_append_parm_value(uint8_t **ptr, const tpb_rt_arg_t *parm,
                       uint32_t elem_size)
 {
     if (*ptr == NULL || parm == NULL) {
@@ -139,7 +141,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
                                      void **data_out,
                                      uint64_t *datasize_out)
 {
-    uint32_t nparm;
+    uint32_t narg;
     uint32_t nmetric;
     uint32_t nheader;
     uint32_t hi;
@@ -157,9 +159,9 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
         TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_NULLPTR_ARG, NULL);
     }
 
-    nparm = (uint32_t)kernel->info.nparms;
+    narg = (uint32_t)kernel->info.nargs;
     nmetric = (uint32_t)kernel->info.nouts;
-    nheader = nparm + nmetric + TPB_RAF_KERNEL_META_HDR_COUNT;
+    nheader = narg + nmetric + TPB_RAF_KERNEL_META_HDR_COUNT;
 
     hdrs = (tpb_meta_header_t *)calloc(nheader, sizeof(*hdrs));
     if (hdrs == NULL) {
@@ -167,12 +169,12 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
     }
 
     datasize = 0;
-    for (uint32_t i = 0; i < nparm; i++) {
+    for (uint32_t i = 0; i < narg; i++) {
         uint32_t type_code;
         uint32_t elem_size;
 
-        _sf_fill_parm_header(&hdrs[i], &kernel->info.parms[i]);
-        type_code = (uint32_t)(kernel->info.parms[i].ctrlbits &
+        _sf_fill_parm_header(&hdrs[i], &kernel->info.args[i]);
+        type_code = (uint32_t)(kernel->info.args[i].ctrlbits &
                                TPB_PARM_TYPE_MASK);
         elem_size = (type_code >> 8) & 0xFF;
         if (elem_size == 0) {
@@ -182,7 +184,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
     }
 
     for (uint32_t j = 0; j < nmetric; j++) {
-        _sf_fill_metric_header(&hdrs[nparm + j], &kernel->info.outs[j]);
+        _sf_fill_metric_header(&hdrs[narg + j], &kernel->info.outs[j]);
     }
 
     tpb_raf_id_to_hex(kernel_id, kid_hex);
@@ -203,9 +205,9 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
             free(hdrs);
             TPB_FAIL(TPB_MOD_RAF_L2_KERNEL, TPBE_MALLOC_FAIL, NULL);
         }
-        _sf_fill_string_header(&hdrs[nparm + nmetric + mi],
+        _sf_fill_string_header(&hdrs[narg + nmetric + mi],
                                g_meta_hdr_names[mi], meta_payloads[mi]);
-        datasize += hdrs[nparm + nmetric + mi].data_size;
+        datasize += hdrs[narg + nmetric + mi].data_size;
     }
 
     data = (datasize > 0) ? calloc(1, (size_t)datasize) : NULL;
@@ -218,20 +220,20 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
     }
 
     ptr = (uint8_t *)data;
-    for (uint32_t i = 0; i < nparm; i++) {
+    for (uint32_t i = 0; i < narg; i++) {
         uint32_t type_code;
         uint32_t elem_size;
 
-        type_code = (uint32_t)(kernel->info.parms[i].ctrlbits &
+        type_code = (uint32_t)(kernel->info.args[i].ctrlbits &
                                TPB_PARM_TYPE_MASK);
         elem_size = (type_code >> 8) & 0xFF;
         if (elem_size == 0) {
             elem_size = 8;
         }
-        _sf_append_parm_value(&ptr, &kernel->info.parms[i], elem_size);
+        _sf_append_parm_value(&ptr, &kernel->info.args[i], elem_size);
     }
 
-    hi = nparm + nmetric;
+    hi = narg + nmetric;
     for (mi = 0; mi < TPB_RAF_KERNEL_META_HDR_COUNT; mi++) {
         size_t plen = strlen(meta_payloads[mi]) + 1;
         memcpy(ptr, meta_payloads[mi], plen);
@@ -246,7 +248,7 @@ tpb_raf_kernel_build_registered_attr(const tpb_kernel_t *kernel,
     snprintf(attr_out->version, sizeof(attr_out->version), "%.1f", TPB_VERSION);
     snprintf(attr_out->description, sizeof(attr_out->description), "%s",
              kernel->info.note);
-    attr_out->nparm = nparm;
+    attr_out->narg = narg;
     attr_out->nmetric = nmetric;
     attr_out->kctrl = (uint32_t)kernel->info.kctrl;
     attr_out->nheader = nheader;

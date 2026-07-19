@@ -268,8 +268,14 @@ test_create_capsule_header(void)
         cleanup_env_workspace();
         return 1;
     }
-    if (strncmp(rattr.headers[0].name, "TPBLINK::TaskID",
+    if (strncmp(rattr.headers[0].name, "TaskID",
                 sizeof(rattr.headers[0].name)) != 0) {
+        tpb_raf_free_headers(rattr.headers, rattr.nheader);
+        free(data);
+        cleanup_env_workspace();
+        return 1;
+    }
+    if (strcmp(rattr.headers[0].tag, TPB_TAG_LINK) != 0) {
         tpb_raf_free_headers(rattr.headers, rattr.nheader);
         free(data);
         cleanup_env_workspace();

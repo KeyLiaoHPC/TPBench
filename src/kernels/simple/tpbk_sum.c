@@ -48,44 +48,42 @@ tpbk_pli_register_sum(void)
     err = tpb_k_register("sum", "Sum (Reduction): s += a[i]", TPB_KTYPE_PLI);
     if (err != 0) return err;
 
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
+    err = tpb_k_add_arg("ntest", NULL, "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Memory size in KiB", "32",
+    err = tpb_k_add_arg("total_memsize", NULL, "Memory size in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array (0 = use total_memsize)", "0",
+    err = tpb_k_add_arg("array_size", NULL, "Number of elements per array (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds", "1",
+    err = tpb_k_add_arg("twarm", NULL, "Warm-up time in milliseconds", "1",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)600000);
     if (err != 0) return err;
 
-    err = tpb_k_add_output("INPARM::Allocated memory size", "Actual memory footprint of sum array.",
+    err = tpb_k_add_output("Allocated memory size", "INPARM", "Actual memory footprint of sum array.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("INPARM::SUM array size", "Actual number of elements per array.",
+    err = tpb_k_add_output("SUM array size", "INPARM", "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("EVENT,TIME::Total", "Measured runtime of the outer loop (all steps).",
+    err = tpb_k_add_output("Total", "EVENT,TIME", "Measured runtime of the outer loop (all steps).",
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("EVENT,TIME::Step", "Measured runtime of per loop step.",
+    err = tpb_k_add_output("Step", "EVENT,TIME", "Measured runtime of per loop step.",
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("EVENT::Sum", "Sum result per iteration (for verification).",
+    err = tpb_k_add_output("Sum", "EVENT", "Sum result per iteration (for verification).",
                            TPB_DOUBLE_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("FOM,BANDWIDTH::Walltime",
-                           "Measured sustainable memory bandwidth in decimal based MB/s.",
+    err = tpb_k_add_output("Walltime", "FOM,BANDWIDTH", "Measured sustainable memory bandwidth in decimal based MB/s.",
                            TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("FOM,BANDWIDTH::Phystime",
-                           "Measured sustainable memory bandwidth in binary based Byte/cy.",
+    err = tpb_k_add_output("Phystime", "FOM,BANDWIDTH", "Measured sustainable memory bandwidth in binary based Byte/cy.",
                            TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 
@@ -132,24 +130,24 @@ run_sum(void)
     tpberr = tpb_k_get_arg("twarm", TPB_INT64_T, (void *)&twarm_ms);
     if (tpberr) return tpberr;
 
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Total", 1, &tot_time);
+    tpberr = tpb_k_alloc_output("Total", 1, &tot_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Step", ntest, &step_time);
+    tpberr = tpb_k_alloc_output("Step", ntest, &step_time);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("INPARM::Allocated memory size", 1, &real_total_memsize);
+    tpberr = tpb_k_alloc_output("Allocated memory size", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("INPARM::SUM array size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("SUM array size", 1, &array_size_out);
     if (tpberr) return tpberr;
-    tpberr = tpb_k_alloc_output("EVENT::Sum", ntest, &result_sum);
+    tpberr = tpb_k_alloc_output("Sum", ntest, &result_sum);
     if (tpberr) return tpberr;
 
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Walltime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("Walltime", ntest, &bw);
         if (tpberr) return tpberr;
     } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpberr = tpb_k_alloc_output("FOM,BANDWIDTH::Phystime", ntest, &bw);
+        tpberr = tpb_k_alloc_output("Phystime", ntest, &bw);
         if (tpberr) return tpberr;
     } else {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT, "In kernel sum: unknown timer unit name %llx", tpb_uname);

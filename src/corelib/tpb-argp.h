@@ -25,14 +25,14 @@
  * @param kernel_tokens Kernel-specific tokens parsed from CLI.
  * @param nkernel Number of kernel-specific tokens.
  * @param kernel Pointer to kernel definition.
- * @param rt_parms_out Output: runtime parameters array.
- * @param nparms_out Output: number of parameters.
+ * @param rt_args_out Output: runtime parameters array.
+ * @param nargs_out Output: number of parameters.
  * @return 0 on success, error code on validation failure.
  */
 int tpb_check_kargs(char **common_tokens, int ncommon,
                     char **kernel_tokens, int nkernel,
                     tpb_kernel_t *kernel,
-                    tpb_rt_parm_t **rt_parms_out, int *nparms_out);
+                    tpb_rt_arg_t **rt_args_out, int *nargs_out);
 
 /**
  * @brief Parse comma-separated key=value string and set kernel arguments.

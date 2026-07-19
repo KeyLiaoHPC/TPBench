@@ -556,6 +556,8 @@ tpbcli_dump_fmt_print_headers(const tpb_meta_header_t *hdrs, uint32_t n)
         tpbcli_dump_fmt_kv_set_uattr_bits(&rows[nr++], key, h->uattr_bits);
         snprintf(key, sizeof(key), "name");
         tpbcli_dump_fmt_kv_set_str(&rows[nr++], key, h->name);
+        snprintf(key, sizeof(key), "tag");
+        tpbcli_dump_fmt_kv_set_str(&rows[nr++], key, h->tag);
         snprintf(key, sizeof(key), "note");
         tpbcli_dump_fmt_kv_set_str(&rows[nr++], key, h->note);
 

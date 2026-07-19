@@ -6,6 +6,7 @@ set(TPB_CORELIB_SOURCES
     tpb-unitcast.c
     tpb-impl.c
     tpb-argp.c
+    tpb-tag-norm.c
     tpb-dynloader.c
     tpb-autorecord.c
     tpb-rtenv.c

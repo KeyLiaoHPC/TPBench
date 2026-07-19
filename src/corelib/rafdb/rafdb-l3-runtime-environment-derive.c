@@ -243,6 +243,7 @@ tpb_raf_record_append_rtenv_derive(const char *workspace,
         dh.block_size = TPB_RAF_HDR_FIXED_SIZE;
         snprintf(dh.name, TPBM_NAME_STR_MAX_LEN, "%s",
                  TPB_RAF_RTENV_HDR_DERIVE_TO);
+        snprintf(dh.tag, TPBM_NAME_STR_MAX_LEN, "%s", TPB_TAG_LINK);
         out_hdrs[attr.nheader] = dh;
         attr.nheader += 1;
 

@@ -283,14 +283,16 @@ tpb_record_begin_batch(uint32_t batch_type)
         h2[0].data_size = 0;
         h2[0].type_bits =
             (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-        snprintf(h2[0].name, sizeof(h2[0].name), "%s", "TPBLINK::TaskID");
+        snprintf(h2[0].name, sizeof(h2[0].name), "%s", "TaskID");
+        snprintf(h2[0].tag, sizeof(h2[0].tag), "%s", TPB_TAG_LINK);
         h2[1].block_size = TPB_RAF_HDR_FIXED_SIZE;
         h2[1].ndim = 1;
         h2[1].dimsizes[0] = 0;
         h2[1].data_size = 0;
         h2[1].type_bits =
             (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-        snprintf(h2[1].name, sizeof(h2[1].name), "%s", "TPBLINK::KernelID");
+        snprintf(h2[1].name, sizeof(h2[1].name), "%s", "KernelID");
+        snprintf(h2[1].tag, sizeof(h2[1].tag), "%s", TPB_TAG_LINK);
         skel.headers = h2;
         err = tpb_raf_record_write_tbatch(s_workspace, &skel, NULL, 0);
         if (err) {
@@ -489,7 +491,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
         /* Input headers */
         for (uint32_t i = 0; i < ninput; i++) {
-            tpb_rt_parm_t *parm = &hdl->argpack.args[i];
+            tpb_rt_arg_t *parm = &hdl->argpack.args[i];
             uint32_t type_code = (uint32_t)(parm->ctrlbits & TPB_PARM_TYPE_MASK);
             uint32_t elem_size = (type_code >> 8) & 0xFF;
             if (elem_size == 0) elem_size = 8;
@@ -500,6 +502,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
             headers[i].data_size = elem_size;
             headers[i].type_bits = (uint32_t)(parm->ctrlbits & (TPB_PARM_SOURCE_MASK | TPB_PARM_CHECK_MASK | TPB_PARM_TYPE_MASK));
             snprintf(headers[i].name, sizeof(headers[i].name), "%s", parm->name);
+            snprintf(headers[i].tag, sizeof(headers[i].tag), "%s", parm->tag);
             snprintf(headers[i].note, sizeof(headers[i].note), "%s", parm->note);
 
             rec_datasize += elem_size;
@@ -533,6 +536,8 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                 headers[header_idx].uattr_bits  = (uint64_t)out->unit;
                 snprintf(headers[header_idx].name,
                          sizeof(headers[header_idx].name), "%s", out->name);
+                snprintf(headers[header_idx].tag,
+                         sizeof(headers[header_idx].tag), "%s", out->tag);
                 snprintf(headers[header_idx].note,
                          sizeof(headers[header_idx].note), "%s", out->note);
 
@@ -549,7 +554,7 @@ tpb_record_write_task(tpb_k_rthdl_t *hdl, int exit_code,
 
         /* Input values */
         for (uint32_t i = 0; i < ninput; i++) {
-            tpb_rt_parm_t *parm = &hdl->argpack.args[i];
+            tpb_rt_arg_t *parm = &hdl->argpack.args[i];
             uint32_t elem_size = (uint32_t)headers[i].data_size;
             memcpy(ptr, &parm->value, elem_size);
             ptr += elem_size;
@@ -841,7 +846,8 @@ tpb_k_create_capsule_task(const unsigned char first_task_id[20],
     chdr.dimsizes[0] = 1;
     chdr.data_size = 20;
     chdr.type_bits = (uint32_t)(TPB_UNSIGNED_CHAR_T & TPB_PARM_TYPE_MASK);
-    snprintf(chdr.name, sizeof(chdr.name), "%s", "TPBLINK::TaskID");
+    snprintf(chdr.name, sizeof(chdr.name), "%s", "TaskID");
+    snprintf(chdr.tag, sizeof(chdr.tag), "%s", TPB_TAG_LINK);
 
     memset(&cap, 0, sizeof(cap));
     memcpy(cap.task_record_id, capsule_id_out, 20);

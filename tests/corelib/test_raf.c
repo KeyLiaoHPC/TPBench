@@ -321,7 +321,7 @@ test_entry_kernel(void)
     memset(e.inherit_from, 0xDD, 20);
     snprintf(e.kernel_name, 64, "triad");
     e.kctrl = TPB_KTYPE_PLI;
-    e.nparm = 3;
+    e.narg = 3;
     e.nmetric = 1;
     e.utc_bits = 12345;
 
@@ -341,7 +341,7 @@ test_entry_kernel(void)
     if (memcmp(entries[0].kernel_id, e.kernel_id, 20) != 0 ||
         memcmp(entries[0].inherit_from, e.inherit_from, 20) != 0 ||
         strcmp(entries[0].kernel_name, "triad") != 0 ||
-        entries[0].nparm != 3 || entries[0].nmetric != 1 ||
+        entries[0].narg != 3 || entries[0].nmetric != 1 ||
         entries[0].utc_bits != e.utc_bits) {
         free(entries);
         cleanup_test_dir();
@@ -552,7 +552,7 @@ test_record_kernel(void)
     snprintf(attr.kernel_name, 256, "triad");
     snprintf(attr.version, 64, "1.0");
     snprintf(attr.description, 2048, "Test kernel");
-    attr.nparm = 2;
+    attr.narg = 2;
     attr.nmetric = 1;
     attr.kctrl = TPB_KTYPE_PLI;
     attr.nheader = 1;
@@ -579,7 +579,7 @@ test_record_kernel(void)
     if (strcmp(rattr.kernel_name, "triad") != 0) fail = 1;
     if (memcmp(rattr.derive_to, attr.derive_to, 20) != 0) fail = 1;
     if (memcmp(rattr.inherit_from, attr.inherit_from, 20) != 0) fail = 1;
-    if (rattr.nparm != 2 || rattr.nmetric != 1) fail = 1;
+    if (rattr.narg != 2 || rattr.nmetric != 1) fail = 1;
     if (rattr.utc_bits != attr.utc_bits) fail = 1;
     if (rsize != 8) fail = 1;
     if (rdata && *(uint64_t *)rdata != 100) fail = 1;
@@ -1268,7 +1268,7 @@ test_rtenv_derive_link(void)
     {
         uint32_t i;
         for (i = 0; i < attr.nheader; i++) {
-            if (strcmp(hdrs[i].name, "TPBLINK::DeriveTo") == 0) {
+            if (strcmp(hdrs[i].name, "DeriveTo") == 0) {
                 derive_idx = (int)i;
                 break;
             }
@@ -1314,7 +1314,7 @@ test_rtenv_derive_link(void)
     {
         uint32_t i;
         for (i = 0; i < attr.nheader; i++) {
-            if (strcmp(hdrs[i].name, "TPBLINK::DeriveTo") == 0) {
+            if (strcmp(hdrs[i].name, "DeriveTo") == 0) {
                 derive_idx = (int)i;
                 break;
             }

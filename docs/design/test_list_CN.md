@@ -56,7 +56,7 @@
 | A6.1 | `corelib/rafdb/rafdb-l2-task.c` | 验证 taskcapsule ID 与 task ID 哈希值不同。 |
 | A6.2 | `corelib/tpb-autorecord.c`, `corelib/rafdb/rafdb-l2-task.c` | 验证 `tpb_record_write_task` 输出非零 TaskRecordID。 |
 | A6.3 | `corelib/tpb-autorecord.c`, `corelib/rafdb/rafdb-l2-task.c` | 验证 `tpb_record_write_task` 在输出指针为 NULL 时仍创建 entry。 |
-| A6.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `rafdb-l2-task.c` | 验证 capsule record 包含正确 header（`TPBLINK::TaskID`）和 20 字节载荷。 |
+| A6.4 | `corelib/rafdb/rafdb-l3-task-taglink.c`, `rafdb-l2-task.c` | 验证 capsule record 包含正确 header（`name=TaskID`, `tag=TPBLINK`）和 20 字节载荷。 |
 | A6.5 | `corelib/rafdb/rafdb-l2-task.c` | 验证 capsule entry 出现在 `task.tpbe` 列表中。 |
 | A6.6 | `corelib/rafdb/rafdb-l3-task-taglink.c` | 验证单条 task 可追加至 capsule，载荷为 40 字节。 |
 | A6.7 | `corelib/rafdb/rafdb-l3-task-taglink.c` | 验证三条 task 追加至 capsule，载荷为 80 字节且顺序保持。 |
@@ -77,6 +77,10 @@
 | A10.3 | `corelib/tpb-rtenv.c` | 验证多 key 混合段数时按 key→count→value 顺序解码。 |
 | A10.4 | `corelib/tpb-rtenv.c` | 验证空 value（`count=0`）不消费 value 段。 |
 | A10.5 | `corelib/tpb-rtenv.c` | 验证 value 段内可含 `;`（连接符仅为 `:`）。 |
+| A11.1 | `corelib/tpb-tag-norm.c` | 验证 tag 去重/大写/排序及系统附加 `TPBOUT`/`TPBARG`。 |
+| A11.2 | `corelib/tpb-tag-norm.c` | 验证 name/tag 合法性（禁止 `:`、长度上限）。 |
+| A11.3 | `corelib/tpb-tag-norm.c` | 验证展示格式（存储无空格，显示 `", "`）。 |
+| A11.4 | `corelib/tpb-tag-norm.c` | 验证规范化幂等。 |
 
 ## B 类 — CLI 单元与功能测试
 

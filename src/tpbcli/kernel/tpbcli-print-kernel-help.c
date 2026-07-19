@@ -42,13 +42,13 @@ static void _sf_print_parm_section_header(void);
 static void _sf_print_metric_section_header(void);
 static void _sf_print_parm_entry(const char *name, const char *note,
                                  uint32_t type_bits);
-static void _sf_print_metric_entry(const char *full_name, const char *note,
-                                   uint64_t uattr_bits);
+static void _sf_print_metric_entry(const char *name, const char *tag,
+                                   const char *note, uint64_t uattr_bits);
 static void _sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
-                                              uint32_t nparm);
+                                              uint32_t narg);
 static void _sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel);
 static void _sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
-                                           uint32_t nparm, uint32_t nmetric,
+                                           uint32_t narg, uint32_t nmetric,
                                            int verbose);
 static void _sf_print_metrics_from_kernel(const tpb_kernel_t *kernel,
                                           int verbose);
@@ -287,21 +287,52 @@ _sf_print_parm_entry(const char *name, const char *note, uint32_t type_bits)
 }
 
 static void
-_sf_print_metric_entry(const char *full_name, const char *note,
+_sf_print_metric_entry(const char *name, const char *tag, const char *note,
                        uint64_t uattr_bits)
 {
-    char tags[TPBM_NAME_STR_MAX_LEN];
-    char real_name[TPBM_NAME_STR_MAX_LEN];
+    char tags_disp[TPBM_NAME_STR_MAX_LEN * 2];
     const char *tag_line;
 
-    _sf_split_metric_name(full_name, tags, sizeof(tags),
-                          real_name, sizeof(real_name));
-    if (real_name[0] == '\0') {
-        snprintf(real_name, sizeof(real_name), "%s",
-                 (full_name != NULL) ? full_name : "");
+    if (name == NULL) {
+        name = "";
     }
-    tag_line = (tags[0] != '\0') ? tags : "-";
-    _sf_print_col_line(real_name, tag_line);
+    tags_disp[0] = '\0';
+    if (tag != NULL && tag[0] != '\0') {
+        /* Display with ", " between tokens; fall back to raw storage. */
+        const char *p = tag;
+        size_t out = 0;
+        int first = 1;
+
+        while (*p != '\0') {
+            const char *start;
+            size_t tlen;
+
+            while (*p == ',') {
+                p++;
+            }
+            if (*p == '\0') {
+                break;
+            }
+            start = p;
+            while (*p != '\0' && *p != ',') {
+                p++;
+            }
+            tlen = (size_t)(p - start);
+            if (!first && out + 2 < sizeof(tags_disp)) {
+                tags_disp[out++] = ',';
+                tags_disp[out++] = ' ';
+            }
+            if (out + tlen >= sizeof(tags_disp)) {
+                break;
+            }
+            memcpy(tags_disp + out, start, tlen);
+            out += tlen;
+            first = 0;
+        }
+        tags_disp[out] = '\0';
+    }
+    tag_line = (tags_disp[0] != '\0') ? tags_disp : "-";
+    _sf_print_col_line(name, tag_line);
     _sf_print_wrapped_note(_sf_unit_category_str(uattr_bits));
     _sf_print_wrapped_note(note);
 }
@@ -337,7 +368,7 @@ _sf_print_kernel_header(const char *name, const char *kernel_id_hex, int active,
 
 static void
 _sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
-                                  uint32_t nparm)
+                                  uint32_t narg)
 {
     static const char *order[] = {
         "CLI",
@@ -353,7 +384,7 @@ _sf_print_parm_sections_from_bits(const tpb_meta_header_t *headers,
 
     for (s = 0; s < sizeof(order) / sizeof(order[0]); s++) {
         has_any = 0;
-        for (i = 0; i < nparm; i++) {
+        for (i = 0; i < narg; i++) {
             if (strcmp(_sf_parm_source_section(headers[i].type_bits),
                        order[s]) != 0) {
                 continue;
@@ -394,8 +425,8 @@ _sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel)
     }
     for (s = 0; s < sizeof(order) / sizeof(order[0]); s++) {
         has_any = 0;
-        for (i = 0; i < kernel->info.nparms; i++) {
-            tpb_rt_parm_t *p = &kernel->info.parms[i];
+        for (i = 0; i < kernel->info.nargs; i++) {
+            tpb_rt_arg_t *p = &kernel->info.args[i];
             if (strcmp(_sf_parm_source_section((uint32_t)p->ctrlbits),
                        order[s]) != 0) {
                 continue;
@@ -417,7 +448,7 @@ _sf_print_parm_sections_from_kernel(const tpb_kernel_t *kernel)
 
 static void
 _sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
-                               uint32_t nparm, uint32_t nmetric,
+                               uint32_t narg, uint32_t nmetric,
                                int verbose)
 {
     uint32_t i;
@@ -430,9 +461,10 @@ _sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
                         "Metrics\n---\n");
         _sf_print_metric_section_header();
         for (i = 0; i < nmetric; i++) {
-            _sf_print_metric_entry(headers[nparm + i].name,
-                                   headers[nparm + i].note,
-                                   headers[nparm + i].uattr_bits);
+            _sf_print_metric_entry(headers[narg + i].name,
+                                   headers[narg + i].tag,
+                                   headers[narg + i].note,
+                                   headers[narg + i].uattr_bits);
         }
         _sf_print_section_line();
         return;
@@ -440,7 +472,7 @@ _sf_print_metrics_from_headers(const tpb_meta_header_t *headers,
 
     for (i = 0; i < nmetric; i++) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
-                        "%s\n", headers[nparm + i].name);
+                        "%s\n", headers[narg + i].name);
     }
 }
 
@@ -458,7 +490,7 @@ _sf_print_metrics_from_kernel(const tpb_kernel_t *kernel, int verbose)
         _sf_print_metric_section_header();
         for (i = 0; i < kernel->info.nouts; i++) {
             tpb_k_output_t *o = &kernel->info.outs[i];
-            _sf_print_metric_entry(o->name, o->note, (uint64_t)o->unit);
+            _sf_print_metric_entry(o->name, o->tag, o->note, (uint64_t)o->unit);
         }
         _sf_print_section_line();
         return;
@@ -550,8 +582,8 @@ tpbcli_print_kernel_help_from_attr(FILE *out, const kernel_attr_t *attr,
 
     _sf_print_kernel_header(attr->kernel_name, kid_hex, (int)attr->active,
                             attr->version, attr->description, variation);
-    _sf_print_parm_sections_from_bits(attr->headers, attr->nparm);
-    _sf_print_metrics_from_headers(attr->headers, attr->nparm,
+    _sf_print_parm_sections_from_bits(attr->headers, attr->narg);
+    _sf_print_metrics_from_headers(attr->headers, attr->narg,
                                    attr->nmetric, 1);
     (void)datasize;
 }
@@ -564,10 +596,10 @@ tpbcli_print_kernel_names_from_attr(const kernel_attr_t *attr)
     if (attr == NULL) {
         return;
     }
-    for (i = 0; i < attr->nparm; i++) {
+    for (i = 0; i < attr->narg; i++) {
         tpblog_printf_f(TPB_LOG_LEVEL_INFO, TPBLOG_TYPE_INFO, TPBLOG_FLAG_DIRECT,
                         "%s\n", attr->headers[i].name);
     }
-    _sf_print_metrics_from_headers(attr->headers, attr->nparm,
+    _sf_print_metrics_from_headers(attr->headers, attr->narg,
                                    attr->nmetric, 0);
 }

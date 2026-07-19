@@ -501,7 +501,7 @@ dump_tpbr_kernel(const char *workspace, const unsigned char id[20])
     tpbcli_dump_fmt_kv_set_str(&rows[nr++], "kernel_name", attr.kernel_name);
     tpbcli_dump_fmt_kv_set_str(&rows[nr++], "version", attr.version);
     tpbcli_dump_fmt_kv_set_str(&rows[nr++], "description", attr.description);
-    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nparm", attr.nparm);
+    tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "narg", attr.narg);
     tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nmetric", attr.nmetric);
     tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "kctrl", attr.kctrl);
     tpbcli_dump_fmt_kv_set_u32(&rows[nr++], "nheader", attr.nheader);
@@ -729,8 +729,8 @@ dump_tpbe_domain(const char *workspace, uint8_t domain,
             dump_print_kv_str(p, e[i].kernel_name);
             snprintf(p, sizeof(p), "entry[%d].kctrl", k);
             dump_print_kv_u32(p, e[i].kctrl);
-            snprintf(p, sizeof(p), "entry[%d].nparm", k);
-            dump_print_kv_u32(p, e[i].nparm);
+            snprintf(p, sizeof(p), "entry[%d].narg", k);
+            dump_print_kv_u32(p, e[i].narg);
             snprintf(p, sizeof(p), "entry[%d].nmetric", k);
             dump_print_kv_u32(p, e[i].nmetric);
             snprintf(p, sizeof(p), "entry[%d].active", k);

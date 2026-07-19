@@ -44,7 +44,8 @@ _tpb_raf_l1_hdr_serialized_len_at(FILE *fp, long hdr_base)
     if (_tpb_raf_l1_read_u32(fp, &ndim) != 0) {
         return -1;
     }
-    return 32L + 256L + 2048L + (long)ndim * 8L + (long)ndim * 64L;
+    /* Scalars(32) + name(256) + tag(256) + note(2048) + dims; incompatible with pre-tag layout. */
+    return 32L + 256L + 256L + 2048L + (long)ndim * 8L + (long)ndim * 64L;
 }
 
 int
@@ -76,6 +77,10 @@ _tpb_raf_l1_write_headers(FILE *fp, const tpb_meta_header_t *hdrs,
             return -1;
         }
         if (fwrite(hdrs[i].name, 1, 256, fp) != 256) {
+            return -1;
+        }
+        /* tag follows name; older .tpbr files without this field are not readable. */
+        if (fwrite(hdrs[i].tag, 1, 256, fp) != 256) {
             return -1;
         }
         if (fwrite(hdrs[i].note, 1, 2048, fp) != 2048) {
@@ -134,6 +139,9 @@ _tpb_raf_l1_read_headers(FILE *fp, tpb_meta_header_t **hdrs_out,
             goto fail;
         }
         if (fread(hdrs[i].name, 1, 256, fp) != 256) {
+            goto fail;
+        }
+        if (fread(hdrs[i].tag, 1, 256, fp) != 256) {
             goto fail;
         }
         if (fread(hdrs[i].note, 1, 2048, fp) != 2048) {

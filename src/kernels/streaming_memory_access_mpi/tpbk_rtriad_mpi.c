@@ -39,23 +39,23 @@ tpbk_pli_register_rtriad_mpi(void)
     err = tpb_k_register("rtriad_mpi", "Repeat Triad with MPI+OpenMP", TPB_KTYPE_PLI);
     if (err != 0) return err;
 
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
+    err = tpb_k_add_arg("ntest", NULL, "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB", "32",
+    err = tpb_k_add_arg("total_memsize", NULL, "Total memory size across all ranks in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
+    err = tpb_k_add_arg("array_size", NULL, "Number of elements per array per rank (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds", "1",
+    err = tpb_k_add_arg("twarm", NULL, "Warm-up time in milliseconds", "1",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)10000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("repeat", "Repeat factor per step (0 = auto)", "0",
+    err = tpb_k_add_arg("repeat", NULL, "Repeat factor per step (0 = auto)", "0",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)1000000000);
     if (err != 0) return err;
@@ -71,37 +71,37 @@ _tpbk_register_rtriad_mpi(void)
     err = tpb_k_register("rtriad_mpi", "Repeat Triad with MPI+OpenMP", TPB_KTYPE_FLI);
     if (err != 0) return err;
 
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
+    err = tpb_k_add_arg("ntest", NULL, "Number of test iterations", "10",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)1, (int64_t)100000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("total_memsize", "Total memory size across all ranks in KiB", "32",
+    err = tpb_k_add_arg("total_memsize", NULL, "Total memory size across all ranks in KiB", "32",
                          TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE,
                          0.0009765625, DBL_MAX);
     if (err != 0) return err;
-    err = tpb_k_add_parm("array_size", "Number of elements per array per rank (0 = use total_memsize)", "0",
+    err = tpb_k_add_arg("array_size", NULL, "Number of elements per array per rank (0 = use total_memsize)", "0",
                          TPB_PARM_CLI | TPB_UINT32_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)4294967295);
     if (err != 0) return err;
-    err = tpb_k_add_parm("twarm", "Warm-up time in milliseconds", "1",
+    err = tpb_k_add_arg("twarm", NULL, "Warm-up time in milliseconds", "1",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)10000);
     if (err != 0) return err;
-    err = tpb_k_add_parm("repeat", "Repeat factor per step (0 = auto)", "0",
+    err = tpb_k_add_arg("repeat", NULL, "Repeat factor per step (0 = auto)", "0",
                          TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
                          (int64_t)0, (int64_t)1000000000);
     if (err != 0) return err;
 
-    err = tpb_k_add_output("step_time", "Measured runtime of per loop step (min across ranks).", 
+    err = tpb_k_add_output("step_time", NULL, "Measured runtime of per loop step (min across ranks).", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("real_total_memsize", "Actual memory footprint of three rtriad arrays.",
+    err = tpb_k_add_output("real_total_memsize", NULL, "Actual memory footprint of three rtriad arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("array_size", "Actual number of elements per array per rank.",
+    err = tpb_k_add_output("Array size", "INPARM", "Actual number of elements per array per rank.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("repeat", "Actual repeat factor used.",
+    err = tpb_k_add_output("Repeat factor", "INPARM", "Actual repeat factor used.",
                            TPB_INT64_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
 
@@ -145,20 +145,20 @@ _tpbk_run_rtriad_mpi(void)
     tpberr = tpb_k_alloc_output("real_total_memsize", 1, &real_total_memsize);
     if (tpberr) return tpberr;
     uint32_t *array_size_out = NULL;
-    tpberr = tpb_k_alloc_output("array_size", 1, &array_size_out);
+    tpberr = tpb_k_alloc_output("Array size", 1, &array_size_out);
     if (tpberr) return tpberr;
     int64_t *repeat_out = NULL;
-    tpberr = tpb_k_alloc_output("repeat", 1, &repeat_out);
+    tpberr = tpb_k_alloc_output("Repeat factor", 1, &repeat_out);
     if (tpberr) return tpberr;
 
     tpb_uname = timer.unit & TPB_UNAME_MASK;
     if (tpb_uname == TPB_UNAME_WALLTIME) {
-        tpb_k_add_output("bw_walltime", "Measured sustainable memory bandwidth in decimal based MB/s.", 
+        tpb_k_add_output("bw_walltime", NULL, "Measured sustainable memory bandwidth in decimal based MB/s.", 
                          TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("bw_walltime", ntest, &bw);
         if (tpberr) return tpberr;
     } else if (tpb_uname == TPB_UNAME_PHYSTIME) {
-        tpb_k_add_output("bw_phystime", "Measured sustainable memory bandwidth in binary based Byte/cy.", 
+        tpb_k_add_output("bw_phystime", NULL, "Measured sustainable memory bandwidth in binary based Byte/cy.", 
                          TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
         tpberr = tpb_k_alloc_output("bw_phystime", ntest, &bw);
         if (tpberr) return tpberr;

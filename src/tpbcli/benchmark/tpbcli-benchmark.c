@@ -131,9 +131,13 @@ parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
     }
     
     while (fgets(line, sizeof(line), fp) != NULL) {
-        /* Metrics section: "Metrics: <name>" */
+        /* Metrics section: "Name: <local name>" (legacy "Metrics:" accepted). */
         const char *metric_prefix = NULL;
-        if (strncmp(line, "### Metrics:", 12) == 0) {
+        if (strncmp(line, "### Name:", 9) == 0) {
+            metric_prefix = line + 9;
+        } else if (strncmp(line, "Name:", 5) == 0) {
+            metric_prefix = line + 5;
+        } else if (strncmp(line, "### Metrics:", 12) == 0) {
             metric_prefix = line + 12;
         } else if (strncmp(line, "Metrics:", 8) == 0) {
             metric_prefix = line + 8;

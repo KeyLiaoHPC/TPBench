@@ -80,22 +80,41 @@ static void checkSTREAMresults(STREAM_TYPE *AvgErrByRank, int numranks,
 #endif
 
 static const char *const s_summary_names[16] = {
-    "FOM,BANDWIDTH::Copy Best Rate MB/s",
-    "FOM,TIME::Copy Avg time",
-    "FOM,TIME::Copy Min time",
-    "FOM,TIME::Copy Max time",
-    "FOM,BANDWIDTH::Scale Best Rate MB/s",
-    "FOM,TIME::Scale Avg time",
-    "FOM,TIME::Scale Min time",
-    "FOM,TIME::Scale Max time",
-    "FOM,BANDWIDTH::Add Best Rate MB/s",
-    "FOM,TIME::Add Avg time",
-    "FOM,TIME::Add Min time",
-    "FOM,TIME::Add Max time",
-    "FOM,BANDWIDTH::Triad Best Rate MB/s",
-    "FOM,TIME::Triad Avg time",
-    "FOM,TIME::Triad Min time",
-    "FOM,TIME::Triad Max time",
+    "Copy Best Rate MB/s",
+    "Copy Avg time",
+    "Copy Min time",
+    "Copy Max time",
+    "Scale Best Rate MB/s",
+    "Scale Avg time",
+    "Scale Min time",
+    "Scale Max time",
+    "Add Best Rate MB/s",
+    "Add Avg time",
+    "Add Min time",
+    "Add Max time",
+    "Triad Best Rate MB/s",
+    "Triad Avg time",
+    "Triad Min time",
+    "Triad Max time",
+};
+
+static const char *const s_summary_tags[16] = {
+    "FOM,BANDWIDTH",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,BANDWIDTH",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,BANDWIDTH",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,BANDWIDTH",
+    "FOM,TIME",
+    "FOM,TIME",
+    "FOM,TIME",
 };
 
 int
@@ -110,68 +129,60 @@ tpbk_pli_register_stream_mpi(void)
         return err;
     }
 
-    err = tpb_k_add_parm("ntest", "Number of test iterations", "10",
+    err = tpb_k_add_arg("ntest", NULL, "Number of test iterations", "10",
         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
         (int64_t)2, (int64_t)100000);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_parm("stream_array_size",
-        "Total aggregate elements per array across all MPI ranks", "0",
+    err = tpb_k_add_arg("stream_array_size", NULL, "Total aggregate elements per array across all MPI ranks", "0",
         TPB_PARM_CLI | TPB_UINT64_T | TPB_PARM_RANGE,
         (int64_t)1, (int64_t)9223372036854775807LL);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_parm("twarm",
-        "Warm-up time in milliseconds, 0<=twarm<=10000, default 500", "500",
+    err = tpb_k_add_arg("twarm", NULL, "Warm-up time in milliseconds, 0<=twarm<=10000, default 500", "500",
         TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
         (int64_t)0, (int64_t)10000);
     if (err != 0) {
         return err;
     }
 
-    err = tpb_k_add_output("INPARM::Allocated memory size",
-        "Local memory footprint of three stream arrays (bytes).",
+    err = tpb_k_add_output("Allocated memory size", "INPARM", "Local memory footprint of three stream arrays (bytes).",
         TPB_UINT64_T,
         TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("INPARM::STREAM array size",
-        "Local number of elements per array on this rank.",
+    err = tpb_k_add_output("STREAM array size", "INPARM", "Local number of elements per array on this rank.",
         TPB_UINT64_T,
         TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N
             | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("EVENT,TIME::Copy",
-        "Measured runtime of copy operation for each iteration.",
+    err = tpb_k_add_output("Copy", "EVENT,TIME", "Measured runtime of copy operation for each iteration.",
         TPB_DTYPE_TIMER_T,
         TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
             | TPB_UATTR_SHAPE_1D);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("EVENT,TIME::Scale",
-        "Measured runtime of scale operation for each iteration.",
+    err = tpb_k_add_output("Scale", "EVENT,TIME", "Measured runtime of scale operation for each iteration.",
         TPB_DTYPE_TIMER_T,
         TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
             | TPB_UATTR_SHAPE_1D);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("EVENT,TIME::Add",
-        "Measured runtime of add operation for each iteration.",
+    err = tpb_k_add_output("Add", "EVENT,TIME", "Measured runtime of add operation for each iteration.",
         TPB_DTYPE_TIMER_T,
         TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
             | TPB_UATTR_SHAPE_1D);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("EVENT,TIME::Triad",
-        "Measured runtime of triad operation for each iteration.",
+    err = tpb_k_add_output("Triad", "EVENT,TIME", "Measured runtime of triad operation for each iteration.",
         TPB_DTYPE_TIMER_T,
         TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y
             | TPB_UATTR_SHAPE_1D);
@@ -182,7 +193,7 @@ tpbk_pli_register_stream_mpi(void)
     for (i = 0; i < 16; i++) {
         TPB_UNIT_T u = (i % 4 == 0) ? TPB_UNIT_MBPS : TPB_UNIT_SEC;
 
-        err = tpb_k_add_output(s_summary_names[i],
+        err = tpb_k_add_output(s_summary_names[i], s_summary_tags[i],
             "Rank 0 global STREAM summary; other ranks omit from task record.",
             TPB_DOUBLE_T,
             u | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_POINT);
@@ -259,32 +270,32 @@ run_stream_mpi(void)
     }
     ntest = (int)ntest64;
 
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Copy", (uint64_t)ntest,
+    tpberr = tpb_k_alloc_output("Copy", (uint64_t)ntest,
         &copy_time);
     if (tpberr) {
         return tpberr;
     }
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Scale", (uint64_t)ntest,
+    tpberr = tpb_k_alloc_output("Scale", (uint64_t)ntest,
         &scale_time);
     if (tpberr) {
         return tpberr;
     }
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Add", (uint64_t)ntest,
+    tpberr = tpb_k_alloc_output("Add", (uint64_t)ntest,
         &add_time);
     if (tpberr) {
         return tpberr;
     }
-    tpberr = tpb_k_alloc_output("EVENT,TIME::Triad", (uint64_t)ntest,
+    tpberr = tpb_k_alloc_output("Triad", (uint64_t)ntest,
         &triad_time);
     if (tpberr) {
         return tpberr;
     }
-    tpberr = tpb_k_alloc_output("INPARM::Allocated memory size", 1,
+    tpberr = tpb_k_alloc_output("Allocated memory size", 1,
         (void **)&real_total_memsize);
     if (tpberr) {
         return tpberr;
     }
-    tpberr = tpb_k_alloc_output("INPARM::STREAM array size", 1,
+    tpberr = tpb_k_alloc_output("STREAM array size", 1,
         (void **)&array_size_out);
     if (tpberr) {
         return tpberr;

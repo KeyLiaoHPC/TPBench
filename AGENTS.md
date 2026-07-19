@@ -25,7 +25,7 @@ cmake --build build --target tpb_cmake_help   # list TPB_* options + kernels (no
 ```bash
 cd build && ctest
 ./build/bin/tpbcli run --kernel stream --kargs stream_array_size=524288,ntest=100
-# expect normal finish; triad_bw_walltime > 1000 MB/s
+# expect normal finish; Name: Triad bandwidth / Result mean > 1000 MB/s
 ```
 
 Optional DB check:

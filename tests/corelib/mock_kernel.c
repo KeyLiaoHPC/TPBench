@@ -28,7 +28,7 @@ mock_setup_driver(void)
     /* mock_pli_test: PLI kernel (no runner) */
     err = tpb_k_register("mock_pli_test", "Mock PLI kernel", TPB_KTYPE_PLI);
     if (err) return err;
-    err = tpb_k_add_parm("ntest", "Number of iterations", "10",
+    err = tpb_k_add_arg("ntest", NULL, "Number of iterations", "10",
                           TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_NOCHECK);
     if (err) return err;
     err = tpb_k_finalize_pli();
@@ -60,20 +60,20 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
     free(kern);
 
     /* Build argpack with separate allocations (deep copy plims) */
-    hdl->argpack.n = hdl->kernel.info.nparms;
-    if (hdl->kernel.info.nparms > 0) {
-        hdl->argpack.args = (tpb_rt_parm_t *)malloc(
-            sizeof(tpb_rt_parm_t) * hdl->kernel.info.nparms);
+    hdl->argpack.n = hdl->kernel.info.nargs;
+    if (hdl->kernel.info.nargs > 0) {
+        hdl->argpack.args = (tpb_rt_arg_t *)malloc(
+            sizeof(tpb_rt_arg_t) * hdl->kernel.info.nargs);
         if (hdl->argpack.args == NULL)
             return TPBE_MALLOC_FAIL;
-        for (int i = 0; i < hdl->kernel.info.nparms; i++) {
-            memcpy(&hdl->argpack.args[i], &hdl->kernel.info.parms[i],
-                   sizeof(tpb_rt_parm_t));
+        for (int i = 0; i < hdl->kernel.info.nargs; i++) {
+            memcpy(&hdl->argpack.args[i], &hdl->kernel.info.args[i],
+                   sizeof(tpb_rt_arg_t));
 
-            if (hdl->kernel.info.parms[i].plims != NULL &&
-                hdl->kernel.info.parms[i].nlims > 0) {
+            if (hdl->kernel.info.args[i].plims != NULL &&
+                hdl->kernel.info.args[i].nlims > 0) {
                 hdl->argpack.args[i].plims = (tpb_parm_value_t *)malloc(
-                    sizeof(tpb_parm_value_t) * hdl->kernel.info.parms[i].nlims);
+                    sizeof(tpb_parm_value_t) * hdl->kernel.info.args[i].nlims);
                 if (hdl->argpack.args[i].plims == NULL) {
                     for (int j = 0; j < i; j++) {
                         if (hdl->argpack.args[j].plims != NULL) {
@@ -85,9 +85,9 @@ mock_build_handle(const char *kernel_name, tpb_k_rthdl_t *hdl)
                     hdl->argpack.args = NULL;
                     return TPBE_MALLOC_FAIL;
                 }
-                for (int j = 0; j < hdl->kernel.info.parms[i].nlims; j++) {
+                for (int j = 0; j < hdl->kernel.info.args[i].nlims; j++) {
                     hdl->argpack.args[i].plims[j] =
-                        hdl->kernel.info.parms[i].plims[j];
+                        hdl->kernel.info.args[i].plims[j];
                 }
             } else {
                 hdl->argpack.args[i].plims = NULL;

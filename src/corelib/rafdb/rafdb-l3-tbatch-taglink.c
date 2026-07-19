@@ -19,8 +19,8 @@
 #define TPB_RAF_TBATCH_HDR_DATA_SIZE_OFF   8
 #define TPB_RAF_TBATCH_HDR_NAME_OFF        32
 #define TPB_RAF_TBATCH_HDR_DIM0_OFF        2336
-#define TPB_RAF_TBATCH_HDR_TASK_NAME      "TPBLINK::TaskID"
-#define TPB_RAF_TBATCH_HDR_KERNEL_NAME    "TPBLINK::KernelID"
+#define TPB_RAF_TBATCH_HDR_TASK_NAME      "TaskID"
+#define TPB_RAF_TBATCH_HDR_KERNEL_NAME    "KernelID"
 
 /**
  * @brief Append a TaskRecordID to tbatch .tpbr header[0] (TPBLINK::TaskID).

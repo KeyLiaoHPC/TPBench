@@ -676,29 +676,30 @@ int tpb_k_register(const char *name, const char *note);
 
 ---
 
-### `tpb_k_add_parm`
+### `tpb_k_add_arg`
 
-Add a runtime parameter to the current kernel.
+Add a runtime **argument** to the current kernel (replaces `tpb_k_add_parm`).
 
 ```c
-int tpb_k_add_parm(const char *name, const char *note,
-                   const char *default_val, TPB_DTYPE dtype, ...);
+int tpb_k_add_arg(const char *name, const char *tag, const char *note,
+                  const char *default_val, TPB_DTYPE dtype, ...);
 ```
 
 **Parameters:**
-- `name`: Parameter name (used for CLI argument matching)
-- `note`: Human-readable parameter description
+- `name`: Argument local name (CLI / lookup key; no `:`; unique vs outputs)
+- `tag`: Optional user tags (comma-separated; `NULL`/`""` allowed). System appends `TPBARG` then normalizes.
+- `note`: Human-readable argument description
 - `default_val`: String representation of default value
-- `dtype`: Combined data type: source | check | type
+- `dtype`: Combined data type: source | check | type (`TPB_PARM_*` encoding)
 - `...`: Variable arguments based on validation mode
 
 **Data Type Encoding (dtype):**
 Format: `0xSSCCTTTT` (32-bit)
-- **SS** (bits 24-31): Parameter Source
-  - `TPB_PARM_CLI`: Parameter from CLI
-  - `TPB_PARM_MACRO`: Parameter from macro
-  - `TPB_PARM_FILE`: Parameter from config file
-  - `TPB_PARM_ENV`: Parameter from environment variable
+- **SS** (bits 24-31): Argument Source
+  - `TPB_PARM_CLI`: Argument from CLI
+  - `TPB_PARM_MACRO`: Argument from macro
+  - `TPB_PARM_FILE`: Argument from config file
+  - `TPB_PARM_ENV`: Argument from environment variable
 - **CC** (bits 16-23): Check/Validation mode
   - `TPB_PARM_NOCHECK`: No validation
   - `TPB_PARM_RANGE`: Check range [lo, hi]
@@ -726,19 +727,19 @@ Format: `0xSSCCTTTT` (32-bit)
 **Example:**
 ```c
 // Range check for integer
-tpb_k_add_parm("ntest", "Number of tests", "10",
-               TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-               (int64_t)1, (int64_t)10000);
+tpb_k_add_arg("ntest", NULL, "Number of tests", "10",
+              TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+              (int64_t)1, (int64_t)10000);
 
 // List check for string
 const char *dtypes[] = {"float", "double", "int"};
-tpb_k_add_parm("dtype", "Data type", "double",
-               TPB_PARM_CLI | TPB_STRING_T | TPB_PARM_LIST,
-               3, dtypes);
+tpb_k_add_arg("dtype", NULL, "Data type", "double",
+              TPB_PARM_CLI | TPB_STRING_T | TPB_PARM_LIST,
+              3, dtypes);
 
 // No check for double
-tpb_k_add_parm("epsilon", "Convergence threshold", "1e-6",
-               TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
+tpb_k_add_arg("epsilon", NULL, "Convergence threshold", "1e-6",
+              TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_NOCHECK);
 ```
 
 ---
@@ -767,12 +768,13 @@ int tpb_k_add_runner(int (*runner)(void));
 Register a new output data definition for the current kernel.
 
 ```c
-int tpb_k_add_output(const char *name, const char *note, 
+int tpb_k_add_output(const char *name, const char *tag, const char *note,
                      TPB_DTYPE dtype, TPB_UNIT_T unit);
 ```
 
 **Parameters:**
-- `name`: Output name (used to look up when allocating/reporting)
+- `name`: Output local name (lookup key for `tpb_k_alloc_output`; no `:`)
+- `tag`: Optional user tags (`NULL`/`""` allowed). System appends `TPBOUT` then normalizes.
 - `note`: Human-readable description
 - `dtype`: Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.)
 - `unit`: Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.)
@@ -1888,13 +1890,13 @@ void register_my_kernel(void) {
     // Register kernel
     tpb_k_register("my_kernel", "Example benchmark kernel");
     
-    // Add parameters
-    tpb_k_add_parm("ntest", "Number of tests", "100",
-                   TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
-                   (int64_t)1, (int64_t)1000000);
+    // Add arguments
+    tpb_k_add_arg("ntest", NULL, "Number of tests", "100",
+                  TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE,
+                  (int64_t)1, (int64_t)1000000);
     
     // Add output
-    tpb_k_add_output("time", "Execution time", TPB_DOUBLE_T, TPB_UNIT_NS);
+    tpb_k_add_output("time", NULL, "Execution time", TPB_DOUBLE_T, TPB_UNIT_NS);
     
     // Finalize registration
     tpb_k_finalize_pli();

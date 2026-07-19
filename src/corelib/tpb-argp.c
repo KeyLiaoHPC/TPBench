@@ -29,21 +29,21 @@
 /* Local Function Prototypes */
 
 /* Apply kernel argument tokens to runtime parameters */
-static int _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
-                                 int nparms, const char *kernel_name, int warn_unknown);
+static int _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_arg_t *rt_parms,
+                                 int nargs, const char *kernel_name, int warn_unknown);
 
 /* Build runtime parameters from kernel and common definitions */
 static int _sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
-                              tpb_rt_parm_t **rt_parms_out, int *nparms_out);
+                              tpb_rt_arg_t **rt_args_out, int *nargs_out);
 
 /* Check if value is in list */
-static int _sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+static int _sf_check_arg_list(tpb_rt_arg_t *parm, tpb_parm_value_t *value);
 
 /* Check if value is within range */
-static int _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value);
+static int _sf_check_arg_range(tpb_rt_arg_t *parm, tpb_parm_value_t *value);
 
 /* Find parameter index by name */
-static int _sf_find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name);
+static int _sf_find_parm_index(tpb_rt_arg_t *rt_parms, int nargs, const char *name);
 
 /* Trim whitespace from both ends of a string */
 static char *_sf_trim_whitespace(char *str);
@@ -80,13 +80,13 @@ _sf_trim_whitespace(char *str)
 }
 
 static int
-_sf_find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name)
+_sf_find_parm_index(tpb_rt_arg_t *rt_parms, int nargs, const char *name)
 {
     if (rt_parms == NULL || name == NULL) {
         return -1;
     }
 
-    for (int i = 0; i < nparms; i++) {
+    for (int i = 0; i < nargs; i++) {
         if (strcmp(rt_parms[i].name, name) == 0) {
             return i;
         }
@@ -96,8 +96,8 @@ _sf_find_parm_index(tpb_rt_parm_t *rt_parms, int nparms, const char *name)
 }
 
 static int
-_sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
-                  int nparms, const char *kernel_name, int warn_unknown)
+_sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_arg_t *rt_parms,
+                  int nargs, const char *kernel_name, int warn_unknown)
 {
     int err;
 
@@ -105,7 +105,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
         return 0;
     }
 
-    if (tokens == NULL || rt_parms == NULL || nparms <= 0) {
+    if (tokens == NULL || rt_parms == NULL || nargs <= 0) {
         return warn_unknown ? TPBE_KERN_ARG_FAIL : 0;
     }
 
@@ -136,7 +136,7 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
             TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
         }
 
-        parm_idx = _sf_find_parm_index(rt_parms, nparms, key);
+        parm_idx = _sf_find_parm_index(rt_parms, nargs, key);
         if (parm_idx < 0) {
             if (warn_unknown) {
                 tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
@@ -182,51 +182,51 @@ _sf_apply_karg_tokens(char **tokens, int ntokens, tpb_rt_parm_t *rt_parms,
 
 static int
 _sf_build_rt_parms(tpb_kernel_t *kernel, tpb_kernel_t *kernel_common,
-               tpb_rt_parm_t **rt_parms_out, int *nparms_out)
+               tpb_rt_arg_t **rt_args_out, int *nargs_out)
 {
-    tpb_rt_parm_t *rt_parms;
+    tpb_rt_arg_t *rt_parms;
     int max_parms;
-    int nparms = 0;
+    int nargs = 0;
 
-    if (kernel == NULL || rt_parms_out == NULL || nparms_out == NULL) {
+    if (kernel == NULL || rt_args_out == NULL || nargs_out == NULL) {
         TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
     }
 
-    max_parms = kernel->info.nparms + (kernel_common ? kernel_common->info.nparms : 0);
+    max_parms = kernel->info.nargs + (kernel_common ? kernel_common->info.nargs : 0);
     if (max_parms == 0) {
-        *rt_parms_out = NULL;
-        *nparms_out = 0;
+        *rt_args_out = NULL;
+        *nargs_out = 0;
         return 0;
     }
 
-    rt_parms = (tpb_rt_parm_t *)malloc(sizeof(tpb_rt_parm_t) * max_parms);
+    rt_parms = (tpb_rt_arg_t *)malloc(sizeof(tpb_rt_arg_t) * max_parms);
     if (rt_parms == NULL) {
         TPB_FAIL(TPB_MOD_ARGP, TPBE_MALLOC_FAIL, NULL);
     }
 
-    for (int i = 0; i < kernel->info.nparms; i++) {
-        memcpy(&rt_parms[nparms], &kernel->info.parms[i], sizeof(tpb_rt_parm_t));
-        nparms++;
+    for (int i = 0; i < kernel->info.nargs; i++) {
+        memcpy(&rt_parms[nargs], &kernel->info.args[i], sizeof(tpb_rt_arg_t));
+        nargs++;
     }
 
     if (kernel_common != NULL) {
-        for (int i = 0; i < kernel_common->info.nparms; i++) {
-            if (_sf_find_parm_index(rt_parms, nparms, kernel_common->info.parms[i].name) >= 0) {
+        for (int i = 0; i < kernel_common->info.nargs; i++) {
+            if (_sf_find_parm_index(rt_parms, nargs, kernel_common->info.args[i].name) >= 0) {
                 continue;
             }
-            memcpy(&rt_parms[nparms], &kernel_common->info.parms[i], sizeof(tpb_rt_parm_t));
-            nparms++;
+            memcpy(&rt_parms[nargs], &kernel_common->info.args[i], sizeof(tpb_rt_arg_t));
+            nargs++;
         }
     }
 
-    *rt_parms_out = rt_parms;
-    *nparms_out = nparms;
+    *rt_args_out = rt_parms;
+    *nargs_out = nargs;
     return 0;
 }
 
 /* Check if value is within range [plims[0], plims[1]] */
 static int
-_sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+_sf_check_arg_range(tpb_rt_arg_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims != 2) {
         TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
@@ -279,7 +279,7 @@ _sf_check_arg_range(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
 
 /* Check if value is in the list plims[0..nlims-1] */
 static int
-_sf_check_arg_list(tpb_rt_parm_t *parm, tpb_parm_value_t *value)
+_sf_check_arg_list(tpb_rt_arg_t *parm, tpb_parm_value_t *value)
 {
     if (parm == NULL || value == NULL || parm->plims == NULL || parm->nlims == 0) {
         TPB_FAIL(TPB_MOD_ARGP, TPBE_KERN_ARG_FAIL, NULL);
@@ -341,10 +341,10 @@ int
 tpb_check_kargs(char **common_tokens, int ncommon,
                 char **kernel_tokens, int nkernel,
                 tpb_kernel_t *kernel,
-                tpb_rt_parm_t **rt_parms_out, int *nparms_out)
+                tpb_rt_arg_t **rt_args_out, int *nargs_out)
 {
     tpb_kernel_t *kernel_common = NULL;
-    tpb_rt_parm_t *rt_parms;
+    tpb_rt_arg_t *rt_parms;
     int err;
 
     if (kernel == NULL) {
@@ -355,20 +355,20 @@ tpb_check_kargs(char **common_tokens, int ncommon,
     tpb_query_kernel(-1, "_tpb_common", &kernel_common);
     /* kernel_common may be NULL if _tpb_common not found, that's OK */
 
-    err = _sf_build_rt_parms(kernel, kernel_common, &rt_parms, nparms_out);
+    err = _sf_build_rt_parms(kernel, kernel_common, &rt_parms, nargs_out);
     TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
     err = _sf_apply_karg_tokens(common_tokens, ncommon,
-                            rt_parms, *nparms_out,
+                            rt_parms, *nargs_out,
                             kernel->info.name, 0);
     TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
     err = _sf_apply_karg_tokens(kernel_tokens, nkernel,
-                            rt_parms, *nparms_out,
+                            rt_parms, *nargs_out,
                             kernel->info.name, 1);
     TPB_PROPAGATE(TPB_MOD_ARGP, err, NULL);
 
-    *rt_parms_out = rt_parms;
+    *rt_args_out = rt_parms;
     tpb_free_kernel(kernel_common);
     free(kernel_common);
     return 0;

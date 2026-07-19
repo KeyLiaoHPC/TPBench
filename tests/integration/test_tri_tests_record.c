@@ -123,7 +123,7 @@ write_stream_bench_yaml(const char *path)
             "      kernel: stream\n"
             "      kargs: [[\"stream_array_size\", \"32\"], [\"ntest\", \"10\"]]\n"
             "      v:\n"
-            "        - [\"FOM,BANDWIDTH::Triad\", \"mean\"]\n"
+            "        - [\"Triad bandwidth\", \"mean\"]\n"
             "  score:\n"
             "    - id: s1\n"
             "      name: Triad\n"

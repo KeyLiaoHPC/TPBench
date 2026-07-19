@@ -18,8 +18,9 @@
 #define TPB_RAF_TASK_FILE_HDR0_BASE       308
 #define TPB_RAF_TASK_FILE_HDR0_DATA_SIZE  316
 #define TPB_RAF_TASK_FILE_HDR0_NAME       340
-#define TPB_RAF_TASK_FILE_HDR0_DIM0       2644
-#define TPB_RAF_TASK_CAPSULE_HDR_NAME     "TPBLINK::TaskID"
+/* dimsizes[0] after scalars(32)+name(256)+tag(256)+note(2048) from HDR0_BASE */
+#define TPB_RAF_TASK_FILE_HDR0_DIM0       2900
+#define TPB_RAF_TASK_CAPSULE_HDR_NAME     "TaskID"
 
 /**
  * @brief Append a TaskRecordID to a task capsule .tpbr under file lock.
@@ -128,8 +129,8 @@ tpb_raf_record_append_task_capsule(const char *workspace,
         if (_tpb_raf_l1_read_u32(fp, &hdr0_ndim) != 0) {
             goto fail_unlock;
         }
-        split_off = (long)TPB_RAF_TASK_FILE_HDR0_BASE + 32L + 256L + 2048L
-            + (long)hdr0_ndim * 8L + (long)hdr0_ndim * 64L;
+        split_off = (long)TPB_RAF_TASK_FILE_HDR0_BASE + 32L + 256L + 256L
+            + 2048L + (long)hdr0_ndim * 8L + (long)hdr0_ndim * 64L;
     }
     (void)metasize;
 

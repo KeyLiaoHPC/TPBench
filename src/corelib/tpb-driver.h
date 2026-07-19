@@ -2,7 +2,7 @@
  * @file tpb-driver.h
  * @brief Internal header for the TPBench driver.
  *
- * Public kernel API declarations (tpb_k_register, tpb_k_add_parm, etc.)
+ * Public kernel API declarations (tpb_k_register, tpb_k_add_arg, etc.)
  * live in tpbench.h.  This header exposes driver-internal functions only.
  */
 

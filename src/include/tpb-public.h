@@ -23,7 +23,16 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPBM_CLI_STR_MAX_LEN 4096
 #define TPBM_NAME_UNIX_MAX_LEN 64
 #define TPBM_NAME_STR_MAX_LEN 256
+/** Max characters of user-supplied tag text (excludes trailing NUL). */
+#define TPBM_TAG_USER_MAX_LEN 191
 #define TPBM_NOTE_STR_MAX_LEN 2048
+
+/** System role tag appended to kernel argument headers. */
+#define TPB_TAG_ARG  "TPBARG"
+/** System role tag appended to kernel output headers. */
+#define TPB_TAG_OUT  "TPBOUT"
+/** Internal linkage tag for cross-record ID arrays. */
+#define TPB_TAG_LINK "TPBLINK"
 
 /* tpblog line tag types; rendered as [INFO], [WARN], or [ERRO] */
 #define TPB_LOG_TAG_NOTE  0x00U
@@ -280,7 +289,7 @@ typedef struct tpb_timer {
     void (*get_stamp)(int64_t *ts);
 } tpb_timer_t;
 
-/** @brief Union for parameter values */
+/** @brief Union for argument values */
 typedef union tpb_parm_value {
     int64_t i64;
     uint64_t u64;
@@ -289,19 +298,26 @@ typedef union tpb_parm_value {
     char c;
 } tpb_parm_value_t;
 
-/** @brief Runtime parameter definition */
-typedef struct tpb_rt_parm {
+/**
+ * @brief Runtime kernel argument definition.
+ *
+ * "Argument" is the recorded/CLI-facing input; TPB_PARM_* dtype flags remain
+ * the type/validation encoding and are unrelated to the TPBARG role tag.
+ */
+typedef struct tpb_rt_arg {
     char name[TPBM_NAME_STR_MAX_LEN];
+    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBARG) */
     char note[TPBM_NOTE_STR_MAX_LEN];
     tpb_parm_value_t value;
     TPB_DTYPE ctrlbits;
     int nlims;
     tpb_parm_value_t *plims;
-} tpb_rt_parm_t;
+} tpb_rt_arg_t;
 
 /** @brief Kernel output definition */
 typedef struct tpb_k_output {
     char name[TPBM_NAME_STR_MAX_LEN];
+    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBOUT) */
     char note[TPBM_NOTE_STR_MAX_LEN];
     TPB_DTYPE dtype;
     TPB_UNIT_T unit;
@@ -318,7 +334,7 @@ typedef struct tpb_respack {
 /** @brief Argument package for kernel execution */
 typedef struct tpb_argpack {
     int n;
-    tpb_rt_parm_t *args;
+    tpb_rt_arg_t *args;
 } tpb_argpack_t;
 
 /** @brief Static kernel information */
@@ -328,8 +344,8 @@ typedef struct tpb_k_static_info {
     unsigned char kernel_id[20];   /**< Resolved KernelID for this kernel */
     int kernel_record_ok;          /**< 1 if workspace kernel record update succeeded */
     TPB_K_CTRL kctrl;
-    int nparms, nouts;
-    tpb_rt_parm_t *parms;
+    int nargs, nouts;
+    tpb_rt_arg_t *args;
     tpb_k_output_t *outs;
 } tpb_k_static_info_t;
 
@@ -389,25 +405,27 @@ typedef struct tpb_k_rthdl {
 int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
 
 /**
- * @brief Add a runtime parameter to the current kernel.
+ * @brief Add a runtime argument to the current kernel.
  *
- * The dtype parameter uses a 32-bit encoding: 0xSSCCTTTT
- *   - SS (bits 24-31): Parameter Source flags
+ * The dtype argument uses a 32-bit encoding: 0xSSCCTTTT
+ *   - SS (bits 24-31): Argument Source flags (TPB_PARM_* source bits)
  *   - CC (bits 16-23): Check/Validation mode flags
  *   - TTTT (bits 0-15): Type code (MPI-compatible)
  *
- * @param name Parameter name (used for CLI argument matching)
- * @param note Human-readable parameter description
- * @param default_val String representation of default value
- * @param dtype Combined data type: source | check | type
- * @param ... Variable arguments based on validation mode:
- *            - TPB_PARM_RANGE: (lo, hi) range bounds
- *            - TPB_PARM_LIST: (n, plist) valid values
- *            - TPB_PARM_NOCHECK: no additional arguments
+ * @param name         Argument local name (unique vs other args/outputs; no ':').
+ * @param tag          Optional user tags (comma-separated; NULL/"" allowed).
+ *                     System appends TPBARG then normalizes (dedupe/upper/sort).
+ * @param note         Human-readable argument description
+ * @param default_val  String representation of default value
+ * @param dtype        Combined data type: source | check | type
+ * @param ...          Variable arguments based on validation mode:
+ *                     - TPB_PARM_RANGE: (lo, hi) range bounds
+ *                     - TPB_PARM_LIST: (n, plist) valid values
+ *                     - TPB_PARM_NOCHECK: no additional arguments
  * @return 0 on success, error code otherwise
  */
-int tpb_k_add_parm(const char *name, const char *note,
-                   const char *default_val, TPB_DTYPE dtype, ...);
+int tpb_k_add_arg(const char *name, const char *tag, const char *note,
+                  const char *default_val, TPB_DTYPE dtype, ...);
 
 
 
@@ -417,13 +435,16 @@ int tpb_k_add_parm(const char *name, const char *note,
  * Must be called during kernel registration (after tpb_k_register,
  * before tpb_k_finalize_pli) to define output metrics.
  *
- * @param name   Output name (used to look up when allocating/reporting).
+ * @param name   Output local name (lookup key for alloc; no ':').
+ * @param tag    Optional user tags (comma-separated; NULL/"" allowed).
+ *               System appends TPBOUT then normalizes.
  * @param note   Human-readable description.
  * @param dtype  Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.).
  * @param unit   Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.).
  * @return 0 on success, error code otherwise.
  */
-int tpb_k_add_output(const char *name, const char *note, TPB_DTYPE dtype, TPB_UNIT_T unit);
+int tpb_k_add_output(const char *name, const char *tag, const char *note,
+                     TPB_DTYPE dtype, TPB_UNIT_T unit);
 
 /* ===== Kernel Runtime API ===== */
 
@@ -537,7 +558,7 @@ int tpb_k_unlink_capsule_sync_shm(const unsigned char kernel_id[20],
  * @brief Finalize kernel registration.
  *
  * Increments the kernel count and completes registration. Called after all
- * parameters and outputs have been added via tpb_k_add_parm/tpb_k_add_output.
+ * parameters and outputs have been added via tpb_k_add_arg/tpb_k_add_output.
  *
  * @return 0 on success, error code otherwise.
  */
@@ -703,14 +724,14 @@ int tpb_get_nhdl(void);
  * @param kernel_tokens Kernel-specific tokens parsed from CLI.
  * @param nkernel Number of kernel-specific tokens.
  * @param kernel Pointer to kernel definition.
- * @param rt_parms_out Output runtime parameters array.
- * @param nparms_out Output number of parameters.
+ * @param rt_args_out Output runtime parameters array.
+ * @param nargs_out Output number of parameters.
  * @return TPBE_SUCCESS or validation error code.
  */
 int tpb_check_kargs(char **common_tokens, int ncommon,
                     char **kernel_tokens, int nkernel,
                     tpb_kernel_t *kernel,
-                    tpb_rt_parm_t **rt_parms_out, int *nparms_out);
+                    tpb_rt_arg_t **rt_args_out, int *nargs_out);
 
 /**
  * @brief Parse comma-separated key=value string and set kernel arguments.
@@ -944,7 +965,8 @@ typedef struct tpb_meta_header {
     uint32_t type_bits;                       /**< Data type control bits: TPB_PARM_SOURCE_MASK|TPB_PARM_CHECK_MASK|TPB_PARM_TYPE_MASK */
     uint32_t _reserve;                        /**< Reserved padding for alignment */
     uint64_t uattr_bits;                      /**< Metric unit encoding, aligned to TPB_UNIT_T */
-    char name[TPBM_NAME_STR_MAX_LEN];       /**< Header name (256 bytes) */
+    char name[TPBM_NAME_STR_MAX_LEN];       /**< Header local name (256 bytes, NUL-terminated) */
+    char tag[TPBM_NAME_STR_MAX_LEN];        /**< Normalized tags (256 bytes); empty if none */
     char note[TPBM_NOTE_STR_MAX_LEN];       /**< Notes and descriptions (2048 bytes) */
     uint64_t dimsizes[TPBM_DATA_NDIM_MAX];  /**< Dimension sizes: dimsizes[0]=innermost (d0) */
     char dimnames[TPBM_DATA_NDIM_MAX][64];  /**< Dimension names, parallel to dimsizes */
@@ -995,7 +1017,7 @@ typedef struct kernel_attr {
     char kernel_name[256];        /**< Kernel name */
     char version[64];             /**< Version string */
     char description[2048];       /**< Description */
-    uint32_t nparm;               /**< Registered parameters */
+    uint32_t narg;                /**< Registered arguments */
     uint32_t nmetric;             /**< Registered output metrics */
     uint32_t kctrl;               /**< Kernel control bits */
     uint32_t nheader;             /**< Number of headers */
@@ -1010,7 +1032,7 @@ typedef struct kernel_entry {
     unsigned char inherit_from[20];   /**< Lineage: source KernelID, or zero */
     char kernel_name[64];         /**< Kernel name */
     uint32_t kctrl;               /**< Kernel control bits */
-    uint32_t nparm;               /**< Number of parameters */
+    uint32_t narg;                /**< Number of arguments */
     uint32_t nmetric;             /**< Number of metrics */
     uint32_t active;              /**< 1 if loadable, 0 if inactive/historical */
     tpb_dtbits_t utc_bits;        /**< Kernel build/registration datetime (UTC) */
