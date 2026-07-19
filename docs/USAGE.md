@@ -72,13 +72,15 @@ tpbcli <subcommand> <options>
 Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`runtime environment` (`rtenv`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
 
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
-- **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores.
+- **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores. **Metric values are read from rafdb task records** linked by the batch TBatchID (`v:` names must match output local names; reducers such as `mean` / `p50` / `Q=` apply to the stored arrays). The run log is not parsed for scoring.
 - **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent index tables) or **`dump`** (domain + `-i`/`--id` for one `.tpbr`, or `-e` for `.tpbe` index). Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
 - **`tpbcli rtenv`**: Create, browse, and load runtime environment records. Records capture application/library versions and explicit environment variable operations.
 - **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
 
 Output results on screen are also written to the run log under `<workspace>/rafdb/log/` via `tpblog_*` (dual-write to stdout and the log file). See [design_tpblog_CN.md](./design/design_tpblog_CN.md).
+
+**CLI tables (human-readable only):** `tpb_cliout_args` prints an **Input** table (`ID Name Tags Unit dim value`); `tpb_cliout_results` prints an **Output** table (`ID Name Tags Unit dim mean min max p25 p50 p75 p90 p95 p99`). Point-shaped metrics fill only `mean` (other stats are `-`). Prefer a terminal width of at least ~160 columns for the results table. **Do not scrape the run log for scoring** — `tpbcli benchmark` reads metric arrays from rafdb task records (see §2.x benchmark).
 
 ## 2.2 tpbcli run
 

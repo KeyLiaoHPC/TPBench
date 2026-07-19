@@ -15,11 +15,10 @@ benchmark:
     # kernel: The kernel's name.
     # kargs: The 2D array of --kargs for `tpbcli run`, each element is a key-value pair. 
     # v: The array that tells `tpb benchmark` what outputs being used
-    #    The fist element is the output's name.
-    #    The second element is the arithmetic applying to the result, in case it is a array.
-    #    For a single point data, this setting will be ignored. For an array, all data will
-    #    first be flatten to 1D, then apply the arithmetic. Current supported: "mean", "median",
-    #    "max", "min", "Q=<quantile_number>". <quantile_number> is a decimal number in [0,100].
+    #    The first element is the output's local name (header name in rafdb, not tags).
+    #    The second element is the reducer applied to the 1-D array payload in rafdb:
+    #    "mean", "median", "max", "min", "p25"/"p50"/..., or "Q=<q>" with q in [0,100]
+    #    or [0,1]. Metrics are loaded from rafdb task records (not the run log).
     - id: 8Kx1
       note: ""
       kernel: stream_mpi
@@ -28,10 +27,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 1"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 8Kx4
       note: ""
       kernel: stream_mpi
@@ -40,10 +39,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 4"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 48Kx1
       note: ""
       kernel: stream_mpi
@@ -52,10 +51,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 1"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 48Kx4
       note: ""
       kernel: stream_mpi
@@ -64,10 +63,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 4"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 1024Kx1
       note: ""
       kernel: stream_mpi
@@ -76,10 +75,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 1"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 1024Kx4
       note: ""
       kernel: stream_mpi
@@ -88,10 +87,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 4"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 524288Kx1
       note: ""
       kernel: stream_mpi
@@ -100,10 +99,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 1"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
     - id: 524288Kx4
       note: ""
       kernel: stream_mpi
@@ -112,10 +111,10 @@ benchmark:
       wrapper: mpirun
       wrapper_args: "--map-by core --bind-to core -np 4"
       v:
-        - ["copy_bw_walltime", "mean"]
-        - ["scale_bw_walltime", "mean"]
-        - ["add_bw_walltime", "mean"]
-        - ["triad_bw_walltime", "mean"]
+        - ["Copy Best Rate MB/s", "mean"]
+        - ["Scale Best Rate MB/s", "mean"]
+        - ["Add Best Rate MB/s", "mean"]
+        - ["Triad Best Rate MB/s", "mean"]
 
   # score: The definition and calculation of benchmark score. 
   score:

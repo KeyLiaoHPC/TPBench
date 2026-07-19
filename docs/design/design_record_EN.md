@@ -1156,7 +1156,7 @@ Runtime APIs match **name** exactly (`strcmp`). Tag is not part of the lookup ke
 
 ### 6.6. Example (STREAM-style Names)
 
-Examples: name=`Copy` tag=`EVENT,TIME,TPBOUT`; name=`Triad bandwidth` tag=`BANDWIDTH,FOM,TPBOUT`. `tpbcli run` prints `Name:` / `Tags:` lines; `tpbcli database dump` prints both fields as stored.
+Examples: name=`Copy` tag=`EVENT,TIME,TPBOUT`; name=`Triad bandwidth` tag=`BANDWIDTH,FOM,TPBOUT`. `tpbcli run` prints fixed-width **Input** / **Output** tables (`tpblog_printf_ctab`); Output stats use `mean`/`min`/`max`/`p25`…`p99`. `tpbcli database dump` prints both `name` and `tag` fields as stored. Benchmark scoring reads rafdb payloads, not the run log.
 
 ### 6.7. CLI dump layout (`.tpbr`, `-i`)
 

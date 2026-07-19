@@ -230,16 +230,37 @@ void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type,
 - `TPBLOG_FLAG_TAG` — prefix `[INFO|WARN|ERRO]`
 - `TPBLOG_FLAG_TSTAG` — both timestamp and tag
 
-### `tpblog_printf_c`
+### `tpblog_printf_ctab`
 
-Print proportional fixed-width columns to stdout and the run log.
+Print one fixed-width table row (no borders) to stdout and the run log.
+
+```c
+typedef struct tpblog_ctab {
+    const float *col_ratios;   /* NULL = equal */
+    int ncol;                  /* 1..16 (TPBLOG_COLUMN_MAX) */
+    int gap;                   /* spaces between columns */
+    const uint32_t *wrap;      /* NULL => TPBLOG_WRAP_HYPHEN */
+    const uint32_t *align;     /* NULL => TPBLOG_ALIGN_LEFT */
+    int term_col_width_min;    /* 0 = off; else floor terminal width */
+    int term_col_width_max;    /* 0 = off; else ceiling terminal width */
+} tpblog_ctab_t;
+
+void tpblog_printf_ctab(const tpblog_ctab_t *opt, const char *const *cells);
+```
+
+Terminal width from `ioctl` / `TPBLOG_TEST_WIDTH` / default 85, then optional min/max clamp. Align: `TPBLOG_ALIGN_LEFT` / `TPBLOG_ALIGN_RIGHT`. Wrap: `TPBLOG_WRAP_HYPHEN` / `TPBLOG_WRAP_NO_HYPHEN`.
+
+### `tpblog_printf_c` / `tpblog_printf_c_flags`
+
+Compat wrappers around `tpblog_printf_ctab` (no align, no width clamp). Prefer `tpblog_printf_ctab` for new code.
 
 ```c
 void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
                      const char *const *cells);
+void tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
+                           const char *const *cells,
+                           const uint32_t *wrap_flags);
 ```
-
-Terminal width from `ioctl` on stdout (default 85). See design doc for width/degenerate rules.
 
 ### `tpblog_print_hline`
 
@@ -331,7 +352,8 @@ int tpb_writecsv(char *path, int64_t **data, int nrow, int ncol, char *header);
 
 ### `tpb_cliout_args`
 
-Output kernel arguments to the command-line interface.
+Print an **Input** fixed-width table (no borders) via `tpblog_printf_ctab`:
+`ID Name Tags Unit dim value`. Preceded by `Kernel Name:`.
 
 ```c
 int tpb_cliout_args(tpb_k_rthdl_t *handle);
@@ -348,7 +370,13 @@ int tpb_cliout_args(tpb_k_rthdl_t *handle);
 
 ### `tpb_cliout_results`
 
-Output kernel execution results to the command-line interface.
+Print an **Output** fixed-width table via `tpblog_printf_ctab`:
+`ID Name Tags Unit dim mean min max p25 p50 p75 p90 p95 p99`.
+
+- Point-shaped outputs (`TPB_UATTR_SHAPE_POINT`): only `mean` is filled; other stats are `-`.
+- 1D (and flattened multi-D): mean/min/max and percentiles p25…p99.
+- Unit casting still follows `TPB_UATTR_CAST_Y/N` and `tpb_set_outargs`.
+- Log output is human-readable only; machines should read rafdb.
 
 ```c
 int tpb_cliout_results(tpb_k_rthdl_t *handle);
@@ -360,8 +388,6 @@ int tpb_cliout_results(tpb_k_rthdl_t *handle);
 **Returns:**
 - `TPBE_SUCCESS` on success
 - `TPBE_NULLPTR_ARG` if handle is NULL
-
-**Note:** Output is based on the output shape attribute. Casting is controlled per-output via `TPB_UATTR_CAST_Y/N` in the unit field.
 
 ---
 
@@ -1573,6 +1599,24 @@ void tpb_raf_free_headers(tpb_meta_header_t *headers,
 **Parameters:**
 - `headers`: Header array (may be NULL, in which case no-op)
 - `nheader`: Number of headers
+
+---
+
+#### `tpb_raf_header_data_ptr`
+
+Resolve a header's byte span inside a concatenated record data blob (sum of prior `data_size` values). Used by `tpbcli benchmark` when reading metric arrays from task `.tpbr` files.
+
+```c
+int tpb_raf_header_data_ptr(const tpb_meta_header_t *headers,
+                            uint32_t nheader,
+                            const void *data,
+                            uint64_t datasize,
+                            uint32_t idx,
+                            const void **ptr_out,
+                            uint64_t *nbytes_out);
+```
+
+Returns `TPBE_LIST_NOT_FOUND` if `idx` is out of range, or `TPBE_FILE_IO_FAIL` if the span exceeds `datasize`.
 
 ---
 

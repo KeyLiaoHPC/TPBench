@@ -16,6 +16,7 @@
 #endif
 #include <ctype.h>
 #include <math.h>
+#include <stdint.h>
 #include "tpb-public.h"
 #include "tpbcli-benchmark.h"
 #include "tpb-bench-yaml.h"
@@ -24,8 +25,13 @@
 /* Local Function Prototypes */
 static int resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size);
 static int run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal);
-static int parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch);
-static double parse_result_value(const char *str);
+static int load_metrics_from_rafdb(const char *workspace,
+                                   const unsigned char tbatch_id[20],
+                                   tpb_bench_batch_t *batch);
+static int apply_reducer(void *arr, size_t narr, TPB_DTYPE dtype,
+                         const char *reducer, double *out);
+static int header_narr(const tpb_meta_header_t *h, size_t esz, size_t *narr_out);
+static int is_zero_id(const unsigned char id[20]);
 
 /* Local Function Implementations */
 
@@ -78,135 +84,289 @@ resolve_suite_path(const char *suite_arg, char *suite_path, size_t path_size)
 }
 
 /**
- * @brief Parse a result value string to double.
+ * @brief True when a 20-byte ID is all zeros (entry-point / no derive_to).
  */
-static double
-parse_result_value(const char *str)
+static int
+is_zero_id(const unsigned char id[20])
 {
-    if (str == NULL) return NAN;
-    
-    /* Skip leading whitespace */
-    while (*str && isspace((unsigned char)*str)) str++;
-    
-    if (*str == '\0' || strcmp(str, "N/A") == 0) {
-        return NAN;
+    int i;
+
+    for (i = 0; i < 20; i++) {
+        if (id[i] != 0) {
+            return 0;
+        }
     }
-    
-    char *endptr;
-    double val = strtod(str, &endptr);
-    
-    /* Check for parse errors */
-    if (endptr == str) {
-        return NAN;
-    }
-    
-    return val;
+    return 1;
 }
 
 /**
- * @brief Parse log file for metrics specified in batch.
+ * @brief Element count for a header payload from dimsizes or data_size/esz.
  */
 static int
-parse_log_for_metrics(const char *log_path, tpb_bench_batch_t *batch)
+header_narr(const tpb_meta_header_t *h, size_t esz, size_t *narr_out)
 {
-    FILE *fp;
-    char line[4096];
-    char current_metric[256] = {0};
-    int found_metric = 0;
-    
-    if (log_path == NULL || batch == NULL) {
+    uint64_t total = 1;
+    uint32_t j;
+    uint32_t nd;
+
+    if (h == NULL || narr_out == NULL || esz == 0) {
+        return -1;
+    }
+    nd = h->ndim;
+    if (nd > TPBM_DATA_NDIM_MAX) {
+        nd = TPBM_DATA_NDIM_MAX;
+    }
+    if (nd == 0) {
+        *narr_out = (size_t)(h->data_size / esz);
+        return 0;
+    }
+    for (j = 0; j < nd; j++) {
+        if (h->dimsizes[j] == 0) {
+            total = 0;
+            break;
+        }
+        if (total > UINT64_MAX / h->dimsizes[j]) {
+            return -1;
+        }
+        total *= h->dimsizes[j];
+    }
+    if (total == 0) {
+        *narr_out = (size_t)(h->data_size / esz);
+        return 0;
+    }
+    *narr_out = (size_t)total;
+    return 0;
+}
+
+/**
+ * @brief Apply YAML reducer to a typed array (mean/min/max/median/pXX/Q=).
+ */
+static int
+apply_reducer(void *arr, size_t narr, TPB_DTYPE dtype,
+              const char *reducer, double *out)
+{
+    double q;
+    double qarr[1];
+    double qout[1];
+    const char *p;
+    char *endptr;
+
+    if (arr == NULL || out == NULL || narr == 0) {
+        return -1;
+    }
+    if (reducer == NULL || reducer[0] == '\0' ||
+        strcmp(reducer, "mean") == 0) {
+        return tpb_stat_mean(arr, narr, dtype, out) == TPBE_SUCCESS ? 0 : -1;
+    }
+    if (strcmp(reducer, "min") == 0) {
+        return tpb_stat_min(arr, narr, dtype, out) == TPBE_SUCCESS ? 0 : -1;
+    }
+    if (strcmp(reducer, "max") == 0) {
+        return tpb_stat_max(arr, narr, dtype, out) == TPBE_SUCCESS ? 0 : -1;
+    }
+    if (strcmp(reducer, "median") == 0 || strcmp(reducer, "p50") == 0) {
+        qarr[0] = 0.50;
+        if (tpb_stat_qtile_1d(arr, narr, dtype, qarr, 1, qout) != TPBE_SUCCESS) {
+            return -1;
+        }
+        *out = qout[0];
+        return 0;
+    }
+    /* p25 / p90 / ... or Q=25 / Q=0.25 */
+    p = reducer;
+    if ((p[0] == 'p' || p[0] == 'P') && isdigit((unsigned char)p[1])) {
+        q = strtod(p + 1, &endptr);
+        if (endptr == p + 1) {
+            return -1;
+        }
+        if (q > 1.0) {
+            q /= 100.0;
+        }
+        qarr[0] = q;
+        if (tpb_stat_qtile_1d(arr, narr, dtype, qarr, 1, qout) != TPBE_SUCCESS) {
+            return -1;
+        }
+        *out = qout[0];
+        return 0;
+    }
+    if ((p[0] == 'Q' || p[0] == 'q') && p[1] == '=') {
+        q = strtod(p + 2, &endptr);
+        if (endptr == p + 2) {
+            return -1;
+        }
+        if (q > 1.0) {
+            q /= 100.0;
+        }
+        qarr[0] = q;
+        if (tpb_stat_qtile_1d(arr, narr, dtype, qarr, 1, qout) != TPBE_SUCCESS) {
+            return -1;
+        }
+        *out = qout[0];
+        return 0;
+    }
+    /* Unknown reducer: fall back to mean. */
+    return tpb_stat_mean(arr, narr, dtype, out) == TPBE_SUCCESS ? 0 : -1;
+}
+
+/**
+ * @brief Load batch vresults from rafdb task payloads linked by tbatch TaskID.
+ *
+ * Saves TBatchID must be captured before end_batch. Matches YAML v: names to
+ * output header local names. Multiple entry-point tasks (derive_to all-zero)
+ * are aggregated by mean of each reducer's scalar.
+ */
+static int
+load_metrics_from_rafdb(const char *workspace,
+                        const unsigned char tbatch_id[20],
+                        tpb_bench_batch_t *batch)
+{
+    tbatch_attr_t tattr;
+    void *tdata = NULL;
+    uint64_t tdatasize = 0;
+    const void *task_ids_blob = NULL;
+    uint64_t task_ids_bytes = 0;
+    uint32_t ntasks;
+    uint32_t ti;
+    int err;
+    int i;
+    int task_hdr_idx = -1;
+    double *sums = NULL;
+    int *counts = NULL;
+
+    if (workspace == NULL || tbatch_id == NULL || batch == NULL) {
         TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_NULLPTR_ARG, NULL);
     }
-    
-    /* Initialize all vresults to NAN */
-    for (int i = 0; i < batch->nvspecs; i++) {
+
+    for (i = 0; i < batch->nvspecs; i++) {
         batch->vresults[i] = NAN;
     }
-    
-    fp = fopen(log_path, "r");
-    if (fp == NULL) {
-        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG, 
-                   "Cannot open log file: %s\n", log_path);
-        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_FILE_IO_FAIL, NULL);
+
+    memset(&tattr, 0, sizeof(tattr));
+    err = tpb_raf_record_read_tbatch(workspace, tbatch_id, &tattr, &tdata,
+                                     &tdatasize);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, err, "read_tbatch");
     }
-    
-    while (fgets(line, sizeof(line), fp) != NULL) {
-        /* Metrics section: "Name: <local name>" (legacy "Metrics:" accepted). */
-        const char *metric_prefix = NULL;
-        if (strncmp(line, "### Name:", 9) == 0) {
-            metric_prefix = line + 9;
-        } else if (strncmp(line, "Name:", 5) == 0) {
-            metric_prefix = line + 5;
-        } else if (strncmp(line, "### Metrics:", 12) == 0) {
-            metric_prefix = line + 12;
-        } else if (strncmp(line, "Metrics:", 8) == 0) {
-            metric_prefix = line + 8;
+
+    for (ti = 0; ti < tattr.nheader; ti++) {
+        if (strcmp(tattr.headers[ti].name, "TaskID") == 0) {
+            task_hdr_idx = (int)ti;
+            break;
         }
-        if (metric_prefix != NULL) {
-            char *name_start = (char *)metric_prefix;
-            while (*name_start && isspace((unsigned char)*name_start)) name_start++;
-            
-            /* Copy metric name, removing trailing newline */
-            strncpy(current_metric, name_start, sizeof(current_metric) - 1);
-            current_metric[sizeof(current_metric) - 1] = '\0';
-            char *nl = strchr(current_metric, '\n');
-            if (nl) *nl = '\0';
-            
-            found_metric = 1;
+    }
+    if (task_hdr_idx < 0) {
+        tpb_raf_free_headers(tattr.headers, tattr.nheader);
+        free(tdata);
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_LIST_NOT_FOUND,
+                 "tbatch missing TaskID header");
+    }
+
+    err = tpb_raf_header_data_ptr(tattr.headers, tattr.nheader, tdata,
+                                  tdatasize, (uint32_t)task_hdr_idx,
+                                  &task_ids_blob, &task_ids_bytes);
+    if (err != TPBE_SUCCESS) {
+        tpb_raf_free_headers(tattr.headers, tattr.nheader);
+        free(tdata);
+        TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, err, "TaskID payload");
+    }
+
+    ntasks = (uint32_t)(task_ids_bytes / 20u);
+    sums = (double *)calloc((size_t)batch->nvspecs, sizeof(double));
+    counts = (int *)calloc((size_t)batch->nvspecs, sizeof(int));
+    if (sums == NULL || counts == NULL) {
+        free(sums);
+        free(counts);
+        tpb_raf_free_headers(tattr.headers, tattr.nheader);
+        free(tdata);
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_MALLOC_FAIL, NULL);
+    }
+
+    for (ti = 0; ti < ntasks; ti++) {
+        const unsigned char *tid =
+            (const unsigned char *)task_ids_blob + (size_t)ti * 20u;
+        task_attr_t attr;
+        void *data = NULL;
+        uint64_t datasize = 0;
+        uint32_t hi;
+
+        memset(&attr, 0, sizeof(attr));
+        err = tpb_raf_record_read_task(workspace, tid, &attr, &data, &datasize);
+        if (err != TPBE_SUCCESS) {
             continue;
         }
-        
-        /* Check for result values when in a metric section */
-        if (found_metric) {
-            double value = NAN;
-            int got_value = 0;
-            
-            /* Check for "Result mean: <value>" */
-            if (strncmp(line, "Result mean:", 12) == 0) {
-                value = parse_result_value(line + 12);
-                got_value = 1;
-            }
-            /* Check for "Result value: <value>" */
-            else if (strncmp(line, "Result value:", 13) == 0) {
-                value = parse_result_value(line + 13);
-                got_value = 1;
-            }
-            
-            if (got_value) {
-                /* Find matching vspec and store value */
-                for (int i = 0; i < batch->nvspecs; i++) {
-                    if (strcmp(batch->vspecs[i].name, current_metric) == 0) {
-                        batch->vresults[i] = value;
-                        break;
-                    }
+        /* Prefer entry-point tasks (not capsule members). */
+        if (!is_zero_id(attr.derive_to)) {
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            continue;
+        }
+
+        for (i = 0; i < batch->nvspecs; i++) {
+            for (hi = attr.ninput; hi < attr.ninput + attr.noutput; hi++) {
+                const void *payload = NULL;
+                uint64_t nbytes = 0;
+                size_t esz = 0;
+                size_t narr = 0;
+                double val = NAN;
+                TPB_DTYPE dtype;
+
+                if (hi >= attr.nheader) {
+                    break;
                 }
-                found_metric = 0;  /* Reset for next metric */
-            }
-            
-            /* Reset if we hit another section */
-            if (line[0] == '#') {
-                found_metric = 0;
+                if (strcmp(attr.headers[hi].name, batch->vspecs[i].name) != 0) {
+                    continue;
+                }
+                err = tpb_raf_header_data_ptr(attr.headers, attr.nheader, data,
+                                              datasize, hi, &payload, &nbytes);
+                if (err != TPBE_SUCCESS || payload == NULL || nbytes == 0) {
+                    break;
+                }
+                dtype = (TPB_DTYPE)attr.headers[hi].type_bits;
+                if (tpb_dtype_elem_size(dtype, &esz) != 0 || esz == 0) {
+                    break;
+                }
+                if (header_narr(&attr.headers[hi], esz, &narr) != 0 ||
+                    narr == 0) {
+                    narr = (size_t)(nbytes / esz);
+                }
+                if (apply_reducer((void *)payload, narr, dtype,
+                                  batch->vspecs[i].reducer, &val) == 0 &&
+                    !isnan(val)) {
+                    sums[i] += val;
+                    counts[i] += 1;
+                }
+                break;
             }
         }
+
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
     }
-    
-    fclose(fp);
-    
-    /* Check if all required metrics were found */
-    int all_found = 1;
-    for (int i = 0; i < batch->nvspecs; i++) {
-        if (isnan(batch->vresults[i])) {
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
-                       "Metric '%s' not found in log for batch '%s'\n",
-                       batch->vspecs[i].name, batch->id);
-            all_found = 0;
+
+    tpb_raf_free_headers(tattr.headers, tattr.nheader);
+    free(tdata);
+
+    {
+        int all_found = 1;
+
+        for (i = 0; i < batch->nvspecs; i++) {
+            if (counts[i] > 0) {
+                batch->vresults[i] = sums[i] / (double)counts[i];
+            } else {
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
+                                TPBLOG_FLAG_TSTAG,
+                                "Metric '%s' not found in rafdb for batch '%s'\n",
+                                batch->vspecs[i].name, batch->id);
+                all_found = 0;
+            }
         }
+        free(sums);
+        free(counts);
+        if (all_found) {
+            return TPBE_SUCCESS;
+        }
+        TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_METRIC_MISSING, NULL);
     }
-    
-    if (all_found) {
-        return TPBE_SUCCESS;
-    }
-    TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_METRIC_MISSING, NULL);
 }
 
 /**
@@ -218,6 +378,9 @@ run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal)
     int err;
     int rec_err;
     int nhdl;
+    unsigned char tbatch_id[20];
+    char tbatch_hex[41];
+    const char *workspace = NULL;
     int kernel_err = 0;
 
     if (batch == NULL) {
@@ -332,6 +495,21 @@ run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal)
         TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, rec_err, "tpb_record_begin_batch");
     }
 
+    /* Capture TBatchID before end_batch clears the active-batch flag. */
+    {
+        const char *hex = tpb_record_get_tbatch_id_hex();
+        if (hex == NULL || tpb_raf_hex_to_id(hex, tbatch_id) != 0) {
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
+                       "tpbcli_benchmark: cannot capture TBatchID\n");
+            TPB_FAIL(TPB_MOD_CLI_BENCHMARK, TPBE_FILE_IO_FAIL, NULL);
+        }
+        snprintf(tbatch_hex, sizeof(tbatch_hex), "%s", hex);
+    }
+    workspace = tpb_record_get_workspace();
+    if (workspace == NULL) {
+        workspace = getenv("TPB_WORKSPACE");
+    }
+
     /* Run the kernel */
     err = tpb_driver_run_all();
     if (err != 0) {
@@ -353,16 +531,15 @@ run_batch(tpb_bench_batch_t *batch, int *tbatch_fatal)
 
     TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, kernel_err, NULL);
 
-    /* Parse log file for metrics */
-    const char *log_path = tpblog_get_filepath();
-    if (log_path != NULL) {
-        err = parse_log_for_metrics(log_path, batch);
+    /* Score inputs come from rafdb task payloads, not the human-readable log. */
+    if (workspace != NULL) {
+        err = load_metrics_from_rafdb(workspace, tbatch_id, batch);
         if (err != 0 && TPBE_CAUSE(err) != TPBE_METRIC_MISSING) {
-            TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, err, "parse_log_for_metrics");
+            TPB_PROPAGATE(TPB_MOD_CLI_BENCHMARK, err, "load_metrics_from_rafdb");
         }
     } else {
-        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG, 
-                   "Log file not available for parsing\n");
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                   "Workspace not available for rafdb metric load\n");
     }
     
     /* Print parsed values */

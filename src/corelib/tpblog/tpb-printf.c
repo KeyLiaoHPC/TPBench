@@ -228,15 +228,35 @@ _sf_print_prefix(int *widths, int ncols, int gap, int start_col)
 }
 
 static void
-_sf_print_plain_cell(const char *text, int width)
+_sf_print_plain_cell(const char *text, int width, uint32_t align)
 {
     char buf[4096];
 
     if (text == NULL) {
         text = "";
     }
-    snprintf(buf, sizeof(buf), "%-*s", width, text);
+    /* RIGHT pads on the left so numeric/ID columns line up at the right edge. */
+    if (align == TPBLOG_ALIGN_RIGHT) {
+        snprintf(buf, sizeof(buf), "%*s", width, text);
+    } else {
+        snprintf(buf, sizeof(buf), "%-*s", width, text);
+    }
     _sf_dual_write(buf);
+}
+
+/**
+ * @brief Clamp detected terminal width using optional min/max (0 = off).
+ */
+static int
+_sf_clamp_term_width(int width, int width_min, int width_max)
+{
+    if (width_min > 0 && width < width_min) {
+        width = width_min;
+    }
+    if (width_max > 0 && width > width_max) {
+        width = width_max;
+    }
+    return width;
 }
 
 static void
@@ -248,7 +268,7 @@ _sf_print_wrapped_cell(const char *text, int width, int col_index,
     int first = 1;
 
     if (text == NULL || text[0] == '\0') {
-        _sf_print_plain_cell("", width);
+        _sf_print_plain_cell("", width, TPBLOG_ALIGN_LEFT);
         return;
     }
     len = strlen(text);
@@ -326,35 +346,41 @@ _sf_print_degenerate_lines(int ncol, const char *const *cells)
 }
 
 void
-tpblog_printf_c(const float *col_ratios, int ncol, int gap,
-                const char *const *cells)
-{
-    tpblog_printf_c_flags(col_ratios, ncol, gap, cells, NULL);
-}
-
-void
-tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
-                      const char *const *cells,
-                      const uint32_t *wrap_flags)
+tpblog_printf_ctab(const tpblog_ctab_t *opt, const char *const *cells)
 {
     const char *lines[TPBLOG_COLUMN_MAX][64];
     int line_count[TPBLOG_COLUMN_MAX];
     char line_bufs[TPBLOG_COLUMN_MAX][64][256];
     int widths[TPBLOG_COLUMN_MAX];
+    uint32_t align_flags[TPBLOG_COLUMN_MAX];
     int total_width;
     int max_lines = 1;
+    int ncol;
+    int gap;
     int c;
     int r;
 
-    if (ncol <= 0 || cells == NULL || ncol > TPBLOG_COLUMN_MAX || gap < 0) {
+    if (opt == NULL || cells == NULL) {
+        return;
+    }
+    ncol = opt->ncol;
+    gap = opt->gap;
+    if (ncol <= 0 || ncol > TPBLOG_COLUMN_MAX || gap < 0) {
         return;
     }
 
-    total_width = _tpblog_terminal_width();
-    if (_tpblog_compute_column_widths(total_width, col_ratios, ncol, gap,
+    total_width = _sf_clamp_term_width(_tpblog_terminal_width(),
+                                       opt->term_col_width_min,
+                                       opt->term_col_width_max);
+    if (_tpblog_compute_column_widths(total_width, opt->col_ratios, ncol, gap,
                                       widths) != 0) {
         _sf_print_degenerate_lines(ncol, cells);
         return;
+    }
+
+    for (c = 0; c < ncol; c++) {
+        align_flags[c] = (opt->align != NULL) ? opt->align[c]
+                                              : TPBLOG_ALIGN_LEFT;
     }
 
     for (c = 0; c < ncol; c++) {
@@ -362,8 +388,8 @@ tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
         size_t pos = 0;
         size_t len = strlen(text);
         int ln = 0;
-        int no_hyphen = (wrap_flags != NULL &&
-                         wrap_flags[c] == TPBLOG_WRAP_NO_HYPHEN);
+        int no_hyphen = (opt->wrap != NULL &&
+                         opt->wrap[c] == TPBLOG_WRAP_NO_HYPHEN);
 
         line_count[c] = 0;
         while (pos < len && ln < 64) {
@@ -441,7 +467,7 @@ tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
             } else {
                 cell = "";
             }
-            _sf_print_plain_cell(cell, widths[c]);
+            _sf_print_plain_cell(cell, widths[c], align_flags[c]);
             if (c + 1 < ncol) {
                 if (gap > 0) {
                     int n = gap;
@@ -456,6 +482,34 @@ tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
         }
         _sf_dual_write("\n");
     }
+}
+
+void
+tpblog_printf_c(const float *col_ratios, int ncol, int gap,
+                const char *const *cells)
+{
+    tpblog_ctab_t opt;
+
+    memset(&opt, 0, sizeof(opt));
+    opt.col_ratios = col_ratios;
+    opt.ncol = ncol;
+    opt.gap = gap;
+    tpblog_printf_ctab(&opt, cells);
+}
+
+void
+tpblog_printf_c_flags(const float *col_ratios, int ncol, int gap,
+                      const char *const *cells,
+                      const uint32_t *wrap_flags)
+{
+    tpblog_ctab_t opt;
+
+    memset(&opt, 0, sizeof(opt));
+    opt.col_ratios = col_ratios;
+    opt.ncol = ncol;
+    opt.gap = gap;
+    opt.wrap = wrap_flags;
+    tpblog_printf_ctab(&opt, cells);
 }
 
 void

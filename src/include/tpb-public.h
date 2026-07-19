@@ -835,13 +835,54 @@ void tpblog_printf(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
 void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
                     const char *fmt, ...);
 
+/** @brief Wrap long cell text with hyphenation when breaking mid-word (default). */
+#define TPBLOG_WRAP_HYPHEN    0u
+/** @brief Wrap long cell text without appending a hyphen at line breaks. */
+#define TPBLOG_WRAP_NO_HYPHEN 1u
+
+/** @brief Left-align cell text within its column width (default). */
+#define TPBLOG_ALIGN_LEFT     0u
+/** @brief Right-align cell text within its column width. */
+#define TPBLOG_ALIGN_RIGHT    1u
+
 /**
- * @brief Print fixed-width columns to stdout and the active run log.
+ * @brief Options for tpblog_printf_ctab() fixed-width column layout.
  *
- * Column widths are derived from stdout terminal width (ioctl), defaulting to 85
- * when unavailable. Widths are allocated proportionally, then reduced by one
- * character per column for hyphenation. When any final width is below 1, each cell
- * is printed on its own line without table layout.
+ * No borders or delimiter glyphs are drawn; columns are separated only by
+ * @c gap spaces. Layout width comes from stdout ioctl, @c TPBLOG_TEST_WIDTH,
+ * or the module default (85), then optionally clamped by
+ * @c term_col_width_min / @c term_col_width_max.
+ *
+ * When proportional allocation yields any column width below 1, each cell is
+ * printed on its own line (degenerate mode).
+ */
+typedef struct tpblog_ctab {
+    const float *col_ratios;   /**< Width ratios; NULL selects equal ratios. */
+    int ncol;                  /**< Column count in [1, TPBLOG_COLUMN_MAX]. */
+    int gap;                   /**< Spaces between columns; must be >= 0. */
+    const uint32_t *wrap;      /**< Per-column wrap; NULL => HYPHEN for all. */
+    const uint32_t *align;     /**< Per-column align; NULL => LEFT for all. */
+    int term_col_width_min;    /**< Floor for terminal width; 0 = disabled. */
+    int term_col_width_max;    /**< Ceiling for terminal width; 0 = disabled. */
+} tpblog_ctab_t;
+
+/**
+ * @brief Print one fixed-width table row to stdout and the active run log.
+ *
+ * @param opt Layout options; must be non-NULL with valid @c ncol and @c gap.
+ * @param cells Array of @c opt->ncol NUL-terminated cell strings (NULL cell = "").
+ *
+ * Wrap prefers breaks at whitespace. Mid-word breaks use @c TPBLOG_WRAP_HYPHEN
+ * (append '-') or @c TPBLOG_WRAP_NO_HYPHEN. Alignment applies when padding a
+ * wrapped line fragment to the column width.
+ */
+void tpblog_printf_ctab(const tpblog_ctab_t *opt, const char *const *cells);
+
+/**
+ * @brief Print fixed-width columns (compat wrapper around tpblog_printf_ctab).
+ *
+ * Equivalent to tpblog_printf_ctab with wrap=NULL, align=NULL, and both
+ * term_col_width_min/max set to 0 (no clamp).
  *
  * @param col_ratios Column width ratios; NULL selects equal ratios.
  * @param ncol Number of columns.
@@ -850,11 +891,6 @@ void tpblog_printf_f(tpb_log_level_t level, uint32_t log_type, uint32_t flags,
  */
 void tpblog_printf_c(const float *col_ratios, int ncol, int gap,
                      const char *const *cells);
-
-/** @brief Wrap long cell text with hyphenation when breaking mid-word (default). */
-#define TPBLOG_WRAP_HYPHEN    0u
-/** @brief Wrap long cell text without appending a hyphen at line breaks. */
-#define TPBLOG_WRAP_NO_HYPHEN 1u
 
 /**
  * @brief Like tpblog_printf_c with per-column wrap behaviour control.
@@ -888,6 +924,37 @@ void tpblog_print_kv_eq(const char *key, const char *value, int key_width);
  * @param sigbit_trim Significant bits for trimming (0 = no trim).
  */
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
+
+/* ===== Statistics (also used by tpbcli benchmark over rafdb payloads) ===== */
+
+/**
+ * @brief Element size in bytes for a TPB_DTYPE (TYPE_MASK bits).
+ * @param dtype Data type flags.
+ * @param out Receives size; must be non-NULL.
+ * @return 0 on success, nonzero if unsupported.
+ */
+int tpb_dtype_elem_size(TPB_DTYPE dtype, size_t *out);
+
+/**
+ * @brief Mean of a typed 1-D array.
+ */
+int tpb_stat_mean(void *arr, size_t narr, TPB_DTYPE dtype, double *mean_out);
+
+/**
+ * @brief Minimum of a typed 1-D array.
+ */
+int tpb_stat_min(void *arr, size_t narr, TPB_DTYPE dtype, double *min_out);
+
+/**
+ * @brief Maximum of a typed 1-D array.
+ */
+int tpb_stat_max(void *arr, size_t narr, TPB_DTYPE dtype, double *max_out);
+
+/**
+ * @brief Quantiles of a typed 1-D array (@p qarr entries in [0,1]).
+ */
+int tpb_stat_qtile_1d(void *arr, size_t narr, TPB_DTYPE dtype,
+                      double *qarr, size_t nq, double *qout);
 
 /* ===== Installation Path API ===== */
 
@@ -1400,6 +1467,30 @@ int tpb_raf_record_read_task(const char *workspace,
  */
 void tpb_raf_free_headers(tpb_meta_header_t *headers,
                             uint32_t nheader);
+
+/**
+ * @brief Resolve a pointer into a concatenated record data blob for one header.
+ *
+ * Headers are laid out in order: offset of header @p idx is the sum of
+ * @c data_size for headers [0 .. idx). Returns TPBE_LIST_NOT_FOUND if @p idx is
+ * out of range, or TPBE_FILE_IO_FAIL if the span does not fit in @p datasize.
+ *
+ * @param headers Header array from a record read.
+ * @param nheader Number of headers.
+ * @param data Concatenated payload blob (may be NULL only when all sizes are 0).
+ * @param datasize Size of @p data in bytes.
+ * @param idx Header index in [0, nheader).
+ * @param ptr_out Receives pointer to that header's bytes (may be data+off with size 0).
+ * @param nbytes_out Receives headers[idx].data_size.
+ * @return TPBE_SUCCESS or encoded error.
+ */
+int tpb_raf_header_data_ptr(const tpb_meta_header_t *headers,
+                            uint32_t nheader,
+                            const void *data,
+                            uint64_t datasize,
+                            uint32_t idx,
+                            const void **ptr_out,
+                            uint64_t *nbytes_out);
 
 /* ===== Runtime Environment (rafdb) ===== */
 

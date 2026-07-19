@@ -221,3 +221,45 @@ tpb_raf_free_headers(tpb_meta_header_t *headers, uint32_t nheader)
     (void)nheader;
     free(headers);
 }
+
+/**
+ * @brief Resolve a pointer into a concatenated record data blob for one header.
+ *
+ * Offset of header idx is the sum of data_size for headers [0 .. idx).
+ */
+int
+tpb_raf_header_data_ptr(const tpb_meta_header_t *headers,
+                        uint32_t nheader,
+                        const void *data,
+                        uint64_t datasize,
+                        uint32_t idx,
+                        const void **ptr_out,
+                        uint64_t *nbytes_out)
+{
+    uint64_t off = 0;
+    uint32_t i;
+    uint64_t dsz;
+
+    if (headers == NULL || ptr_out == NULL || nbytes_out == NULL) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
+    }
+    if (idx >= nheader) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_LIST_NOT_FOUND, NULL);
+    }
+
+    for (i = 0; i < idx; i++) {
+        off += headers[i].data_size;
+    }
+    dsz = headers[idx].data_size;
+    if (off > datasize || dsz > datasize - off) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_FILE_IO_FAIL,
+                 "header data span exceeds blob");
+    }
+    if (data == NULL && (off > 0 || dsz > 0)) {
+        TPB_FAIL(TPB_MOD_RAF_MISC, TPBE_NULLPTR_ARG, NULL);
+    }
+
+    *ptr_out = (data == NULL) ? NULL : ((const uint8_t *)data + off);
+    *nbytes_out = dsz;
+    return TPBE_SUCCESS;
+}

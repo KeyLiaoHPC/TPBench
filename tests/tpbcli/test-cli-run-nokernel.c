@@ -212,9 +212,13 @@ test_normal_with_kernel(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    if (strstr(buf, "Name: Triad bandwidth") == NULL &&
-        strstr(buf, "Triad bandwidth") == NULL) {
+    if (strstr(buf, "Triad bandwidth") == NULL) {
         FAIL("B2.5 normal_with_kernel: missing Triad metric");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "mean") == NULL || strstr(buf, "p50") == NULL) {
+        FAIL("B2.5 normal_with_kernel: missing result table headers");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
@@ -223,12 +227,8 @@ test_normal_with_kernel(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    triad_line = strstr(buf, "Name: Triad bandwidth");
-    if (triad_line == NULL) {
-        triad_line = strstr(buf, "Triad bandwidth");
-    }
+    triad_line = strstr(buf, "Triad bandwidth");
     if (triad_line != NULL) {
-        /* Bandwidth value appears on a later Result mean line; just require presence. */
         (void)triad_bw;
     }
     PASS();

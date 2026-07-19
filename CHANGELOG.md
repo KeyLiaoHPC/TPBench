@@ -2,12 +2,19 @@
 
 ## Unreleased
 
+### CLI output / tpblog / benchmark (breaking)
+
+- **Breaking (CLI human output):** `tpb_cliout_args` / `tpb_cliout_results` print independent fixed-width tables via `tpblog_printf_ctab` (no borders). Results columns: `ID Name Tags Unit dim mean min max p25 p50 p75 p90 p95 p99`. Point-shaped rows fill only `mean` (other stats `-`). Removed `Name:` / `Tags:` / `Result mean:` / `Q0.xx` line blocks.
+- **New:** `tpblog_printf_ctab` (+ `tpblog_ctab_t`, align flags, `term_col_width_min/max`). `tpblog_printf_c` / `tpblog_printf_c_flags` are thin wrappers. `TPBLOG_COLUMN_MAX` raised to 16.
+- **Breaking (benchmark):** Scoring reads metric arrays from **rafdb** task records (tbatch `TaskID` link + reducers). Run logs are human-only and are not scraped.
+- **New:** `tpb_raf_header_data_ptr()` resolves a header's slice in a concatenated record blob.
+- **Tests:** A8.11–A8.13 (ctab); A5.8 (header_data_ptr); B2.5 asserts table headers; suite `benchmark_stream_smoke.yml`.
+
 ### Records / headers (breaking)
 
 - **Breaking:** `tpb_meta_header_t` stores separate `name` and `tag` fields (256 bytes each). On-disk header layout grows (`TPB_RAF_HDR_FIXED_SIZE` 2840→3096). **Clear existing rafdb** (`rm -rf ~/.tpbench/rafdb` or workspace rafdb) before use; old `.tpbr` files are not readable.
 - **Breaking (API):** `tpb_k_add_parm` replaced by `tpb_k_add_arg(name, tag, note, …)`; `tpb_k_add_output(name, tag, note, …)`. Lookup (`alloc_output` / `get_arg` / `--kargs`) uses local **name** only. Runtime type `tpb_rt_arg_t`; kernel attr/entry field `narg` (was `nparm`).
 - **Tags:** User tags (≤191 chars) plus system role tags `TPBARG` (arguments) / `TPBOUT` (outputs); stored form is deduped, uppercase, comma-joined, sorted ascending. Link headers use `tag=TPBLINK` with local names `TaskID` / `KernelID` / `DeriveTo`.
-- **CLI output:** Result block prints `Name:` and `Tags:` (display uses `", "` between tags) instead of `Metrics: Tag::Name`.
 - **Tests:** Pack **A11** covers tag normalize/validate/display.
 
 ### Frontend: tpbcli

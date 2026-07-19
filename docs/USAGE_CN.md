@@ -69,13 +69,13 @@ tpbcli <subcommand> <options>
 顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`runtime environment`（`rtenv`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。
 
 - **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
-- **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。
+- **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。**指标数值从 rafdb task 记录读取**（`v:` 使用输出 local name；reducer 作用于载荷数组），不解析运行日志。
 - **`tpbcli database`** / **`tpbcli db`**：查看工作区内 rafdb 记录 —— **`list`** / **`ls`**（近期索引表）或 **`dump`**（须指定 **domain**，再加 **`-i`/`--id`** 导出单条 `.tpbr`，或 **`-e`** 导出 `.tpbe` 索引）。**`tpbcli database --help`** 可查看子命令与 dump 选项摘要；**`tpbcli database dump --help`** 查看 dump 全部选项。单独 **`tpbcli database`**（无 `list`/`dump`）会报错。
 - **`tpbcli rtenv`**：创建、浏览和加载运行时环境记录，记录应用/库版本和显式环境变量。子命令：**`new`**、**`list`**、**`show`**、**`load`**。
 - **`tpbcli kernel`**：管理工作区内的 kernel 编译历史 —— **`list`** / **`ls`**（扫描并注册 PLI 内核）、**`get`**（只读查询）、**`set`**（写入 metadata），以及构建系统内部使用的 **`backup-inactive`**。
 - **`tpbcli help`**：帮助文档。
 
-屏幕上的输出结果会同步写入日志文件，路径：`<workspace>/rafdb/log/tpbrunlog_*.log`。
+屏幕上的输出结果会同步写入日志文件，路径：`<workspace>/rafdb/log/tpbrunlog_*.log`。日志仅供人类阅读：`tpb_cliout_args` / `tpb_cliout_results` 分别打印定宽 **Input** / **Output** 表（结果表含 `mean`/`min`/`max`/`p25`…`p99`）。计分请从 rafdb task 记录读取，勿解析日志。
 
 ## 2.2 tpbcli run
 

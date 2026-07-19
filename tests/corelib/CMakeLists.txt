@@ -118,6 +118,7 @@ tpb_add_subcase(A5 A5.4  write_read_int32      test-1d-array corelib)
 tpb_add_subcase(A5 A5.5  write_read_random_len test-1d-array corelib)
 tpb_add_subcase(A5 A5.6  write_read_multi      test-1d-array corelib)
 tpb_add_subcase(A5 A5.7  skip_unalloc_output   test-1d-array corelib)
+tpb_add_subcase(A5 A5.8  header_data_ptr       test-1d-array corelib)
 
 # --- Task capsule tests (Pack A6) ---
 add_executable(test-capsule EXCLUDE_FROM_ALL
@@ -184,6 +185,9 @@ tpb_add_subcase(A8 A8.7 degenerate_output    test-tpblog corelib)
 tpb_add_subcase(A8 A8.8 snprintf_macro       test-tpblog corelib)
 tpb_add_subcase(A8 A8.9 log_tag_macros        test-tpblog corelib)
 tpb_add_subcase(A8 A8.10 report_error_tags    test-tpblog corelib)
+tpb_add_subcase(A8 A8.11 ctab_width_min       test-tpblog corelib)
+tpb_add_subcase(A8 A8.12 ctab_align_right     test-tpblog corelib)
+tpb_add_subcase(A8 A8.13 ctab_14_columns      test-tpblog corelib)
 
 # --- error code test executable (Pack A9) ---
 add_executable(test-errcode EXCLUDE_FROM_ALL

@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include "include/tpb-public.h"
 #include "corelib/rafdb/tpb-raf-types.h"
 #include "mock_kernel.h"
@@ -576,6 +577,56 @@ done:
     return ret;
 }
 
+/**
+ * A5.8: tpb_raf_header_data_ptr offset math and bounds checks.
+ */
+static int
+test_header_data_ptr(void)
+{
+    tpb_meta_header_t hdrs[3];
+    uint8_t blob[12];
+    const void *ptr = NULL;
+    uint64_t nbytes = 0;
+    int err;
+    uint32_t i;
+
+    memset(hdrs, 0, sizeof(hdrs));
+    for (i = 0; i < 12; i++) {
+        blob[i] = (uint8_t)(i + 1);
+    }
+    hdrs[0].data_size = 3;
+    hdrs[1].data_size = 5;
+    hdrs[2].data_size = 4;
+
+    err = tpb_raf_header_data_ptr(hdrs, 3, blob, 12, 0, &ptr, &nbytes);
+    if (err != TPBE_SUCCESS || nbytes != 3 || ptr != blob) {
+        fprintf(stderr, "  FAIL: idx0 err=%d nbytes=%" PRIu64 "\n", err, nbytes);
+        return 1;
+    }
+    err = tpb_raf_header_data_ptr(hdrs, 3, blob, 12, 1, &ptr, &nbytes);
+    if (err != TPBE_SUCCESS || nbytes != 5 ||
+        ptr != blob + 3 || ((const uint8_t *)ptr)[0] != 4) {
+        fprintf(stderr, "  FAIL: idx1\n");
+        return 1;
+    }
+    err = tpb_raf_header_data_ptr(hdrs, 3, blob, 12, 2, &ptr, &nbytes);
+    if (err != TPBE_SUCCESS || nbytes != 4 || ptr != blob + 8) {
+        fprintf(stderr, "  FAIL: idx2\n");
+        return 1;
+    }
+    err = tpb_raf_header_data_ptr(hdrs, 3, blob, 12, 3, &ptr, &nbytes);
+    if (TPBE_CAUSE(err) != TPBE_LIST_NOT_FOUND) {
+        fprintf(stderr, "  FAIL: expected LIST_NOT_FOUND for oob\n");
+        return 1;
+    }
+    err = tpb_raf_header_data_ptr(hdrs, 3, blob, 10, 2, &ptr, &nbytes);
+    if (TPBE_CAUSE(err) != TPBE_FILE_IO_FAIL) {
+        fprintf(stderr, "  FAIL: expected FILE_IO_FAIL for short blob\n");
+        return 1;
+    }
+    return 0;
+}
+
 /* ---- main ---- */
 int
 main(int argc, char **argv)
@@ -591,6 +642,7 @@ main(int argc, char **argv)
         { "A5.6", "write_read_multi",      test_write_read_multi },
         { "A5.7", "skip_unalloc_output",
             test_write_read_skip_unalloc_output },
+        { "A5.8", "header_data_ptr",       test_header_data_ptr },
     };
     int ncases = sizeof(cases) / sizeof(cases[0]);
 

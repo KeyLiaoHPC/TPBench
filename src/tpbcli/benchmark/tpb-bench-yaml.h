@@ -35,7 +35,7 @@ typedef struct tpb_bench_batch {
     char wrapper_args[1024];  /**< Wrapper arguments string */
     int nvspecs;              /**< Number of value specifications */
     tpb_bench_vspec_t vspecs[TPB_BENCH_MAX_VSPECS];
-    double vresults[TPB_BENCH_MAX_VSPECS];  /**< Parsed results from log */
+    double vresults[TPB_BENCH_MAX_VSPECS];  /**< Reduced scalars from rafdb */
 } tpb_bench_batch_t;
 
 /**

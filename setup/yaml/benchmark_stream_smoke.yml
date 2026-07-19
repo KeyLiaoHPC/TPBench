@@ -1,0 +1,22 @@
+# Minimal suite for smoking rafdb-backed benchmark scoring (non-MPI stream).
+benchmark:
+  name: "stream_smoke_rafdb"
+  note: >
+    Single-batch stream suite used to verify v: names match local output names
+    and reducers are applied from rafdb task payloads.
+  batch:
+    - id: stream_small
+      note: "small STREAM run"
+      kernel: stream
+      kargs: [["stream_array_size", "65536"], ["ntest", "20"], ["twarm", "10"]]
+      v:
+        - ["Copy bandwidth", "mean"]
+        - ["Triad bandwidth", "mean"]
+  score:
+    - id: triad_copy_sum
+      name: "triad_plus_copy"
+      display: 1
+      modifier: sum
+      args:
+        - "@batch[id=='stream_small'].v[0]"
+        - "@batch[id=='stream_small'].v[1]"
