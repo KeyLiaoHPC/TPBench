@@ -53,4 +53,11 @@ target_link_libraries(tpbench PUBLIC m ${CMAKE_DL_LIBS})
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(tpbench PUBLIC rt)
 endif()
+# Apple: flat namespace so test executables can override tpb_dl_* the same
+# way ELF interposition works on Linux. Without this, same-dylib calls
+# (tpb_run_pli -> tpb_dl_*) bypass DYLD __DATA,__interpose. Linux link
+# options are unchanged.
+if(APPLE)
+    target_link_options(tpbench PRIVATE "LINKER:-flat_namespace")
+endif()
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")

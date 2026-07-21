@@ -1,4 +1,4 @@
-# Backup existing kernel .so before link overwrites it.
+# Backup existing kernel shlib before link overwrites it.
 cmake_minimum_required(VERSION 3.16)
 
 if(NOT TGT_FILE OR NOT KERNEL_NAME)
@@ -7,7 +7,7 @@ endif()
 
 get_filename_component(_lib_dir "${TGT_FILE}" DIRECTORY)
 set(_inactive_dir "${_lib_dir}/inactive")
-set(_so_name "libtpbk_${KERNEL_NAME}.so")
+set(_so_name "libtpbk_${KERNEL_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 
 if(NOT EXISTS "${_lib_dir}/${_so_name}")
     return()
@@ -35,5 +35,5 @@ if(TPBCLI AND EXISTS "${TPBCLI}")
 else()
     # Fallback: move with unknown KernelID placeholder
     file(RENAME "${_lib_dir}/${_so_name}"
-         "${_inactive_dir}/libkernel_${KERNEL_NAME}_unknown.so_bak")
+         "${_inactive_dir}/libkernel_${KERNEL_NAME}_unknown${CMAKE_SHARED_LIBRARY_SUFFIX}_bak")
 endif()

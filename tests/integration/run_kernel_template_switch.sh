@@ -23,8 +23,34 @@ patch_template_sleep() {
     local source="$1"
     local seconds="$2"
 
-    sed -i '/#include <stdint.h>/a #include <unistd.h>' "${source}"
-    sed -i "/value\\[0\\] = 0\\.0;/i\\    sleep(${seconds});" "${source}"
+    python3 - "$source" "$seconds" <<'PY'
+import sys
+path, seconds = sys.argv[1], sys.argv[2]
+with open(path, "r", encoding="utf-8") as f:
+    lines = f.readlines()
+out = []
+inserted_unistd = False
+inserted_sleep = False
+for line in lines:
+    out.append(line)
+    if (not inserted_unistd) and "#include <stdint.h>" in line:
+        out.append("#include <unistd.h>\n")
+        inserted_unistd = True
+    if (not inserted_sleep) and "value[0] = 0.0;" in line:
+        # Insert sleep before the value assignment line we just appended.
+        out.pop()
+        out.append(f"    sleep({seconds});\n")
+        out.append(line)
+        inserted_sleep = True
+if not inserted_unistd or not inserted_sleep:
+    sys.stderr.write(
+        "patch_template_sleep: failed to find anchors "
+        f"(unistd={inserted_unistd}, sleep={inserted_sleep})\n"
+    )
+    sys.exit(1)
+with open(path, "w", encoding="utf-8") as f:
+    f.writelines(out)
+PY
 }
 
 rm -rf "${WS}" "${DIR_A}" "${DIR_B}"

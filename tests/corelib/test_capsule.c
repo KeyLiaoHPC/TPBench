@@ -9,6 +9,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <limits.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 
 #include "include/tpb-public.h"
 #include "corelib/rafdb/tpb-raf-types.h"
@@ -105,6 +109,33 @@ cleanup_env_workspace(void)
 static int
 read_self_exe(char *buf, size_t buflen)
 {
+#ifdef __APPLE__
+    char tmp[PATH_MAX];
+    uint32_t size = (uint32_t)sizeof(tmp);
+    char *resolved;
+
+    if (buflen == 0) {
+        return -1;
+    }
+    if (_NSGetExecutablePath(tmp, &size) != 0) {
+        return -1;
+    }
+    resolved = realpath(tmp, NULL);
+    if (resolved == NULL) {
+        if (strlen(tmp) >= buflen) {
+            return -1;
+        }
+        snprintf(buf, buflen, "%s", tmp);
+        return 0;
+    }
+    if (strlen(resolved) >= buflen) {
+        free(resolved);
+        return -1;
+    }
+    snprintf(buf, buflen, "%s", resolved);
+    free(resolved);
+    return 0;
+#else
     ssize_t n;
 
     n = readlink("/proc/self/exe", buf, buflen - 1);
@@ -113,6 +144,7 @@ read_self_exe(char *buf, size_t buflen)
     }
     buf[n] = '\0';
     return 0;
+#endif
 }
 
 static void

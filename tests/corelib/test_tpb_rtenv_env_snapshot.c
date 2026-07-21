@@ -6,16 +6,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "include/tpb-public.h"
 
 static char g_ws[512];
+static void *g_capture_data = NULL;
 
 typedef struct {
     const char *id;
     const char *name;
     int (*func)(void);
 } test_case_t;
+
+static void
+_sf_release_capture(void)
+{
+    free(g_capture_data);
+    g_capture_data = NULL;
+}
 
 static void
 _sf_setup_workspace(void)
@@ -31,6 +40,8 @@ _sf_setup_workspace(void)
     ent.id = 1;
     snprintf(ent.name, sizeof(ent.name), "base");
     snprintf(ent.hostname, sizeof(ent.hostname), "testhost");
+    memset(&dt, 0, sizeof(dt));
+    (void)tpb_ts_get_datetime(TPBM_TS_UTC, &dt);
     (void)tpb_ts_datetime_to_bits(&dt, 0, &ent.utc_bits);
     ent.inherit_from = 0;
     ent.derive_to = -1;
@@ -55,6 +66,7 @@ _sf_cleanup_workspace(void)
 {
     char cmd[640];
 
+    _sf_release_capture();
     snprintf(cmd, sizeof(cmd), "rm -rf '%s'", g_ws);
     (void)system(cmd);
 }
@@ -97,6 +109,8 @@ _sf_capture_to_headers(const char **key_blob, const int32_t **counts,
     uint64_t dsize = 0;
     int err;
 
+    _sf_release_capture();
+
     tpb_rtenv_clear_environ_snapshot();
     err = tpb_rtenv_capture_environ_snapshot(g_ws);
     if (err != TPBE_SUCCESS) {
@@ -110,8 +124,13 @@ _sf_capture_to_headers(const char **key_blob, const int32_t **counts,
     err = _sf_extract_env_headers(hdrs, nhdr, data, key_blob, counts, nkeys,
                                   value_blob);
     free(hdrs);
-    free(data);
-    return err;
+    if (err != 0) {
+        free(data);
+        return err;
+    }
+    /* Keep data alive: key/value blobs point into this buffer. */
+    g_capture_data = data;
+    return 0;
 }
 
 static int

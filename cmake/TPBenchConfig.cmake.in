@@ -23,8 +23,10 @@ set(TPBENCH_LIB_DIR     "${_TPBENCH_PREFIX}/lib")
 
 if(NOT TARGET tpbench)
     add_library(tpbench SHARED IMPORTED)
+    # CMAKE_SHARED_LIBRARY_SUFFIX is .so on Linux, .dylib on Apple.
+    set(_tpb_shlib "${TPBENCH_LIB_DIR}/libtpbench${CMAKE_SHARED_LIBRARY_SUFFIX}")
     set_target_properties(tpbench PROPERTIES
-        IMPORTED_LOCATION "${TPBENCH_LIB_DIR}/libtpbench.so"
+        IMPORTED_LOCATION "${_tpb_shlib}"
         INTERFACE_INCLUDE_DIRECTORIES "${TPBENCH_INCLUDE_DIR}"
     )
 endif()

@@ -32,7 +32,11 @@ echo "${list_after}"
 echo "${list_after}" | grep "staxpy" | grep -qv "N/A"
 echo "${list_after}" | grep "striad" | grep -qv "N/A"
 
-test -f "${TPB_HOME}/lib/libtpbk_staxpy.so"
-test -f "${TPB_HOME}/lib/libtpbk_striad.so"
+SHLIB_EXT=".so"
+case "$(uname -s)" in
+    Darwin) SHLIB_EXT=".dylib" ;;
+esac
+test -f "${TPB_HOME}/lib/libtpbk_staxpy${SHLIB_EXT}"
+test -f "${TPB_HOME}/lib/libtpbk_striad${SHLIB_EXT}"
 
 echo "kernel list/registry integration test passed"

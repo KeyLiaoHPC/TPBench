@@ -5,7 +5,7 @@
  * Runs:
  *   1) tpbcli r --kernel stream --kargs stream_array_size=32
  *   2) tpbcli run --kernel stream --kargs ntest=100 --kargs-dim stream_array_size=[242144,524288,1048576]
- *   3) tpbcli-pli-launcher lib/libtpbk_stream.so clock_gettime 10 32 0  (direct invoke)
+ *   3) tpbcli-pli-launcher lib/libtpbk_stream.<shlib> clock_gettime 10 32 0  (direct invoke)
  *
  * Verifies:
  *   - 2 tbatch entries (batch 1: ntask=1, batch 2: ntask=3)
@@ -20,6 +20,10 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <limits.h>
+#ifdef __APPLE__
+#include <mach-o/dyld.h>
+#endif
 #include "include/tpb-public.h"
 #include "corelib/rafdb/tpb-raf-types.h"
 
@@ -189,8 +193,8 @@ test_tri_record(void)
     /* --- Run 3: Direct kernel invocation (no TPB_TBATCH_ID) --- */
     snprintf(cmd, sizeof(cmd),
              "TPB_HOME=%s/.. TPB_WORKSPACE=%s %s/tpbcli-pli-launcher "
-             "%s/../lib/libtpbk_stream.so clock_gettime 10 32 0",
-             g_bin_dir, g_test_dir, g_bin_dir, g_bin_dir);
+             "%s/../lib/libtpbk_stream%s clock_gettime 10 32 0",
+             g_bin_dir, g_test_dir, g_bin_dir, g_bin_dir, TPB_SHLIB_EXT);
     err = run_cmd(cmd);
     CHECK("run3 exit", err == 0);
 
@@ -724,12 +728,44 @@ main(int argc, char **argv)
     {
         /* The test binary lives in build/tests/bin/; tpbcli lives in build/bin/ */
         char self[PATH_MAX];
-        ssize_t len = readlink("/proc/self/exe", self, sizeof(self) - 1);
-        if (len > 0) {
-            self[len] = '\0';
-            /* Strip filename */
-            char *slash = strrchr(self, '/');
-            if (slash) *slash = '\0';
+        char resolved_buf[PATH_MAX];
+        const char *self_path = NULL;
+        char *slash;
+        int got = -1;
+
+#ifdef __APPLE__
+        {
+            char tmp[PATH_MAX];
+            uint32_t size = (uint32_t)sizeof(tmp);
+
+            if (_NSGetExecutablePath(tmp, &size) == 0) {
+                if (realpath(tmp, resolved_buf) != NULL) {
+                    self_path = resolved_buf;
+                } else {
+                    snprintf(self, sizeof(self), "%s", tmp);
+                    self_path = self;
+                }
+                got = 0;
+            }
+        }
+#else
+        {
+            ssize_t len = readlink("/proc/self/exe", self, sizeof(self) - 1);
+            if (len > 0) {
+                self[len] = '\0';
+                self_path = self;
+                got = 0;
+            }
+        }
+#endif
+        if (got == 0 && self_path != NULL) {
+            if (self_path != self) {
+                snprintf(self, sizeof(self), "%s", self_path);
+            }
+            slash = strrchr(self, '/');
+            if (slash) {
+                *slash = '\0';
+            }
             /* Go up from tests/bin/ to build root, then into bin/ */
             snprintf(g_bin_dir, sizeof(g_bin_dir), "%s/../../bin", self);
         } else {

@@ -187,6 +187,7 @@ tpb_add_subcase(B6 B6.10 new_requires_active      test-cli-rtenv tpbcli)
 add_executable(test-cli-kernel EXCLUDE_FROM_ALL
     test-cli-kernel.c
 )
+target_include_directories(test-cli-kernel PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(test-cli-kernel PRIVATE
     "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
 )

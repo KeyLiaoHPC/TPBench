@@ -10,6 +10,8 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 
+#include "include/tpb-public.h"
+
 #ifndef TPB_TEST_TPBCLI_STR
 #define TPB_TEST_TPBCLI_STR "./bin/tpbcli"
 #endif
@@ -289,10 +291,10 @@ test_b5_5_init_and_build_template(void)
         return 1;
     }
 
-    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_tmpltest.so",
-             TPB_TEST_TPB_HOME);
+    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_tmpltest%s",
+             TPB_TEST_TPB_HOME, TPB_SHLIB_EXT);
     if (access(so_path, R_OK) != 0) {
-        FAIL("B5.5 installed .so missing");
+        FAIL("B5.5 installed shlib missing");
         return 1;
     }
 
