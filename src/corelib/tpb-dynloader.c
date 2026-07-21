@@ -136,7 +136,7 @@ _sf_build_kernel_paths(const char *kernel_name, char *so_path,
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
-    snprintf(so_path, so_len, "%s/lib/libtpbk_%s.so",
+    snprintf(so_path, so_len, "%s/lib/libtpbk_%s" TPB_SHLIB_EXT,
              tpb_home_resolved, kernel_name);
     return TPBE_SUCCESS;
 }
@@ -186,7 +186,7 @@ _sf_check_so_exists(const char *kernel_name)
 {
     char so_path[PATH_MAX];
 
-    snprintf(so_path, PATH_MAX, "%s/lib/libtpbk_%s.so",
+    snprintf(so_path, PATH_MAX, "%s/lib/libtpbk_%s" TPB_SHLIB_EXT,
              tpb_home_resolved, kernel_name);
     return (access(so_path, R_OK) == 0);
 }
@@ -696,7 +696,7 @@ tpb_dl_scan(void)
     }
 
     while ((entry = readdir(dir)) != NULL) {
-        if (_sf_extract_kernel_name(entry->d_name, "libtpbk_", ".so",
+        if (_sf_extract_kernel_name(entry->d_name, "libtpbk_", TPB_SHLIB_EXT,
                                     kernel_name, sizeof(kernel_name)) != 0) {
             continue;
         }

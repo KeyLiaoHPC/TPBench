@@ -46,5 +46,11 @@ target_include_directories(tpbench
             ${CMAKE_CURRENT_SOURCE_DIR}/rafdb
             ${CMAKE_CURRENT_SOURCE_DIR}/tpblog
 )
-target_link_libraries(tpbench PUBLIC m dl rt)
+# libm always; libdl via CMAKE_DL_LIBS (empty on some platforms).
+# librt: Linux only — provides clock_gettime on older glibc; macOS/BSD have
+# no librt and reject -lrt at link time. Linux behavior unchanged.
+target_link_libraries(tpbench PUBLIC m ${CMAKE_DL_LIBS})
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(tpbench PUBLIC rt)
+endif()
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")

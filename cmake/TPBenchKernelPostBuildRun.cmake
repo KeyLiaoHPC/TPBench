@@ -5,6 +5,12 @@ if(NOT TGT_FILE OR NOT KERNEL_NAME OR NOT TPBCLI)
     message(FATAL_ERROR "TPBenchKernelPostBuildRun.cmake: TGT_FILE, KERNEL_NAME, TPBCLI required")
 endif()
 
+if(APPLE)
+    set(_tpb_shlib_ext ".dylib")
+else()
+    set(_tpb_shlib_ext ".so")
+endif()
+
 set(_tpb_env_cmd ${CMAKE_COMMAND} -E env)
 if(DEFINED TPB_HOME AND NOT TPB_HOME STREQUAL "")
     list(APPEND _tpb_env_cmd TPB_HOME=${TPB_HOME})
@@ -25,7 +31,7 @@ execute_process(
         --key compilation.compiler.path "${C_COMPILER}"
         --key compilation.c_flags "${C_FLAGS}"
         --key compilation.kernel_cflags "${KERNEL_CFLAGS}"
-        --key dependency.tpbench "libtpbench.so"
+        --key dependency.tpbench "libtpbench${_tpb_shlib_ext}"
     RESULT_VARIABLE _rc
     OUTPUT_VARIABLE _out
     ERROR_VARIABLE _err)

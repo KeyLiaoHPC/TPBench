@@ -159,12 +159,25 @@ test_get_btime(void)
     if (ensure_setup()) return 1;
 
     tpb_btime_t btime;
+    tpb_btime_t btime2;
+    uint64_t ns1;
+    uint64_t ns2;
     int err = tpb_ts_get_btime(&btime);
     if (err != 0) return 1;
 
     /* Boot time should be reasonable (system not booted for more than 100 years) */
     if (btime.sec > 8760ULL * 3600ULL * 100ULL) return 1;
     if (btime.nsec > 999999999) return 1;
+
+    /*
+     * Second sample must be monotonic non-decreasing. Covers the
+     * CLOCK_BOOTTIME / CLOCK_MONOTONIC compile-time selection path.
+     */
+    err = tpb_ts_get_btime(&btime2);
+    if (err != 0) return 1;
+    ns1 = btime.sec * 1000000000ULL + btime.nsec;
+    ns2 = btime2.sec * 1000000000ULL + btime2.nsec;
+    if (ns2 < ns1) return 1;
 
     return 0;
 }

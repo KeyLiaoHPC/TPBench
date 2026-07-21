@@ -150,7 +150,9 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     )
-    if(UNIX)
+    # GNU ld: export dynamic symbols for PLI dlsym. Apple ld rejects
+    # --export-dynamic; macOS dylibs export globals by default.
+    if(UNIX AND NOT APPLE)
         target_link_options(${_so_target} PRIVATE "-Wl,--export-dynamic")
     endif()
     tpb_kernel_apply_c_options(${_so_target})

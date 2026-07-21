@@ -27,6 +27,13 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPBM_TAG_USER_MAX_LEN 191
 #define TPBM_NOTE_STR_MAX_LEN 2048
 
+/** Shared-library filename suffix for PLI kernels (libtpbk_<name>TPB_SHLIB_EXT). */
+#ifdef __APPLE__
+#define TPB_SHLIB_EXT ".dylib"
+#else
+#define TPB_SHLIB_EXT ".so"
+#endif
+
 /** System role tag appended to kernel argument headers. */
 #define TPB_TAG_ARG  "TPBARG"
 /** System role tag appended to kernel output headers. */

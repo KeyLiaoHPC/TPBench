@@ -125,7 +125,10 @@ add_executable(test-capsule EXCLUDE_FROM_ALL
     test_capsule.c
 )
 target_include_directories(test-capsule PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test-capsule PRIVATE tpbench m rt)
+target_link_libraries(test-capsule PRIVATE tpbench m)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(test-capsule PRIVATE rt)
+endif()
 set_target_properties(test-capsule PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
     LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"

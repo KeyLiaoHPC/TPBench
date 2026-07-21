@@ -47,7 +47,7 @@ tpbcli_kernel_backup_inactive(int argc, char **argv)
         TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
-    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
+    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s" TPB_SHLIB_EXT,
              tpb_home, kernel_name);
     if (access(so_path, R_OK) != 0) {
         return TPBE_SUCCESS;

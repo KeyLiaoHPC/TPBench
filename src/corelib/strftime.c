@@ -83,6 +83,15 @@ tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt)
 
 /**
  * @brief Get boot-time timestamp.
+ *
+ * Clock selection (compile-time, preserves Linux behavior):
+ * - When CLOCK_BOOTTIME is defined (typical Linux): use it first so suspend
+ *   time is included; if the call fails at runtime, fall back to
+ *   CLOCK_MONOTONIC (same as the previous portable intent).
+ * - When CLOCK_BOOTTIME is absent (e.g. macOS): use CLOCK_MONOTONIC only.
+ *   On Darwin this clock continues during sleep and is the closest substitute
+ *   for Linux CLOCK_BOOTTIME. Do not use CLOCK_UPTIME_RAW here — that pauses
+ *   during sleep and would diverge more from BOOTTIME semantics.
  */
 int
 tpb_ts_get_btime(tpb_btime_t *btime)
@@ -92,12 +101,20 @@ tpb_ts_get_btime(tpb_btime_t *btime)
     }
 
     struct timespec ts;
+
+#ifdef CLOCK_BOOTTIME
     if (clock_gettime(CLOCK_BOOTTIME, &ts) != 0) {
-        /* Fallback to MONOTONIC if BOOTTIME not available */
+        /* Runtime fallback only; Linux still prefers BOOTTIME above. */
         if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
             TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
         }
     }
+#else
+    /* No CLOCK_BOOTTIME in libc headers (macOS and some non-Linux Unix). */
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        TPB_FAIL(TPB_MOD_MISC, TPBE_ILLEGAL_CALL, NULL);
+    }
+#endif
 
     btime->sec = (uint64_t)ts.tv_sec;
     btime->nsec = (uint32_t)ts.tv_nsec;

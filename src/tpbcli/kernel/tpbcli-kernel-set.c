@@ -67,7 +67,7 @@ _sf_hash_current_kernel_so(const char *kernel_name, unsigned char kernel_id[20])
     if (tpb_home == NULL) {
         TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
-    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s.so",
+    snprintf(so_path, sizeof(so_path), "%s/lib/libtpbk_%s" TPB_SHLIB_EXT,
              tpb_home, kernel_name);
 
     err = tpb_raf_hash_file(so_path, sha1);
@@ -135,8 +135,8 @@ tpbcli_kernel_set(int argc, char **argv)
     err = _sf_hash_current_kernel_so(kernel_name, kernel_id);
     if (err != TPBE_SUCCESS) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
-                   "kernel set: cannot hash libtpbk_%s.so (%d).\n",
-                   kernel_name, err);
+                   "kernel set: cannot hash libtpbk_%s%s (%d).\n",
+                   kernel_name, TPB_SHLIB_EXT, err);
         TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_hash_current_kernel_so");
     }
 

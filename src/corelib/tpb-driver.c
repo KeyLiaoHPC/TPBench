@@ -1547,7 +1547,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
     }
 
     launch_path = tpb_dl_get_pli_launch_path();
-    if (launch_path == NULL && strstr(exec_path, ".so") != NULL) {
+    if (launch_path == NULL && strstr(exec_path, TPB_SHLIB_EXT) != NULL) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "PLI launcher not found under %s/bin/tpbcli-pli-launcher\n",
                    tpb_dl_get_tpb_home());
@@ -1691,7 +1691,7 @@ tpb_run_pli(tpb_k_rthdl_t *hdl)
             pos += snprintf(full_cmd + pos, cmd_size - pos, " ");
         }
 
-        if (launch_path != NULL && strstr(exec_path, ".so") != NULL) {
+        if (launch_path != NULL && strstr(exec_path, TPB_SHLIB_EXT) != NULL) {
             pos += snprintf(full_cmd + pos, cmd_size - pos, "%s %s %s",
                             launch_path, exec_path, timer.name);
         } else {

@@ -42,8 +42,10 @@ typedef struct {
 
 /**
  * @brief Mode constants for datetime acquisition.
+ *
+ * TPBM_TS_UTC is defined in tpb-public.h (included above). Do not redefine it
+ * here — that triggers -Wmacro-redefined on Clang/GCC.
  */
-#define TPBM_TS_UTC   0x01  /* Current UTC datetime */
 #define TPBM_TS_LOCAL 0x02  /* Current local datetime */
 
 /**
@@ -72,7 +74,8 @@ int tpb_ts_get_datetime(uint32_t mode, tpb_datetime_t *dt);
 /**
  * @brief Get boot-time timestamp (seconds and nanoseconds since system boot).
  *
- * Uses CLOCK_BOOTTIME for seconds and nanoseconds.
+ * Uses CLOCK_BOOTTIME when available (Linux). Platforms without that macro
+ * (e.g. macOS) use CLOCK_MONOTONIC instead; see tpb_ts_get_btime() comments.
  *
  * @param btime Pointer to output boot-time structure (must not be NULL)
  * @return 0 on success, error code otherwise

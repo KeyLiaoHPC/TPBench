@@ -21,6 +21,7 @@ _sf_extract_kernel_name(const char *so_path, char *kernel_name, size_t name_len)
     char *base;
     const char *prefix = "libtpbk_";
     size_t prefix_len = strlen(prefix);
+    size_t suffix_len = strlen(TPB_SHLIB_EXT);
     size_t base_len;
     size_t kernel_len;
 
@@ -35,14 +36,14 @@ _sf_extract_kernel_name(const char *so_path, char *kernel_name, size_t name_len)
 
     base = basename(copy);
     base_len = strlen(base);
-    if (base_len <= prefix_len + 3 ||
+    if (base_len <= prefix_len + suffix_len ||
         strncmp(base, prefix, prefix_len) != 0 ||
-        strcmp(base + base_len - 3, ".so") != 0) {
+        strcmp(base + base_len - suffix_len, TPB_SHLIB_EXT) != 0) {
         free(copy);
         return -1;
     }
 
-    kernel_len = base_len - prefix_len - 3;
+    kernel_len = base_len - prefix_len - suffix_len;
     if (kernel_len >= name_len) {
         free(copy);
         return -1;
@@ -67,7 +68,7 @@ main(int argc, char **argv)
     int rc;
 
     if (argc < 3) {
-        printf("Usage: %s <kernel.so> <timer_name> [kernel_args...]\n",
+        printf("Usage: %s <kernel" TPB_SHLIB_EXT "> <timer_name> [kernel_args...]\n",
                argv[0]);
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }

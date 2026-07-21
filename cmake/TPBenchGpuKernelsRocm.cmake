@@ -57,7 +57,7 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
         OUTPUT_NAME "tpbk_${_rk_name}"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-    if(UNIX)
+    if(UNIX AND NOT APPLE)
         target_link_options(${_lib_target} PRIVATE "-Wl,--export-dynamic")
     endif()
     if(TPB_SHOW_DEBUG)

@@ -82,7 +82,8 @@ function(tpbench_add_kernel)
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
     )
-    if(UNIX)
+    # GNU ld only; Apple ld has no --export-dynamic (dylibs export by default).
+    if(UNIX AND NOT APPLE)
         target_link_options(${_lib_target} PRIVATE "-Wl,--export-dynamic")
     endif()
 

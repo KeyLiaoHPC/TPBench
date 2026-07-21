@@ -503,7 +503,7 @@ _sf_register_compile_meta(const char *kernel_name,
     argv[argc++] = (char *)ldflags;
     argv[argc++] = "--key";
     argv[argc++] = "dependency.tpbench";
-    argv[argc++] = "libtpbench.so";
+    argv[argc++] = "libtpbench" TPB_SHLIB_EXT;
     argv[argc] = NULL;
 
     err = tpbcli_kernel_set(argc, argv);
@@ -651,7 +651,7 @@ _sf_build_one_kernel(const char *kernel_name,
         TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_run_shell");
     }
 
-    if (snprintf(built_so, sizeof(built_so), "%s/lib/libtpbk_%s.so",
+    if (snprintf(built_so, sizeof(built_so), "%s/lib/libtpbk_%s" TPB_SHLIB_EXT,
                  build_dir, kernel_name) >= (int)sizeof(built_so)) {
         TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
@@ -680,7 +680,7 @@ _sf_build_one_kernel(const char *kernel_name,
     backup_argv[5] = NULL;
     (void)tpbcli_kernel_backup_inactive(5, backup_argv);
 
-    if (snprintf(dest_so, sizeof(dest_so), "%s/libtpbk_%s.so",
+    if (snprintf(dest_so, sizeof(dest_so), "%s/libtpbk_%s" TPB_SHLIB_EXT,
                  lib_dir, kernel_name) >= (int)sizeof(dest_so)) {
         TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
