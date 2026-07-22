@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Frontend: tpbcli task (new)
+
+- **New:** `tpbcli task` with `ls|list`, `get-result|gr`, and `export`.
+  Implementation lives under `src/tpbcli/task/` and uses only `tpb-public.h`
+  (no corelib/rafdb private headers; no new public API).
+- **`task ls`:** Lists entry points only; prints **Start Time (Local)** with
+  explicit UTC offset; refreshes `rafdb/task/RIDMAP` atomically (`0600`) when
+  results are non-empty.
+- **`task get-result|gr`:** Selects by `-r/--rid` or `-i/--task-id` (6–20 hex);
+  auto-resolves capsules via `derive_to`; default pools raw member samples for
+  mean/min/max/p25…p99; `--show-each-subrank` prints per-member rows.
+- **`task export`:** Writes paired meta/data CSV (double-comma delimiter);
+  collapses a valid environment key/count/value triple to two data columns;
+  commits files with temp+rename and rolls back half-pairs on failure.
+- **Shared helper:** `src/tpbcli/common/tpbcli-data-fmt.*` for type/unit decode
+  (also used by `db dump`; B4 output unchanged). Unit macro lookup strips only
+  attribution bits (`~TPB_UATTR_MASK`) so name/base units match correctly.
+- **Fix:** `task get-result` runs `tpb_stat_*` on the pooled `double` sample
+  buffer with `TPB_DOUBLE_T` (previously reused the header dtype and mis-read
+  integer metrics).
+- **Docs:** [`docs/USAGE.md`](docs/USAGE.md) / [`docs/USAGE_CN.md`](docs/USAGE_CN.md)
+  §2.6; design [`docs/design/tpbcli_task.md`](docs/design/tpbcli_task.md).
+- **Tests:** Pack **B7** (`tests/tpbcli/test-cli-task-*.c`) — B7.1–B7.15,
+  B7.20–B7.30, B7.40–B7.49.
+
 ### CLI output / tpblog / benchmark (breaking)
 
 - **Breaking (CLI human output):** `tpb_cliout_args` / `tpb_cliout_results` print independent fixed-width tables via `tpblog_printf_ctab` (no borders). Results columns: `ID Name Tags Unit dim mean min max p25 p50 p75 p90 p95 p99`. Point-shaped rows fill only `mean` (other stats `-`). Removed `Name:` / `Tags:` / `Result mean:` / `Q0.xx` line blocks.

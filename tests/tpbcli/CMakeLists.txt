@@ -183,6 +183,110 @@ tpb_add_subcase(B6 B6.8  show_tables              test-cli-rtenv tpbcli)
 tpb_add_subcase(B6 B6.9  load_shell_fragment      test-cli-rtenv tpbcli)
 tpb_add_subcase(B6 B6.10 new_requires_active      test-cli-rtenv tpbcli)
 
+# --- task ls subcommand (Pack B7) ---
+add_executable(test-cli-task-ls EXCLUDE_FROM_ALL
+    test-cli-task-ls.c
+    test-cli-task-fixture.c
+)
+target_compile_definitions(test-cli-task-ls PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+target_include_directories(test-cli-task-ls PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+)
+target_link_libraries(test-cli-task-ls PRIVATE tpbench m)
+add_dependencies(test-cli-task-ls tpbcli)
+set_target_properties(test-cli-task-ls PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B7 B7.1  task_missing_subcmd      test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.2  task_help_overview       test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.3  task_ls_help             test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.4  task_ls_alias            test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.5  ls_empty_workspace       test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.6  ls_entrypoint_only       test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.7  ls_count_limits          test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.8  ls_exit_code_filter      test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.9  ls_reject_bad_filters    test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.10 ls_local_time_header     test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.11 ls_capsule_subproc       test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.12 ls_ridmap_update         test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.13 ls_ridmap_zero_preserve  test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.14 ls_count_conflict        test-cli-task-ls tpbcli)
+tpb_add_subcase(B7 B7.15 ls_kernel_id_filter      test-cli-task-ls tpbcli)
+
+add_executable(test-cli-task-get-result EXCLUDE_FROM_ALL
+    test-cli-task-get-result.c
+    test-cli-task-fixture.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-select.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-get-result.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-time.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/common/tpbcli-data-fmt.c
+)
+target_compile_definitions(test-cli-task-get-result PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+target_include_directories(test-cli-task-get-result PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/common
+)
+target_link_libraries(test-cli-task-get-result PRIVATE tpbench m)
+add_dependencies(test-cli-task-get-result tpbcli)
+set_target_properties(test-cli-task-get-result PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B7 B7.20 name_csv              test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.21 id_prefix_resolve     test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.22 pooled_samples        test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.23 metric_missing        test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.24 follow_derive_member  test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.25 gr_alias               test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.26 meta_only_mode          test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.27 data_only_mode          test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.28 data_name_context_help  test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.29 show_each_subrank       test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.30 duplicate_header_warn   test-cli-task-get-result tpbcli)
+
+add_executable(test-cli-task-export EXCLUDE_FROM_ALL
+    test-cli-task-export.c
+    test-cli-task-fixture.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-select.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-csv.c
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task/tpbcli-task-time.c
+)
+target_compile_definitions(test-cli-task-export PRIVATE
+    "TPB_TEST_TPBCLI_STR=\"$<TARGET_FILE:tpbcli>\""
+)
+target_include_directories(test-cli-task-export PRIVATE
+    ${CMAKE_SOURCE_DIR}/src/include
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task
+)
+target_link_libraries(test-cli-task-export PRIVATE tpbench m)
+add_dependencies(test-cli-task-export tpbcli)
+set_target_properties(test-cli-task-export PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+
+tpb_add_subcase(B7 B7.40 export_standalone_pair   test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.41 csv_double_comma         test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.42 export_from_ls           test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.43 export_capsule_members  test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.44 export_subrank_filter   test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.45 export_non_tty_default  test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.46 export_invalid_id       test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.47 export_filter_parse      test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.48 export_id_prefix        test-cli-task-export tpbcli)
+tpb_add_subcase(B7 B7.49 export_env_two_columns  test-cli-task-export tpbcli)
+
 # --- kernel subcommand (Pack B5) ---
 add_executable(test-cli-kernel EXCLUDE_FROM_ALL
     test-cli-kernel.c
@@ -221,7 +325,8 @@ tpb_add_subcase(B5 B5.9 build_unknown_tag test-cli-kernel tpbcli)
 # Aggregate targets
 add_custom_target(test_tpbcli
     DEPENDS test-cli-run-dimargs test-cli-run-nokernel test-tpbcli-argp
-            test-cli-database test-cli-rtenv test-cli-kernel
+            test-cli-database test-cli-rtenv test-cli-kernel test-cli-task-ls
+            test-cli-task-get-result test-cli-task-export
 )
 
 add_custom_target(check_tpbcli

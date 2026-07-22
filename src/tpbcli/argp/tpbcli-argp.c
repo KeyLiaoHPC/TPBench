@@ -599,6 +599,18 @@ tpbcli_parse_args(tpbcli_argtree_t *tree, int argc, char **argv)
 
             hchild = _sf_find_max_chosen_zero_child(match, argv[i + 1]);
             if (hchild != NULL) {
+                if (hchild->parse_fn != NULL) {
+                    err = hchild->parse_fn(hchild, NULL);
+                    if (err != 0) {
+                        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+                    }
+                    hchild->is_set = 1;
+                    hchild->chosen_count++;
+                    match->is_set = 1;
+                    match->chosen_count++;
+                    i += 2;
+                    continue;
+                }
                 err = _sf_validate_pre_increment(hchild, stdout);
                 if (err != TPBE_SUCCESS) {
                     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);

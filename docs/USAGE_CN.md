@@ -66,7 +66,7 @@ Post-build 会将 kernel 编译元数据与构建期运行时环境快照写入 
 ```bash
 tpbcli <subcommand> <options>
 ```
-顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`runtime environment`（`rtenv`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。
+顶层子命令（括号内为短别名）：**`run`（`r`）**、**`benchmark`（`b`）**、**`database`（`db`）**、**`task`**、**`runtime environment`（`rtenv`）**、**`kernel`（`k`）**、**`help`（`h`）**。顶层使用 **`--help`** 或 **`-h`** 可查看完整 CLI 说明。**`tpbcli task`** 用于列出入口任务、对比 meta/指标并导出成对 CSV，详见 §2.6。
 
 - **`tpbcli run`**：用于运行一个或多个 TPBench 内核，支持设置运行时参数与可变参数维度扫描；可为每个内核传递命令行参数、环境变量或 MPI 参数。
 - **`tpbcli benchmark`**：运行预定义评测套件（参数、计分规则与输出）。**指标数值从 rafdb task 记录读取**（`v:` 使用输出 local name；reducer 作用于载荷数组），不解析运行日志。
@@ -521,3 +521,48 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
 ```
 
 **`--kernel`** 与 **`--kernel-tag`** 互斥且必须指定其一；均支持逗号分隔，可用单/双引号包裹。**`--dir`** 默认为 **`TPB_HOME`**；默认时按 **`kernel_list.cmake.in`** 解析 **`$TPB_HOME/src/kernels/<PATH>`**。多内核顺序构建，逐个输出 PASS/FAIL 及汇总。 **`--ldflags`** 映射为 **`TPB_KERNEL_LDFLAGS`** 并写入 **`compilation.kernel_ldflags`**。
+
+## 2.6 tpbcli task
+
+`tpbcli task` 用于列出入口任务、对比 meta/指标，并导出成对的 meta/data CSV。完整设计见 [`docs/design/tpbcli_task.md`](./design/tpbcli_task.md)。终端时间一律为**本地时区**并带显式 UTC 偏移（`YYYY-MM-DDTHH:MM:SS±HH:MM`）；export meta 中的 `start_utc` 仍为 UTC。
+
+### 2.6.1 列出入口（`ls` / `list`）
+
+```bash
+tpbcli task ls
+tpbcli task ls -n 20 \
+  -f 'kernel_name=stream' \
+  -f 'exit_code=0'
+```
+
+- 只显示入口（`derive_to` 全零）；capsule 成员不单独出现。
+- 默认显示**全部**匹配项（`-n 0`），与 `db list` 默认 20 条不同。
+- 非空结果会原子更新 `<workspace>/rafdb/task/RIDMAP`（权限 `0600`）；零结果保留旧 RIDMAP。
+- 表头 **Start Time (Local)** 使用运行主机本地时区。
+
+### 2.6.2 对比结果（`get-result` / `gr`）
+
+```bash
+tpbcli task get-result -r 0,1
+tpbcli task gr -r 0 --data-name 'Triad,"latency,p99"'
+tpbcli task gr -i a1b2c3 --meta-name 'task_record_id,kernel,batch_host,nmember'
+tpbcli task gr -r 0,1 --data-name --help
+tpbcli task gr -r 0 --show-each-subrank
+```
+
+- 用 **`-r|--rid`**（最近一次 RIDMAP）或 **`-i|--task-id`**（6–20 位 hex 前缀）选择；成员会自动解析到入口。
+- 默认将 capsule 成员的**原始样本合并**再统计（非 mean-of-means）；统计列与 `run` 一致。
+- 部分指标失败显示 `N/A` 与 warning；所选 data 全部失败时退出码为 `TPBE_METRIC_MISSING`。
+
+### 2.6.3 导出 CSV（`export`）
+
+```bash
+tpbcli task export --from-ls
+tpbcli task export -i a1b2c3d4 --outdir ./out
+tpbcli task export -r 0 --trace-to-entry
+tpbcli task export -r 0 --keep-current -f 'subrank=0'
+```
+
+- 每条记录成对写入 meta/data（临时文件 + rename；第二次 rename 失败会回滚）。
+- data 使用**双逗号**分隔，不是普通单逗号 CSV。
+- 环境变量三条 meta header 保留；data 在合法 key/count/value 三元组时折叠为两列。

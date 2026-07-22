@@ -448,13 +448,13 @@ rid 只属于最近一次成功写入 RIDMAP 的 `task ls` 结果。它与
 ### 6.3 表格
 
 ```text
-Rid  Start Time (UTC)  Kernel  Exit  Duration(s)  Handle  Subproc  Task ID  TBatch ID
+Rid  Start Time (Local)  Kernel  Exit  Duration(s)  Handle  Subproc  Task ID  TBatch ID
 ```
 
 各列规则：
 
 - `Rid` 从 0 连续编号。
-- `Start Time` 通过 `tpb_ts_bits_to_isoutc` 显示。
+- `Start Time` 通过 `tpbcli_task_time_format_local` 显示本机时区时间。
 - `Kernel` 用 `kernel_id` 在 kernel 索引中查找名称。
 - 找不到 kernel 名称时显示 kernel ID 的 6 位前缀加 `*`，与
   `tpbcli db list` 一致。
@@ -1280,8 +1280,9 @@ tpbcli-task-csv.c
 - 环境变量编码不能完整保留空的冒号段。
 - 文件名中的 hostname 来自 tbatch，不一定是成员实际运行主机。
 
-本文件当前只完成设计定稿。`tpbcli task` 尚未实现，因此本次不提前修改
-用户使用文档、CLI help 或测试；功能实现时必须一次性完成上述同步。
+`tpbcli task`（`ls` / `get-result|gr` / `export`）已实现；用户文档见
+[`docs/USAGE.md`](../USAGE.md) §2.6 与 [`docs/USAGE_CN.md`](../USAGE_CN.md) §2.6，
+CLI help 与 Pack **B7** 测试随实现同步维护。
 
 ## 14. 使用示例
 

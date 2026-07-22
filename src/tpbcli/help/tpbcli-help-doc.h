@@ -10,7 +10,7 @@
     "tpbcli is the command-line interface of the active launcher of TPBench.\n" \
     "Usage: tpbcli [--workspace PATH] <action> <option>\n" \
     "Global (before action): --workspace PATH — TPBench data root; omit to use $TPB_WORKSPACE or $HOME/.tpbench.\n" \
-    "Action: run/r, benchmark/b, database/d, rtenv, kernel/k, help/h\n" \
+    "Action: run/r, benchmark/b, database/d, task, rtenv, kernel/k, help/h\n" \
     "Options and explanation for each action:\n" \
     "    r, run: Run one or more benchmark kernels.\n" \
     "        -P          Use Process-Level Integration mode (default). Kernels run as\n" \
@@ -45,6 +45,10 @@
     "                    Path to the data directory of the current test. \n" \
     "        -h, --help  Print usages of the `tpbcli benchmark` subcommand.\n" \
     "    d, database: Read and manage TPBench database.\n" \
+    "    task: List/compare/export task records (ls refreshes RIDMAP).\n" \
+    "        ls|list: List entry points with local start time and Subproc.\n" \
+    "        get-result|gr: Compare meta and pooled metrics (-r/-i).\n" \
+    "        export: Write paired meta/data CSV under an output directory.\n" \
     "    rtenv: Runtime environment management (new, list, show, load).\n" \
     "    k, kernel: Kernel management (refreshes kernel records in the workspace).\n" \
     "        list, ls: List integrated kernels (Kernel, KernelID, Tags, Description).\n" \

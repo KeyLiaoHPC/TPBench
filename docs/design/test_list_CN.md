@@ -152,6 +152,42 @@
 | B5.7 | `tpbcli/kernel/` | 验证 `kernel build --kernel` 和 `--kernel-tag` 同时使用报互斥错误。 |
 | B5.8 | `tpbcli/kernel/` | 验证 `kernel list` 输出包含 Tags 列。 |
 | B5.9 | `tpbcli/kernel/` | 验证 `kernel build` 使用未知 tag 时报 "no kernels matched" 错误。 |
+| B7.1 | `tpbcli/task/` | 验证缺子命令时提示 `ls|list` 等用法。 |
+| B7.2 | `tpbcli/task/` | 验证 `task --help` 概览含 ls / get-result / export。 |
+| B7.3 | `tpbcli/task/` | 验证 `task ls --help` 选项说明。 |
+| B7.4 | `tpbcli/task/` | 验证 `list` 别名等价于 `ls`。 |
+| B7.5 | `tpbcli/task/` | 验证空库 `ls` 退出 0 且不更新 RIDMAP。 |
+| B7.6 | `tpbcli/task/` | 验证只列入口（独立任务 + capsule）。 |
+| B7.7 | `tpbcli/task/` | 验证 `-n`/`-N`/`0` 数量限制。 |
+| B7.8 | `tpbcli/task/` | 验证 `exit_code` 过滤器。 |
+| B7.9 | `tpbcli/task/` | 验证非法过滤 key/operator 被拒绝。 |
+| B7.10 | `tpbcli/task/` | 验证本地时间表头与带偏移输出格式。 |
+| B7.11 | `tpbcli/task/` | 验证 capsule `Subproc` 计数。 |
+| B7.12 | `tpbcli/task/` | 验证 RIDMAP 按显示顺序原子更新。 |
+| B7.13 | `tpbcli/task/` | 验证零结果保留旧 RIDMAP。 |
+| B7.14 | `tpbcli/task/` | 验证 `-n`/`-N` 冲突。 |
+| B7.15 | `tpbcli/task/` | 验证 `kernel_id` 前缀过滤。 |
+| B7.20 | `tpbcli/task/` | 验证 `--data-name` CSV 引号/逗号解析。 |
+| B7.21 | `tpbcli/task/` | 验证 6–20 hex 前缀解析。 |
+| B7.22 | `tpbcli/task/` | 验证 capsule 原始样本池化统计。 |
+| B7.23 | `tpbcli/task/` | 验证全部指标缺失返回 `TPBE_METRIC_MISSING`。 |
+| B7.24 | `tpbcli/task/` | 验证成员 `-i` 经 `derive_to` 跟随到入口。 |
+| B7.25 | `tpbcli/task/` | 验证 `gr` 别名。 |
+| B7.26 | `tpbcli/task/` | 验证仅 meta 模式与本地 Datetime。 |
+| B7.27 | `tpbcli/task/` | 验证仅 data 模式。 |
+| B7.28 | `tpbcli/task/` | 验证 `--data-name --help` 上下文帮助。 |
+| B7.29 | `tpbcli/task/` | 验证 `--show-each-subrank`。 |
+| B7.30 | `tpbcli/task/` | 验证重复 output 名告警。 |
+| B7.40 | `tpbcli/task/` | 验证独立任务导出 meta/data 成对文件。 |
+| B7.41 | `tpbcli/task/` | 验证双逗号 CSV 转义。 |
+| B7.42 | `tpbcli/task/` | 验证 `--from-ls`。 |
+| B7.43 | `tpbcli/task/` | 验证 capsule 与成员成对导出。 |
+| B7.44 | `tpbcli/task/` | 验证 `subrank` 成员过滤。 |
+| B7.45 | `tpbcli/task/` | 验证非 TTY 默认导出策略提示。 |
+| B7.46 | `tpbcli/task/` | 验证非法 id 前缀失败。 |
+| B7.47 | `tpbcli/task/` | 验证 export 成员过滤解析。 |
+| B7.48 | `tpbcli/task/` | 验证 export 4–40 hex 前缀。 |
+| B7.49 | `tpbcli/task/` | 验证环境三 header 折叠为 data 两列。 |
 | W1.1 | `tpbcli/run/tpbcli-run.c`, `tpbcli/pli/` | 验证干跑模式 Exec 行包含 `tpbcli-pli-launcher` 且无 wrapper。 |
 | W1.2 | `tpbcli/run/tpbcli-run.c`, `tpbcli/pli/` | 验证干跑模式 Exec 行仅包含全局 wrapper，不含 per-kernel wrapper。 |
 | W1.3 | `tpbcli/run/tpbcli-run.c`, `tpbcli/pli/` | 验证干跑模式 Exec 行链式组合全局 wrapper + per-kernel wrapper + args。 |

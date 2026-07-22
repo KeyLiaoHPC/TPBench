@@ -69,11 +69,12 @@ tpbcli basic format:
 tpbcli <subcommand> <options>
 ```
 
-Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`runtime environment` (`rtenv`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
+Top-level subcommands (short aliases in parentheses): **`run` (`r`)**, **`benchmark` (`b`)**, **`database` (`db`)**, **`task`**, **`runtime environment` (`rtenv`)**, **`kernel` (`k`)**, **`help` (`h`)**. Use **`--help`** or **`-h`** at the top level for full CLI help.
 
 - **`tpbcli run`**: Run one or more TPBench kernels. Set runtime parameters, scan variable parameter dimensions. Pass runtime command-line arguments, environment variables, or MPI runtime parameters to each kernel through the TPBench framework.
 - **`tpbcli benchmark`**: Run predefined benchmark suites. Each suite contains benchmark kernels with predefined parameters, scoring rules, and formulas. Outputs benchmark process and result scores. **Metric values are read from rafdb task records** linked by the batch TBatchID (`v:` names must match output local names; reducers such as `mean` / `p50` / `Q=` apply to the stored arrays). The run log is not parsed for scoring.
 - **`tpbcli database`** / **`tpbcli db`**: Inspect rafdb results in the workspace — **`list`** / **`ls`** (recent index tables) or **`dump`** (domain + `-i`/`--id` for one `.tpbr`, or `-e` for `.tpbe` index). Run **`tpbcli database --help`** for a subcommand summary; **`tpbcli database dump --help`** for dump-only options. A bare **`tpbcli database`** (no `list`/`dump`) is an error.
+- **`tpbcli task`**: List entry-point tasks, compare meta/metrics, and export paired CSV files. Prefer this over raw `db dump` when reviewing run results. See §2.6.
 - **`tpbcli rtenv`**: Create, browse, and load runtime environment records. Records capture application/library versions and explicit environment variable operations.
 - **`tpbcli kernel`**: Manage kernel compile history in the workspace — **`list`** / **`ls`** (scan and register PLI kernels), **`init`** (scaffold out-of-tree kernel project), **`build`** (compile and install `libtpbk_<name>.so`), **`get`** (read-only query), **`set`** (write metadata), and internal **`backup-inactive`** (used by the build system).
 - **`tpbcli help`**: Display help documentation.
@@ -698,3 +699,77 @@ tpbcli kernel build --dir ~/dev/mykern --kernel mykern --cflags "-O2"
 tpbcli run --kernel mykern --kargs n=100
 tpbcli kernel get -v --kernel mykern
 ```
+
+## 2.6 tpbcli task
+
+`tpbcli task` lists entry-point task records, compares metadata and metrics, and
+exports paired meta/data CSV files. Full design notes live in
+[`docs/design/tpbcli_task.md`](./design/tpbcli_task.md). Times shown on the
+terminal use **local** civil time with an explicit UTC offset
+(`YYYY-MM-DDTHH:MM:SS±HH:MM`). Export meta still stores `start_utc` as UTC.
+
+### 2.6.1 List entry points (`ls` / `list`)
+
+```bash
+# Refresh RIDMAP and list all entry points (newest first)
+tpbcli task ls
+
+# Recent successful stream runs
+tpbcli task ls -n 20 \
+  -f 'kernel_name=stream' \
+  -f 'exit_code=0'
+```
+
+- Only entry points (`derive_to` all-zero) appear; capsule members are omitted.
+- Default count is **all** matches (`-n 0`); this differs from `db list` (default 20).
+- `-n` / `-N` conflict; `N == 0` means unlimited.
+- Successful non-empty listings rewrite `<workspace>/rafdb/task/RIDMAP` (mode `0600`).
+  Zero results leave the previous RIDMAP unchanged.
+- Table column **Start Time (Local)** uses the host timezone.
+
+### 2.6.2 Compare results (`get-result` / `gr`)
+
+```bash
+# Default meta + all shared numeric outputs for RIDMAP rows 0 and 1
+tpbcli task get-result -r 0,1
+
+# Alias + quoted metric names (commas inside quotes are part of the name)
+tpbcli task gr -r 0 --data-name 'Triad,"latency,p99"'
+
+# Resolve a 6–20 hex task-id prefix (unique in the task domain)
+tpbcli task gr -i a1b2c3 --meta-name 'task_record_id,kernel,batch_host,nmember'
+
+# List shared/private names for the selection
+tpbcli task gr -r 0,1 --data-name --help
+
+# Per-member rows instead of pooled samples
+tpbcli task gr -r 0 --show-each-subrank
+```
+
+- Select with **`-r|--rid`** (comma/ranges from the latest RIDMAP) **or**
+  **`-i|--task-id`** (hex prefix). Capsule members auto-resolve to the entry.
+- Default aggregation **pools raw samples** across capsule members (not
+  mean-of-means). Stats match `run`: mean/min/max/p25…p99.
+- Partial metric failures print `N/A` plus warnings; if every selected data
+  metric fails, the command exits with `TPBE_METRIC_MISSING`.
+
+### 2.6.3 Export CSV (`export`)
+
+```bash
+# Export RIDMAP selection into ./tpb_export/<taskid>/
+tpbcli task export --from-ls
+
+# Explicit id (4–40 hex) and output root
+tpbcli task export -i a1b2c3d4 --outdir ./out
+
+# Capsule: keep current record or walk derive_to; filter members
+tpbcli task export -r 0 --trace-to-entry
+tpbcli task export -r 0 --keep-current -f 'subrank=0'
+```
+
+- Each record writes a **meta** and **data** file as a pair (temp + rename;
+  failed second rename rolls back the first final file).
+- Data CSV uses **double-comma** delimiters (not ordinary single-comma CSV).
+- Environment snapshot headers stay as three meta rows; the data file collapses
+  a valid key/count/value triple into two columns
+  (`environment_variable_key`, `environment_variable_value`).

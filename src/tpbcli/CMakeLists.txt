@@ -5,6 +5,8 @@ set(TPBCLI_INCLUDE_DIRS
     ${CMAKE_SOURCE_DIR}/src/tpbcli/run
     ${CMAKE_SOURCE_DIR}/src/tpbcli/benchmark
     ${CMAKE_SOURCE_DIR}/src/tpbcli/database
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/task
+    ${CMAKE_SOURCE_DIR}/src/tpbcli/common
     ${CMAKE_SOURCE_DIR}/src/tpbcli/rtenv
     ${CMAKE_SOURCE_DIR}/src/tpbcli/kernel
     ${CMAKE_SOURCE_DIR}/src/tpbcli/help
@@ -35,6 +37,14 @@ add_executable(tpbcli
     database/tpbcli-database-ls.c
     database/tpbcli-database-dump.c
     database/tpbcli-database-dump-fmt.c
+    common/tpbcli-data-fmt.c
+    task/tpbcli-task.c
+    task/tpbcli-task-ls.c
+    task/tpbcli-task-select.c
+    task/tpbcli-task-time.c
+    task/tpbcli-task-get-result.c
+    task/tpbcli-task-export.c
+    task/tpbcli-task-csv.c
     rtenv/tpbcli-rtenv.c
     rtenv/tpbcli-rtenv-new.c
     rtenv/tpbcli-rtenv-list.c
