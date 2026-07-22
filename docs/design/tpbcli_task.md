@@ -6,14 +6,14 @@
 
 ```text
 tpbcli [--workspace PATH] task ls
-tpbcli [--workspace PATH] task extract
+tpbcli [--workspace PATH] task get-result|gr
 tpbcli [--workspace PATH] task export
 ```
 
 三条命令分别解决以下问题：
 
 1. `ls` 按条件查找任务，按开始时间排序，为本次结果分配短编号。
-2. `extract` 从若干任务中读取同一个指标或同一个固定属性，在终端中对比。
+2. `get-result` 从若干逻辑任务中读取元数据和输出指标，在终端中对比。
 3. `export` 把任务记录写成便于其它程序读取的文本文件。
 
 实现代码放在 `src/tpbcli/task/`。读取 rafdb 时只调用
@@ -31,7 +31,6 @@ tpbcli [--workspace PATH] task export
 `task` 只会写以下位置：
 
 - `<workspace>/.tmp/tpb_rt_local_ridmap`
-- 用户通过 `extract -o` 指定的文本文件
 - `export` 的输出目录
 
 ## 2. 当前记录格式
@@ -95,7 +94,8 @@ task 域位于：
 
 若完整记录可以正常读取，但结构不符合上述规则，则把它当作普通入口。
 若记录无法读取或数据长度错误，`ls` 仍显示该索引行，将 `Subproc` 显示
-为 `?` 并给出警告。`extract` 和 `export` 在需要展开它时失败，不猜测成员。
+为 `?` 并给出警告。`get-result` 和 `export` 在需要展开它时失败，不猜测
+成员。
 
 ### 2.4 capsule 成员与 subrank
 
@@ -165,7 +165,7 @@ a::b  读取后为 a:b
 a:    读取后为 a
 ```
 
-`extract` 和 `export` 展示的是按当前编码能够恢复的值，不得宣称它与
+`export` 展示的是按当前编码能够恢复的值，不得宣称它与
 原进程环境逐字节相同。
 
 环境变量数量为零时，count header 的 `dimsizes[0]` 为 0，但磁盘中仍有
@@ -209,12 +209,9 @@ tpbcli --workspace /path/to/ws task ls
 
 ### 3.2 ID 输入
 
-`extract` 和 `export` 支持以下两种 ID 来源：
-
-- `-r` 或 `--rid` 读取 RIDMAP 中的短编号。
-- `-i` 或 `--id` 读取 task ID 的十六进制前缀。
-
-两者不能同时出现。
+`get-result` 和 `export` 都可通过 `-r` 或 `--rid` 读取 RIDMAP 中的短
+编号。`get-result` 使用 `-i` 或 `--task-id` 直接选择 task ID；`export`
+保留 `-i` 或 `--id`。同一条命令中的两种 ID 来源互斥。
 
 `-r` 支持：
 
@@ -227,15 +224,19 @@ tpbcli --workspace /path/to/ws task ls
 
 范围是闭区间。短编号必须是非负十进制整数。
 
-`-i` 支持用逗号分开的 4 到 40 位十六进制前缀：
+`get-result -i` 支持用逗号分开的 6 到 20 位十六进制前缀：
 
 ```text
-a1b2
-a1b2c3,01234567
+a1b2c3
+a1b2c3,0123456789abcdef
 ```
 
+这里的长度是十六进制字符数，不是字节数。大小写均可，解析后统一显示
+为小写。`export -i` 为兼容完整导出仍接受 4 到 40 位前缀。
+
 `-i` 不支持用连字符表示范围。每个前缀只在 task 域中查找。没有匹配
-时失败；匹配多条时列出完整候选 ID 并失败。
+时失败；匹配多条时列出完整候选 ID 并失败。20 位仍可能匹配多条，不能
+把它当成完整的 40 位 TaskRecordID。
 
 输入中重复指向同一条记录时，只处理一次，并保留第一次出现的位置。
 任何 ID 无效时，整条命令在开始输出前失败。
@@ -255,19 +256,15 @@ a1b2c3,01234567
 多个 `-f` 按命令行顺序依次处理，含义是所有条件都必须满足。某一步
 得到空结果后，不再继续读取后续筛选所需的数据。
 
-`ls` 和 `extract`、`export` 允许的 key 不同。使用错误的 key 时，错误
-信息必须指出该 key 适用于哪条子命令。
+`ls` 和 `export` 允许的 key 不同。`get-result` 不接受 `-f`。使用错误
+的 key 时，错误信息必须指出该 key 适用于哪条子命令。
 
 ### 3.4 输出与日志
 
 终端表格、提示、警告和错误使用现有 `tpblog` 函数，因此同时写入终端
 和运行日志。
 
-RIDMAP、`extract -o` 文件和 CSV 文件直接写磁盘，不把文件正文复制到
-运行日志。
-
-`extract -o FILE` 只把完整报告写入 `FILE`。终端和日志只写一行完成
-消息及文件路径。
+RIDMAP 和 CSV 文件直接写磁盘，不把文件正文复制到运行日志。
 
 ### 3.5 错误码
 
@@ -316,17 +313,42 @@ RIDMAP 不记录 workspace 名称。读取 ID 后还要在当前 workspace 的 t
 
 ## 5. 初始记录、入口与成员
 
-### 5.1 为什么需要追踪
+### 5.1 逻辑任务
 
 用户通过 `-i` 可以直接指定成员记录。成员的 `derive_to` 指向 capsule
-或其它归并后的入口。用户可能只想处理当前成员，也可能想从入口展开整
-组成员。
+或其它归并后的入口。`get-result` 的比较单位是逻辑任务，而不是用户
+碰巧指定的某一条物理记录：
+
+- 独立入口对应一个逻辑任务。
+- capsule 及其 `TaskID` 列表中的成员共同对应一个逻辑任务。
+- 直接指定 capsule 成员时，先解析到入口，再按同一逻辑任务处理。
 
 沿 `derive_to` 走的方向是从当前记录走向目标入口，不是寻找子记录。
+这个定义保证 `-r` 选择入口和 `-i` 选择其中一个成员时得到相同的默认
+聚合结果。
 
-### 5.2 追踪选项
+### 5.2 `get-result` 的自动解析
 
-`extract` 和 `export` 都支持：
+`get-result` 不接受 `--trace-to-entry`、`--keep-current` 或成员过滤，也
+不进行交互询问。每个初始 ID 按以下顺序处理：
+
+1. `derive_to == 0` 时把当前记录作为工作根。
+2. 否则自动沿 `derive_to` 走到入口，最多允许 8 跳。
+3. 工作根是独立入口时，只读取该记录。
+4. 工作根是 capsule 时，读取全部成员；默认聚合，指定
+   `--show-each-subrank` 时逐成员显示。
+
+遇到重复 ID、目标文件缺失、目标不在 task 域、断链或超过 8 跳时，该
+初始选择失败。所有初始选择必须在打印报告前完成解析。同一工作根由多个
+输入指向时只处理一次，并保留第一次出现的位置。
+
+从 capsule 展开的成员不再跟随 `derive_to`，否则会回到同一个 capsule
+并造成循环。成员没有指回 capsule 时按 2.4 节给出警告，但仍以 capsule
+列表为成员关系依据。
+
+### 5.3 `export` 的追踪选项
+
+`export` 继续支持：
 
 ```text
 --trace-to-entry
@@ -350,9 +372,9 @@ Trace task <当前ID> to entry <下一条ID>? [y/N]
 选择 `y` 后不再逐跳询问，而是自动走到入口。最多允许 8 跳。遇到重复
 ID、目标文件缺失、目标不在 task 域或超过 8 跳时失败。
 
-### 5.3 展开规则
+### 5.4 `export` 的展开与成员过滤
 
-每个初始 ID 最终得到一个工作根：
+`export` 的每个初始 ID 最终得到一个工作根：
 
 - 工作根是独立入口时，只处理该记录。
 - 工作根是 capsule 时，读取 `TaskID` 列表，再应用 `subrank` 和
@@ -362,9 +384,7 @@ ID、目标文件缺失、目标不在 task 域或超过 8 跳时失败。
 从 capsule 展开的成员不再检查和询问 `derive_to`。否则成员会沿
 `derive_to` 回到同一个 capsule，再次展开，造成循环。
 
-### 5.4 成员过滤
-
-`extract` 和 `export` 支持：
+`export` 支持：
 
 ```text
 -f 'subrank=1-10'
@@ -500,106 +520,131 @@ YYYY-MM-DDTHH:MM:SS
 - 最终比较值必须重新编码成时区部分为零的 UTC `utc_bits`，不能把带
   时区的墙钟字段直接与 task 记录比较。
 
-## 7. `tpbcli task extract`
+## 7. `tpbcli task get-result`
 
-### 7.1 语法
-
-```text
-tpbcli task extract
-        (-r|--rid LIST | -i|--id LIST)
-        (-m|--metric NAME | -F|--field FIELD)
-        [--reducer NAME]
-        [--trace-to-entry | --keep-current]
-        [-f|--filter 'subrank=...' | -f|--filter 'subtid=...']...
-        [--show-env]
-        [-o|--out FILE]
-```
-
-`-r` 与 `-i` 必须且只能选择一个。`-m` 与 `-F` 也必须且只能选择一个。
-
-`--reducer` 只允许与 `-m` 一起使用。`-F` 同时带 `--reducer` 时返回参数
-错误。
-
-### 7.2 表格中的记录
-
-独立任务产生一行，`Subrank` 显示 `-`。
-
-capsule 本身不产生指标行。它的固定属性显示在该组的简要信息中，成员
-各产生一行。这样不会把 capsule 的 `TaskID` 链接误当成业务指标。
-
-表格使用 `Ref` 标识用户输入来源：
-
-- 通过 rid 选择时显示 `r0`、`r1`。
-- 通过 ID 选择时显示解析后的 task ID 6 位前缀加 `*`。
-
-### 7.3 指标模式
-
-`-m NAME` 只在输出范围
-`[ninput, ninput + noutput)` 中按 `header.name` 完整匹配，区分大小写。
-
-一条记录中没有该指标时显示 `N/A`。同名输出 header 多于一个时，该
-记录有歧义，命令失败。全部记录都没有该指标时，命令返回
-`TPBE_METRIC_MISSING`。
-
-统计只支持以下数据类型：
+### 7.1 语法与默认选择
 
 ```text
-TPB_INT_T
-TPB_INT8_T
-TPB_INT16_T
-TPB_INT32_T
-TPB_INT64_T
-TPB_UINT8_T
-TPB_UINT16_T
-TPB_UINT32_T
-TPB_UINT64_T
-TPB_FLOAT_T
-TPB_DOUBLE_T
+tpbcli task get-result|gr
+        (-r|--rid LIST | -i|--task-id HASH_LIST)
+        [--data-name NAME_LIST]...
+        [--meta-name META_LIST]...
+        [--show-each-subrank]
 ```
 
-空数组、数据长度错误和其它类型不能计算统计量。若只有部分记录不能
-计算，则这些行显示 `N/A` 并给出原因；若全部记录都不能计算，则命令
-失败。
+`-r` 与 `-i` 必须且只能选择一个。
 
-支持的统计名称：
+名称选项的默认规则如下：
+
+- 两个名称选项都未出现时，显示默认 meta 列和所有 shared data name。
+- 只出现 `--data-name` 时，显示默认 meta 列和指定 data。
+- 只出现 `--meta-name` 时，显示指定meta和所有Record Data。
+- 两者都出现时，分别显示指定的 meta 和 data。
+
+名称列表为空时，参数错误。
+
+### 7.2 名称列表语法
+
+`NAME_LIST` 在一个命令行参数内使用 CSV 风格语法：
+
+- 逗号只在双引号外分隔条目。
+- 未引用条目的首尾 ASCII 空白会被忽略。
+- 双引号必须包住整个条目；引号内的逗号属于名称。
+- 引号内用两个连续双引号表示一个双引号字符。
+- 空条目、未闭合引号和引号外的非空尾随字符均为参数错误。
+- 名称区分大小写，必须完整匹配。
+- 重复名称只保留第一次出现的位置。
+- 同一选项可重复，效果等同于按出现顺序连接各列表。
+
+例如：
+
+```bash
+--data-name 'a,b,c'
+--data-name '"test,x", "test,y"'
+--data-name '"a""b",c'
+```
+
+第二例选择 `test,x` 和 `test,y`；第三例第一个名称是 `a"b`。这里采用
+CSV 的双引号规则，不把反斜线定义为转义符。
+
+`--data-name --help`、`--data-name -h`、`--meta-name --help` 和
+`--meta-name -h` 是上下文名称查询。它们仍要求 `-r` 或 `-i`，解析所选
+记录并打印 7.3 节的名称报告后成功退出，不打印结果表。若实际 header
+名称恰好是 `--help` 或 `-h`，必须让 CSV 双引号成为参数内容，例如
+`--data-name '"--help"'`，以消除语法歧义。现有 argp 不支持
+`--data-name=VALUE`，设计不能依赖等号形式。普通的 `get-result --help`
+只打印静态命令帮助，不读取 rafdb。
+
+### 7.3 Shared 与 Private 名称
+
+`--data-name` 只在每条普通 task 的输出范围
+`[ninput, ninput + noutput)` 内按 `header.name` 查找。输入参数、capsule
+的 `TaskID` 链接和末尾环境 header 不属于 Record Data。这个边界保证
+固定统计列只处理输出指标；需要逐元素内容时使用 `task export`。
+
+名称报告先把每个输入解析为 5.1 节定义的逻辑任务，再输出：
 
 ```text
-mean
-min
-max
-median
-p50
-pXX
-Q=<值>
+Shared meta name: ref, taskid, kernel, batch_host, datetime, nmember, ...
+Shared data name: Copy, Scale, Add, Triad
+Private meta name (ref=r1): header[12].name, header[12].tag
+Private data name (ref=r1): RankLocalMetric
 ```
 
-默认是 `mean`。`median` 与 `p50` 相同。`pXX` 中的值按百分数解释。
-`Q=` 后的值大于 1 时按百分数解释，否则按 0 到 1 的比例解释。最终值
-必须落在 0 到 1 之间。
+定义如下：
 
-未知名称、尾部多余字符和超出范围的值都报错，不沿用 benchmark 中把
-未知名称改成 `mean` 的现有行为。
+- Shared meta name 是所有所选逻辑任务都能解析的 meta key 交集。
+- Shared data name 是所有所选逻辑任务都存在且 schema 兼容的 data name
+  交集。
+- Private 名称是某个逻辑任务的可用名称减去对应 Shared 集合。
+- 输出名称按第一条逻辑任务中的顺序排列；Private 名称按本任务中的顺序
+  排列。
+- 某个名称在 capsule 中只存在于部分成员时，不进入 Shared data name。
+  它显示在该逻辑任务的 Private 行，并追加成员范围，例如
+  `RankLocalMetric[subrank=0,2-3]`。
+- 只有一个逻辑任务时，满足 capsule 内全成员一致条件的名称属于 Shared；
+  Private 仍可揭示只存在于部分成员的名称。
 
-分位数计算调用现有 `tpb_stat_qtile_1d`。它先排序，再取
-`floor(q * n)` 位置的元素，并把越过末尾的位置限制到最后一个元素。
-它不在相邻元素之间取平均。
+名称报告中的 `ref` 使用输入引用，不总是 rid：通过 `-r` 选择时为 `r0`、
+`r1`；通过 `-i` 选择时按解析后且去重的输入顺序为 `i0`、`i1`。不能把
+`i0` 写成 rid，因为 RIDMAP 中未必存在该记录。
 
-指标表：
+### 7.4 Meta Data
+
+默认 Meta Data 列为：
 
 ```text
-Metric: Triad    Reducer: mean
-Ref      Subrank  Task ID   Kernel  Exit  Unit         Value
-r0       0        a1b2c3*   stream  0     TPB_UNIT_MBPS 12345.670000000000000
-r0       1        d4e5f6*   stream  0     TPB_UNIT_MBPS 12001.200000000000000
-998877*  -        998877*   stream  0     TPB_UNIT_MBPS 11000.000000000000000
+Ref TaskID Kernel BatchHost Datetime NMember ExitCode NInput NOutput NHeader
 ```
 
-统计结果以 `double` 计算并保留小数点后 15 位。表中保留单位列，因为
-不同记录中的同名指标可能使用不同单位。前端不自动换算单位。
+各默认列含义：
 
-### 7.4 固定属性模式
+- `Ref` 是 7.3 节的输入引用。
+- `TaskID` 是解析后工作根的 6 位小写前缀加 `*`。
+- `Kernel` 从 `kernel_id` 查找；失败时显示 kernel ID 的 6 位前缀加 `*`。
+- `BatchHost` 来自关联 tbatch 的 `hostname`。它是批次前端主机，不保证
+  是每个成员实际执行的主机；tbatch 缺失时显示 `N/A` 并警告。
+- `Datetime` 使用工作根的 UTC 时间。
+- `NMember` 对独立任务为 1，对 capsule 为成员 ID 数量。它不是 `nproc`，
+  因为 subrank 不保证等于 MPI rank。
+- `ExitCode`、`NInput`、`NOutput`、`NHeader` 对独立任务取本记录值；对
+  capsule 取成员的一致值，不一致时显示 `mixed`。不能使用 capsule 自身
+  固定的 `0`、`0`、`0`、`1` 代替成员值。
 
-`-F FIELD` 支持以下名称：
+当前 task 的 `duration` 固定写为 0，因此不放入默认列。它仍可通过
+`--meta-name duration` 或 `duration_seconds` 显式查看。
+
+`--meta-name` 支持以下派生 key：
+
+```text
+ref
+taskid
+kernel
+batch_host
+nmember
+```
+
+支持以下 `task_attr_t` key：
 
 ```text
 task_record_id
@@ -607,7 +652,6 @@ derive_to
 inherit_from
 tbatch_id
 kernel_id
-kernel_name
 datetime
 utc_bits
 btime
@@ -623,41 +667,164 @@ nheader
 reserve
 ```
 
-字段格式：
-
-- `datetime` 显示 ISO UTC。
-- `duration` 显示原始纳秒整数。
-- `duration_seconds` 显示秒，保留三位小数。
-- ID 字段显示完整 40 位十六进制。
-- `kernel_name` 从 kernel 索引查找，找不到时显示 kernel ID 的 6 位前缀。
-- 其它整数使用十进制。
-
-属性表仍按 `Ref` 和 `Subrank` 排列。
-
-### 7.5 环境变量显示
-
-默认不打印环境变量，以免大量进程环境遮住对比表。指定 `--show-env`
-后，在每条实际任务记录下显示：
+还支持 `header[INDEX].FIELD`，其中 `INDEX` 是非负十进制数，`FIELD` 为：
 
 ```text
-Environment for r0 subrank 0
-  PATH = /usr/bin:/bin
-  FOO = v0:v1
+block_size
+ndim
+data_size
+type_bits
+type_bits.source
+type_bits.check
+type_bits.type
+_reserve
+uattr_bits
+uattr_bits.cast
+uattr_bits.shape
+uattr_bits.trim
+uattr_bits.kind
+uattr_bits.name
+uattr_bits.base
+uattr_bits.value
+name
+tag
+note
+dimsizes
+dimnames
 ```
 
-若三条环境 header 不完整、类型不符或 count 与 key 数量不符，该记录
-显示环境解析错误。指标和属性仍可继续显示，命令最后给出警告。
+header 下标只适合低层诊断。同一个下标在不同内核或不同版本中可能指向
+不同名称，不能把 `header[2].uattr_bits` 当成跨任务的稳定指标选择器。
+data 选择必须使用 `--data-name`。
 
-### 7.6 页脚
+ID key 显示完整 40 位小写十六进制，`taskid` 例外，按默认短格式显示。
+`datetime` 显示 ISO UTC，`duration` 为纳秒整数，`duration_seconds` 为秒。
+位字段的子字段显示符号名，无法识别的位同时保留原始十六进制值。
 
-报告末尾固定写：
+默认聚合模式下，成员字段和 header 字段均采用 consensus 规则：所有可读
+成员值相同才显示该值，否则显示 `mixed`。`task_record_id`、`derive_to`、
+`pid`、`tid` 等天然逐成员变化的字段通常会显示 `mixed`。指定
+`--show-each-subrank` 后，Meta Data 增加 `Subrank` 列并逐成员显示原值；
+工作根自身不再额外产生一行。只有部分成员可读时 consensus 只基于可读
+成员，并必须给出 `used <可用数>/<总成员数> members` 警告。
+
+### 7.5 Data 匹配与聚合
+
+默认情况下，对每个逻辑任务和每个 data name 合并所有可读成员的原始
+数值样本，再对合并后的单一数组计算统计量。不能先对每个成员算 mean
+再计算 mean；这种 “mean of means” 会在成员样本数不同时改变权重。
+
+可统计的数据类型为：
 
 ```text
-Hint: use `tpbcli task export ...` to write raw arrays as CSV.
+TPB_INT_T
+TPB_INT8_T
+TPB_INT16_T
+TPB_INT32_T
+TPB_INT64_T
+TPB_UINT8_T
+TPB_UINT16_T
+TPB_UINT32_T
+TPB_UINT64_T
+TPB_FLOAT_T
+TPB_DOUBLE_T
 ```
 
-这里的 raw arrays 指指标等普通 header 的逐元素内容。环境变量会按
-key/value 形式整理，不能视为逐字节原始数据。
+各成员样本转换成 `double` 后合并。不同数值类型可以合并，`Type` 列显示
+`mixed`；非数值类型不能进入统计。统计转换与现有 `tpb_stat_*` 一样可能
+无法精确表示大于 `2^53` 的 64 位整数，前端不声称结果仍是整数精确值。
+
+同名 header 只有同时满足以下条件才可聚合：
+
+- 每个参与成员中恰好匹配一个输出 header。
+- 数据类型在上述支持列表中。
+- unit 与 shape 位一致；前端不静默换算不同单位。
+- 逻辑元素数和 `data_size` 一致，乘法计算无溢出。
+- 数组非空。
+
+成员之间的数组长度可以不同，合并后 `Dim` 显示总样本数。多维数组按
+连续存储顺序展平，并对该 ref/name 给出一次警告；`--show-each-subrank`
+模式下 `Dim` 显示每个成员自己的维度。
+
+同一成员中有多个同名输出 header 时无法只靠名称消除歧义。该
+ref/name 显示 `N/A` 并警告，不任意选择第一个 header。若部分成员缺失、
+损坏或 schema 不兼容，默认聚合其余可用成员，同时明确警告
+`used <可用数>/<总成员数> members`；没有可用成员时显示 `N/A`。
+
+指定 `--show-each-subrank` 时不跨成员合并。独立任务的 `Subrank` 显示
+`-`；capsule 每个成员各产生一行，缺失成员也保留一行 `N/A`，以免行号
+错位。规范名称使用 subrank 而不是 rank，因为 2.4 节已明确它不保证等于
+MPI rank。可以把 `--show-each-rank` 留作未来兼容别名，但帮助和设计不得
+把它描述成真实 MPI rank。
+
+### 7.6 固定统计列
+
+Record Data 固定显示：
+
+```text
+mean min max p25 p50 p75 p90 p95 p99
+```
+
+不提供 reducer 参数。mean、min、max 调用现有 `tpb_stat_*`；分位数调用
+`tpb_stat_qtile_1d`。分位函数先排序，再取 `floor(q * n)` 位置的元素，
+越过末尾时限制到最后一个元素，不在相邻元素间插值。
+
+数值格式沿用 `tpb_cliout_results` 的有效数字、trim 和 unit 显示规则，
+而不是旧设计中固定输出 15 位小数。shape 为 point 且逻辑任务只有一个
+样本时只填 mean，其余列为 `-`。capsule 的 point 指标由每个成员贡献一个
+样本；合并后样本数大于 1 时显示完整的跨成员统计。非 point 的单元素
+数组也按现有 run 行为只填 mean。
+
+### 7.7 输出布局
+
+各段之间使用现有 `tpblog` 水平分隔线。以下示例假定显式请求了
+`--data-name 'Triad,Add'`：
+
+```text
+Selected tasks: r0(a1b2c3*), r1(d4e5f6*)
+--------------------------------------------------------------------------------
+Meta Data
+Ref TaskID  Kernel BatchHost Datetime             NMember ExitCode NInput NOutput NHeader
+r0  a1b2c3* stream n01       2026-07-22T01:02:03Z 4       0        3      4       10
+r1  d4e5f6* stream n02       2026-07-22T02:03:04Z 1       0        3      4       10
+--------------------------------------------------------------------------------
+Record Data
+Ref Name  Type   Unit          Dim mean min max p25 p50 p75 p90 p95 p99
+r0  Triad double TPB_UNIT_MBPS 400 ...
+r1  Triad double TPB_UNIT_MBPS 100 ...
+--------------------------------------------------------------------------------
+Warnings
+WARNING: Data name Add does not exist in ref=r1 (task=d4e5f6*).
+--------------------------------------------------------------------------------
+Note: capsule member results were aggregated; use --show-each-subrank to display each member.
+```
+
+`--show-each-subrank` 时两个表都在 `Ref` 后增加 `Subrank`。只请求 meta 时
+省略 Record Data、Warnings 中的 data 警告和聚合 Note。没有警告时省略
+Warnings 段。没有 capsule 发生聚合时省略 Note。
+
+Record Data 先按用户请求的 data name 顺序，再按输入 Ref 顺序，最后按
+subrank 排序。这样同一指标的各任务相邻，便于横向比较。名称报告、表格、
+提示、警告和错误均通过 `tpblog` 双写到终端与日志；该命令不写报告文件。
+
+### 7.8 缺失数据与退出状态
+
+名称、ID 列表和 meta key 的语法错误在任何报告输出前失败。记录读取后的
+运行时问题按以下规则处理：
+
+- 某个 ref/name 缺失、重复、损坏或不兼容时显示 `N/A`，在 Warnings 段
+  给出准确原因，其它结果继续。
+- capsule 的部分成员无法读取时保留可用结果并警告；全部成员无法读取时
+  该逻辑任务不可用。
+- 显式请求的 meta key 在某个逻辑任务中不存在时显示 `N/A` 并警告。
+- 只请求 meta 且至少一个逻辑任务可读时允许成功。
+- 请求 data 时，只要至少一个 ref/name 成功产生统计行，命令成功并保留
+  警告；全部 data 均不可统计时返回 `TPBE_METRIC_MISSING`。
+- 初始 ID 无效、自动追踪断链、capsule 结构损坏或所有逻辑任务均不可读
+  时返回非零状态。
+
+这里的表格是人类可读输出，不承诺稳定的机器解析格式。需要逐元素数据
+或稳定文件边界时使用 `task export`。
 
 ## 8. `tpbcli task export`
 
@@ -748,8 +915,9 @@ capsule：
 成员过滤不会改写 capsule 自身的 data 文件。capsule data 仍列出它在
 磁盘中保存的全部成员 ID，因为该文件描述的是完整 capsule 记录。
 
-capsule 中同一成员 ID 出现多次时，`extract` 保留每个 subrank 行；
-`export` 只写一组成员文件，并给出重复 ID 警告。
+capsule 中同一成员 ID 出现多次时，`get-result --show-each-subrank` 保留
+每个 subrank 行，默认聚合也按每个位置贡献一次样本，并给出重复 ID
+警告。`export` 只写一组成员文件，同样给出警告。
 
 ### 8.5 本功能所称的 CSV
 
@@ -940,7 +1108,7 @@ TaskID
 - `db list -dt` 按 task 索引追加顺序显示。
 - `task ls` 按开始时间显示。
 - `db dump -dt -i ID` 只显示指定的那一条记录。
-- `task extract` 和 `task export` 可以从 capsule 展开成员。
+- `task get-result` 和 `task export` 可以从 capsule 展开成员。
 - `db dump -e` 使用单逗号的简单文本。
 - `task export` 使用双逗号分隔的独立 meta 和 data 文件。
 
@@ -948,14 +1116,19 @@ TaskID
 
 ### 9.2 与 benchmark
 
-`task extract` 复用与 benchmark 相同的统计函数和指标名称匹配规则，但
-有两处有意不同：
+`task get-result` 复用与 benchmark 相同的公开统计函数和输出名称精确
+匹配规则，但行为有意不同：
 
-- `task extract` 会展开 capsule 成员。
-- `task extract` 遇到未知统计名称时失败，不自动改成 `mean`。
+- `get-result` 会展开 capsule 成员；当前 benchmark 路径跳过成员。
+- `get-result` 把成员原始样本合并后统计；benchmark 对每条记录先应用
+  reducer，再对多个标量求平均。
+- `get-result` 的统计列固定，不接受 reducer，也不存在未知 reducer
+  回退到 mean 的行为。
+- `get-result` 对重复名称和 schema 不兼容给出 `N/A` 与警告，不任意取
+  第一个 header。
 
-因此 MPI 任务在 `task extract` 中可以从成员得到指标，不代表当前
-benchmark 路径也会以相同方式展开 capsule。
+因此 MPI 任务在 `get-result` 中得到的聚合结果不应直接假设与 benchmark
+得分输入相同。
 
 ## 10. 读取失败与不完整数据
 
@@ -967,12 +1140,14 @@ benchmark 路径也会以相同方式展开 capsule。
 - capsule 完整记录读取失败时仍列入口，Subproc 显示 `?`。
 - RIDMAP 只写实际显示且有有效 TaskRecordID 的行。
 
-### 10.2 `extract`
+### 10.2 `get-result`
 
-- 初始 ID、追踪目标或 capsule 记录缺失时失败。
-- 某个成员文件缺失时，该行显示 `N/A` 并给出警告；其它成员继续。
-- 全部成员都无法读取时失败。
-- 部分记录没有指标时允许完成，全部没有时失败。
+- 初始 ID、自动解析目标或 capsule 记录缺失时失败。
+- 某个成员文件缺失时显示 `N/A` 或使用其余成员聚合，并明确给出警告。
+- 全部成员都无法读取时该逻辑任务不可用；所有逻辑任务不可用时失败。
+- 部分 ref/name 没有指标时允许完成；请求的 data 全部不可统计时返回
+  `TPBE_METRIC_MISSING`。
+- meta-only 查询至少有一个逻辑任务可读时允许成功。
 
 ### 10.3 `export`
 
@@ -990,7 +1165,7 @@ tpbcli-task.h
 tpbcli-task.c
 tpbcli-task-select.c
 tpbcli-task-ls.c
-tpbcli-task-extract.c
+tpbcli-task-get-result.c
 tpbcli-task-export.c
 tpbcli-task-csv.c
 ```
@@ -998,9 +1173,11 @@ tpbcli-task-csv.c
 各文件用途：
 
 - `tpbcli-task.c` 建立参数树并分派子命令。
-- `tpbcli-task-select.c` 处理 RIDMAP、ID 前缀、追踪、capsule 和成员筛选。
+- `tpbcli-task-select.c` 处理 RIDMAP、ID 前缀、自动解析、export 追踪、
+  capsule 和成员筛选。
 - `tpbcli-task-ls.c` 处理索引筛选、排序、表格和 RIDMAP 写入。
-- `tpbcli-task-extract.c` 处理指标统计、属性表和环境显示。
+- `tpbcli-task-get-result.c` 处理名称列表、上下文名称报告、成员聚合、
+  meta/record 表和警告。
 - `tpbcli-task-export.c` 处理目录、文件名、meta 和 data 内容。
 - `tpbcli-task-csv.c` 只处理双逗号文件的单元格和行写入。
 
@@ -1033,28 +1210,36 @@ tpbcli-task-csv.c
 - 零结果不更新 RIDMAP。
 - RIDMAP 临时文件替换。
 
-### 12.2 ID 与追踪
+### 12.2 ID、自动解析与 export 追踪
 
 - rid 列表和闭区间。
-- 4 到 40 位 ID 前缀。
+- `get-result` 的 6 到 20 位 ID 前缀和 `export` 的 4 到 40 位前缀。
 - 无匹配和多个匹配。
 - 重复 ID 只处理一次。
+- `get-result -i` 指定成员时自动解析到与 `-r` 相同的入口结果。
+- `get-result` 的断链、重复 ID 和超过 8 跳。
 - 交互回答 `y` 与默认 `N`。
 - 非交互输入默认保留当前记录。
-- `--trace-to-entry` 与 `--keep-current` 冲突。
-- 断链、重复 ID 和超过 8 跳。
-- capsule 展开后不再次追踪成员。
+- `export --trace-to-entry` 与 `--keep-current` 冲突。
+- 两条命令从 capsule 展开后都不再次追踪成员。
 
-### 12.3 `extract`
+### 12.3 `get-result`
 
-- 输出范围内精确匹配指标。
-- 指标缺失、空数组和不支持的类型。
-- 每种统计名称。
-- 非法统计名称不改成 `mean`。
+- `get-result` 与 `gr` 两个命令名。
+- `--data-name` 和 `--meta-name` 的单项、列表、重复选项和去重顺序。
+- 引号内逗号、成对双引号、空项、未闭合引号和双引号 `--help` 消歧。
+- 无名称选项、data-only、meta-only 和两个名称选项同时出现。
+- 上下文帮助的 Shared/Private 交集、差集和部分 subrank 标记。
+- 输出范围内区分大小写地精确匹配指标。
+- 指标缺失、同名 header、空数组、损坏长度和不支持的类型。
+- 独立任务、capsule 原始样本合并和禁止 mean of means。
+- 不同成员样本数、混合数值类型、单位/shape 不兼容和多维展平。
+- point 单样本和 capsule 多成员 point 统计。
+- 默认 meta、成员 consensus、`mixed` 和 `header[index].field`。
+- BatchHost 与 NMember 的准确语义。
+- 默认聚合与 `--show-each-subrank` 的行顺序、缺失成员占位。
 - 分位数位置与现有统计函数一致。
-- 独立任务与 capsule 成员表。
-- `subrank` 和 `subtid`。
-- 环境变量空值和连续冒号造成的已知信息丢失。
+- 部分 ref/name 警告后成功、全部 data 不可统计和 meta-only 成功。
 
 ### 12.4 `export`
 
@@ -1087,10 +1272,16 @@ tpbcli-task-csv.c
 
 - `task ls` 默认显示全部，`db list` 默认显示 20 条。
 - rid 只来自最近一次写入 RIDMAP 的 `task ls`。
-- `task` 会展开 capsule，`db dump` 不会。
+- `get-result` 会自动解析并展开 capsule；`export` 可按选项展开，
+  `db dump` 不会展开。
+- `get-result` 默认合并成员原始样本，subrank 不保证等于 MPI rank。
+- BatchHost 来自 tbatch 前端，不保证是成员实际运行主机。
 - 双逗号文件不是普通单逗号 CSV。
 - 环境变量编码不能完整保留空的冒号段。
 - 文件名中的 hostname 来自 tbatch，不一定是成员实际运行主机。
+
+本文件当前只完成设计定稿。`tpbcli task` 尚未实现，因此本次不提前修改
+用户使用文档、CLI help 或测试；功能实现时必须一次性完成上述同步。
 
 ## 14. 使用示例
 
@@ -1100,14 +1291,22 @@ tpbcli task ls -n 20 \
     -f 'kernel_name=stream' \
     -f 'exit_code=0'
 
-# 对比 RIDMAP 中前两条入口的 Triad 指标
-tpbcli task extract -r 0,1 -m Triad --reducer mean
+# 显示 RIDMAP 中前两条入口的默认 meta 和全部 shared output
+tpbcli task get-result -r 0,1
 
-# 显示环境变量
-tpbcli task extract -r 0 -m Triad --show-env
+# 对比指定指标；引号内逗号属于名称
+tpbcli task gr -r 0,1 --data-name 'Triad,"latency,p99"'
 
-# 直接保留指定成员，不追踪到 capsule
-tpbcli task extract -i a1b2c3d4 -m Triad --keep-current
+# 只显示指定 meta；成员 ID 会自动解析到入口
+tpbcli task gr -i a1b2c3 --meta-name \
+    'task_record_id,kernel,batch_host,nmember,exit_code'
+
+# 列出所选逻辑任务的 shared/private 名称
+tpbcli task gr -r 0,1 --data-name --help
+
+# 不聚合 capsule，逐 subrank 显示
+tpbcli task gr -r 0 --data-name 'Copy,Scale,Add,Triad' \
+    --show-each-subrank
 
 # 从指定成员追踪到入口，再选择部分成员
 tpbcli task export -i a1b2c3d4 \
