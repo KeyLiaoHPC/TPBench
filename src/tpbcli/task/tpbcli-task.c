@@ -514,6 +514,11 @@ _sf_parse_gr_data_name(tpbcli_argnode_t *node, const char *value)
         ctx->gr.data_name_help = 1;
         return 0;
     }
+    /* Empty '' means omit Record Data (design §7.1); still marks the option. */
+    ctx->gr.data_name_given = 1;
+    if (value == NULL || value[0] == '\0') {
+        return 0;
+    }
     err = _sf_gr_merge_names(ctx, ctx->gr.data_names, &ctx->gr.ndata_names,
                              value);
     TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
@@ -1110,14 +1115,19 @@ tpbcli_task(int argc, char **argv)
         TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
     }
     if (cli_ctx.gr.ndata_names == 0 && cli_ctx.gr.nmeta_names == 0 &&
-        !cli_ctx.gr.data_name_help && !cli_ctx.gr.meta_name_help) {
+        !cli_ctx.gr.data_name_given && !cli_ctx.gr.data_name_help &&
+        !cli_ctx.gr.meta_name_help) {
         /* default columns */
     } else if ((cli_ctx.gr.ndata_names == 0 && cli_ctx.gr.nmeta_names > 0 &&
                 !cli_ctx.gr.meta_name_help) ||
+               (cli_ctx.gr.data_name_given && cli_ctx.gr.ndata_names == 0 &&
+                cli_ctx.gr.nmeta_names == 0 && !cli_ctx.gr.data_name_help) ||
                (cli_ctx.gr.ndata_names > 0 && cli_ctx.gr.nmeta_names == 0 &&
                 !cli_ctx.gr.data_name_help) ||
-               (cli_ctx.gr.ndata_names > 0 && cli_ctx.gr.nmeta_names > 0)) {
-        /* valid explicit combinations */
+               (cli_ctx.gr.ndata_names > 0 && cli_ctx.gr.nmeta_names > 0) ||
+               (cli_ctx.gr.data_name_given && cli_ctx.gr.ndata_names == 0 &&
+                cli_ctx.gr.nmeta_names > 0)) {
+        /* valid explicit combinations, including --data-name '' */
     } else if (cli_ctx.gr.data_name_help || cli_ctx.gr.meta_name_help) {
         /* context help */
     }

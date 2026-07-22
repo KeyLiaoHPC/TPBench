@@ -173,11 +173,19 @@
 | B7.23 | `tpbcli/task/` | 验证全部指标缺失返回 `TPBE_METRIC_MISSING`。 |
 | B7.24 | `tpbcli/task/` | 验证成员 `-i` 经 `derive_to` 跟随到入口。 |
 | B7.25 | `tpbcli/task/` | 验证 `gr` 别名。 |
-| B7.26 | `tpbcli/task/` | 验证仅 meta 模式与本地 Datetime。 |
+| B7.26 | `tpbcli/task/` | 验证仅 meta 模式与 UTC Datetime。 |
 | B7.27 | `tpbcli/task/` | 验证仅 data 模式。 |
 | B7.28 | `tpbcli/task/` | 验证 `--data-name --help` 上下文帮助。 |
 | B7.29 | `tpbcli/task/` | 验证 `--show-each-subrank`。 |
 | B7.30 | `tpbcli/task/` | 验证重复 output 名告警。 |
+| B7.31 | `tpbcli/task/` | 验证 capsule 全部成员重复 output 名时返回 `TPBE_METRIC_MISSING`。 |
+| B7.32 | `tpbcli/task/` | 验证跨成员 unit 不一致时跳过并告警。 |
+| B7.33 | `tpbcli/task/` | 验证跨成员 shape 不一致时跳过并告警。 |
+| B7.34 | `tpbcli/task/` | 验证部分成员缺少指定 data name 时的 `used N/M members` 告警。 |
+| B7.35 | `tpbcli/task/` | 验证 tbatch 记录缺失时 `batch_host` 显示 `N/A` 并告警。 |
+| B7.36 | `tpbcli/task/` | 验证全部 `task_attr_t` 标量 meta key。 |
+| B7.37 | `tpbcli/task/` | 验证 `header[INDEX].FIELD` meta key 及非法 key 提前失败。 |
+| B7.38 | `tpbcli/task/` | 验证 `--meta-name --help` 的 Shared/Private 名称报告。 |
 | B7.40 | `tpbcli/task/` | 验证独立任务导出 meta/data 成对文件。 |
 | B7.41 | `tpbcli/task/` | 验证双逗号 CSV 转义。 |
 | B7.42 | `tpbcli/task/` | 验证 `--from-ls`。 |

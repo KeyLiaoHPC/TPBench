@@ -932,6 +932,18 @@ void tpblog_print_kv_eq(const char *key, const char *value, int key_width);
  */
 void tpb_set_outargs(int unit_cast, int sigbit_trim);
 
+/**
+ * @brief Format a floating-point value with significant-digit trimming.
+ * @param value Value to format.
+ * @param buf Output buffer.
+ * @param bufsize Capacity of @p buf.
+ * @param sigbit Significant digits to retain when trimming.
+ * @param intbit Integer digits before decimal (0 or negative = no limit).
+ * @return Number of characters written.
+ */
+int tpb_format_value(double value, char *buf, size_t bufsize,
+                     int sigbit, int intbit);
+
 /* ===== Statistics (also used by tpbcli benchmark over rafdb payloads) ===== */
 
 /**

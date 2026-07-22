@@ -294,6 +294,24 @@ tpbcli_task_time_format_local(tpb_dtbits_t bits, char *out, size_t outlen)
 }
 
 /**
+ * @brief Format task utc_bits as ISO-8601 UTC (trailing 'Z', no offset).
+ */
+int
+tpbcli_task_time_format_utc(tpb_dtbits_t bits, char *out, size_t outlen)
+{
+    tpb_datetime_str_t utc_str;
+    int err;
+
+    if (out == NULL || outlen == 0) {
+        TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_NULLPTR_ARG, NULL);
+    }
+    err = tpb_ts_bits_to_isoutc(bits, &utc_str);
+    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    snprintf(out, outlen, "%s", utc_str.str);
+    return TPBE_SUCCESS;
+}
+
+/**
  * @brief Parse a filter datetime string into UTC bits (tz field zero).
  */
 int

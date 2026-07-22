@@ -440,6 +440,8 @@ tpbcli_task_parse_name_csv(const char *text, char ***names_out, int *nnames_out)
             goto fail;
         }
         if (*p == '"') {
+            int closed = 0;
+
             p++;
             while (*p != '\0') {
                 if (*p == '"') {
@@ -452,6 +454,7 @@ tpbcli_task_parse_name_csv(const char *text, char ***names_out, int *nnames_out)
                         continue;
                     }
                     p++;
+                    closed = 1;
                     if (*p != '\0' && *p != ',') {
                         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
                                         TPBLOG_FLAG_DIRECT,
@@ -466,7 +469,7 @@ tpbcli_task_parse_name_csv(const char *text, char ***names_out, int *nnames_out)
                 }
                 token[ti++] = *p++;
             }
-            if (*p == '"') {
+            if (!closed) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
                                 TPBLOG_FLAG_DIRECT,
                                 "error: unclosed quote in name list\n");
@@ -505,6 +508,13 @@ tpbcli_task_parse_name_csv(const char *text, char ***names_out, int *nnames_out)
         if (*p == ',') {
             p++;
         }
+    }
+
+    if (n == 0) {
+        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
+                        TPBLOG_FLAG_DIRECT,
+                        "error: empty name list\n");
+        goto fail;
     }
 
     *names_out = names;
@@ -867,6 +877,8 @@ _sf_logical_from_root(const char *workspace, const unsigned char root[20],
                         "error: cannot read task record %s\n", hx);
         TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
     }
+    out->root_utc_bits = attr.utc_bits;
+    out->root_btime = attr.btime;
 
     if (tpbcli_task_confirm_capsule(&attr, data, ds)) {
         unsigned char (*ids)[20] = NULL;

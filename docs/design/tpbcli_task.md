@@ -538,10 +538,14 @@ tpbcli task get-result|gr
 
 - 两个名称选项都未出现时，显示默认 meta 列和所有 shared data name。
 - 只出现 `--data-name` 时，显示默认 meta 列和指定 data。
-- 只出现 `--meta-name` 时，显示指定meta和所有Record Data。
+- 只出现 `--meta-name` 时（未传入 `--data-name`），显示指定 meta，不输出
+  Record Data。
 - 两者都出现时，分别显示指定的 meta 和 data。
+- `--data-name` 参数为空字符串 `''` 时，等价于明确不选择任何 data：不输出
+  Record Data。可单独使用（配合默认 meta），也可与 `--meta-name` 组合。
 
-名称列表为空时，参数错误。
+`--meta-name` 的名称列表为空时参数错误。`--data-name` 允许整段参数为空
+字符串（见上）；CSV 列表内的空条目（例如 `a,,b`）仍是参数错误。
 
 ### 7.2 名称列表语法
 
@@ -624,7 +628,9 @@ Ref TaskID Kernel BatchHost Datetime NMember ExitCode NInput NOutput NHeader
 - `Kernel` 从 `kernel_id` 查找；失败时显示 kernel ID 的 6 位前缀加 `*`。
 - `BatchHost` 来自关联 tbatch 的 `hostname`。它是批次前端主机，不保证
   是每个成员实际执行的主机；tbatch 缺失时显示 `N/A` 并警告。
-- `Datetime` 使用工作根的 UTC 时间。
+- `Datetime` 使用工作根的 UTC 时间。对 capsule，工作根是 capsule 入口
+  记录本身，因此显示 capsule 记录的 `utc_bits`，不在成员间做 consensus，
+  也不因成员时间不一致显示 `mixed`。独立任务的工作根即该任务自身。
 - `NMember` 对独立任务为 1，对 capsule 为成员 ID 数量。它不是 `nproc`，
   因为 subrank 不保证等于 MPI rank。
 - `ExitCode`、`NInput`、`NOutput`、`NHeader` 对独立任务取本记录值；对
@@ -703,9 +709,11 @@ ID key 显示完整 40 位小写十六进制，`taskid` 例外，按默认短格
 
 默认聚合模式下，成员字段和 header 字段均采用 consensus 规则：所有可读
 成员值相同才显示该值，否则显示 `mixed`。`task_record_id`、`derive_to`、
-`pid`、`tid` 等天然逐成员变化的字段通常会显示 `mixed`。指定
-`--show-each-subrank` 后，Meta Data 增加 `Subrank` 列并逐成员显示原值；
-工作根自身不再额外产生一行。只有部分成员可读时 consensus 只基于可读
+`pid`、`tid` 等天然逐成员变化的字段通常会显示 `mixed`。例外：`datetime`、
+`utc_bits` 和 `btime` 在默认聚合下取工作根（capsule 入口或独立任务）的
+值，与默认 `Datetime` 列一致。指定 `--show-each-subrank` 后，Meta Data
+增加 `Subrank` 列并逐成员显示原值；工作根自身不再额外产生一行，此时
+上述时间字段也按成员各自取值。只有部分成员可读时 consensus 只基于可读
 成员，并必须给出 `used <可用数>/<总成员数> members` 警告。
 
 ### 7.5 Data 匹配与聚合
@@ -799,9 +807,10 @@ WARNING: Data name Add does not exist in ref=r1 (task=d4e5f6*).
 Note: capsule member results were aggregated; use --show-each-subrank to display each member.
 ```
 
-`--show-each-subrank` 时两个表都在 `Ref` 后增加 `Subrank`。只请求 meta 时
-省略 Record Data、Warnings 中的 data 警告和聚合 Note。没有警告时省略
-Warnings 段。没有 capsule 发生聚合时省略 Note。
+`--show-each-subrank` 时两个表都在 `Ref` 后增加 `Subrank`。未传入
+`--data-name`，或 `--data-name` 参数为空字符串 `''` 时，省略 Record Data、
+Warnings 中的 data 警告和聚合 Note。没有警告时省略 Warnings 段。没有
+capsule 发生聚合时省略 Note。
 
 Record Data 先按用户请求的 data name 顺序，再按输入 Ref 顺序，最后按
 subrank 排序。这样同一指标的各任务相邻，便于横向比较。名称报告、表格、
@@ -817,7 +826,8 @@ subrank 排序。这样同一指标的各任务相邻，便于横向比较。名
 - capsule 的部分成员无法读取时保留可用结果并警告；全部成员无法读取时
   该逻辑任务不可用。
 - 显式请求的 meta key 在某个逻辑任务中不存在时显示 `N/A` 并警告。
-- 只请求 meta 且至少一个逻辑任务可读时允许成功。
+- 未请求 Record Data（未传入 `--data-name` 或 `--data-name ''`）且至少
+  一个逻辑任务可读时允许成功。
 - 请求 data 时，只要至少一个 ref/name 成功产生统计行，命令成功并保留
   警告；全部 data 均不可统计时返回 `TPBE_METRIC_MISSING`。
 - 初始 ID 无效、自动追踪断链、capsule 结构损坏或所有逻辑任务均不可读

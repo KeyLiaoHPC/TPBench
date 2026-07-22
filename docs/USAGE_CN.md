@@ -524,7 +524,7 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
 
 ## 2.6 tpbcli task
 
-`tpbcli task` 用于列出入口任务、对比 meta/指标，并导出成对的 meta/data CSV。完整设计见 [`docs/design/tpbcli_task.md`](./design/tpbcli_task.md)。终端时间一律为**本地时区**并带显式 UTC 偏移（`YYYY-MM-DDTHH:MM:SS±HH:MM`）；export meta 中的 `start_utc` 仍为 UTC。
+`tpbcli task` 用于列出入口任务、对比 meta/指标，并导出成对的 meta/data CSV。完整设计见 [`docs/design/tpbcli_task.md`](./design/tpbcli_task.md)。`task ls` 的 **Start Time (Local)** 使用运行主机本地时区并带显式 UTC 偏移（`YYYY-MM-DDTHH:MM:SS±HH:MM`）；`task get-result|gr` 的 `Datetime` meta 列改为 ISO-8601 **UTC**（带 `Z` 后缀，无偏移）。export meta 中的 `start_utc` 仍为 UTC。
 
 ### 2.6.1 列出入口（`ls` / `list`）
 
@@ -537,7 +537,7 @@ tpbcli task ls -n 20 \
 
 - 只显示入口（`derive_to` 全零）；capsule 成员不单独出现。
 - 默认显示**全部**匹配项（`-n 0`），与 `db list` 默认 20 条不同。
-- 非空结果会原子更新 `<workspace>/rafdb/task/RIDMAP`（权限 `0600`）；零结果保留旧 RIDMAP。
+- 非空结果会原子更新 `<workspace>/.tmp/tpb_rt_local_ridmap`（权限 `0600`）；零结果保留旧 RIDMAP。
 - 表头 **Start Time (Local)** 使用运行主机本地时区。
 
 ### 2.6.2 对比结果（`get-result` / `gr`）

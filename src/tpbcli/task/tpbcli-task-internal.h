@@ -69,6 +69,7 @@ typedef struct tpbcli_task_gr_opts {
     int                    show_each_subrank;
     int                    data_name_help;
     int                    meta_name_help;
+    int                    data_name_given; /**< 1 if --data-name appeared (even '') */
     int                    ndata_names;
     char                  *data_names[TPBCLI_TASK_GR_NAME_MAX];
     int                    nmeta_names;
@@ -101,6 +102,8 @@ typedef struct tpbcli_task_logical {
     int                        nmember;
     tpbcli_task_member_rec_t  *members;
     int                        input_order;
+    tpb_dtbits_t               root_utc_bits; /**< Work-root invocation datetime */
+    uint64_t                   root_btime;    /**< Work-root boot time (ns) */
 } tpbcli_task_logical_t;
 
 typedef struct tpbcli_task_row {
@@ -116,6 +119,15 @@ typedef struct tpbcli_task_row {
  * @return TPBE_SUCCESS or a TPBE_* error code
  */
 int tpbcli_task_time_format_local(tpb_dtbits_t bits, char *out, size_t outlen);
+
+/**
+ * @brief Format task utc_bits as ISO-8601 UTC (trailing 'Z', no offset).
+ * @param bits Encoded UTC datetime bits from task records
+ * @param out Output buffer (recommended >= 24 bytes)
+ * @param outlen Capacity of out
+ * @return TPBE_SUCCESS or a TPBE_* error code
+ */
+int tpbcli_task_time_format_utc(tpb_dtbits_t bits, char *out, size_t outlen);
 
 /**
  * @brief Parse a filter datetime string into UTC bits (tz field zero).

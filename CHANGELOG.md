@@ -8,11 +8,13 @@
   Implementation lives under `src/tpbcli/task/` and uses only `tpb-public.h`
   (no corelib/rafdb private headers; no new public API).
 - **`task ls`:** Lists entry points only; prints **Start Time (Local)** with
-  explicit UTC offset; refreshes `rafdb/task/RIDMAP` atomically (`0600`) when
-  results are non-empty.
+  explicit UTC offset; refreshes `<workspace>/.tmp/tpb_rt_local_ridmap`
+  atomically (`0600`) when results are non-empty.
 - **`task get-result|gr`:** Selects by `-r/--rid` or `-i/--task-id` (6–20 hex);
   auto-resolves capsules via `derive_to`; default pools raw member samples for
-  mean/min/max/p25…p99; `--show-each-subrank` prints per-member rows.
+  mean/min/max/p25…p99; `--show-each-subrank` prints per-member rows. Its
+  `Datetime` meta column shows ISO-8601 **UTC** (trailing `Z`), unlike `task ls`'s
+  local-time display.
 - **`task export`:** Writes paired meta/data CSV (double-comma delimiter);
   collapses a valid environment key/count/value triple to two data columns;
   commits files with temp+rename and rolls back half-pairs on failure.
@@ -22,10 +24,22 @@
 - **Fix:** `task get-result` runs `tpb_stat_*` on the pooled `double` sample
   buffer with `TPB_DOUBLE_T` (previously reused the header dtype and mis-read
   integer metrics).
+- **Fix (review):** `task get-result`'s `Datetime` meta cell now formats
+  `utc_bits` as UTC (`tpbcli_task_time_format_utc`) instead of local time, so
+  it cannot be confused with `task ls`'s local-time column. Capsule data
+  aggregation now tracks a per-row `row_ok` flag so a bare per-member warning
+  (e.g. a duplicate output header) is never mistaken for success; a
+  member whose unit/shape schema disagrees with the first successful member
+  is skipped with a warning instead of silently mixing incompatible samples;
+  `--meta-name` keys are validated up front so an unknown key or malformed
+  `header[INDEX].FIELD` syntax fails before any table is printed; the
+  `--meta-name --help` / `--data-name --help` name report now separates
+  Shared and Private meta/data names per logical task; and partial-member
+  aggregation (meta or data) always emits a `used N/M members` warning.
 - **Docs:** [`docs/USAGE.md`](docs/USAGE.md) / [`docs/USAGE_CN.md`](docs/USAGE_CN.md)
   §2.6; design [`docs/design/tpbcli_task.md`](docs/design/tpbcli_task.md).
 - **Tests:** Pack **B7** (`tests/tpbcli/test-cli-task-*.c`) — B7.1–B7.15,
-  B7.20–B7.30, B7.40–B7.49.
+  B7.20–B7.38, B7.40–B7.49.
 
 ### CLI output / tpblog / benchmark (breaking)
 

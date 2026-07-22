@@ -704,9 +704,11 @@ tpbcli kernel get -v --kernel mykern
 
 `tpbcli task` lists entry-point task records, compares metadata and metrics, and
 exports paired meta/data CSV files. Full design notes live in
-[`docs/design/tpbcli_task.md`](./design/tpbcli_task.md). Times shown on the
-terminal use **local** civil time with an explicit UTC offset
-(`YYYY-MM-DDTHH:MM:SS±HH:MM`). Export meta still stores `start_utc` as UTC.
+[`docs/design/tpbcli_task.md`](./design/tpbcli_task.md). `task ls` shows
+**Start Time (Local)** using host civil time with an explicit UTC offset
+(`YYYY-MM-DDTHH:MM:SS±HH:MM`); `task get-result|gr`'s `Datetime` meta column
+shows ISO-8601 **UTC** instead (trailing `Z`, no offset). Export meta still
+stores `start_utc` as UTC.
 
 ### 2.6.1 List entry points (`ls` / `list`)
 
@@ -723,8 +725,8 @@ tpbcli task ls -n 20 \
 - Only entry points (`derive_to` all-zero) appear; capsule members are omitted.
 - Default count is **all** matches (`-n 0`); this differs from `db list` (default 20).
 - `-n` / `-N` conflict; `N == 0` means unlimited.
-- Successful non-empty listings rewrite `<workspace>/rafdb/task/RIDMAP` (mode `0600`).
-  Zero results leave the previous RIDMAP unchanged.
+- Successful non-empty listings rewrite `<workspace>/.tmp/tpb_rt_local_ridmap`
+  (mode `0600`). Zero results leave the previous RIDMAP unchanged.
 - Table column **Start Time (Local)** uses the host timezone.
 
 ### 2.6.2 Compare results (`get-result` / `gr`)
@@ -739,6 +741,10 @@ tpbcli task gr -r 0 --data-name 'Triad,"latency,p99"'
 # Resolve a 6–20 hex task-id prefix (unique in the task domain)
 tpbcli task gr -i a1b2c3 --meta-name 'task_record_id,kernel,batch_host,nmember'
 
+# Meta only (no Record Data): omit --data-name, or pass an empty list
+tpbcli task gr -r 0 --meta-name 'ref,datetime'
+tpbcli task gr -r 0 --data-name '' --meta-name ref
+
 # List shared/private names for the selection
 tpbcli task gr -r 0,1 --data-name --help
 
@@ -748,6 +754,10 @@ tpbcli task gr -r 0 --show-each-subrank
 
 - Select with **`-r|--rid`** (comma/ranges from the latest RIDMAP) **or**
   **`-i|--task-id`** (hex prefix). Capsule members auto-resolve to the entry.
+- Record Data is omitted when **`--data-name` is not passed** or is **`''`**.
+  Meta-only queries therefore never pull metrics or fail on missing data.
+- Capsule **`Datetime`** uses the capsule entry’s UTC time (work root), not a
+  member consensus.
 - Default aggregation **pools raw samples** across capsule members (not
   mean-of-means). Stats match `run`: mean/min/max/p25…p99.
 - Partial metric failures print `N/A` plus warnings; if every selected data

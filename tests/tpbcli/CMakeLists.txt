@@ -253,6 +253,14 @@ tpb_add_subcase(B7 B7.27 data_only_mode          test-cli-task-get-result tpbcli
 tpb_add_subcase(B7 B7.28 data_name_context_help  test-cli-task-get-result tpbcli)
 tpb_add_subcase(B7 B7.29 show_each_subrank       test-cli-task-get-result tpbcli)
 tpb_add_subcase(B7 B7.30 duplicate_header_warn   test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.31 all_members_fail_warn   test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.32 unit_mismatch           test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.33 shape_mismatch          test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.34 partial_members_used    test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.35 batch_host_na_warn      test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.36 meta_scalar_keys        test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.37 header_field_meta       test-cli-task-get-result tpbcli)
+tpb_add_subcase(B7 B7.38 name_report_meta        test-cli-task-get-result tpbcli)
 
 add_executable(test-cli-task-export EXCLUDE_FROM_ALL
     test-cli-task-export.c

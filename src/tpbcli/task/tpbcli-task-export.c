@@ -546,13 +546,28 @@ typedef struct meta_wctx {
     uint64_t           datasize;
 } meta_wctx_t;
 
-static void
+static int
 _sf_meta_kv(tpbcli_task_csv_writer_t *w, const char *field, const char *val)
 {
-    (void)tpbcli_task_csv_row_begin(w);
-    (void)tpbcli_task_csv_cell(w, field);
-    (void)tpbcli_task_csv_cell(w, val);
-    (void)tpbcli_task_csv_row_end(w);
+    int err;
+
+    err = tpbcli_task_csv_row_begin(w);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_cell(w, field);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_cell(w, val);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_row_end(w);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    return TPBE_SUCCESS;
 }
 
 static int
@@ -565,54 +580,121 @@ _sf_write_meta(FILE *fp, const task_attr_t *attr, uint64_t datasize)
     tpb_datetime_str_t ts;
     uint32_t i;
     meta_wctx_t ctx;
+    int err;
 
     (void)ctx;
     tpbcli_task_csv_writer_init(&csv, fp);
-    (void)tpbcli_task_csv_row_begin(&csv);
-    (void)tpbcli_task_csv_cell(&csv, "field");
-    (void)tpbcli_task_csv_cell(&csv, "value");
-    (void)tpbcli_task_csv_row_end(&csv);
+    err = tpbcli_task_csv_row_begin(&csv);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_cell(&csv, "field");
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_cell(&csv, "value");
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
+    err = tpbcli_task_csv_row_end(&csv);
+    if (err != TPBE_SUCCESS) {
+        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+    }
 
     tpb_raf_id_to_hex(attr->task_record_id, hx);
-    _sf_meta_kv(&csv, "task_record_id", hx);
+    err = _sf_meta_kv(&csv, "task_record_id", hx);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     tpb_raf_id_to_hex(attr->derive_to, hx);
-    _sf_meta_kv(&csv, "derive_to", hx);
+    err = _sf_meta_kv(&csv, "derive_to", hx);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     tpb_raf_id_to_hex(attr->inherit_from, hx);
-    _sf_meta_kv(&csv, "inherit_from", hx);
+    err = _sf_meta_kv(&csv, "inherit_from", hx);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     tpb_raf_id_to_hex(attr->tbatch_id, hx);
-    _sf_meta_kv(&csv, "tbatch_id", hx);
+    err = _sf_meta_kv(&csv, "tbatch_id", hx);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     tpb_raf_id_to_hex(attr->kernel_id, hx);
-    _sf_meta_kv(&csv, "kernel_id", hx);
+    err = _sf_meta_kv(&csv, "kernel_id", hx);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu64, (uint64_t)attr->utc_bits);
-    _sf_meta_kv(&csv, "utc_bits", tmp);
+    err = _sf_meta_kv(&csv, "utc_bits", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     if (attr->utc_bits != 0 &&
         tpb_ts_bits_to_isoutc(attr->utc_bits, &ts) == 0) {
-        _sf_meta_kv(&csv, "start_utc", ts.str);
+        err = _sf_meta_kv(&csv, "start_utc", ts.str);
     } else {
-        _sf_meta_kv(&csv, "start_utc", "");
+        err = _sf_meta_kv(&csv, "start_utc", "");
+    }
+    if (err != TPBE_SUCCESS) {
+        return err;
     }
     snprintf(tmp, sizeof(tmp), "%" PRIu64, (uint64_t)attr->btime);
-    _sf_meta_kv(&csv, "btime", tmp);
+    err = _sf_meta_kv(&csv, "btime", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu64, (uint64_t)attr->duration);
-    _sf_meta_kv(&csv, "duration", tmp);
+    err = _sf_meta_kv(&csv, "duration", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->exit_code);
-    _sf_meta_kv(&csv, "exit_code", tmp);
+    err = _sf_meta_kv(&csv, "exit_code", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->handle_index);
-    _sf_meta_kv(&csv, "handle_index", tmp);
+    err = _sf_meta_kv(&csv, "handle_index", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->pid);
-    _sf_meta_kv(&csv, "pid", tmp);
+    err = _sf_meta_kv(&csv, "pid", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->tid);
-    _sf_meta_kv(&csv, "tid", tmp);
+    err = _sf_meta_kv(&csv, "tid", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->ninput);
-    _sf_meta_kv(&csv, "ninput", tmp);
+    err = _sf_meta_kv(&csv, "ninput", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->noutput);
-    _sf_meta_kv(&csv, "noutput", tmp);
+    err = _sf_meta_kv(&csv, "noutput", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->nheader);
-    _sf_meta_kv(&csv, "nheader", tmp);
+    err = _sf_meta_kv(&csv, "nheader", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu32, attr->reserve);
-    _sf_meta_kv(&csv, "reserve", tmp);
+    err = _sf_meta_kv(&csv, "reserve", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
     snprintf(tmp, sizeof(tmp), "%" PRIu64, datasize);
-    _sf_meta_kv(&csv, "record_datasize", tmp);
+    err = _sf_meta_kv(&csv, "record_datasize", tmp);
+    if (err != TPBE_SUCCESS) {
+        return err;
+    }
 
     for (i = 0; i < attr->nheader; i++) {
         const tpb_meta_header_t *h = &attr->headers[i];
@@ -620,45 +702,84 @@ _sf_write_meta(FILE *fp, const task_attr_t *attr, uint64_t datasize)
 
         snprintf(key, sizeof(key), "header[%" PRIu32 "].block_size", i);
         snprintf(tmp, sizeof(tmp), "%" PRIu32, h->block_size);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].ndim", i);
         snprintf(tmp, sizeof(tmp), "%" PRIu32, h->ndim);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].data_size", i);
         snprintf(tmp, sizeof(tmp), "%" PRIu64, h->data_size);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits", i);
         snprintf(tmp, sizeof(tmp), "0x%08" PRIX32, h->type_bits);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits.source", i);
         tpbcli_data_fmt_decode_type_bits(h->type_bits, decode, sizeof(decode));
         snprintf(tmp, sizeof(tmp), "0x%08" PRIX32,
                  h->type_bits & (uint32_t)TPB_PARM_SOURCE_MASK);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits.check", i);
         snprintf(tmp, sizeof(tmp), "0x%08" PRIX32,
                  h->type_bits & (uint32_t)TPB_PARM_CHECK_MASK);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].type_bits.type", i);
         snprintf(tmp, sizeof(tmp), "0x%08" PRIX32,
                  h->type_bits & (uint32_t)TPB_PARM_TYPE_MASK);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "]._reserve", i);
         snprintf(tmp, sizeof(tmp), "%" PRIu32, h->_reserve);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].uattr_bits", i);
         snprintf(tmp, sizeof(tmp), "0x%016" PRIX64, (uint64_t)h->uattr_bits);
-        _sf_meta_kv(&csv, key, tmp);
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].uattr_bits.cast", i);
         snprintf(tmp, sizeof(tmp), "0x%016" PRIX64,
-                 (uint64_t)(h->uattr_bits & TPB_UATTR_MASK));
-        _sf_meta_kv(&csv, key, tmp);
+                 (uint64_t)(h->uattr_bits & TPB_UATTR_CAST_MASK));
+        err = _sf_meta_kv(&csv, key, tmp);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].name", i);
-        _sf_meta_kv(&csv, key, h->name);
+        err = _sf_meta_kv(&csv, key, h->name);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].tag", i);
-        _sf_meta_kv(&csv, key, h->tag);
+        err = _sf_meta_kv(&csv, key, h->tag);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         snprintf(key, sizeof(key), "header[%" PRIu32 "].note", i);
-        _sf_meta_kv(&csv, key, h->note);
+        err = _sf_meta_kv(&csv, key, h->note);
+        if (err != TPBE_SUCCESS) {
+            return err;
+        }
         {
             char dsz[256];
             char dnm[512];
@@ -674,7 +795,10 @@ _sf_write_meta(FILE *fp, const task_attr_t *attr, uint64_t datasize)
                 }
             }
             snprintf(key, sizeof(key), "header[%" PRIu32 "].dimsizes", i);
-            _sf_meta_kv(&csv, key, dsz);
+            err = _sf_meta_kv(&csv, key, dsz);
+            if (err != TPBE_SUCCESS) {
+                return err;
+            }
             dnm[0] = '\0';
             for (j = 0; j < (uint32_t)TPBM_DATA_NDIM_MAX; j++) {
                 char part[80];
@@ -684,7 +808,10 @@ _sf_write_meta(FILE *fp, const task_attr_t *attr, uint64_t datasize)
                 }
             }
             snprintf(key, sizeof(key), "header[%" PRIu32 "].dimnames", i);
-            _sf_meta_kv(&csv, key, dnm);
+            err = _sf_meta_kv(&csv, key, dnm);
+            if (err != TPBE_SUCCESS) {
+                return err;
+            }
         }
         (void)decode;
     }
@@ -774,83 +901,127 @@ _sf_write_data(FILE *fp, const task_attr_t *attr, const void *data,
     }
 
     (void)ncols;
-    (void)tpbcli_task_csv_row_begin(&csv);
-    for (hi = 0; hi < attr->nheader; hi++) {
-        const tpb_meta_header_t *h = &attr->headers[hi];
+    {
+        int err;
 
-        if (h->data_size == 0) {
-            continue;
+        err = tpbcli_task_csv_row_begin(&csv);
+        if (err != TPBE_SUCCESS) {
+            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
         }
-        if (_sf_env_skip_col(env_on, hi, env_count_hi, env_value_hi)) {
-            continue;
-        }
-        if (env_on && hi == env_key_hi) {
-            (void)tpbcli_task_csv_cell(&csv, TPB_TASK_HDR_ENV_KEY);
-            (void)tpbcli_task_csv_cell(&csv, TPB_TASK_HDR_ENV_VALUE);
-            continue;
-        }
-        (void)tpbcli_task_csv_cell(&csv, h->name);
-    }
-    (void)tpbcli_task_csv_row_end(&csv);
-
-    for (row = 0; row < nrows; row++) {
-        (void)tpbcli_task_csv_row_begin(&csv);
-        off = 0;
         for (hi = 0; hi < attr->nheader; hi++) {
             const tpb_meta_header_t *h = &attr->headers[hi];
-            size_t esz;
-            uint64_t nr;
-            char cell[4096];
-            int use_byte = 0;
 
             if (h->data_size == 0) {
                 continue;
             }
             if (_sf_env_skip_col(env_on, hi, env_count_hi, env_value_hi)) {
-                off += h->data_size;
                 continue;
-            }
-            if (off + h->data_size > datasize) {
-                TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
             }
             if (env_on && hi == env_key_hi) {
-                if (row < (uint64_t)env_nkeys) {
-                    char keycell[4096];
-
-                    if (_sf_env_key_to_buf(env_kb, (size_t)row, keycell,
-                                           sizeof(keycell)) != TPBE_SUCCESS ||
-                        _sf_env_value_to_buf(env_counts, env_nkeys, env_vb,
-                                             (size_t)row, cell, sizeof(cell)) != TPBE_SUCCESS) {
-                        return TPBE_CLI_FAIL;
-                    }
-                    (void)tpbcli_task_csv_cell(&csv, keycell);
-                    (void)tpbcli_task_csv_cell(&csv, cell);
-                } else {
-                    (void)tpbcli_task_csv_cell(&csv, "");
-                    (void)tpbcli_task_csv_cell(&csv, "");
+                err = tpbcli_task_csv_cell(&csv, TPB_TASK_HDR_ENV_KEY);
+                if (err != TPBE_SUCCESS) {
+                    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
                 }
-                off += h->data_size;
+                err = tpbcli_task_csv_cell(&csv, TPB_TASK_HDR_ENV_VALUE);
+                if (err != TPBE_SUCCESS) {
+                    TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                }
                 continue;
             }
-            esz = _sf_elem_size(h);
-            (void)_sf_column_rows(h, esz, &nr);
-            if (row < nr) {
-                const uint8_t *p = base + off + (size_t)(row * esz);
-                if (_sf_format_elem(h, p, esz, cell, sizeof(cell),
-                                    &use_byte) != TPBE_SUCCESS) {
-                    return TPBE_CLI_FAIL;
-                }
-                if (use_byte) {
-                    (void)tpbcli_task_csv_cell_byte(&csv, *p);
-                } else {
-                    (void)tpbcli_task_csv_cell(&csv, cell);
-                }
-            } else {
-                (void)tpbcli_task_csv_cell(&csv, "");
+            err = tpbcli_task_csv_cell(&csv, h->name);
+            if (err != TPBE_SUCCESS) {
+                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
             }
-            off += h->data_size;
         }
-        (void)tpbcli_task_csv_row_end(&csv);
+        err = tpbcli_task_csv_row_end(&csv);
+        if (err != TPBE_SUCCESS) {
+            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+        }
+
+        for (row = 0; row < nrows; row++) {
+            err = tpbcli_task_csv_row_begin(&csv);
+            if (err != TPBE_SUCCESS) {
+                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+            }
+            off = 0;
+            for (hi = 0; hi < attr->nheader; hi++) {
+                const tpb_meta_header_t *h = &attr->headers[hi];
+                size_t esz;
+                uint64_t nr;
+                char cell[4096];
+                int use_byte = 0;
+
+                if (h->data_size == 0) {
+                    continue;
+                }
+                if (_sf_env_skip_col(env_on, hi, env_count_hi, env_value_hi)) {
+                    off += h->data_size;
+                    continue;
+                }
+                if (off + h->data_size > datasize) {
+                    TPB_FAIL(TPB_MOD_CLI_MISC, TPBE_CLI_FAIL, NULL);
+                }
+                if (env_on && hi == env_key_hi) {
+                    if (row < (uint64_t)env_nkeys) {
+                        char keycell[4096];
+
+                        if (_sf_env_key_to_buf(env_kb, (size_t)row, keycell,
+                                               sizeof(keycell)) != TPBE_SUCCESS ||
+                            _sf_env_value_to_buf(env_counts, env_nkeys, env_vb,
+                                                 (size_t)row, cell,
+                                                 sizeof(cell)) != TPBE_SUCCESS) {
+                            return TPBE_CLI_FAIL;
+                        }
+                        err = tpbcli_task_csv_cell(&csv, keycell);
+                        if (err != TPBE_SUCCESS) {
+                            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                        }
+                        err = tpbcli_task_csv_cell(&csv, cell);
+                        if (err != TPBE_SUCCESS) {
+                            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                        }
+                    } else {
+                        err = tpbcli_task_csv_cell(&csv, "");
+                        if (err != TPBE_SUCCESS) {
+                            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                        }
+                        err = tpbcli_task_csv_cell(&csv, "");
+                        if (err != TPBE_SUCCESS) {
+                            TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                        }
+                    }
+                    off += h->data_size;
+                    continue;
+                }
+                esz = _sf_elem_size(h);
+                (void)_sf_column_rows(h, esz, &nr);
+                if (row < nr) {
+                    const uint8_t *p = base + off + (size_t)(row * esz);
+                    if (_sf_format_elem(h, p, esz, cell, sizeof(cell),
+                                        &use_byte) != TPBE_SUCCESS) {
+                        return TPBE_CLI_FAIL;
+                    }
+                    if (use_byte) {
+                        err = tpbcli_task_csv_cell_byte(&csv, *p);
+                    } else {
+                        err = tpbcli_task_csv_cell(&csv, cell);
+                    }
+                    if (err != TPBE_SUCCESS) {
+                        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                    }
+                } else {
+                    err = tpbcli_task_csv_cell(&csv, "");
+                    if (err != TPBE_SUCCESS) {
+                        TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+                    }
+                }
+                off += h->data_size;
+            }
+            err = tpbcli_task_csv_row_end(&csv);
+            if (err != TPBE_SUCCESS) {
+                TPB_PROPAGATE(TPB_MOD_CLI_MISC, err, NULL);
+            }
+        }
     }
 
     if (fflush(fp) != 0) {
@@ -1101,11 +1272,13 @@ _sf_export_work(const char *workspace, const char *outroot,
             memset(&ma, 0, sizeof(ma));
             err = tpb_raf_record_read_task(workspace, ids[i], &ma, &md, &mds);
             if (err != TPBE_SUCCESS) {
-                free(ids);
-                tpb_raf_free_headers(attr.headers, attr.nheader);
-                free(data);
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
+                                TPBLOG_FLAG_DIRECT,
+                                "warning: failed to read capsule member at "
+                                "subrank %d\n",
+                                i);
                 (*fail_out)++;
-                return err;
+                continue;
             }
             if (!_sf_member_passes(opts, 1, i, ma.tid)) {
                 tpb_raf_free_headers(ma.headers, ma.nheader);
@@ -1136,10 +1309,12 @@ _sf_export_work(const char *workspace, const char *outroot,
             tpb_raf_free_headers(ma.headers, ma.nheader);
             free(md);
             if (err != TPBE_SUCCESS) {
-                free(ids);
-                tpb_raf_free_headers(attr.headers, attr.nheader);
-                free(data);
-                return err;
+                tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN,
+                                TPBLOG_FLAG_DIRECT,
+                                "warning: failed to export capsule member at "
+                                "subrank %d\n",
+                                i);
+                continue;
             }
         }
         free(ids);
