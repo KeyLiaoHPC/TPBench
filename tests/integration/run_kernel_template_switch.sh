@@ -19,6 +19,39 @@ count_version_rows() {
     awk '/^Kernel Versions:/{found=1; next} found && /^[0-9a-f]{40} /{c++} END{print c+0}'
 }
 
+assert_kernel_get_verbose_tags() {
+    local out="$1"
+    local label="$2"
+
+    case "${out}" in
+        *"Kernel: ${KERNEL}"*) ;;
+        *) echo "${label}: missing Kernel: ${KERNEL}"; return 1 ;;
+    esac
+    case "${out}" in
+        *"Data Records"*) ;;
+        *) echo "${label}: missing Data Records"; return 1 ;;
+    esac
+    case "${out}" in
+        *"Tags/Type/Unit/Description"*) ;;
+        *) echo "${label}: missing Tags/Type/Unit/Description"; return 1 ;;
+    esac
+    case "${out}" in
+        *"TPBFOM"*) ;;
+        *) echo "${label}: missing TPBFOM"; return 1 ;;
+    esac
+    case "${out}" in
+        *"TPBOUTPUT"*) ;;
+        *) echo "${label}: missing TPBOUTPUT"; return 1 ;;
+    esac
+    case "${out}" in
+        *$'\nMetrics\n'*) echo "${label}: old Metrics section still present"; return 1 ;;
+        *"Metrics"$'\n'"---"*) echo "${label}: old Metrics section still present"; return 1 ;;
+        *"INPARM"*) echo "${label}: obsolete INPARM tag still present"; return 1 ;;
+        *"TPBARG"*) echo "${label}: obsolete TPBARG tag still present"; return 1 ;;
+    esac
+    return 0
+}
+
 patch_template_sleep() {
     local source="$1"
     local seconds="$2"
@@ -59,8 +92,16 @@ mkdir -p "${WS}"
 export TPB_HOME
 export TPB_WORKSPACE="${WS}"
 
+# absorbed integration.C4.1_cmake_template_staging (formerly B5.5 pre-init checks)
+test -f "${BUILD}/lib/cmake/TPBench/TPBenchConfig.cmake"
+test -f "${BUILD}/lib/cmake/TPBench/TPBenchKernel.cmake"
+test -f "${BUILD}/etc/cmake/kernel/CMakeLists.txt.in"
+test -f "${BUILD}/etc/cmake/kernel/tpbk_kernel.c.in"
+
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel init --dir "${DIR_A}" --kernel "${KERNEL}"
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel init --dir "${DIR_B}" --kernel "${KERNEL}"
+test -f "${DIR_A}/CMakeLists.txt"
+test -f "${DIR_A}/tpbk_${KERNEL}.c"
 patch_template_sleep "${DIR_A}/tpbk_${KERNEL}.c" 1
 patch_template_sleep "${DIR_B}/tpbk_${KERNEL}.c" 2
 
@@ -73,6 +114,7 @@ out_a="$(TPB_HOME="${TPB_HOME}" TPB_WORKSPACE="${WS}" \
 echo "${out_a}"
 test "$(echo "${out_a}" | count_active_entries)" -eq 1
 test "$(echo "${out_a}" | count_version_rows)" -eq 1
+assert_kernel_get_verbose_tags "${out_a}" "first kernel get -v"
 
 TPB_HOME="${TPB_HOME}" "${TPBCLI}" kernel build --dir "${DIR_B}" --kernel "${KERNEL}" \
     --cflags "-O3 -DTMPL_VARIANT=2"

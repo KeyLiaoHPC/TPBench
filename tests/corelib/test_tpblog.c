@@ -192,11 +192,13 @@ test_a8_2_log_file_append(void)
     return 0;
 }
 
+/* A8.3: dual_write; absorbs A8.8 snprintf_macro */
 static int
 test_a8_3_dual_write(void)
 {
     char outbuf[4096];
     char logbuf[4096];
+    char buf[32];
 
     if (setup_workspace() != TPBE_SUCCESS) {
         return 1;
@@ -213,6 +215,12 @@ test_a8_3_dual_write(void)
     if (strstr(logbuf, "tpblog test line") == NULL) {
         return 1;
     }
+
+    tpblog_snprintf(buf, sizeof(buf), "value=%d", 42);
+    if (strcmp(buf, "value=42") != 0) {
+        return 1;
+    }
+
     tpblog_cleanup();
     return 0;
 }
@@ -290,36 +298,6 @@ test_a8_7_degenerate_output(void)
     return 0;
 }
 
-static int
-test_a8_8_snprintf_macro(void)
-{
-    char buf[32];
-
-    tpblog_snprintf(buf, sizeof(buf), "value=%d", 42);
-    if (strcmp(buf, "value=42") != 0) {
-        return 1;
-    }
-    return 0;
-}
-
-static int
-test_a8_9_log_tag_macros(void)
-{
-    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_WARN), "WARN") != 0) {
-        return 1;
-    }
-    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_FAIL), "ERRO") != 0) {
-        return 1;
-    }
-    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_UNKN), "ERRO") != 0) {
-        return 1;
-    }
-    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_NOTE), "INFO") != 0) {
-        return 1;
-    }
-    return 0;
-}
-
 static void
 fn_report_kern_verify_fail(void)
 {
@@ -336,10 +314,24 @@ fn_report_dlopen_fail(void)
                               "test context");
 }
 
+/* A8.10: report_error_tags; absorbs A8.9 log_tag_macros */
 static int
 test_a8_10_report_error_tags(void)
 {
     char outbuf[4096];
+
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_WARN), "WARN") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_FAIL), "ERRO") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_UNKN), "ERRO") != 0) {
+        return 1;
+    }
+    if (strcmp(_tpblog_tag_from_type(TPB_LOG_TAG_NOTE), "INFO") != 0) {
+        return 1;
+    }
 
     if (setup_workspace() != TPBE_SUCCESS) {
         return 1;
@@ -516,8 +508,6 @@ static test_case_t cases[] = {
     { "A8.5", "column_widths", test_a8_5_column_widths },
     { "A8.6", "column_output", test_a8_6_column_output },
     { "A8.7", "degenerate_output", test_a8_7_degenerate_output },
-    { "A8.8", "snprintf_macro", test_a8_8_snprintf_macro },
-    { "A8.9", "log_tag_macros", test_a8_9_log_tag_macros },
     { "A8.10", "report_error_tags", test_a8_10_report_error_tags },
     { "A8.11", "ctab_width_min", test_a8_11_ctab_width_min },
     { "A8.12", "ctab_align_right", test_a8_12_ctab_align_right },

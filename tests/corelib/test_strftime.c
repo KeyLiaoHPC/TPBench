@@ -208,82 +208,68 @@ test_btime_to_datetime(void)
     return 0;
 }
 
-/* A3.4: tpb_ts_datetime_to_bits encodes correctly */
-static int
-test_datetime_to_bits(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_t dt = {0};
-    dt.year = 2026;
-    dt.month = 3;
-    dt.day = 10;
-    dt.hour = 4;
-    dt.min = 55;
-    dt.sec = 54;
-
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&dt, 0, &bits);  /* UTC, no timezone bias */
-    if (err != 0) return 1;
-
-    /* Verify encoding by decoding back */
-    tpb_datetime_t dt2 = {0};
-    err = tpb_ts_bits_to_datetime(bits, &dt2, NULL);
-    if (err != 0) return 1;
-
-    if (dt2.year != dt.year) return 1;
-    if (dt2.month != dt.month) return 1;
-    if (dt2.day != dt.day) return 1;
-    if (dt2.hour != dt.hour) return 1;
-    if (dt2.min != dt.min) return 1;
-    if (dt2.sec != dt.sec) return 1;
-
-    return 0;
-}
-
-/* A3.5: tpb_ts_bits_to_datetime decodes correctly */
-static int
-test_bits_to_datetime(void)
-{
-    if (ensure_setup()) return 1;
-
-    /* Construct datetime and encode it */
-    tpb_datetime_t orig = {0};
-    orig.year = 2026;
-    orig.month = 3;
-    orig.day = 10;
-    orig.hour = 4;
-    orig.min = 55;
-    orig.sec = 54;
-
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&orig, 480, &bits);  /* +8 hours */
-    if (err != 0) return 1;
-
-    tpb_datetime_t dt = {0};
-    int16_t tz_bias = 0;
-    err = tpb_ts_bits_to_datetime(bits, &dt, &tz_bias);
-    if (err != 0) return 1;
-
-    if (dt.year != 2026) return 1;
-    if (dt.month != 3) return 1;
-    if (dt.day != 10) return 1;
-    if (dt.hour != 4) return 1;
-    if (dt.min != 55) return 1;
-    if (dt.sec != 54) return 1;
-    /* Timezone bias should be close to +480 minutes (stored in 15-min increments) */
-    if (tz_bias < 450 || tz_bias > 480) return 1;  /* Allow some rounding */
-
-    return 0;
-}
-
-/* A3.6: datetime -> bits -> datetime roundtrip */
+/* A3.6: roundtrip_bits; absorbs A3.4 datetime_to_bits, A3.5 bits_to_datetime */
 static int
 test_roundtrip_bits(void)
 {
+    tpb_datetime_t original = {0};
+    tpb_datetime_t encode_dt = {0};
+    tpb_datetime_t decode_dt = {0};
+    tpb_dtbits_t bits = 0;
+    int16_t tz_bias = 0;
+    int err;
+
     if (ensure_setup()) return 1;
 
-    tpb_datetime_t original = {0};
+    /* A3.4: datetime_to_bits encodes correctly (UTC, tz_bias 0) */
+    encode_dt.year = 2026;
+    encode_dt.month = 3;
+    encode_dt.day = 10;
+    encode_dt.hour = 4;
+    encode_dt.min = 55;
+    encode_dt.sec = 54;
+
+    err = tpb_ts_datetime_to_bits(&encode_dt, 0, &bits);
+    if (err != 0) return 1;
+
+    err = tpb_ts_bits_to_datetime(bits, &decode_dt, NULL);
+    if (err != 0) return 1;
+
+    if (decode_dt.year != encode_dt.year) return 1;
+    if (decode_dt.month != encode_dt.month) return 1;
+    if (decode_dt.day != encode_dt.day) return 1;
+    if (decode_dt.hour != encode_dt.hour) return 1;
+    if (decode_dt.min != encode_dt.min) return 1;
+    if (decode_dt.sec != encode_dt.sec) return 1;
+
+    /* A3.5: bits_to_datetime decodes tz_bias (+8 hours) */
+    memset(&encode_dt, 0, sizeof(encode_dt));
+    encode_dt.year = 2026;
+    encode_dt.month = 3;
+    encode_dt.day = 10;
+    encode_dt.hour = 4;
+    encode_dt.min = 55;
+    encode_dt.sec = 54;
+
+    bits = 0;
+    tz_bias = 0;
+    err = tpb_ts_datetime_to_bits(&encode_dt, 480, &bits);
+    if (err != 0) return 1;
+
+    memset(&decode_dt, 0, sizeof(decode_dt));
+    err = tpb_ts_bits_to_datetime(bits, &decode_dt, &tz_bias);
+    if (err != 0) return 1;
+
+    if (decode_dt.year != 2026) return 1;
+    if (decode_dt.month != 3) return 1;
+    if (decode_dt.day != 10) return 1;
+    if (decode_dt.hour != 4) return 1;
+    if (decode_dt.min != 55) return 1;
+    if (decode_dt.sec != 54) return 1;
+    if (tz_bias < 450 || tz_bias > 480) return 1;
+
+    /* Roundtrip with UTC-5 bias */
+    memset(&original, 0, sizeof(original));
     original.year = 1985;
     original.month = 7;
     original.day = 15;
@@ -291,160 +277,158 @@ test_roundtrip_bits(void)
     original.min = 30;
     original.sec = 45;
 
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&original, -300, &bits);  /* UTC-5 */
+    bits = 0;
+    tz_bias = 0;
+    err = tpb_ts_datetime_to_bits(&original, -300, &bits);
     if (err != 0) return 1;
 
-    tpb_datetime_t decoded = {0};
-    int16_t tz_bias = 0;
-    err = tpb_ts_bits_to_datetime(bits, &decoded, &tz_bias);
+    memset(&decode_dt, 0, sizeof(decode_dt));
+    err = tpb_ts_bits_to_datetime(bits, &decode_dt, &tz_bias);
     if (err != 0) return 1;
 
-    if (original.year != decoded.year) return 1;
-    if (original.month != decoded.month) return 1;
-    if (original.day != decoded.day) return 1;
-    if (original.hour != decoded.hour) return 1;
-    if (original.min != decoded.min) return 1;
-    if (original.sec != decoded.sec) return 1;
+    if (original.year != decode_dt.year) return 1;
+    if (original.month != decode_dt.month) return 1;
+    if (original.day != decode_dt.day) return 1;
+    if (original.hour != decode_dt.hour) return 1;
+    if (original.min != decode_dt.min) return 1;
+    if (original.sec != decode_dt.sec) return 1;
+    if (tz_bias < -315 || tz_bias > -300) return 1;
 
     return 0;
 }
 
-/* A3.7: tpb_ts_bits_to_isoutc produces valid ISO 8601 UTC */
+/* A3.12: roundtrip_isoutc; absorbs A3.7 bits_to_isoutc, A3.10 isoutc_to_bits */
 static int
-test_bits_to_isoutc(void)
+test_roundtrip_isoutc(void)
 {
+    tpb_datetime_t orig = {0};
+    tpb_datetime_t dt = {0};
+    tpb_datetime_str_t str = {0};
+    tpb_dtbits_t original_bits = 0;
+    tpb_dtbits_t roundtrip_bits = 0;
+    int err;
+
     if (ensure_setup()) return 1;
 
-    /* Construct datetime for 2026-03-10T04:55:54 */
-    tpb_datetime_t dt = {0};
-    dt.year = 2026;
-    dt.month = 3;
-    dt.day = 10;
-    dt.hour = 4;
-    dt.min = 55;
-    dt.sec = 54;
+    /* A3.7: bits_to_isoutc exact UTC "…Z" string */
+    orig.year = 2026;
+    orig.month = 3;
+    orig.day = 10;
+    orig.hour = 4;
+    orig.min = 55;
+    orig.sec = 54;
 
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&dt, 0, &bits);
+    err = tpb_ts_datetime_to_bits(&orig, 0, &original_bits);
     if (err != 0) return 1;
 
-    tpb_datetime_str_t str = {0};
-    err = tpb_ts_bits_to_isoutc(bits, &str);
+    memset(&str, 0, sizeof(str));
+    err = tpb_ts_bits_to_isoutc(original_bits, &str);
     if (err != 0) return 1;
 
-    const char *expected = "2026-03-10T04:55:54Z";
-    if (strcmp(str.str, expected) != 0) {
+    if (strcmp(str.str, "2026-03-10T04:55:54Z") != 0) {
         return 1;
     }
 
+    /* Roundtrip: bits -> isoutc -> bits */
+    orig.year = 2024;
+    orig.month = 7;
+    orig.day = 15;
+    orig.hour = 8;
+    orig.min = 45;
+    orig.sec = 30;
+
+    original_bits = 0;
+    err = tpb_ts_datetime_to_bits(&orig, 0, &original_bits);
+    if (err != 0) return 1;
+
+    memset(&str, 0, sizeof(str));
+    err = tpb_ts_bits_to_isoutc(original_bits, &str);
+    if (err != 0) return 1;
+
+    roundtrip_bits = 0;
+    err = tpb_ts_isoutc_to_bits(&str, &roundtrip_bits);
+    if (err != 0) return 1;
+
+    /* A3.10: isoutc_to_bits full field checks */
+    memset(&dt, 0, sizeof(dt));
+    err = tpb_ts_bits_to_datetime(roundtrip_bits, &dt, NULL);
+    if (err != 0) return 1;
+
+    if (dt.year != 2024) return 1;
+    if (dt.month != 7) return 1;
+    if (dt.day != 15) return 1;
+    if (dt.hour != 8) return 1;
+    if (dt.min != 45) return 1;
+    if (dt.sec != 30) return 1;
+
     return 0;
 }
 
-/* A3.8: tpb_ts_bits_to_isotz with UTC timezone */
+/* A3.13: roundtrip_isotz; absorbs A3.8/A3.9 isotz strings, A3.11 isotz_to_bits */
 static int
-test_bits_to_isotz_utc(void)
+test_roundtrip_isotz(void)
 {
+    tpb_datetime_t orig = {0};
+    tpb_datetime_t dt = {0};
+    tpb_datetime_str_t str = {0};
+    tpb_dtbits_t bits = 0;
+    tpb_dtbits_t roundtrip_bits = 0;
+    int16_t tz_bias = 0;
+    int err;
+
     if (ensure_setup()) return 1;
 
-    tpb_datetime_t dt = {0};
-    dt.year = 1970;
-    dt.month = 1;
-    dt.day = 1;
-    dt.hour = 12;
-    dt.min = 0;
-    dt.sec = 0;
+    /* A3.8: bits_to_isotz UTC (+00:00) */
+    orig.year = 1970;
+    orig.month = 1;
+    orig.day = 1;
+    orig.hour = 12;
+    orig.min = 0;
+    orig.sec = 0;
 
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&dt, 0, &bits);
+    bits = 0;
+    err = tpb_ts_datetime_to_bits(&orig, 0, &bits);
     if (err != 0) return 1;
 
-    tpb_datetime_str_t str = {0};
+    memset(&str, 0, sizeof(str));
     err = tpb_ts_bits_to_isotz(bits, 0, &str);
     if (err != 0) return 1;
 
-    const char *expected = "1970-01-01T12:00:00+00:00";
-    if (strcmp(str.str, expected) != 0) {
+    if (strcmp(str.str, "1970-01-01T12:00:00+00:00") != 0) {
         return 1;
     }
 
-    return 0;
-}
+    /* A3.9: bits_to_isotz +08:00 offset */
+    memset(&orig, 0, sizeof(orig));
+    orig.year = 2024;
+    orig.month = 6;
+    orig.day = 20;
+    orig.hour = 8;
+    orig.min = 45;
+    orig.sec = 30;
 
-/* A3.9: tpb_ts_bits_to_isotz with +08:00 offset */
-static int
-test_bits_to_isotz_offset(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_t dt = {0};
-    dt.year = 2024;
-    dt.month = 6;
-    dt.day = 20;
-    dt.hour = 8;
-    dt.min = 45;
-    dt.sec = 30;
-
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_datetime_to_bits(&dt, 0, &bits);
+    bits = 0;
+    err = tpb_ts_datetime_to_bits(&orig, 0, &bits);
     if (err != 0) return 1;
 
-    tpb_datetime_str_t str = {0};
-    err = tpb_ts_bits_to_isotz(bits, 480, &str);  /* +8 hours */
+    memset(&str, 0, sizeof(str));
+    err = tpb_ts_bits_to_isotz(bits, 480, &str);
     if (err != 0) return 1;
 
-    const char *expected = "2024-06-20T08:45:30+08:00";
-    if (strcmp(str.str, expected) != 0) {
+    if (strcmp(str.str, "2024-06-20T08:45:30+08:00") != 0) {
         return 1;
     }
 
-    return 0;
-}
-
-/* A3.10: tpb_ts_isoutc_to_bits parses ISO 8601 UTC correctly */
-static int
-test_isoutc_to_bits(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_str_t str = {0};
-    strncpy(str.str, "2026-03-10T04:55:54Z", sizeof(str.str) - 1);
-
-    tpb_dtbits_t bits = 0;
-    int err = tpb_ts_isoutc_to_bits(&str, &bits);
-    if (err != 0) return 1;
-
-    /* Decode and verify */
-    tpb_datetime_t dt = {0};
-    err = tpb_ts_bits_to_datetime(bits, &dt, NULL);
-    if (err != 0) return 1;
-
-    if (dt.year != 2026) return 1;
-    if (dt.month != 3) return 1;
-    if (dt.day != 10) return 1;
-    if (dt.hour != 4) return 1;
-    if (dt.min != 55) return 1;
-    if (dt.sec != 54) return 1;
-
-    return 0;
-}
-
-/* A3.11: tpb_ts_isotz_to_bits parses ISO 8601 with TZ correctly */
-static int
-test_isotz_to_bits(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_str_t str = {0};
+    /* A3.11: isotz_to_bits tz_bias field assertions */
+    memset(&str, 0, sizeof(str));
     strncpy(str.str, "2026-03-10T12:55:54+08:00", sizeof(str.str) - 1);
 
-    tpb_dtbits_t bits = 0;
-    int16_t tz_bias = 0;
-    int err = tpb_ts_isotz_to_bits(&str, &bits, &tz_bias);
+    bits = 0;
+    tz_bias = 0;
+    err = tpb_ts_isotz_to_bits(&str, &bits, &tz_bias);
     if (err != 0) return 1;
 
-    /* Decode and verify (timezone is stored in the bits encoding) */
-    tpb_datetime_t dt = {0};
+    memset(&dt, 0, sizeof(dt));
     err = tpb_ts_bits_to_datetime(bits, &dt, &tz_bias);
     if (err != 0) return 1;
 
@@ -455,57 +439,10 @@ test_isotz_to_bits(void)
     if (dt.min != 55) return 1;
     if (dt.sec != 54) return 1;
 
-    return 0;
-}
-
-/* A3.12: bits -> isoutc -> bits roundtrip */
-static int
-test_roundtrip_isoutc(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_t orig = {0};
-    orig.year = 2024;
-    orig.month = 7;
-    orig.day = 15;
-    orig.hour = 8;
-    orig.min = 45;
-    orig.sec = 30;
-
+    /* Roundtrip with +5:30 bias */
     tpb_dtbits_t original_bits = 0;
-    int err = tpb_ts_datetime_to_bits(&orig, 0, &original_bits);
-    if (err != 0) return 1;
 
-    tpb_datetime_str_t str = {0};
-    err = tpb_ts_bits_to_isoutc(original_bits, &str);
-    if (err != 0) return 1;
-
-    tpb_dtbits_t roundtrip_bits = 0;
-    err = tpb_ts_isoutc_to_bits(&str, &roundtrip_bits);
-    if (err != 0) return 1;
-
-    /* Compare decoded values */
-    tpb_datetime_t dt1 = {0}, dt2 = {0};
-    tpb_ts_bits_to_datetime(original_bits, &dt1, NULL);
-    tpb_ts_bits_to_datetime(roundtrip_bits, &dt2, NULL);
-
-    if (dt1.year != dt2.year) return 1;
-    if (dt1.month != dt2.month) return 1;
-    if (dt1.day != dt2.day) return 1;
-    if (dt1.hour != dt2.hour) return 1;
-    if (dt1.min != dt2.min) return 1;
-    if (dt1.sec != dt2.sec) return 1;
-
-    return 0;
-}
-
-/* A3.13: bits -> isotz -> bits roundtrip */
-static int
-test_roundtrip_isotz(void)
-{
-    if (ensure_setup()) return 1;
-
-    tpb_datetime_t orig = {0};
+    memset(&orig, 0, sizeof(orig));
     orig.year = 2000;
     orig.month = 1;
     orig.day = 1;
@@ -513,29 +450,32 @@ test_roundtrip_isotz(void)
     orig.min = 0;
     orig.sec = 0;
 
-    tpb_dtbits_t original_bits = 0;
-    int err = tpb_ts_datetime_to_bits(&orig, 330, &original_bits);  /* +5:30 */
+    original_bits = 0;
+    err = tpb_ts_datetime_to_bits(&orig, 330, &original_bits);
     if (err != 0) return 1;
 
-    tpb_datetime_str_t str = {0};
+    memset(&str, 0, sizeof(str));
     err = tpb_ts_bits_to_isotz(original_bits, 330, &str);
     if (err != 0) return 1;
 
-    tpb_dtbits_t roundtrip_bits = 0;
-    int16_t tz_bias = 0;
+    roundtrip_bits = 0;
+    tz_bias = 0;
     err = tpb_ts_isotz_to_bits(&str, &roundtrip_bits, &tz_bias);
     if (err != 0) return 1;
 
-    tpb_datetime_t dt1 = {0}, dt2 = {0};
-    tpb_ts_bits_to_datetime(original_bits, &dt1, NULL);
-    tpb_ts_bits_to_datetime(roundtrip_bits, &dt2, NULL);
+    {
+        tpb_datetime_t dt1 = {0}, dt2 = {0};
 
-    if (dt1.year != dt2.year) return 1;
-    if (dt1.month != dt2.month) return 1;
-    if (dt1.day != dt2.day) return 1;
-    if (dt1.hour != dt2.hour) return 1;
-    if (dt1.min != dt2.min) return 1;
-    if (dt1.sec != dt2.sec) return 1;
+        tpb_ts_bits_to_datetime(original_bits, &dt1, NULL);
+        tpb_ts_bits_to_datetime(roundtrip_bits, &dt2, NULL);
+
+        if (dt1.year != dt2.year) return 1;
+        if (dt1.month != dt2.month) return 1;
+        if (dt1.day != dt2.day) return 1;
+        if (dt1.hour != dt2.hour) return 1;
+        if (dt1.min != dt2.min) return 1;
+        if (dt1.sec != dt2.sec) return 1;
+    }
 
     return 0;
 }
@@ -672,14 +612,7 @@ main(int argc, char **argv)
         { "A3.1",  "get_datetime",       test_get_datetime       },
         { "A3.2",  "get_btime",          test_get_btime          },
         { "A3.3",  "btime_to_datetime",  test_btime_to_datetime  },
-        { "A3.4",  "datetime_to_bits",   test_datetime_to_bits   },
-        { "A3.5",  "bits_to_datetime",   test_bits_to_datetime   },
         { "A3.6",  "roundtrip_bits",     test_roundtrip_bits     },
-        { "A3.7",  "bits_to_isoutc",     test_bits_to_isoutc     },
-        { "A3.8",  "bits_to_isotz_utc",  test_bits_to_isotz_utc  },
-        { "A3.9",  "bits_to_isotz_offset", test_bits_to_isotz_offset },
-        { "A3.10", "isoutc_to_bits",     test_isoutc_to_bits     },
-        { "A3.11", "isotz_to_bits",      test_isotz_to_bits      },
         { "A3.12", "roundtrip_isoutc",   test_roundtrip_isoutc   },
         { "A3.13", "roundtrip_isotz",    test_roundtrip_isotz    },
         { "A3.14", "invalid_mode",       test_invalid_mode       },

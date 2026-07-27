@@ -158,11 +158,19 @@ unlink_test_capsule_shm(void)
     }
 }
 
-/* A6.1 */
+/* A6.4: create_capsule_header; absorbs A6.1-A6.3 */
 static int
-test_id_taskcapsule_differs(void)
+test_create_capsule_header(void)
 {
     unsigned char tb[20], k[20], t1[20], t2[20];
+    unsigned char tid[20], cap[20];
+    task_entry_t *entries = NULL;
+    task_attr_t rattr;
+    void *data = NULL;
+    uint64_t ds = 0;
+    size_t j;
+    int allz = 1;
+    int n = 0;
     int err;
 
     memset(tb, 0xab, 20);
@@ -178,53 +186,6 @@ test_id_taskcapsule_differs(void)
     if (memcmp(t1, t2, 20) == 0) {
         return 1;
     }
-    return 0;
-}
-
-/* A6.2 */
-static int
-test_write_task_id_out(void)
-{
-    unsigned char tid[20];
-    int err;
-    size_t j;
-    int allz = 1;
-
-    setup_env_workspace();
-    err = tpb_raf_init_workspace(g_test_dir);
-    if (err != 0) {
-        cleanup_env_workspace();
-        return 1;
-    }
-
-    memset(tid, 0, sizeof(tid));
-    err = write_min_task(tid);
-    if (err != 0) {
-        cleanup_env_workspace();
-        return 1;
-    }
-    for (j = 0; j < 20; j++) {
-        if (tid[j] != 0) {
-            allz = 0;
-            break;
-        }
-    }
-    /* Expect non-zero TaskRecordID bytes */
-    if (allz != 0) {
-        cleanup_env_workspace();
-        return 1;
-    }
-    cleanup_env_workspace();
-    return 0;
-}
-
-/* A6.3 */
-static int
-test_write_task_null_out(void)
-{
-    task_entry_t *entries = NULL;
-    int n = 0;
-    int err;
 
     setup_env_workspace();
     err = tpb_raf_init_workspace(g_test_dir);
@@ -241,8 +202,19 @@ test_write_task_null_out(void)
         return 1;
     }
 
-    err = write_min_task(NULL);
+    memset(tid, 0, sizeof(tid));
+    err = write_min_task(tid);
     if (err != 0) {
+        cleanup_env_workspace();
+        return 1;
+    }
+    for (j = 0; j < 20; j++) {
+        if (tid[j] != 0) {
+            allz = 0;
+            break;
+        }
+    }
+    if (allz != 0) {
         cleanup_env_workspace();
         return 1;
     }
@@ -254,32 +226,20 @@ test_write_task_null_out(void)
         return 1;
     }
     free(entries);
-    cleanup_env_workspace();
-    return 0;
-}
 
-/* A6.4 + A6.5 */
-static int
-test_create_capsule_header(void)
-{
-    unsigned char tid[20], cap[20];
-    task_attr_t rattr;
-    void *data = NULL;
-    uint64_t ds = 0;
-    int err;
-
-    setup_env_workspace();
-    err = tpb_raf_init_workspace(g_test_dir);
+    err = write_min_task(NULL);
     if (err != 0) {
         cleanup_env_workspace();
         return 1;
     }
 
-    err = write_min_task(tid);
-    if (err != 0) {
+    err = tpb_raf_entry_list_task(g_test_dir, &entries, &n);
+    if (err != 0 || n != 2) {
+        free(entries);
         cleanup_env_workspace();
         return 1;
     }
+    free(entries);
 
     err = tpb_k_create_capsule_task(tid, cap);
     unlink_test_capsule_shm();
@@ -723,9 +683,6 @@ main(int argc, char **argv)
 
     filter = (argc > 1) ? argv[1] : NULL;
     test_case_t cases[] = {
-        { "A6.1", "task vs taskcapsule id", test_id_taskcapsule_differs },
-        { "A6.2", "write_task id_out", test_write_task_id_out },
-        { "A6.3", "write_task NULL id_out", test_write_task_null_out },
         { "A6.4", "create capsule + header", test_create_capsule_header },
         { "A6.5", "task.tpbe lists capsule", test_tpbe_lists_capsule },
         { "A6.6", "append once", test_append_once },

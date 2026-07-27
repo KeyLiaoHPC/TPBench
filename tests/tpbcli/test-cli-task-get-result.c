@@ -577,29 +577,15 @@ test_b7_27_data_only(void)
     }
     code = tpb_test_task_run_cmd("get-result -r 0 --data-name Triad", buf,
                                  sizeof(buf));
-    tpb_test_task_fixture_cleanup();
     if (code != 0 || strstr(buf, "Meta Data") == NULL ||
         strstr(buf, "Record Data") == NULL || strstr(buf, "Triad") == NULL) {
+        tpb_test_task_fixture_cleanup();
         FAIL("B7.27: data-only mode");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b7_28_data_name_help(void)
-{
-    char buf[16384];
-    int code;
-
-    tpb_test_task_fixture_setup();
-    if (_sf_seed_ridmap_one_triad() != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.28: seed");
-        return 1;
-    }
+    /* absorbed B7.28 data_name_context_help */
     code = tpb_test_task_run_cmd("get-result -r 0 --data-name --help", buf,
                                  sizeof(buf));
     tpb_test_task_fixture_cleanup();
@@ -609,6 +595,7 @@ test_b7_28_data_name_help(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+
     PASS();
     return 0;
 }
@@ -820,134 +807,102 @@ test_b7_31_all_members_fail_warn(void)
 }
 
 /*
- * B7.32 — a capsule with two members, both "Triad" double outputs, but the
- * second member's unit differs (TPB_UNIT_UNDEF vs TPB_UNIT_B) while shape
- * stays consistent (point). The first member establishes the schema and
- * succeeds; the second is skipped for the unit mismatch, so the command
- * reports success from 1/2 members with both warnings present.
+ * Parameterized helper for unit/shape mismatch capsule scenarios
+ * (absorbed B7.32 unit_mismatch and B7.33 shape_mismatch).
  */
 static int
-test_b7_32_unit_mismatch(void)
+_sf_run_mismatch_case(const char *case_id,
+                      unsigned char cap_fill,
+                      unsigned char m0_fill,
+                      unsigned char m1_fill,
+                      tpb_meta_header_t *h0,
+                      tpb_meta_header_t *h1,
+                      const double *v0,
+                      const double *v1,
+                      size_t ds0,
+                      size_t ds1)
 {
     unsigned char cap[20];
     unsigned char m0[20];
     unsigned char m1[20];
     unsigned char members[2][20];
-    tpb_meta_header_t h0;
-    tpb_meta_header_t h1;
-    double v0[1] = {10.0};
-    double v1[1] = {20.0};
     char buf[16384];
     int code;
 
-    memset(cap, 0xB0, 20);
-    memset(m0, 0xB1, 20);
-    memset(m1, 0xB2, 20);
+    memset(cap, cap_fill, 20);
+    memset(m0, m0_fill, 20);
+    memset(m1, m1_fill, 20);
     tpb_test_task_fixture_setup();
+
+    if (write_member_hdrs(m0, cap, h0, 1, 1, v0, ds0) != 0 ||
+        write_member_hdrs(m1, cap, h1, 1, 1, v1, ds1) != 0) {
+        tpb_test_task_fixture_cleanup();
+        FAIL(case_id);
+        fprintf(stderr, "    member setup failed\n");
+        return 1;
+    }
+    memcpy(members[0], m0, 20);
+    memcpy(members[1], m1, 20);
+    if (write_capsule_link(cap, members, 2) != 0) {
+        tpb_test_task_fixture_cleanup();
+        FAIL(case_id);
+        fprintf(stderr, "    capsule link failed\n");
+        return 1;
+    }
+    if (tpb_test_task_run_cmd("ls", NULL, 0) != 0) {
+        tpb_test_task_fixture_cleanup();
+        FAIL(case_id);
+        fprintf(stderr, "    ls failed\n");
+        return 1;
+    }
+    code = tpb_test_task_run_cmd("get-result -r 0 --data-name Triad", buf,
+                                 sizeof(buf));
+    tpb_test_task_fixture_cleanup();
+    if (code != 0) {
+        FAIL(case_id);
+        fprintf(stderr, "    expected success, code: %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "used 1/2") == NULL &&
+        strstr(buf, "unit/shape mismatch") == NULL) {
+        FAIL(case_id);
+        fprintf(stderr, "    expected used 1/2 or unit/shape mismatch warning");
+        fprintf(stderr, "    output: %.600s\n", buf);
+        return 1;
+    }
+    return 0;
+}
+
+/*
+ * B7.32 — unit mismatch between capsule members; B7.33 shape mismatch
+ * absorbed via _sf_run_mismatch_case().
+ */
+static int
+test_b7_32_unit_mismatch(void)
+{
+    tpb_meta_header_t h0;
+    tpb_meta_header_t h1;
+    double v0[1] = {10.0};
+    double v1_unit[1] = {20.0};
+    double v1_shape[2] = {20.0, 30.0};
+    int fail = 0;
 
     h0 = make_out_hdr("Triad", TPB_DOUBLE_T,
                       TPB_UNIT_UNDEF | TPB_UATTR_SHAPE_POINT, 1);
     h1 = make_out_hdr("Triad", TPB_DOUBLE_T,
                       TPB_UNIT_B | TPB_UATTR_SHAPE_POINT, 1);
-    if (write_member_hdrs(m0, cap, &h0, 1, 1, v0, 8) != 0 ||
-        write_member_hdrs(m1, cap, &h1, 1, 1, v1, 8) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.32: member setup");
-        return 1;
-    }
-    memcpy(members[0], m0, 20);
-    memcpy(members[1], m1, 20);
-    if (write_capsule_link(cap, members, 2) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.32: capsule link");
-        return 1;
-    }
-    if (tpb_test_task_run_cmd("ls", NULL, 0) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.32: ls");
-        return 1;
-    }
-    code = tpb_test_task_run_cmd("get-result -r 0 --data-name Triad", buf,
-                                 sizeof(buf));
-    tpb_test_task_fixture_cleanup();
-    if (code != 0) {
-        FAIL("B7.32: expected success");
-        fprintf(stderr, "    code: %d\n", code);
-        return 1;
-    }
-    if (strstr(buf, "used 1/2") == NULL &&
-        strstr(buf, "unit/shape mismatch") == NULL) {
-        FAIL("B7.32: expected used 1/2 or unit/shape mismatch warning");
-        fprintf(stderr, "    output: %.600s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
+    fail += _sf_run_mismatch_case("B7.32 unit_mismatch", 0xB0, 0xB1, 0xB2,
+                                  &h0, &h1, v0, v1_unit, 8, 8);
 
-/*
- * B7.33 — same as B7.32 but the unit matches and the shape differs
- * (TPB_UATTR_SHAPE_POINT vs TPB_UATTR_SHAPE_1D with nelem 1 vs 2). The
- * schema mismatch on shape must be treated the same way as a unit
- * mismatch: second member skipped, first member's result used.
- */
-static int
-test_b7_33_shape_mismatch(void)
-{
-    unsigned char cap[20];
-    unsigned char m0[20];
-    unsigned char m1[20];
-    unsigned char members[2][20];
-    tpb_meta_header_t h0;
-    tpb_meta_header_t h1;
-    double v0[1] = {10.0};
-    double v1[2] = {20.0, 30.0};
-    char buf[16384];
-    int code;
-
-    memset(cap, 0xC0, 20);
-    memset(m0, 0xC1, 20);
-    memset(m1, 0xC2, 20);
-    tpb_test_task_fixture_setup();
-
-    h0 = make_out_hdr("Triad", TPB_DOUBLE_T,
-                      TPB_UNIT_UNDEF | TPB_UATTR_SHAPE_POINT, 1);
     h1 = make_out_hdr("Triad", TPB_DOUBLE_T,
                       TPB_UNIT_UNDEF | TPB_UATTR_SHAPE_1D, 2);
-    if (write_member_hdrs(m0, cap, &h0, 1, 1, v0, 8) != 0 ||
-        write_member_hdrs(m1, cap, &h1, 1, 1, v1, 16) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.33: member setup");
-        return 1;
+    fail += _sf_run_mismatch_case("B7.33 shape_mismatch", 0xC0, 0xC1, 0xC2,
+                                  &h0, &h1, v0, v1_shape, 8, 16);
+
+    if (fail == 0) {
+        PASS();
     }
-    memcpy(members[0], m0, 20);
-    memcpy(members[1], m1, 20);
-    if (write_capsule_link(cap, members, 2) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.33: capsule link");
-        return 1;
-    }
-    if (tpb_test_task_run_cmd("ls", NULL, 0) != 0) {
-        tpb_test_task_fixture_cleanup();
-        FAIL("B7.33: ls");
-        return 1;
-    }
-    code = tpb_test_task_run_cmd("get-result -r 0 --data-name Triad", buf,
-                                 sizeof(buf));
-    tpb_test_task_fixture_cleanup();
-    if (code != 0) {
-        FAIL("B7.33: expected success");
-        fprintf(stderr, "    code: %d\n", code);
-        return 1;
-    }
-    if (strstr(buf, "used 1/2") == NULL &&
-        strstr(buf, "unit/shape mismatch") == NULL) {
-        FAIL("B7.33: expected used 1/2 or unit/shape mismatch warning");
-        fprintf(stderr, "    output: %.600s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
+    return fail > 0 ? 1 : 0;
 }
 
 /*
@@ -1256,9 +1211,6 @@ main(int argc, char **argv)
     if (filter == NULL || strcmp(filter, "B7.27") == 0) {
         fail += test_b7_27_data_only();
     }
-    if (filter == NULL || strcmp(filter, "B7.28") == 0) {
-        fail += test_b7_28_data_name_help();
-    }
     if (filter == NULL || strcmp(filter, "B7.29") == 0) {
         fail += test_b7_29_show_each_subrank();
     }
@@ -1270,9 +1222,6 @@ main(int argc, char **argv)
     }
     if (filter == NULL || strcmp(filter, "B7.32") == 0) {
         fail += test_b7_32_unit_mismatch();
-    }
-    if (filter == NULL || strcmp(filter, "B7.33") == 0) {
-        fail += test_b7_33_shape_mismatch();
     }
     if (filter == NULL || strcmp(filter, "B7.34") == 0) {
         fail += test_b7_34_partial_members_used();

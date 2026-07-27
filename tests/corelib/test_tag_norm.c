@@ -15,10 +15,13 @@ typedef struct {
     int (*fn)(void);
 } case_t;
 
+/* A11.1: normalize; absorbs A11.3 display, A11.4 idempotent */
 static int
 test_normalize(void)
 {
     char out[256];
+    char a[256];
+    char b[256];
 
     if (_sf_normalize_tags(out, sizeof(out), "tpbfom,bandwidth,TPBFOM") != 0) {
         return 1;
@@ -50,6 +53,27 @@ test_normalize(void)
         fprintf(stderr, "got '%s'\n", out);
         return 1;
     }
+
+    /* A11.3: display formatting */
+    if (_sf_format_tags_display(out, sizeof(out),
+                                "BANDWIDTH,TPBFOM,TPBOUTPUT") != 0) {
+        return 1;
+    }
+    if (strcmp(out, "BANDWIDTH, TPBFOM, TPBOUTPUT") != 0) {
+        fprintf(stderr, "got '%s'\n", out);
+        return 1;
+    }
+
+    /* A11.4: normalize is idempotent */
+    if (_sf_normalize_tags(a, sizeof(a), "time,event,TIME") != 0) {
+        return 1;
+    }
+    if (_sf_normalize_tags(b, sizeof(b), a) != 0) {
+        return 1;
+    }
+    if (strcmp(a, b) != 0) {
+        return 1;
+    }
     return 0;
 }
 
@@ -72,37 +96,6 @@ test_validate(void)
         return 1;
     }
     return 0;
-}
-
-static int
-test_display(void)
-{
-    char out[256];
-
-    if (_sf_format_tags_display(out, sizeof(out),
-                                "BANDWIDTH,TPBFOM,TPBOUTPUT") != 0) {
-        return 1;
-    }
-    if (strcmp(out, "BANDWIDTH, TPBFOM, TPBOUTPUT") != 0) {
-        fprintf(stderr, "got '%s'\n", out);
-        return 1;
-    }
-    return 0;
-}
-
-static int
-test_idempotent(void)
-{
-    char a[256];
-    char b[256];
-
-    if (_sf_normalize_tags(a, sizeof(a), "time,event,TIME") != 0) {
-        return 1;
-    }
-    if (_sf_normalize_tags(b, sizeof(b), a) != 0) {
-        return 1;
-    }
-    return strcmp(a, b) != 0;
 }
 
 static int
@@ -147,8 +140,6 @@ test_dedupe_combo(void)
 static const case_t cases[] = {
     { "A11.1", "normalize", test_normalize },
     { "A11.2", "validate", test_validate },
-    { "A11.3", "display", test_display },
-    { "A11.4", "idempotent", test_idempotent },
     { "A11.5", "preset_macros", test_preset_macros },
     { "A11.6", "dedupe_combo", test_dedupe_combo },
 };

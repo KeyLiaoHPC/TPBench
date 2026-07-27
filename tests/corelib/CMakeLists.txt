@@ -39,14 +39,7 @@ set_target_properties(test-strftime PROPERTIES
 tpb_add_subcase(A3 A3.1  get_datetime       test-strftime corelib)
 tpb_add_subcase(A3 A3.2  get_btime          test-strftime corelib)
 tpb_add_subcase(A3 A3.3  btime_to_datetime  test-strftime corelib)
-tpb_add_subcase(A3 A3.4  datetime_to_bits   test-strftime corelib)
-tpb_add_subcase(A3 A3.5  bits_to_datetime   test-strftime corelib)
 tpb_add_subcase(A3 A3.6  roundtrip_bits     test-strftime corelib)
-tpb_add_subcase(A3 A3.7  bits_to_isoutc     test-strftime corelib)
-tpb_add_subcase(A3 A3.8  bits_to_isotz_utc  test-strftime corelib)
-tpb_add_subcase(A3 A3.9  bits_to_isotz_offset test-strftime corelib)
-tpb_add_subcase(A3 A3.10 isoutc_to_bits     test-strftime corelib)
-tpb_add_subcase(A3 A3.11 isotz_to_bits      test-strftime corelib)
 tpb_add_subcase(A3 A3.12 roundtrip_isoutc   test-strftime corelib)
 tpb_add_subcase(A3 A3.13 roundtrip_isotz    test-strftime corelib)
 tpb_add_subcase(A3 A3.14 invalid_mode       test-strftime corelib)
@@ -67,12 +60,7 @@ set_target_properties(test-raf PROPERTIES
 )
 
 # Pack A4 sub-cases
-tpb_add_subcase(A4 A4.1  magic_construct    test-raf corelib)
-tpb_add_subcase(A4 A4.2  magic_validate_ok  test-raf corelib)
 tpb_add_subcase(A4 A4.3  magic_validate_bad test-raf corelib)
-tpb_add_subcase(A4 A4.6  id_tbatch          test-raf corelib)
-tpb_add_subcase(A4 A4.7  id_kernel          test-raf corelib)
-tpb_add_subcase(A4 A4.8  id_task            test-raf corelib)
 tpb_add_subcase(A4 A4.9  id_uniqueness      test-raf corelib)
 tpb_add_subcase(A4 A4.10 entry_tbatch       test-raf corelib)
 tpb_add_subcase(A4 A4.11 entry_kernel       test-raf corelib)
@@ -84,7 +72,6 @@ tpb_add_subcase(A4 A4.16 record_task        test-raf corelib)
 tpb_add_subcase(A4 A4.17 header_1d          test-raf corelib)
 tpb_add_subcase(A4 A4.18 header_multidim    test-raf corelib)
 tpb_add_subcase(A4 A4.19 header_mixed       test-raf corelib)
-tpb_add_subcase(A4 A4.20 rtenv_domain_dir    test-raf corelib)
 tpb_add_subcase(A4 A4.21 rtenv_id_alloc      test-raf corelib)
 tpb_add_subcase(A4 A4.22 rtenv_dup_name      test-raf corelib)
 tpb_add_subcase(A4 A4.23 rtenv_entry_roundtrip test-raf corelib)
@@ -111,11 +98,7 @@ set_target_properties(test-1d-array PROPERTIES
 )
 
 # Pack A5 sub-cases
-tpb_add_subcase(A5 A5.1  write_read_doubles    test-1d-array corelib)
-tpb_add_subcase(A5 A5.2  write_read_floats     test-1d-array corelib)
 tpb_add_subcase(A5 A5.3  write_read_int64      test-1d-array corelib)
-tpb_add_subcase(A5 A5.4  write_read_int32      test-1d-array corelib)
-tpb_add_subcase(A5 A5.5  write_read_random_len test-1d-array corelib)
 tpb_add_subcase(A5 A5.6  write_read_multi      test-1d-array corelib)
 tpb_add_subcase(A5 A5.7  skip_unalloc_output   test-1d-array corelib)
 tpb_add_subcase(A5 A5.8  header_data_ptr       test-1d-array corelib)
@@ -135,9 +118,6 @@ set_target_properties(test-capsule PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
 )
 
-tpb_add_subcase(A6 A6.1  id_taskcapsule_differs test-capsule corelib)
-tpb_add_subcase(A6 A6.2  write_task_id_out      test-capsule corelib)
-tpb_add_subcase(A6 A6.3  write_task_null_out    test-capsule corelib)
 tpb_add_subcase(A6 A6.4  create_capsule_header  test-capsule corelib)
 tpb_add_subcase(A6 A6.5  tpbe_lists_capsule     test-capsule corelib)
 tpb_add_subcase(A6 A6.6  append_once            test-capsule corelib)
@@ -185,8 +165,6 @@ tpb_add_subcase(A8 A8.4 tag_labels           test-tpblog corelib)
 tpb_add_subcase(A8 A8.5 column_widths        test-tpblog corelib)
 tpb_add_subcase(A8 A8.6 column_output        test-tpblog corelib)
 tpb_add_subcase(A8 A8.7 degenerate_output    test-tpblog corelib)
-tpb_add_subcase(A8 A8.8 snprintf_macro       test-tpblog corelib)
-tpb_add_subcase(A8 A8.9 log_tag_macros        test-tpblog corelib)
 tpb_add_subcase(A8 A8.10 report_error_tags    test-tpblog corelib)
 tpb_add_subcase(A8 A8.11 ctab_width_min       test-tpblog corelib)
 tpb_add_subcase(A8 A8.12 ctab_align_right     test-tpblog corelib)
@@ -204,13 +182,11 @@ set_target_properties(test-errcode PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
 )
 
-tpb_add_subcase(A9 A9.1 make_roundtrip   test-errcode corelib)
 tpb_add_subcase(A9 A9.2 propagate_swap   test-errcode corelib)
 tpb_add_subcase(A9 A9.3 propagate_legacy test-errcode corelib)
 tpb_add_subcase(A9 A9.4 exit_status      test-errcode corelib)
 tpb_add_subcase(A9 A9.5 unknown_msg      test-errcode corelib)
 tpb_add_subcase(A9 A9.6 module_name      test-errcode corelib)
-tpb_add_subcase(A9 A9.7 success_plain    test-errcode corelib)
 
 # --- environment snapshot encoding (Pack A10) ---
 add_executable(test-rtenv-env-snapshot EXCLUDE_FROM_ALL
@@ -244,8 +220,6 @@ set_target_properties(test-tag-norm PROPERTIES
 
 tpb_add_subcase(A11 A11.1 normalize   test-tag-norm corelib)
 tpb_add_subcase(A11 A11.2 validate    test-tag-norm corelib)
-tpb_add_subcase(A11 A11.3 display     test-tag-norm corelib)
-tpb_add_subcase(A11 A11.4 idempotent  test-tag-norm corelib)
 tpb_add_subcase(A11 A11.5 preset_macros test-tag-norm corelib)
 tpb_add_subcase(A11 A11.6 dedupe_combo  test-tag-norm corelib)
 

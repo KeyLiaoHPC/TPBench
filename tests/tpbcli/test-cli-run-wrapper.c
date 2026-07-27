@@ -150,49 +150,75 @@ expect_dry_run_contains(const char *case_name, const char *args,
 static int
 test_no_wrapper(void)
 {
-    return expect_dry_run_contains(
+    char cmd[4096];
+    char buf[16384];
+    int code;
+
+    /* absorbed B2.8 dry_run_basic: [DRY-RUN] and Exec: markers */
+    build_tpbcli_cmd(cmd, sizeof(cmd),
+                     "run -d --kernel stream "
+                     "--kargs stream_array_size=1000,ntest=2");
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("W1.1 no_wrapper");
+        fprintf(stderr, "    expected exit 0, got %d\n", code);
+        return 1;
+    }
+    if (strstr(buf, "[DRY-RUN]") == NULL) {
+        FAIL("W1.1 no_wrapper: missing [DRY-RUN]");
+        return 1;
+    }
+    if (strstr(buf, "Exec:") == NULL) {
+        FAIL("W1.1 no_wrapper: missing Exec:");
+        return 1;
+    }
+  return expect_dry_run_contains(
         "W1.1 no_wrapper",
         "run -d --kernel stream --kargs stream_array_size=1000,ntest=2",
         "tpbcli-pli-launcher", NULL);
 }
 
 static int
-test_global_wrapper_only(void)
+test_global_local_chain(void)
 {
-    return expect_dry_run_contains(
+    int rc;
+
+    /* absorbed W1.2 global_wrapper_only */
+    rc = expect_dry_run_contains(
         "W1.2 global_wrapper_only",
         "run -d --wrapper /usr/bin/fake-numactl --kernel stream "
         "--kargs stream_array_size=1000,ntest=2",
         "/usr/bin/fake-numactl", "fake-mpirun");
-}
-
-static int
-test_global_local_chain(void)
-{
-    char cmd[4096];
-    char buf[16384];
-    const char *exec_line;
-    int code;
-
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run -d --wrapper /usr/bin/fake-numactl --kernel stream "
-                     "--kargs stream_array_size=1000,ntest=2 "
-                     "--wrapper /usr/bin/fake-mpirun --wrapper-args '-np 20'");
-    code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0) {
-        FAIL("W1.3 global_local_chain");
-        fprintf(stderr, "    exit %d\n    output: %.500s\n", code, buf);
-        return 1;
+    if (rc != 0) {
+        return rc;
     }
-    exec_line = find_exec_line(buf);
-    if (exec_line == NULL ||
-        !exec_line_contains(exec_line, "/usr/bin/fake-numactl") ||
-        !exec_line_contains(exec_line, "/usr/bin/fake-mpirun") ||
-        !exec_line_contains(exec_line, "-np 20") ||
-        !exec_line_contains(exec_line, "tpbcli-pli-launcher")) {
-        FAIL("W1.3 global_local_chain");
-        fprintf(stderr, "    line: %.300s\n", exec_line ? exec_line : "(null)");
-        return 1;
+
+    {
+        char cmd[4096];
+        char buf[16384];
+        const char *exec_line;
+        int code;
+
+        build_tpbcli_cmd(cmd, sizeof(cmd),
+                         "run -d --wrapper /usr/bin/fake-numactl --kernel stream "
+                         "--kargs stream_array_size=1000,ntest=2 "
+                         "--wrapper /usr/bin/fake-mpirun --wrapper-args '-np 20'");
+        code = run_cmd_capture(cmd, buf, sizeof(buf));
+        if (code != 0) {
+            FAIL("W1.3 global_local_chain");
+            fprintf(stderr, "    exit %d\n    output: %.500s\n", code, buf);
+            return 1;
+        }
+        exec_line = find_exec_line(buf);
+        if (exec_line == NULL ||
+            !exec_line_contains(exec_line, "/usr/bin/fake-numactl") ||
+            !exec_line_contains(exec_line, "/usr/bin/fake-mpirun") ||
+            !exec_line_contains(exec_line, "-np 20") ||
+            !exec_line_contains(exec_line, "tpbcli-pli-launcher")) {
+            FAIL("W1.3 global_local_chain");
+            fprintf(stderr, "    line: %.300s\n", exec_line ? exec_line : "(null)");
+            return 1;
+        }
     }
     PASS();
     return 0;
@@ -318,9 +344,6 @@ main(int argc, char **argv)
 
     if (strcmp(argv[1], "W1.1") == 0) {
         return test_no_wrapper();
-    }
-    if (strcmp(argv[1], "W1.2") == 0) {
-        return test_global_wrapper_only();
     }
     if (strcmp(argv[1], "W1.3") == 0) {
         return test_global_local_chain();

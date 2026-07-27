@@ -12,8 +12,7 @@
 #include "mock_kernel.h"
 #include "mock_dynloader.h"
 
-#define MOCK_SCRIPT_DIR "/tmp/tpbench_test_pli"
-
+static char g_mock_script_dir[512];
 static char path_success[512];
 static char path_fail[512];
 static char path_signal[512];
@@ -51,24 +50,33 @@ write_script(const char *path, const char *body)
 static int
 create_mock_scripts(void)
 {
-    snprintf(path_success, sizeof(path_success),
-             "%s/mock_pli_success.sh", MOCK_SCRIPT_DIR);
-    snprintf(path_fail, sizeof(path_fail),
-             "%s/mock_pli_fail.sh", MOCK_SCRIPT_DIR);
-    snprintf(path_signal, sizeof(path_signal),
-             "%s/mock_pli_signal.sh", MOCK_SCRIPT_DIR);
-    snprintf(path_capture_kid, sizeof(path_capture_kid),
-             "%s/mock_pli_capture_kid.sh", MOCK_SCRIPT_DIR);
-    snprintf(path_kernel_id_out, sizeof(path_kernel_id_out),
-             "%s/kernel_id.out", MOCK_SCRIPT_DIR);
+    char body[640];
 
-    mkdir(MOCK_SCRIPT_DIR, 0755);
+    /* PID-scoped dir so parallel ctest A2 cases do not race on /tmp. */
+    snprintf(g_mock_script_dir, sizeof(g_mock_script_dir),
+             "/tmp/tpbench_test_pli_%d", (int)getpid());
+    snprintf(path_success, sizeof(path_success),
+             "%s/mock_pli_success.sh", g_mock_script_dir);
+    snprintf(path_fail, sizeof(path_fail),
+             "%s/mock_pli_fail.sh", g_mock_script_dir);
+    snprintf(path_signal, sizeof(path_signal),
+             "%s/mock_pli_signal.sh", g_mock_script_dir);
+    snprintf(path_capture_kid, sizeof(path_capture_kid),
+             "%s/mock_pli_capture_kid.sh", g_mock_script_dir);
+    snprintf(path_kernel_id_out, sizeof(path_kernel_id_out),
+             "%s/kernel_id.out", g_mock_script_dir);
+
+    if (mkdir(g_mock_script_dir, 0755) != 0 && errno != EEXIST) {
+        return -1;
+    }
 
     if (write_script(path_success, "exit 0")) return -1;
     if (write_script(path_fail, "exit 42")) return -1;
     if (write_script(path_signal, "kill -9 $$")) return -1;
-    if (write_script(path_capture_kid,
-                     "printf \"%s\" \"$TPB_KERNEL_ID\" > /tmp/tpbench_test_pli/kernel_id.out\nexit 0")) {
+    snprintf(body, sizeof(body),
+             "printf \"%%s\" \"$TPB_KERNEL_ID\" > %s/kernel_id.out\nexit 0",
+             g_mock_script_dir);
+    if (write_script(path_capture_kid, body)) {
         return -1;
     }
     return 0;
@@ -84,7 +92,10 @@ cleanup_mock_scripts(void)
     unlink(path_signal);
     unlink(path_capture_kid);
     unlink(path_kernel_id_out);
-    rmdir(MOCK_SCRIPT_DIR);
+    if (g_mock_script_dir[0] != '\0') {
+        rmdir(g_mock_script_dir);
+        g_mock_script_dir[0] = '\0';
+    }
     if (g_pli_workspace[0] != '\0') {
         snprintf(cmd, sizeof(cmd), "rm -rf %s", g_pli_workspace);
         (void)system(cmd);

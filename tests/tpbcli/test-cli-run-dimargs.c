@@ -65,6 +65,7 @@ test_list_expansion(void)
     if (err != 0) { tpb_dim_config_free(cfg); return 1; }
 
     ASSERT_EQ_INT("list vals n", 3, vals->n);
+    ASSERT_EQ_INT("list total_count", 3, tpb_dim_get_total_count(cfg));
     ASSERT_EQ_DBL("list val[0]", 16.0, vals->values[0], 1e-9);
     ASSERT_EQ_DBL("list val[1]", 32.0, vals->values[1], 1e-9);
     ASSERT_EQ_DBL("list val[2]", 64.0, vals->values[2], 1e-9);
@@ -101,6 +102,7 @@ test_recur_expansion(void)
     if (err != 0) { tpb_dim_config_free(cfg); return 1; }
 
     ASSERT_EQ_INT("recur vals n", 4, vals->n);
+    ASSERT_EQ_INT("recur total_count", 4, tpb_dim_get_total_count(cfg));
     ASSERT_EQ_DBL("recur val[0]", 16.0,  vals->values[0], 1e-9);
     ASSERT_EQ_DBL("recur val[1]", 32.0,  vals->values[1], 1e-9);
     ASSERT_EQ_DBL("recur val[2]", 64.0,  vals->values[2], 1e-9);
@@ -162,48 +164,6 @@ test_nested_rejected(void)
     return (g_fail > before) ? 1 : 0;
 }
 
-/* B1.5: total count matches Cartesian product */
-static int
-test_total_count(void)
-{
-    tpb_dim_config_t *cfg = NULL;
-    int err, total;
-    int before = g_fail;
-
-    /* Single element list: 1 value */
-    err = tpb_argp_parse_dim("x=[42]", &cfg);
-    ASSERT_EQ_INT("count single parse", 0, err);
-    if (err != 0) return 1;
-
-    total = tpb_dim_get_total_count(cfg);
-    ASSERT_EQ_INT("count single 1", 1, total);
-    tpb_dim_config_free(cfg);
-    cfg = NULL;
-
-    /* Flat list: 3 values */
-    cfg = NULL;
-    err = tpb_argp_parse_dim("x=[1,2,3]", &cfg);
-    ASSERT_EQ_INT("count flat parse", 0, err);
-    if (err != 0) return 1;
-
-    total = tpb_dim_get_total_count(cfg);
-    ASSERT_EQ_INT("count flat 3", 3, total);
-    tpb_dim_config_free(cfg);
-
-    /* Recursive: mul(@,2)(16,16,128,0) -> 4 values */
-    cfg = NULL;
-    err = tpb_argp_parse_dim(
-        "ms=mul(@,2)(16,16,128,0)", &cfg);
-    ASSERT_EQ_INT("count recur parse", 0, err);
-    if (err != 0) return 1;
-
-    total = tpb_dim_get_total_count(cfg);
-    ASSERT_EQ_INT("count recur 4", 4, total);
-    tpb_dim_config_free(cfg);
-
-    return (g_fail > before) ? 1 : 0;
-}
-
 typedef struct {
     const char *id;
     const char *name;
@@ -253,7 +213,6 @@ main(int argc, char **argv)
         { "B1.2", "recur_expansion",   test_recur_expansion   },
         { "B1.3", "string_list",       test_string_list       },
         { "B1.4", "nested_rejected",   test_nested_rejected    },
-        { "B1.5", "total_count",       test_total_count       },
     };
     int n = sizeof(cases) / sizeof(cases[0]);
     int fail = run_pack("B1", cases, n, filter);

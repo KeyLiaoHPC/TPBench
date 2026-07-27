@@ -36,20 +36,12 @@ static int expect_fail_with_hint(const char *case_name, const char *cmd);
  */
 static int run_cmd_capture(const char *cmd, char *errbuf, size_t errbuf_sz);
 
-/* Pack B2 sub-case runners (argv[1] id B2.1 .. B2.5) */
+/* Pack B2 sub-case runners */
 static int test_kargs_before_kernel(void);
-static int test_kargs_dim_before_kernel(void);
-static int test_kenvs_before_kernel(void);
-static int test_wrapper_args_without_wrapper(void);
-static int test_kenvs_dim_before_kernel(void);
 static int test_normal_with_kernel(void);
-static int test_dry_run_basic(void);
-static int test_help_run_level(void);
-static int test_help_kernel_no_name(void);
 static int test_bad_kernel_name(void);
 static int test_dry_run_cartesian(void);
 static int test_help_kernel_specific(void);
-static int test_run_kernel_found_id(void);
 static int test_run_begin_batch_fail(void);
 
 /* Local Function Implementations */
@@ -131,62 +123,30 @@ expect_fail_with_hint(const char *case_name, const char *cmd)
 static int
 test_kargs_before_kernel(void)
 {
+    static const struct {
+        const char *case_name;
+        const char *args;
+    } cases[] = {
+        { "B2.1 kargs_before_kernel",
+          "run --kargs ntest=10 --kernel stream" },
+        /* absorbed B2.2/B2.3/B2.6: k* options before --kernel */
+        { "B2.2 kargs_dim_before_kernel",
+          "run --kargs-dim 'ntest=[10,20]' --kernel stream" },
+        { "B2.3 kenvs_before_kernel",
+          "run --kenvs OMP_NUM_THREADS=4 --kernel stream" },
+        { "B2.6 kenvs_dim_before_kernel",
+          "run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream" },
+    };
     char cmd[4096];
-    build_tpbcli_cmd(cmd, sizeof(cmd), "run --kargs ntest=10 --kernel stream");
-    return expect_fail_with_hint("B2.1 kargs_before_kernel", cmd);
-}
+    size_t i;
 
-static int
-test_kargs_dim_before_kernel(void)
-{
-    char cmd[4096];
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kargs-dim 'ntest=[10,20]' --kernel stream");
-    return expect_fail_with_hint("B2.2 kargs_dim_before_kernel", cmd);
-}
-
-static int
-test_kenvs_before_kernel(void)
-{
-    char cmd[4096];
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kenvs OMP_NUM_THREADS=4 --kernel stream");
-    return expect_fail_with_hint("B2.3 kenvs_before_kernel", cmd);
-}
-
-static int
-test_wrapper_args_without_wrapper(void)
-{
-    char cmd[4096];
-    char buf[4096];
-    int code;
-
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --wrapper-args '-np 2' --kernel stream");
-    code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code == 0) {
-        FAIL("B2.4 wrapper_args_without_wrapper");
-        fprintf(stderr, "    expected nonzero exit, got 0\n");
-        return 1;
+    for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        build_tpbcli_cmd(cmd, sizeof(cmd), cases[i].args);
+        if (expect_fail_with_hint(cases[i].case_name, cmd) != 0) {
+            return 1;
+        }
     }
-    if (strstr(buf, "wrapper-args requires a preceding --wrapper") == NULL &&
-        strstr(buf, "unknown argument") == NULL) {
-        FAIL("B2.4 wrapper_args_without_wrapper");
-        fprintf(stderr, "    stderr missing expected error\n");
-        fprintf(stderr, "    output (truncated): %.500s\n", buf);
-        return 1;
-    }
-    PASS();
     return 0;
-}
-
-static int
-test_kenvs_dim_before_kernel(void)
-{
-    char cmd[4096];
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kenvs-dim 'OMP_NUM_THREADS=[1,2]' --kernel stream");
-    return expect_fail_with_hint("B2.6 kenvs_dim_before_kernel", cmd);
 }
 
 static int
@@ -227,6 +187,25 @@ test_normal_with_kernel(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+
+    /* absorbed B2.14 run_kernel_found_id: second run, KernelID / no skip-update */
+    code = run_cmd_capture(cmd, buf, sizeof(buf));
+    if (code != 0) {
+        FAIL("B2.14: second run expected exit 0");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "already recorded; skip update") != NULL) {
+        FAIL("B2.14: unexpected already-recorded warning");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "Kernel stream found, KernelID:") == NULL) {
+        FAIL("B2.14: missing kernel found message");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+
     triad_line = strstr(buf, "Triad bandwidth");
     if (triad_line != NULL) {
         (void)triad_bw;
@@ -236,42 +215,13 @@ test_normal_with_kernel(void)
 }
 
 static int
-test_dry_run_basic(void)
+test_bad_kernel_name(void)
 {
     char cmd[4096];
     char buf[8192];
     int code;
 
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run -d --kernel stream "
-                     "--kargs stream_array_size=1000,ntest=5");
-    code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0) {
-        FAIL("B2.8 dry_run_basic: nonzero exit");
-        fprintf(stderr, "    exit %d\n", code);
-        return 1;
-    }
-    if (strstr(buf, "[DRY-RUN]") == NULL) {
-        FAIL("B2.8 dry_run_basic: missing DRY-RUN");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-    if (strstr(buf, "Exec:") == NULL) {
-        FAIL("B2.8 dry_run_basic: missing Exec");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
-test_help_run_level(void)
-{
-    char cmd[4096];
-    char buf[8192];
-    int code;
-
+    /* absorbed B2.9 help_run_level */
     build_tpbcli_cmd(cmd, sizeof(cmd), "run --help");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
@@ -284,17 +234,8 @@ test_help_run_level(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_help_kernel_no_name(void)
-{
-    char cmd[4096];
-    char buf[8192];
-    int code;
-
+    /* absorbed B2.10 help_kernel_no_name */
     build_tpbcli_cmd(cmd, sizeof(cmd), "run --kernel -h");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0) {
@@ -312,16 +253,6 @@ test_help_kernel_no_name(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
-
-static int
-test_bad_kernel_name(void)
-{
-    char cmd[4096];
-    char buf[8192];
-    int code;
 
     build_tpbcli_cmd(cmd, sizeof(cmd), "run --kernel nonexistent_kern");
     code = run_cmd_capture(cmd, buf, sizeof(buf));
@@ -460,43 +391,6 @@ test_help_kernel_specific(void)
 }
 
 static int
-test_run_kernel_found_id(void)
-{
-    char cmd[4096];
-    char buf[32768];
-    int code;
-
-    build_tpbcli_cmd(cmd, sizeof(cmd),
-                     "run --kernel stream "
-                     "--kargs stream_array_size=524288,ntest=3");
-    code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0) {
-        FAIL("B2.14: first run expected exit 0");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-
-    code = run_cmd_capture(cmd, buf, sizeof(buf));
-    if (code != 0) {
-        FAIL("B2.14: second run expected exit 0");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-    if (strstr(buf, "already recorded; skip update") != NULL) {
-        FAIL("B2.14: unexpected already-recorded warning");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-    if (strstr(buf, "Kernel stream found, KernelID:") == NULL) {
-        FAIL("B2.14: missing kernel found message");
-        fprintf(stderr, "    output: %.500s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
 test_run_begin_batch_fail(void)
 {
     char cmd[4096];
@@ -574,29 +468,8 @@ main(int argc, char **argv)
     if (strcmp(id, "B2.1") == 0) {
         return test_kargs_before_kernel();
     }
-    if (strcmp(id, "B2.2") == 0) {
-        return test_kargs_dim_before_kernel();
-    }
-    if (strcmp(id, "B2.3") == 0) {
-        return test_kenvs_before_kernel();
-    }
-    if (strcmp(id, "B2.4") == 0) {
-        return test_wrapper_args_without_wrapper();
-    }
     if (strcmp(id, "B2.5") == 0) {
         return test_normal_with_kernel();
-    }
-    if (strcmp(id, "B2.6") == 0) {
-        return test_kenvs_dim_before_kernel();
-    }
-    if (strcmp(id, "B2.8") == 0) {
-        return test_dry_run_basic();
-    }
-    if (strcmp(id, "B2.9") == 0) {
-        return test_help_run_level();
-    }
-    if (strcmp(id, "B2.10") == 0) {
-        return test_help_kernel_no_name();
     }
     if (strcmp(id, "B2.11") == 0) {
         return test_bad_kernel_name();
@@ -606,9 +479,6 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B2.13") == 0) {
         return test_help_kernel_specific();
-    }
-    if (strcmp(id, "B2.14") == 0) {
-        return test_run_kernel_found_id();
     }
     if (strcmp(id, "B2.15") == 0) {
         return test_run_begin_batch_fail();

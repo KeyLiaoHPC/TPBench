@@ -7,10 +7,13 @@
 #include <string.h>
 #include "include/tpb-public.h"
 
+/* A9.2: propagate_swap; absorbs A9.1 MAKE/CAUSE/MODULE roundtrip */
 static int
-test_make_cause_module_roundtrip(void)
+test_propagate_swaps_module(void)
 {
     int err;
+    int origin;
+    int propagated;
 
     err = TPBE_MAKE(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL);
     if (TPBE_CAUSE(err) != TPBE_FILE_IO_FAIL) {
@@ -22,14 +25,6 @@ test_make_cause_module_roundtrip(void)
     if (!TPBE_IS_ENCODED(err)) {
         return 1;
     }
-    return 0;
-}
-
-static int
-test_propagate_swaps_module(void)
-{
-    int origin;
-    int propagated;
 
     origin = TPBE_MAKE(TPB_MOD_RAF_L2_TBATCH, TPBE_FILE_IO_FAIL);
     propagated = tpb_err_propagate(TPB_MOD_RAF_MISC, origin);
@@ -57,6 +52,7 @@ test_propagate_legacy_bare_cause(void)
     return 0;
 }
 
+/* A9.4: exit_status; absorbs A9.7 SUCCESS/HELP not-encoded */
 static int
 test_exit_status_uses_cause(void)
 {
@@ -70,6 +66,12 @@ test_exit_status_uses_cause(void)
         return 1;
     }
     if (tpb_err_to_exit_status(TPBE_SUCCESS) != 0) {
+        return 1;
+    }
+    if (TPBE_IS_ENCODED(TPBE_SUCCESS)) {
+        return 1;
+    }
+    if (TPBE_IS_ENCODED(TPBE_EXIT_ON_HELP)) {
         return 1;
     }
     return 0;
@@ -100,18 +102,6 @@ test_module_name_lookup(void)
     return 0;
 }
 
-static int
-test_success_not_encoded(void)
-{
-    if (TPBE_IS_ENCODED(TPBE_SUCCESS)) {
-        return 1;
-    }
-    if (TPBE_IS_ENCODED(TPBE_EXIT_ON_HELP)) {
-        return 1;
-    }
-    return 0;
-}
-
 typedef struct {
     const char *id;
     const char *name;
@@ -119,13 +109,11 @@ typedef struct {
 } test_case_t;
 
 static test_case_t cases[] = {
-    { "A9.1", "make_roundtrip", test_make_cause_module_roundtrip },
     { "A9.2", "propagate_swap", test_propagate_swaps_module },
     { "A9.3", "propagate_legacy", test_propagate_legacy_bare_cause },
     { "A9.4", "exit_status", test_exit_status_uses_cause },
     { "A9.5", "unknown_msg", test_get_err_msg_unknown_cause },
     { "A9.6", "module_name", test_module_name_lookup },
-    { "A9.7", "success_plain", test_success_not_encoded },
 };
 
 static int

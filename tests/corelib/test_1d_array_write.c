@@ -274,28 +274,6 @@ done:
     return ret;
 }
 
-/* ---- A5.1: doubles ---- */
-static int
-test_write_read_doubles(void)
-{
-    srand(101);
-    int n = 1 + (rand() % 100);
-    TPB_DTYPE dt = TPB_DOUBLE_T;
-    const char *nm = "bw_walltime";
-    return do_write_read_test(1, &dt, &n, &nm, "dbl");
-}
-
-/* ---- A5.2: floats ---- */
-static int
-test_write_read_floats(void)
-{
-    srand(202);
-    int n = 1 + (rand() % 256);
-    TPB_DTYPE dt = TPB_FLOAT_T;
-    const char *nm = "latency_f32";
-    return do_write_read_test(1, &dt, &n, &nm, "flt");
-}
-
 /* ---- A5.3: int64 ---- */
 static int
 test_write_read_int64(void)
@@ -307,44 +285,160 @@ test_write_read_int64(void)
     return do_write_read_test(1, &dt, &n, &nm, "i64");
 }
 
-/* ---- A5.4: int32 ---- */
-static int
-test_write_read_int32(void)
-{
-    srand(404);
-    int n = 1 + (rand() % 200);
-    TPB_DTYPE dt = TPB_INT32_T;
-    const char *nm = "error_codes";
-    return do_write_read_test(1, &dt, &n, &nm, "i32");
-}
-
-/* ---- A5.5: random dtype + random length ---- */
-static int
-test_write_read_random_len(void)
-{
-    srand(505);
-    TPB_DTYPE choices[] = { TPB_INT32_T, TPB_INT64_T, TPB_FLOAT_T, TPB_DOUBLE_T };
-    TPB_DTYPE dt = choices[rand() % 4];
-    int n = 1 + (rand() % 1000);
-    const char *nm = "random_metric";
-    return do_write_read_test(1, &dt, &n, &nm, "rnd");
-}
-
-/* ---- A5.6: multiple outputs ---- */
+/*
+ * A5.6: multiple outputs with fixed payloads; absorbs A5.1/A5.2/A5.4
+ * dtype coverage and A5.5 longer-array length coverage.
+ */
 static int
 test_write_read_multi(void)
 {
-    srand(606);
-    int nout = 3;
-    TPB_DTYPE dtypes[3] = { TPB_DOUBLE_T, TPB_INT32_T, TPB_FLOAT_T };
-    int counts[3];
-    const char *names[3] = { "throughput", "iterations", "avg_latency" };
+    int err, ret = 0;
+    tpb_k_rthdl_t hdl;
+    const int nout = 4;
+    TPB_DTYPE dtypes[4] = {
+        TPB_DOUBLE_T, TPB_FLOAT_T, TPB_INT32_T, TPB_DOUBLE_T
+    };
+    int counts[4] = { 2, 3, 4, 512 };
+    const char *names[4] = {
+        "throughput", "avg_latency", "iterations", "long_series"
+    };
+    double dbl_data[2] = { 1.5, 2.5 };
+    float flt_data[3] = { 0.1f, 0.2f, 0.3f };
+    int32_t i32_data[4] = { 10, 20, 30, 40 };
+    double long_data[512];
+    void *fixed_data[4];
+    size_t data_sizes[4];
+    int i;
 
-    counts[0] = 1 + (rand() % 64);
-    counts[1] = 1 + (rand() % 128);
-    counts[2] = 1 + (rand() % 32);
+    for (i = 0; i < 512; i++) {
+        long_data[i] = (double)(i + 1) * 0.01;
+    }
+    fixed_data[0] = dbl_data;
+    fixed_data[1] = flt_data;
+    fixed_data[2] = i32_data;
+    fixed_data[3] = long_data;
+    data_sizes[0] = sizeof(dbl_data);
+    data_sizes[1] = sizeof(flt_data);
+    data_sizes[2] = sizeof(i32_data);
+    data_sizes[3] = sizeof(long_data);
 
-    return do_write_read_test(nout, dtypes, counts, names, "multi");
+    setup_test_dir("multi");
+    err = tpb_raf_init_workspace(g_test_dir);
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    err = mock_setup_driver();
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+    err = mock_build_handle("mock_pli_test", &hdl);
+    if (err) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    hdl.respack.n = nout;
+    hdl.respack.outputs = (tpb_k_output_t *)calloc(nout, sizeof(tpb_k_output_t));
+    if (hdl.respack.outputs == NULL) {
+        cleanup_test_dir();
+        return 1;
+    }
+
+    for (i = 0; i < nout; i++) {
+        snprintf(hdl.respack.outputs[i].name,
+                 sizeof(hdl.respack.outputs[i].name), "%s", names[i]);
+        snprintf(hdl.respack.outputs[i].note,
+                 sizeof(hdl.respack.outputs[i].note), "test output %d", i);
+        hdl.respack.outputs[i].dtype = dtypes[i];
+        hdl.respack.outputs[i].unit  = TPB_UNIT_B;
+        hdl.respack.outputs[i].n     = counts[i];
+        hdl.respack.outputs[i].p     = malloc(data_sizes[i]);
+        if (hdl.respack.outputs[i].p == NULL) {
+            ret = 1;
+            goto done;
+        }
+        memcpy(hdl.respack.outputs[i].p, fixed_data[i], data_sizes[i]);
+    }
+
+    err = tpb_k_write_task(&hdl, 0, NULL);
+    if (err) {
+        fprintf(stderr, "  FAIL: tpb_k_write_task returned %d\n", err);
+        ret = 1;
+        goto done;
+    }
+
+    {
+        task_entry_t *entries = NULL;
+        int count = 0;
+        unsigned char new_task_id[20];
+        task_attr_t rattr;
+        void *rdata = NULL;
+        uint64_t rdatasize = 0;
+        uint64_t offset;
+        int j;
+
+        err = tpb_raf_entry_list_task(g_test_dir, &entries, &count);
+        if (err || count != 1) {
+            fprintf(stderr, "  FAIL: expected 1 task entry, got %d (err=%d)\n",
+                    count, err);
+            free(entries);
+            ret = 1;
+            goto done;
+        }
+        memcpy(new_task_id, entries[count - 1].task_record_id, 20);
+        free(entries);
+
+        err = tpb_raf_record_read_task(g_test_dir, new_task_id,
+                                       &rattr, &rdata, &rdatasize);
+        if (err) {
+            fprintf(stderr,
+                    "  FAIL: tpb_raf_record_read_task returned %d\n", err);
+            ret = 1;
+            goto done;
+        }
+
+        if (rattr.noutput != (uint32_t)nout) {
+            fprintf(stderr, "  FAIL: noutput expected %d, got %u\n",
+                    nout, rattr.noutput);
+            ret = 1;
+        }
+
+        offset = 0;
+        for (j = 0; j < rattr.ninput; j++) {
+            offset += rattr.headers[j].data_size;
+        }
+        for (j = 0; j < nout && ret == 0; j++) {
+            size_t blksz = data_sizes[j];
+
+            if (offset + blksz > rdatasize) {
+                fprintf(stderr, "  FAIL: data too short for output[%d]\n", j);
+                ret = 1;
+                break;
+            }
+            if (memcmp((uint8_t *)rdata + offset, fixed_data[j], blksz) != 0) {
+                fprintf(stderr, "  FAIL: output[%d] data mismatch\n", j);
+                ret = 1;
+            }
+            offset += blksz;
+        }
+
+        tpb_raf_free_headers(rattr.headers, rattr.nheader);
+        free(rdata);
+    }
+
+done:
+    for (i = 0; i < nout; i++) {
+        free(hdl.respack.outputs[i].p);
+    }
+    free(hdl.respack.outputs);
+    hdl.respack.outputs = NULL;
+    hdl.respack.n = 0;
+    tpb_driver_clean_handle(&hdl);
+    cleanup_test_dir();
+    return ret;
 }
 
 /*
@@ -634,11 +728,7 @@ main(int argc, char **argv)
     const char *filter = (argc >= 2) ? argv[1] : NULL;
 
     test_case_t cases[] = {
-        { "A5.1", "write_read_doubles",    test_write_read_doubles },
-        { "A5.2", "write_read_floats",     test_write_read_floats },
         { "A5.3", "write_read_int64",      test_write_read_int64 },
-        { "A5.4", "write_read_int32",      test_write_read_int32 },
-        { "A5.5", "write_read_random_len", test_write_read_random_len },
         { "A5.6", "write_read_multi",      test_write_read_multi },
         { "A5.7", "skip_unalloc_output",
             test_write_read_skip_unalloc_output },

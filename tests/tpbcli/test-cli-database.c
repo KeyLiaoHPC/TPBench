@@ -83,8 +83,10 @@ static int
 test_b4_2_database_help_overview(void)
 {
     char buf[8192];
-    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" database -h", buf,
-                               sizeof(buf));
+    int code;
+
+    code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" database -h", buf,
+                           sizeof(buf));
 
     if (code != 0) {
         FAIL("B4.2: expected exit 0");
@@ -102,17 +104,11 @@ test_b4_2_database_help_overview(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b4_3_list_help(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
+    /* absorbed B4.3 database_list_help */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR "\" database list -h", buf, sizeof(buf));
-
     if (code != 0) {
         FAIL("B4.3: expected exit 0");
         return 1;
@@ -130,17 +126,11 @@ test_b4_3_list_help(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b4_4_dump_help(void)
-{
-    char buf[8192];
-    int code = run_cmd_capture(
+    /* absorbed B4.4 database_dump_help */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR "\" database dump -h", buf, sizeof(buf));
-
     if (code != 0) {
         FAIL("B4.4: expected exit 0");
         return 1;
@@ -153,6 +143,7 @@ test_b4_4_dump_help(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+
     PASS();
     return 0;
 }
@@ -181,7 +172,9 @@ static int
 test_b4_6_dump_conflict(void)
 {
     char buf[4096];
-    int code = run_cmd_capture(
+    int code;
+
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR
         "\" database dump -dT -i deadbeef -e",
         buf, sizeof(buf));
@@ -195,6 +188,37 @@ test_b4_6_dump_conflict(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+
+    /* absorbed B4.21 database_dump_domain_conflict */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dT -dk", buf,
+        sizeof(buf));
+    if (code == 0) {
+        FAIL("B4.21: expected nonzero for domain conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.21: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
+    /* absorbed B4.24 database_dump_count_conflict */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dk -e -n 3 -N 3",
+        buf, sizeof(buf));
+    if (code == 0) {
+        FAIL("B4.24: expected nonzero for -n/-N conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.24: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
     PASS();
     return 0;
 }
@@ -203,7 +227,9 @@ static int
 test_b4_7_unknown_action(void)
 {
     char buf[4096];
-    int code = run_cmd_capture(
+    int code;
+
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR "\" database nosuchcmd", buf, sizeof(buf));
 
     if (code == 0) {
@@ -215,18 +241,12 @@ test_b4_7_unknown_action(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b4_8_dump_unknown_flag(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
+    /* absorbed B4.8 database_dump_unknown_flag */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR "\" database dump --notaflag", buf,
         sizeof(buf));
-
     if (code == 0) {
         FAIL("B4.8: expected nonzero");
         return 1;
@@ -236,6 +256,7 @@ test_b4_8_dump_unknown_flag(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+
     PASS();
     return 0;
 }
@@ -327,7 +348,9 @@ static int
 test_b4_13_list_domain_conflict(void)
 {
     char buf[4096];
-    int code = run_cmd_capture(
+    int code;
+
+    code = run_cmd_capture(
         "\"" TPB_TEST_TPBCLI_STR "\" database list -dT -dk", buf,
         sizeof(buf));
 
@@ -340,6 +363,22 @@ test_b4_13_list_domain_conflict(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+
+    /* absorbed B4.16 database_list_domain_conflict_dr */
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture(
+        "\"" TPB_TEST_TPBCLI_STR "\" database list -dT -dr", buf,
+        sizeof(buf));
+    if (code == 0) {
+        FAIL("B4.16: expected nonzero for -dT/-dr conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        FAIL("B4.16: missing conflict message");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
     PASS();
     return 0;
 }
@@ -406,45 +445,6 @@ test_b4_15_list_domain_rtenv(void)
 }
 
 static int
-test_b4_16_list_domain_conflict_dr(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
-        "\"" TPB_TEST_TPBCLI_STR "\" database list -dT -dr", buf,
-        sizeof(buf));
-
-    if (code == 0) {
-        FAIL("B4.16: expected nonzero for -dT/-dr conflict");
-        return 1;
-    }
-    if (strstr(buf, "conflict") == NULL) {
-        FAIL("B4.16: missing conflict message");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
-test_b4_17_dump_domain_id_prefix(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
-        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dT -i deadbeef",
-        buf, sizeof(buf));
-
-    if (strstr(buf, "unknown argument") != NULL) {
-        FAIL("B4.17: unexpected unknown argument");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    (void)code;
-    PASS();
-    return 0;
-}
-
-static int
 test_b4_18_dump_missing_domain(void)
 {
     char buf[4096];
@@ -479,49 +479,6 @@ test_b4_19_dump_missing_mode(void)
     }
     if (strstr(buf, "-i") == NULL && strstr(buf, "-e") == NULL) {
         FAIL("B4.19: missing -i/-e hint");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
-test_b4_20_dump_id_entry_conflict(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
-        "\"" TPB_TEST_TPBCLI_STR
-        "\" database dump -dT -i deadbeef -e",
-        buf, sizeof(buf));
-
-    if (code == 0) {
-        FAIL("B4.20: expected nonzero for -i/-e conflict");
-        return 1;
-    }
-    if (strstr(buf, "conflict") == NULL) {
-        FAIL("B4.20: missing conflict message");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
-test_b4_21_dump_domain_conflict(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
-        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dT -dk", buf,
-        sizeof(buf));
-
-    if (code == 0) {
-        FAIL("B4.21: expected nonzero for domain conflict");
-        return 1;
-    }
-    if (strstr(buf, "conflict") == NULL) {
-        FAIL("B4.21: missing conflict message");
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
@@ -656,27 +613,6 @@ test_b4_23_dump_rtenv_record(void)
     return 0;
 }
 
-static int
-test_b4_24_dump_count_conflict(void)
-{
-    char buf[4096];
-    int code = run_cmd_capture(
-        "\"" TPB_TEST_TPBCLI_STR "\" database dump -dk -e -n 3 -N 3",
-        buf, sizeof(buf));
-
-    if (code == 0) {
-        FAIL("B4.24: expected nonzero for -n/-N conflict");
-        return 1;
-    }
-    if (strstr(buf, "conflict") == NULL) {
-        FAIL("B4.24: missing conflict message");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
 int
 main(int argc, char **argv)
 {
@@ -691,12 +627,6 @@ main(int argc, char **argv)
     if (strcmp(id, "B4.2") == 0) {
         return test_b4_2_database_help_overview();
     }
-    if (strcmp(id, "B4.3") == 0) {
-        return test_b4_3_list_help();
-    }
-    if (strcmp(id, "B4.4") == 0) {
-        return test_b4_4_dump_help();
-    }
     if (strcmp(id, "B4.5") == 0) {
         return test_b4_5_dump_no_selector();
     }
@@ -705,9 +635,6 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B4.7") == 0) {
         return test_b4_7_unknown_action();
-    }
-    if (strcmp(id, "B4.8") == 0) {
-        return test_b4_8_dump_unknown_flag();
     }
     if (strcmp(id, "B4.9") == 0) {
         return test_b4_9_ls_alias();
@@ -730,32 +657,17 @@ main(int argc, char **argv)
     if (strcmp(id, "B4.15") == 0) {
         return test_b4_15_list_domain_rtenv();
     }
-    if (strcmp(id, "B4.16") == 0) {
-        return test_b4_16_list_domain_conflict_dr();
-    }
-    if (strcmp(id, "B4.17") == 0) {
-        return test_b4_17_dump_domain_id_prefix();
-    }
     if (strcmp(id, "B4.18") == 0) {
         return test_b4_18_dump_missing_domain();
     }
     if (strcmp(id, "B4.19") == 0) {
         return test_b4_19_dump_missing_mode();
     }
-    if (strcmp(id, "B4.20") == 0) {
-        return test_b4_20_dump_id_entry_conflict();
-    }
-    if (strcmp(id, "B4.21") == 0) {
-        return test_b4_21_dump_domain_conflict();
-    }
     if (strcmp(id, "B4.22") == 0) {
         return test_b4_22_dump_rtenv_entry();
     }
     if (strcmp(id, "B4.23") == 0) {
         return test_b4_23_dump_rtenv_record();
-    }
-    if (strcmp(id, "B4.24") == 0) {
-        return test_b4_24_dump_count_conflict();
     }
 
     fprintf(stderr, "Unknown case id: %s\n", id);

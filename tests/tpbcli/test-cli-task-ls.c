@@ -22,35 +22,27 @@ static int g_fail;
 #define PASS() do { g_pass++; } while (0)
 
 static int
-test_b7_1_missing_subcmd(void)
-{
-    char buf[4096];
-    int code;
-
-    tpb_test_task_fixture_setup();
-    code = tpb_test_task_run_cmd("", buf, sizeof(buf));
-    tpb_test_task_fixture_cleanup();
-
-    if (code == 0) {
-        FAIL("B7.1: expected nonzero exit");
-        return 1;
-    }
-    if (strstr(buf, "ls") == NULL || strstr(buf, "list") == NULL) {
-        FAIL("B7.1: expected ls|list hint");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
 test_b7_2_task_help(void)
 {
     char buf[8192];
     int code;
 
+    /* absorbed B7.1 task_missing_subcmd */
     tpb_test_task_fixture_setup();
+    code = tpb_test_task_run_cmd("", buf, sizeof(buf));
+    if (code == 0) {
+        tpb_test_task_fixture_cleanup();
+        FAIL("B7.1: expected nonzero exit");
+        return 1;
+    }
+    if (strstr(buf, "ls") == NULL || strstr(buf, "list") == NULL) {
+        tpb_test_task_fixture_cleanup();
+        FAIL("B7.1: expected ls|list hint");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
+    memset(buf, 0, sizeof(buf));
     code = tpb_test_task_run_cmd("-h", buf, sizeof(buf));
     tpb_test_task_fixture_cleanup();
 
@@ -64,16 +56,8 @@ test_b7_2_task_help(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b7_3_ls_help(void)
-{
-    char buf[4096];
-    int code;
-
+    /* absorbed B7.3 task_ls_help */
     tpb_test_task_fixture_setup();
     code = tpb_test_task_run_cmd("ls -h", buf, sizeof(buf));
     tpb_test_task_fixture_cleanup();
@@ -88,6 +72,7 @@ test_b7_3_ls_help(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
+
     PASS();
     return 0;
 }
@@ -223,6 +208,21 @@ test_b7_7_count_limits(void)
     if (code != 0 || strstr(buf, "shown 5 results") == NULL) {
         tpb_test_task_fixture_cleanup();
         FAIL("B7.7: -n 0 expected all 5 shown");
+        fprintf(stderr, "    output: %.400s\n", buf);
+        return 1;
+    }
+
+    /* absorbed B7.14 ls_count_conflict */
+    memset(buf, 0, sizeof(buf));
+    code = tpb_test_task_run_cmd("ls -n 3 -N 3", buf, sizeof(buf));
+    if (code == 0) {
+        tpb_test_task_fixture_cleanup();
+        FAIL("B7.14: expected nonzero for -n/-N conflict");
+        return 1;
+    }
+    if (strstr(buf, "conflict") == NULL) {
+        tpb_test_task_fixture_cleanup();
+        FAIL("B7.14: missing conflict message");
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
@@ -517,29 +517,6 @@ test_b7_13_ridmap_zero_preserve(void)
 }
 
 static int
-test_b7_14_count_conflict(void)
-{
-    char buf[4096];
-    int code;
-
-    tpb_test_task_fixture_setup();
-    code = tpb_test_task_run_cmd("ls -n 3 -N 3", buf, sizeof(buf));
-    tpb_test_task_fixture_cleanup();
-
-    if (code == 0) {
-        FAIL("B7.14: expected nonzero for -n/-N conflict");
-        return 1;
-    }
-    if (strstr(buf, "conflict") == NULL) {
-        FAIL("B7.14: missing conflict message");
-        fprintf(stderr, "    output: %.400s\n", buf);
-        return 1;
-    }
-    PASS();
-    return 0;
-}
-
-static int
 test_b7_15_kernel_id_filter(void)
 {
     char buf[8192];
@@ -597,14 +574,8 @@ main(int argc, char **argv)
     g_pass = 0;
     g_fail = 0;
 
-    if (strcmp(id, "B7.1") == 0) {
-        return test_b7_1_missing_subcmd();
-    }
     if (strcmp(id, "B7.2") == 0) {
         return test_b7_2_task_help();
-    }
-    if (strcmp(id, "B7.3") == 0) {
-        return test_b7_3_ls_help();
     }
     if (strcmp(id, "B7.4") == 0) {
         return test_b7_4_list_alias();
@@ -635,9 +606,6 @@ main(int argc, char **argv)
     }
     if (strcmp(id, "B7.13") == 0) {
         return test_b7_13_ridmap_zero_preserve();
-    }
-    if (strcmp(id, "B7.14") == 0) {
-        return test_b7_14_count_conflict();
     }
     if (strcmp(id, "B7.15") == 0) {
         return test_b7_15_kernel_id_filter();

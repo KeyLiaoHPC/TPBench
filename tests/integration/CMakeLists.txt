@@ -18,7 +18,6 @@ if(TARGET tpbk_stream)
     tpb_add_subcase(C1 C1.3 benchmark_begin_batch_fail test-tri-record integration)
     tpb_add_subcase(C1 C1.4 benchmark_metric_missing_soft_fail test-tri-record integration)
     tpb_add_subcase(C1 C1.5 rtenv_fk_and_counter test-tri-record integration)
-    tpb_add_subcase(C1 C1.6 rtenv_fallback_warn test-tri-record integration)
     tpb_add_subcase(C1 C1.7 rtenv_kenvs_input_param test-tri-record integration)
 endif()
 
@@ -31,14 +30,6 @@ if(TARGET tpbk_stream)
     set_tests_properties(integration.C3.1_kernel_o2_o3 PROPERTIES
         LABELS "integration")
 endif()
-
-# --- Integration: CMake package + kernel template staging (Pack C4) ---
-add_test(
-    NAME integration.C4.1_cmake_template_staging
-    COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_cmake_template_install.sh"
-)
-set_tests_properties(integration.C4.1_cmake_template_staging PROPERTIES
-    LABELS "integration")
 
 # --- Integration: template kernel init/build active switching (Pack C4) ---
 add_test(

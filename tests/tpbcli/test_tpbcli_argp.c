@@ -201,9 +201,11 @@ test_parse_basic(void)
     tpbcli_argnode_t *run;
     tpbcli_argnode_t *kern;
     tpbcli_argnode_t *out;
+    tpbcli_argnode_t *a;
     char *argv[] = { "prog", "run", "--kernel", "stream", "--kargs", "n=10" };
     int argc = 6;
     int err;
+    int r;
     int before = g_fail;
 
     memset(&tr, 0, sizeof(tr));
@@ -254,6 +256,37 @@ test_parse_basic(void)
     ASSERT_PTR("leaf found", out != NULL);
 
     tpbcli_argtree_destroy(tree);
+
+    /* absorbed B3.10 find_arg depth cases */
+    tree = tpbcli_argtree_create("prog", "t");
+    a = tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
+        .name = "a",
+        .type = TPBCLI_ARG_CMD,
+        .max_chosen = 1,
+    });
+    tpbcli_add_arg(a, &(tpbcli_argconf_t){
+        .name = "leaf",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = 1,
+        .parse_fn = parse_kernel,
+    });
+
+    out = NULL;
+    r = tpbcli_find_arg(&tree->root, "leaf", 2, &out);
+    ASSERT_EQ_INT("find leaf depth2", TPBE_SUCCESS, r);
+    ASSERT_PTR("leaf ptr", out != NULL);
+    ASSERT_EQ_STR("leaf name", "leaf", out->name);
+
+    out = NULL;
+    r = tpbcli_find_arg(&tree->root, "leaf", 1, &out);
+    ASSERT_EQ_ERR("leaf not depth1", TPBE_LIST_NOT_FOUND, r);
+
+    out = NULL;
+    r = tpbcli_find_arg(&tree->root, "a", 1, &out);
+    ASSERT_EQ_INT("find a", TPBE_SUCCESS, r);
+    ASSERT_EQ_STR("a name", "a", out->name);
+
+    tpbcli_argtree_destroy(tree);
     return (g_fail > before) ? 1 : 0;
 }
 
@@ -296,79 +329,6 @@ test_mandatory_and_preset(void)
     err = tpbcli_parse_args(tree, 4, argv2);
     ASSERT_EQ_INT("ok with preset timer", TPBE_SUCCESS, err);
     ASSERT_EQ_INT("timer not set", 0, timer->is_set);
-
-    tpbcli_argtree_destroy(tree);
-    return (g_fail > before) ? 1 : 0;
-}
-
-static int
-test_exclusive_conflict(void)
-{
-    tpbcli_argtree_t *tree;
-    char *argv[] = { "prog", "run", "benchmark" };
-    int before = g_fail;
-
-    tree = tpbcli_argtree_create("prog", "t");
-    tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
-        .name = "run",
-        .type = TPBCLI_ARG_CMD,
-        .flags = TPBCLI_ARGF_EXCLUSIVE,
-        .max_chosen = 1,
-    });
-    tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
-        .name = "benchmark",
-        .type = TPBCLI_ARG_CMD,
-        .flags = TPBCLI_ARGF_EXCLUSIVE,
-        .max_chosen = 1,
-    });
-
-    ASSERT_EQ_ERR("exclusive", TPBE_CLI_FAIL,
-                  tpbcli_parse_args(tree, 3, argv));
-
-    tpbcli_argtree_destroy(tree);
-    return (g_fail > before) ? 1 : 0;
-}
-
-static int
-test_conflict_opts(void)
-{
-    tpbcli_argtree_t *tree;
-    tpbcli_argnode_t *run;
-    char *argv_bad[] = { "prog", "run", "-P", "4", "-F", "x" };
-    char *argv_ok[] = { "prog", "run", "-P", "4", "--timer", "t" };
-    int before = g_fail;
-
-    tree = tpbcli_argtree_create("prog", "t");
-    run = tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
-        .name = "run",
-        .type = TPBCLI_ARG_CMD,
-        .max_chosen = 1,
-    });
-    tpbcli_add_arg(run, &(tpbcli_argconf_t){
-        .name = "-P",
-        .type = TPBCLI_ARG_OPT,
-        .max_chosen = 1,
-        .conflict_opts = (const char *[]){ "-F", NULL },
-        .parse_fn = parse_p,
-    });
-    tpbcli_add_arg(run, &(tpbcli_argconf_t){
-        .name = "-F",
-        .type = TPBCLI_ARG_OPT,
-        .max_chosen = 1,
-        .conflict_opts = (const char *[]){ "-P", NULL },
-        .parse_fn = parse_f,
-    });
-    tpbcli_add_arg(run, &(tpbcli_argconf_t){
-        .name = "--timer",
-        .type = TPBCLI_ARG_OPT,
-        .max_chosen = 1,
-        .parse_fn = parse_timer,
-    });
-
-    ASSERT_EQ_ERR("conflict P F", TPBE_CLI_FAIL,
-                  tpbcli_parse_args(tree, 6, argv_bad));
-    ASSERT_EQ_INT("P timer ok", TPBE_SUCCESS,
-                  tpbcli_parse_args(tree, 6, argv_ok));
 
     tpbcli_argtree_destroy(tree);
     return (g_fail > before) ? 1 : 0;
@@ -573,47 +533,64 @@ test_max_chosen(void)
                   tpbcli_parse_args(t2, 3, av_twice));
 
     tpbcli_argtree_destroy(t2);
-    return (g_fail > before) ? 1 : 0;
-}
 
-static int
-test_find_arg(void)
-{
-    tpbcli_argtree_t *tree;
-    tpbcli_argnode_t *out;
-    tpbcli_argnode_t *a;
-    int before = g_fail;
-    int r;
+    /* absorbed B3.4 exclusive_conflict */
+    t2 = tpbcli_argtree_create("prog", "t");
+    tpbcli_add_arg(&t2->root, &(tpbcli_argconf_t){
+        .name = "run",
+        .type = TPBCLI_ARG_CMD,
+        .flags = TPBCLI_ARGF_EXCLUSIVE,
+        .max_chosen = 1,
+    });
+    tpbcli_add_arg(&t2->root, &(tpbcli_argconf_t){
+        .name = "benchmark",
+        .type = TPBCLI_ARG_CMD,
+        .flags = TPBCLI_ARGF_EXCLUSIVE,
+        .max_chosen = 1,
+    });
+    {
+        char *argv_ex[] = { "prog", "run", "benchmark" };
+        ASSERT_EQ_ERR("exclusive", TPBE_CLI_FAIL,
+                      tpbcli_parse_args(t2, 3, argv_ex));
+    }
+    tpbcli_argtree_destroy(t2);
 
-    tree = tpbcli_argtree_create("prog", "t");
-    a = tpbcli_add_arg(&tree->root, &(tpbcli_argconf_t){
-        .name = "a",
+    /* absorbed B3.5 conflict_opts */
+    t2 = tpbcli_argtree_create("prog", "t");
+    run1 = tpbcli_add_arg(&t2->root, &(tpbcli_argconf_t){
+        .name = "run",
         .type = TPBCLI_ARG_CMD,
         .max_chosen = 1,
     });
-    tpbcli_add_arg(a, &(tpbcli_argconf_t){
-        .name = "leaf",
+    tpbcli_add_arg(run1, &(tpbcli_argconf_t){
+        .name = "-P",
         .type = TPBCLI_ARG_OPT,
         .max_chosen = 1,
-        .parse_fn = parse_kernel,
+        .conflict_opts = (const char *[]){ "-F", NULL },
+        .parse_fn = parse_p,
     });
-
-    out = NULL;
-    r = tpbcli_find_arg(&tree->root, "leaf", 2, &out);
-    ASSERT_EQ_INT("find leaf depth2", TPBE_SUCCESS, r);
-    ASSERT_PTR("leaf ptr", out != NULL);
-    ASSERT_EQ_STR("leaf name", "leaf", out->name);
-
-    out = NULL;
-    r = tpbcli_find_arg(&tree->root, "leaf", 1, &out);
-    ASSERT_EQ_ERR("leaf not depth1", TPBE_LIST_NOT_FOUND, r);
-
-    out = NULL;
-    r = tpbcli_find_arg(&tree->root, "a", 1, &out);
-    ASSERT_EQ_INT("find a", TPBE_SUCCESS, r);
-    ASSERT_EQ_STR("a name", "a", out->name);
-
-    tpbcli_argtree_destroy(tree);
+    tpbcli_add_arg(run1, &(tpbcli_argconf_t){
+        .name = "-F",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = 1,
+        .conflict_opts = (const char *[]){ "-P", NULL },
+        .parse_fn = parse_f,
+    });
+    tpbcli_add_arg(run1, &(tpbcli_argconf_t){
+        .name = "--timer",
+        .type = TPBCLI_ARG_OPT,
+        .max_chosen = 1,
+        .parse_fn = parse_timer,
+    });
+  {
+        char *argv_bad[] = { "prog", "run", "-P", "4", "-F", "x" };
+        char *argv_ok[] = { "prog", "run", "-P", "4", "--timer", "t" };
+        ASSERT_EQ_ERR("conflict P F", TPBE_CLI_FAIL,
+                      tpbcli_parse_args(t2, 6, argv_bad));
+        ASSERT_EQ_INT("P timer ok", TPBE_SUCCESS,
+                      tpbcli_parse_args(t2, 6, argv_ok));
+    }
+    tpbcli_argtree_destroy(t2);
     return (g_fail > before) ? 1 : 0;
 }
 
@@ -710,13 +687,10 @@ main(int argc, char **argv)
         { "B3.1",  "tree_lifecycle",       test_tree_lifecycle       },
         { "B3.2",  "parse_basic",          test_parse_basic          },
         { "B3.3",  "mandatory_and_preset", test_mandatory_and_preset },
-        { "B3.4",  "exclusive_conflict",   test_exclusive_conflict   },
-        { "B3.5",  "conflict_opts",        test_conflict_opts        },
         { "B3.6",  "help_dispatch",        test_help_dispatch        },
         { "B3.7",  "unknown_arg",          test_unknown_arg          },
         { "B3.8",  "stack_pop_retry",      test_stack_pop_retry      },
         { "B3.9",  "max_chosen",           test_max_chosen           },
-        { "B3.10", "find_arg",             test_find_arg             },
         { "B3.11", "delegate_subcmd",      test_delegate_subcmd      },
     };
     int n = (int)(sizeof(cases) / sizeof(cases[0]));

@@ -117,10 +117,14 @@ count_rtenv_entries(void)
 }
 
 static int
-test_b6_1_missing_subcmd(void)
+test_b6_2_rtenv_help(void)
 {
-    char buf[4096];
-    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" rtenv", buf, sizeof(buf));
+    char buf[8192];
+    int code;
+
+    /* absorbed B6.1 rtenv_missing_subcmd */
+    code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" rtenv", buf,
+                           sizeof(buf));
     if (code == 0) {
         FAIL("B6.1: expected nonzero exit");
         return 1;
@@ -131,16 +135,10 @@ test_b6_1_missing_subcmd(void)
         fprintf(stderr, "    output: %.400s\n", buf);
         return 1;
     }
-    PASS();
-    return 0;
-}
 
-static int
-test_b6_2_rtenv_help(void)
-{
-    char buf[8192];
-    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" rtenv -h", buf,
-                               sizeof(buf));
+    memset(buf, 0, sizeof(buf));
+    code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" rtenv -h", buf,
+                           sizeof(buf));
 
     if (code != 0) {
         FAIL("B6.2: expected exit 0");
@@ -497,9 +495,6 @@ main(int argc, char **argv)
     const char *filter = (argc > 1) ? argv[1] : NULL;
     int fail = 0;
 
-    if (filter == NULL || strcmp(filter, "B6.1") == 0) {
-        fail += test_b6_1_missing_subcmd();
-    }
     if (filter == NULL || strcmp(filter, "B6.2") == 0) {
         fail += test_b6_2_rtenv_help();
     }

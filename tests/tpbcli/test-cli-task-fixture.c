@@ -167,8 +167,10 @@ tpb_test_task_run_cmd(const char *task_args, char *outbuf, size_t outbuf_sz)
     if (outbuf != NULL && outbuf_sz > 0) {
         outbuf[0] = '\0';
     }
+    /* Force non-TTY stdin so export keep-current note and prompts are
+       deterministic under interactive ctest (B7.45). */
     snprintf(cmd, sizeof(cmd),
-             "\"%s\" --workspace \"%s\" task %s 2>&1",
+             "\"%s\" --workspace \"%s\" task %s </dev/null 2>&1",
              TPB_TEST_TPBCLI_STR, tpb_test_task_ws, task_args);
     fp = popen(cmd, "r");
     if (fp == NULL) {

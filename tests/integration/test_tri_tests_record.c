@@ -623,18 +623,12 @@ test_rtenv_counter_and_task_env(void)
     free(tb);
     free(tk);
     free(re);
+    tb = NULL;
+    tk = NULL;
+    re = NULL;
     cleanup_test_dir();
-    return (g_fail > 0) ? 1 : 0;
-}
 
-static int
-test_rtenv_fallback_warn(void)
-{
-    int err;
-    char cmd[2048];
-    tbatch_entry_t *tb = NULL;
-    int tb_n = 0;
-
+    /* --- Fallback: independent workspace, no TPB_RTENV_ID (absorbed C1.6) --- */
     setup_test_dir();
     err = tpb_raf_init_workspace(g_test_dir);
     CHECK("rtenv_fallback init", err == 0);
@@ -780,7 +774,6 @@ main(int argc, char **argv)
         {"C1.4", "benchmark_metric_missing_soft_fail",
          test_benchmark_metric_missing_soft_fail},
         {"C1.5", "rtenv_counter_and_task_env", test_rtenv_counter_and_task_env},
-        {"C1.6", "rtenv_fallback_warn", test_rtenv_fallback_warn},
         {"C1.7", "rtenv_kenvs_input_param", test_rtenv_kenvs_input_param},
     };
     int n = sizeof(cases) / sizeof(cases[0]);

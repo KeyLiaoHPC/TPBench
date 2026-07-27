@@ -225,6 +225,7 @@ test_b7_44_subrank_filter(void)
     return 0;
 }
 
+/* B7.45 — non-TTY stdin prints keep-current note (fixture forces </dev/null). */
 static int
 test_b7_45_non_tty_note(void)
 {
@@ -247,6 +248,7 @@ test_b7_45_non_tty_note(void)
     }
     if (strstr(out, "keep-current") == NULL && strstr(out, "not a TTY") == NULL) {
         FAIL("B7.45: missing non-TTY note");
+        fprintf(stderr, "    output: %.500s\n", out);
         return -1;
     }
     PASS();

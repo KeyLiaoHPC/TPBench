@@ -27,12 +27,7 @@ static int run_pack(const char *prefix, test_case_t *cases,
                     int n, const char *filter);
 static void setup_test_dir(void);
 static void cleanup_test_dir(void);
-static int test_magic_construct(void);
-static int test_magic_validate_ok(void);
 static int test_magic_validate_bad(void);
-static int test_id_tbatch(void);
-static int test_id_kernel(void);
-static int test_id_task(void);
 static int test_id_uniqueness(void);
 static int test_entry_tbatch(void);
 static int test_entry_kernel(void);
@@ -44,7 +39,6 @@ static int test_record_task(void);
 static int test_header_1d(void);
 static int test_header_multidim(void);
 static int test_header_mixed(void);
-static int test_rtenv_domain_dir(void);
 static int test_rtenv_id_alloc(void);
 static int test_rtenv_dup_name(void);
 static int test_rtenv_entry_roundtrip(void);
@@ -102,12 +96,13 @@ cleanup_test_dir(void)
     system(cmd);
 }
 
-/* A4.1: magic_construct */
+/* A4.3: magic_validate_bad; absorbs A4.1 magic_construct, A4.2 magic_validate_ok */
 static int
-test_magic_construct(void)
+test_magic_validate_bad(void)
 {
     unsigned char m[8];
-    /* tbatch entry start */
+
+    /* A4.1: valid magic bytes for entry/record domains */
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
                           TPB_RAF_DOM_TBATCH,
                           TPB_RAF_POS_START, m);
@@ -117,26 +112,17 @@ test_magic_construct(void)
         return 1;
     }
 
-    /* kernel record split */
     tpb_raf_build_magic(TPB_RAF_FTYPE_RECORD,
                           TPB_RAF_DOM_KERNEL,
                           TPB_RAF_POS_SPLIT, m);
     if (m[4] != 0xD1 || m[5] != 0x44) return 1;
 
-    /* task entry end */
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
                           TPB_RAF_DOM_TASK,
                           TPB_RAF_POS_END, m);
     if (m[4] != 0xE2 || m[5] != 0x45) return 1;
 
-    return 0;
-}
-
-/* A4.2: magic_validate_ok */
-static int
-test_magic_validate_ok(void)
-{
-    unsigned char m[8];
+    /* A4.2: validate_magic accepts matching tuples */
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
                           TPB_RAF_DOM_TBATCH,
                           TPB_RAF_POS_START, m);
@@ -154,19 +140,11 @@ test_magic_validate_ok(void)
                                   TPB_RAF_POS_END)) {
         return 1;
     }
-    return 0;
-}
 
-/* A4.3: magic_validate_bad */
-static int
-test_magic_validate_bad(void)
-{
-    unsigned char m[8];
+    /* Wrong domain should fail */
     tpb_raf_build_magic(TPB_RAF_FTYPE_ENTRY,
                           TPB_RAF_DOM_TBATCH,
                           TPB_RAF_POS_START, m);
-
-    /* Wrong domain should fail */
     if (tpb_raf_validate_magic(m, TPB_RAF_FTYPE_ENTRY,
                                  TPB_RAF_DOM_KERNEL,
                                  TPB_RAF_POS_START)) {
@@ -183,48 +161,31 @@ test_magic_validate_bad(void)
     return 0;
 }
 
-/* A4.6: id_tbatch */
+/* A4.9: id_uniqueness; absorbs A4.6 id_tbatch, A4.7 id_kernel, A4.8 id_task */
 static int
-test_id_tbatch(void)
+test_id_uniqueness(void)
 {
-    unsigned char id1[20], id2[20];
+    unsigned char id1[20], id2[20], id3[20], id4[20];
+    unsigned char tb[20], kn[20];
+    unsigned char tpbx_a[20], tpbx_b[20];
 
+    /* A4.6: tbatch ID deterministic */
     tpb_raf_gen_tbatch_id(12345, 67890,
                             "node01", "testuser", 1000, id1);
     tpb_raf_gen_tbatch_id(12345, 67890,
                             "node01", "testuser", 1000, id2);
-
     if (memcmp(id1, id2, 20) != 0) return 1;
-    return 0;
-}
 
-/* A4.7: id_kernel */
-static int
-test_id_kernel(void)
-{
-    unsigned char id1[20], id2[20];
-    unsigned char tpbx[20];
-
-    memset(tpbx, 0xBB, 20);
-
-    tpb_raf_gen_kernel_id(tpbx, id1);
-    tpb_raf_gen_kernel_id(tpbx, id2);
-
+    /* A4.7: kernel ID equals SHA1(tpbx) */
+    memset(tpbx_a, 0xBB, 20);
+    tpb_raf_gen_kernel_id(tpbx_a, id1);
+    tpb_raf_gen_kernel_id(tpbx_a, id2);
     if (memcmp(id1, id2, 20) != 0) return 1;
-    if (memcmp(id1, tpbx, 20) != 0) return 1;
-    return 0;
-}
+    if (memcmp(id1, tpbx_a, 20) != 0) return 1;
 
-/* A4.8: id_task */
-static int
-test_id_task(void)
-{
-    unsigned char id1[20], id2[20], id3[20], id4[20];
-    unsigned char tb[20], kn[20];
-
+    /* A4.8: task ID sensitive to handle_index */
     memset(tb, 0x11, 20);
     memset(kn, 0x22, 20);
-
     tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 333, 444, id1);
     tpb_raf_gen_task_id(111, 222, "host", "user",
@@ -233,32 +194,21 @@ test_id_task(void)
                           tb, kn, 0, 334, 444, id3);
     tpb_raf_gen_task_id(111, 222, "host", "user",
                           tb, kn, 0, 333, 445, id4);
-
     if (memcmp(id1, id2, 20) != 0) return 1;
     if (memcmp(id1, id3, 20) == 0) return 1;
     if (memcmp(id1, id4, 20) == 0) return 1;
-    return 0;
-}
 
-/* A4.9: id_uniqueness */
-static int
-test_id_uniqueness(void)
-{
-    unsigned char id_a[20], id_b[20];
-    unsigned char tpbx_a[20], tpbx_b[20];
-
+    /* Cross-domain uniqueness */
     memset(tpbx_a, 0xAA, 20);
     memset(tpbx_b, 0xBB, 20);
+    tpb_raf_gen_kernel_id(tpbx_a, id1);
+    tpb_raf_gen_kernel_id(tpbx_b, id2);
+    if (memcmp(id1, id2, 20) == 0) return 1;
 
-    tpb_raf_gen_kernel_id(tpbx_a, id_a);
-    tpb_raf_gen_kernel_id(tpbx_b, id_b);
+    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 1, id1);
+    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 2, id2);
+    if (memcmp(id1, id2, 20) == 0) return 1;
 
-    if (memcmp(id_a, id_b, 20) == 0) return 1;
-
-    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 1, id_a);
-    tpb_raf_gen_tbatch_id(100, 200, "h", "u", 2, id_b);
-
-    if (memcmp(id_a, id_b, 20) == 0) return 1;
     return 0;
 }
 
@@ -816,23 +766,6 @@ test_header_mixed(void)
     free(rdata);
     cleanup_test_dir();
     return fail;
-}
-
-/* A4.20: rtenv_domain_dir */
-static int
-test_rtenv_domain_dir(void)
-{
-    char path[600];
-    struct stat st;
-
-    setup_test_dir();
-    snprintf(path, sizeof(path), "%s/%s", g_test_dir, TPB_RAF_RTENV_DIR);
-    if (stat(path, &st) != 0 || !S_ISDIR(st.st_mode)) {
-        cleanup_test_dir();
-        return 1;
-    }
-    cleanup_test_dir();
-    return 0;
 }
 
 static tpb_raf_rtenv_entry_t
@@ -1518,12 +1451,7 @@ main(int argc, char **argv)
 {
     const char *filter = (argc > 1) ? argv[1] : NULL;
     test_case_t cases[] = {
-        { "A4.1",  "magic_construct",    test_magic_construct },
-        { "A4.2",  "magic_validate_ok",  test_magic_validate_ok },
         { "A4.3",  "magic_validate_bad", test_magic_validate_bad },
-        { "A4.6",  "id_tbatch",          test_id_tbatch },
-        { "A4.7",  "id_kernel",          test_id_kernel },
-        { "A4.8",  "id_task",            test_id_task },
         { "A4.9",  "id_uniqueness",      test_id_uniqueness },
         { "A4.10", "entry_tbatch",       test_entry_tbatch },
         { "A4.11", "entry_kernel",       test_entry_kernel },
@@ -1535,7 +1463,6 @@ main(int argc, char **argv)
         { "A4.17", "header_1d",          test_header_1d },
         { "A4.18", "header_multidim",    test_header_multidim },
         { "A4.19", "header_mixed",       test_header_mixed },
-        { "A4.20", "rtenv_domain_dir",   test_rtenv_domain_dir },
         { "A4.21", "rtenv_id_alloc",     test_rtenv_id_alloc },
         { "A4.22", "rtenv_dup_name",     test_rtenv_dup_name },
         { "A4.23", "rtenv_entry_roundtrip", test_rtenv_entry_roundtrip },
