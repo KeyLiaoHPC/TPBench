@@ -176,6 +176,11 @@ _sf_finalize_role_tags(char *dst, size_t dst_sz,
 {
     char combined[TPBM_NAME_STR_MAX_LEN + 64];
 
+    /*
+     * sys_tag may list multiple role tokens (e.g. TPBINPUT,TPBENVVAR).
+     * Validate user text only; system tokens are trusted and normalized
+     * together with the user list so duplicates and order are fixed once.
+     */
     if (dst == NULL || dst_sz == 0 || sys_tag == NULL || sys_tag[0] == '\0') {
         return -1;
     }

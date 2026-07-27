@@ -95,6 +95,9 @@ tpbcli run <tpbench_options> \
 **Wrapper 规则：** 第一个 `--kernel` 之前的 `--wrapper` / `--wrapper-args` 组成**全局**链，默认加在每个 kernel 前；某 kernel 组使用 `-og` / `--override-global` 时跳过全局链，保留该 kernel 的局部 wrapper。Wrapper 按顺序链接，后面的不会替换前面的。
 
 **内核发现：** `tpbcli run` 仅加载命令行 `--kernel` / `-k` 指定的内核，**不会**扫描整个 `lib/libtpbk_*.so`。若内核名不存在或 `.so` 无法加载，会输出 `Kernel <name> not found. Use \`tpbcli kernel list\` to show kernel lists.`。请使用 **`tpbcli kernel list`** 查看已安装内核。找到已注册内核时，run 会输出 `Kernel <name> found, KernelID: <id>`（首次注册时为 `New kernel found, add to kernel records.`）。
+
+内核帮助（`run --kernel <name> -h` 与 `kernel get -v`）除按来源打印可配置参数外，还会打印一张 **Data Records** 表，列出带预设 tag 的数据定义。预设 tag：`TPBINPUT`（输入）、`TPBENVVAR`（环境变量）、`TPBOUTPUT`（输出）、`TPBFOM`（关键指标）、`TPBVERIFYVAR`（验证变量）、`TPBLINK`（跨记录链接）。旧 tag `TPBARG`/`TPBOUT`/`FOM`/`INPARM` 已废弃，无兼容别名；升级后请清理工作区 rafdb 并重新注册/运行。
+
 \<tpbench_options\>支持的选项包括：
 - `-P`: 选择PLI集成内核（默认，保留以向后兼容）。
 - `--timer`: 选择名为\<timer_name\>的计时方法，默认为clock_gettime。

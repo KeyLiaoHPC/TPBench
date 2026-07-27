@@ -1042,6 +1042,21 @@ Start Time (UTC)     TBatch ID                                 Type        NTask
 | NScore | `nscore` | 整数（目前始终为 0） |
 | Duration (s) | `duration` 纳秒 | 秒，3 位小数 |
 
+## 6. 预设 Data Record Tag
+
+`name` 为查找键；`tag` 为逗号分隔、大写、去重、升序存储的分类 token。公共预设：
+
+| Tag | 含义 |
+| --- | --- |
+| **TPBINPUT** | 输入参数；也可用于作为输出列记录的输入快照 |
+| **TPBENVVAR** | 环境变量（`TPB_PARM_ENV` 参数；task 环境快照三 header） |
+| **TPBOUTPUT** | 输出数据列（`tpb_k_add_output` 自动追加） |
+| **TPBFOM** | 关键指标 |
+| **TPBVERIFYVAR** | 写入 record 的正确性/精度验证变量 |
+| **TPBLINK** | 跨记录链接（`TaskID` / `KernelID` / `DeriveTo`） |
+
+`tpb_k_add_arg` 自动追加 **TPBINPUT**（ENV 来源再追加 **TPBENVVAR**）；`tpb_k_add_output` 自动追加 **TPBOUTPUT**。旧标签 `TPBARG`/`TPBOUT`/`FOM`/`INPARM` 已直接替换，无兼容别名；升级后请清理工作区 rafdb 并重新注册。内核帮助在 `Parameters::*` 之外打印一张 **Data Records** 表，列出带上述预设 tag 的静态定义。
+
 ## 7. CLI dump 可读布局（`.tpbr`，`-i`）
 
 `tpbcli db dump -i` 输出与文件分段 magic 对应的人类可读视图：

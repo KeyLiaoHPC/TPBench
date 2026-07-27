@@ -82,10 +82,10 @@ tpbk_pli_register_stream(void)
     if (err != 0) return err;
 
     /* Kernel outputs */
-    err = tpb_k_add_output("Allocated memory size", "INPARM", "Actual memory footprint of three stream arrays.",
+    err = tpb_k_add_output("Allocated memory size", TPB_TAG_INPUT, "Actual memory footprint of three stream arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("STREAM array size", "INPARM", "Actual number of elements per array.",
+    err = tpb_k_add_output("STREAM array size", TPB_TAG_INPUT, "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
     err = tpb_k_add_output("Copy", "EVENT,TIME", "Measured runtime of copy operation.", 
@@ -100,16 +100,16 @@ tpbk_pli_register_stream(void)
     err = tpb_k_add_output("Triad", "EVENT,TIME", "Measured runtime of triad operation.", 
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Copy bandwidth", "FOM,BANDWIDTH", "Measured copy bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("Copy bandwidth", TPB_TAG_FOM ",BANDWIDTH", "Measured copy bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Scale bandwidth", "FOM,BANDWIDTH", "Measured scale bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("Scale bandwidth", TPB_TAG_FOM ",BANDWIDTH", "Measured scale bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Add bandwidth", "FOM,BANDWIDTH", "Measured add bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("Add bandwidth", TPB_TAG_FOM ",BANDWIDTH", "Measured add bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Triad bandwidth", "FOM,BANDWIDTH", "Measured triad bandwidth in decimal based MB/s.", 
+    err = tpb_k_add_output("Triad bandwidth", TPB_TAG_FOM ",BANDWIDTH", "Measured triad bandwidth in decimal based MB/s.", 
                      TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 

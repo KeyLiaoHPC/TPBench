@@ -960,6 +960,10 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
 
     memset(&hdrs[base], 0,
            TPB_TASK_ENV_SNAPSHOT_HDR_COUNT * sizeof(tpb_meta_header_t));
+    /*
+     * These three headers encode one environment snapshot and are not
+     * produced by tpb_k_add_arg, so driver role tags are applied here.
+     */
     hdrs[base].block_size = TPB_RAF_HDR_FIXED_SIZE;
     hdrs[base].ndim = 1;
     hdrs[base].dimsizes[0] = kb_len;
@@ -967,6 +971,7 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     hdrs[base].type_bits = (uint32_t)(TPB_STRING_T & TPB_PARM_TYPE_MASK);
     snprintf(hdrs[base].name, sizeof(hdrs[base].name), "%s",
              TPB_TASK_HDR_ENV_KEY);
+    snprintf(hdrs[base].tag, sizeof(hdrs[base].tag), "%s", TPB_TAG_ENVVAR);
     if (s_env_snap.key_blob != NULL && s_env_snap.key_len > 0) {
         memcpy((uint8_t *)data + dsize, s_env_snap.key_blob, kb_len - 1);
     }
@@ -980,6 +985,8 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     hdrs[base + 1].type_bits = (uint32_t)(TPB_INT32_T & TPB_PARM_TYPE_MASK);
     snprintf(hdrs[base + 1].name, sizeof(hdrs[base + 1].name), "%s",
              TPB_TASK_HDR_ENV_COUNT);
+    snprintf(hdrs[base + 1].tag, sizeof(hdrs[base + 1].tag), "%s",
+             TPB_TAG_ENVVAR);
     if (s_env_snap.nkeys > 0 && s_env_snap.counts != NULL) {
         memcpy((uint8_t *)data + dsize, s_env_snap.counts, cb_len);
     } else {
@@ -994,6 +1001,8 @@ tpb_rtenv_append_env_snapshot_headers(tpb_meta_header_t **headers,
     hdrs[base + 2].type_bits = (uint32_t)(TPB_STRING_T & TPB_PARM_TYPE_MASK);
     snprintf(hdrs[base + 2].name, sizeof(hdrs[base + 2].name), "%s",
              TPB_TASK_HDR_ENV_VALUE);
+    snprintf(hdrs[base + 2].tag, sizeof(hdrs[base + 2].tag), "%s",
+             TPB_TAG_ENVVAR);
     if (s_env_snap.value_blob != NULL && s_env_snap.value_len > 0) {
         memcpy((uint8_t *)data + dsize, s_env_snap.value_blob, vb_len - 1);
     }

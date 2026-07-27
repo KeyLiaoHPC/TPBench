@@ -77,10 +77,12 @@
 | A10.3 | `corelib/tpb-rtenv.c` | 验证多 key 混合段数时按 key→count→value 顺序解码。 |
 | A10.4 | `corelib/tpb-rtenv.c` | 验证空 value（`count=0`）不消费 value 段。 |
 | A10.5 | `corelib/tpb-rtenv.c` | 验证 value 段内可含 `;`（连接符仅为 `:`）。 |
-| A11.1 | `corelib/tpb-tag-norm.c` | 验证 tag 去重/大写/排序及系统附加 `TPBOUT`/`TPBARG`。 |
+| A11.1 | `corelib/tpb-tag-norm.c` | 验证 tag 去重/大写/排序及系统附加 `TPBOUTPUT`/`TPBINPUT`（含 `TPBENVVAR` 组合）。 |
 | A11.2 | `corelib/tpb-tag-norm.c` | 验证 name/tag 合法性（禁止 `:`、长度上限）。 |
 | A11.3 | `corelib/tpb-tag-norm.c` | 验证展示格式（存储无空格，显示 `", "`）。 |
 | A11.4 | `corelib/tpb-tag-norm.c` | 验证规范化幂等。 |
+| A11.5 | `include/tpb-public.h` | 验证六个预设 tag 宏字符串。 |
+| A11.6 | `corelib/tpb-tag-norm.c` | 验证角色 tag 与用户 tag 去重组合。 |
 
 ## B 类 — CLI 单元与功能测试
 
@@ -104,7 +106,7 @@
 | B2.10 | `tpbcli/run/tpbcli-run.c` | 验证 `run --kernel -h` 提示需要合法 kernel 名称。 |
 | B2.11 | `tpbcli/run/tpbcli-run.c` | 验证不存在 kernel 显示 "not found" 提示且不触发 dynloader 扫描错误。 |
 | B2.12 | `tpbcli/run/tpbcli-run.c` | 验证干跑模式下两个 kargs-dim 产生 4 条 Exec 行（2×2 笛卡尔积）。 |
-| B2.13 | `tpbcli/run/tpbcli-run.c` | 验证 `run --kernel stream --help` 显示参数和指标列表。 |
+| B2.13 | `tpbcli/run/tpbcli-run.c` | 验证 `run --kernel stream --help` 显示 Parameters 与统一 Data Records 表（含 `TPBINPUT`/`TPBOUTPUT`/`TPBFOM`）。 |
 | B2.14 | `tpbcli/run/tpbcli-run.c`, `corelib/rafdb/` | 验证重复运行 stream kernel 显示 KernelID 且不报 "already recorded" 警告。 |
 | B2.15 | `tpbcli/run/tpbcli-run.c`, `corelib/rafdb/` | 验证只读 task_batch 目录导致 run 报 "begin_batch failed" 错误。 |
 | B3.1 | `tpbcli/argp/tpbcli-argp.c` | 验证 argp 树创建、添加、销毁生命周期；重复名称被拒绝；兄弟链正确。 |
@@ -145,7 +147,7 @@
 | B6.1–B6.10 | `tpbcli/rtenv/` | 验证 `rtenv` 子命令：模板 `name=`/`var=` 解析、`show` 定列宽与 `On_set`/`On_get`、`load` 按 `on_set` 输出 export、`-f` 从文件创建记录。 |
 | B5.1 | `tpbcli/kernel/` | 验证 `kernel set` 缺少参数时失败。 |
 | B5.2 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel get` 不修改 kernel.tpbe entry 数量。 |
-| B5.3 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel set` 后 `get -v` 显示 kernel 信息和列名，无旧 type 包装。 |
+| B5.3 | `tpbcli/kernel/`, `corelib/rafdb/` | 验证 `kernel set` 后 `get -v` 显示 Parameters + Data Records（含预设 tag），无旧 Metrics/type 包装。 |
 | B5.4 | `tpbcli/kernel/` | 验证 `kernel init` 缺少参数时失败。 |
 | B5.5 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证模板 kernel 完整生命周期：init → build → run → get -v。 |
 | B5.6 | `tpbcli/kernel/` | 验证 `kernel build` 缺少选择器时报错并显示选择器提示。 |

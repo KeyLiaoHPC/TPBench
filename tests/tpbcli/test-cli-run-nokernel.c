@@ -397,13 +397,19 @@ test_help_kernel_specific(void)
     }
     if (strstr(buf, "Kernel: stream") == NULL ||
         strstr(buf, "Parameters::CLI") == NULL ||
-        strstr(buf, "Metrics") == NULL) {
+        strstr(buf, "Data Records") == NULL) {
         FAIL("B2.13: missing kernel info");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
+    if (strstr(buf, "\nMetrics\n") != NULL ||
+        strstr(buf, "Metrics\n---") != NULL) {
+        FAIL("B2.13: old Metrics section still present");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
     if (strstr(buf, "Type/Description") == NULL ||
-        strstr(buf, "Tags/Unit/Description") == NULL) {
+        strstr(buf, "Tags/Type/Unit/Description") == NULL) {
         FAIL("B2.13: missing column headers");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
@@ -425,11 +431,29 @@ test_help_kernel_specific(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    if (strstr(buf, "INPARM") == NULL ||
+    if (strstr(buf, "TPBINPUT") == NULL ||
+        strstr(buf, "TPBOUTPUT") == NULL ||
+        strstr(buf, "TPBFOM") == NULL ||
         strstr(buf, "Data size (e.g. B, MB, GB)") == NULL) {
-        FAIL("B2.13: missing metric tag or unit category");
+        FAIL("B2.13: missing preset tags or unit category");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
+    }
+    if (strstr(buf, "INPARM") != NULL ||
+        strstr(buf, "TPBARG") != NULL ||
+        strstr(buf, "ntest") == NULL ||
+        strstr(buf, "Triad bandwidth") == NULL) {
+        if (strstr(buf, "INPARM") != NULL || strstr(buf, "TPBARG") != NULL) {
+            FAIL("B2.13: obsolete tags still present");
+            fprintf(stderr, "    output: %.500s\n", buf);
+            return 1;
+        }
+        if (strstr(buf, "ntest") == NULL ||
+            strstr(buf, "Triad bandwidth") == NULL) {
+            FAIL("B2.13: Data Records missing input/output names");
+            fprintf(stderr, "    output: %.500s\n", buf);
+            return 1;
+        }
     }
     PASS();
     return 0;

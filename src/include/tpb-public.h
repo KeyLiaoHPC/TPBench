@@ -34,12 +34,42 @@ typedef uint32_t TPB_DTYPE_U32;
 #define TPB_SHLIB_EXT ".so"
 #endif
 
-/** System role tag appended to kernel argument headers. */
-#define TPB_TAG_ARG  "TPBARG"
-/** System role tag appended to kernel output headers. */
-#define TPB_TAG_OUT  "TPBOUT"
-/** Internal linkage tag for cross-record ID arrays. */
-#define TPB_TAG_LINK "TPBLINK"
+/**
+ * @brief Preset tag: input parameters (CLI/recorded kernel arguments).
+ *
+ * Automatically appended by tpb_k_add_arg(). Input snapshots recorded as
+ * output columns may also carry this tag together with TPBOUTPUT.
+ */
+#define TPB_TAG_INPUT      "TPBINPUT"
+/**
+ * @brief Preset tag: environment variables.
+ *
+ * Applied to TPB_PARM_ENV arguments (with TPBINPUT) and to task-record
+ * environment snapshot headers (key/count/value).
+ */
+#define TPB_TAG_ENVVAR     "TPBENVVAR"
+/**
+ * @brief Preset tag: output data / metrics.
+ *
+ * Automatically appended by tpb_k_add_output().
+ */
+#define TPB_TAG_OUTPUT     "TPBOUTPUT"
+/**
+ * @brief Preset tag: figure of merit (primary outcome metrics).
+ *
+ * User-supplied on tpb_k_add_output(); combines with TPBOUTPUT after normalize.
+ */
+#define TPB_TAG_FOM        "TPBFOM"
+/**
+ * @brief Preset tag: correctness / precision verification variables.
+ *
+ * Applied only to outputs that persist verification data in the record.
+ */
+#define TPB_TAG_VERIFYVAR  "TPBVERIFYVAR"
+/**
+ * @brief Preset tag: cross-record links (TaskID / KernelID / DeriveTo).
+ */
+#define TPB_TAG_LINK       "TPBLINK"
 
 /* tpblog line tag types; rendered as [INFO], [WARN], or [ERRO] */
 #define TPB_LOG_TAG_NOTE  0x00U
@@ -309,11 +339,11 @@ typedef union tpb_parm_value {
  * @brief Runtime kernel argument definition.
  *
  * "Argument" is the recorded/CLI-facing input; TPB_PARM_* dtype flags remain
- * the type/validation encoding and are unrelated to the TPBARG role tag.
+ * the type/validation encoding and are unrelated to the TPBINPUT role tag.
  */
 typedef struct tpb_rt_arg {
     char name[TPBM_NAME_STR_MAX_LEN];
-    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBARG) */
+    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBINPUT) */
     char note[TPBM_NOTE_STR_MAX_LEN];
     tpb_parm_value_t value;
     TPB_DTYPE ctrlbits;
@@ -324,7 +354,7 @@ typedef struct tpb_rt_arg {
 /** @brief Kernel output definition */
 typedef struct tpb_k_output {
     char name[TPBM_NAME_STR_MAX_LEN];
-    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBOUT) */
+    char tag[TPBM_NAME_STR_MAX_LEN];  /**< Normalized tags (includes TPBOUTPUT) */
     char note[TPBM_NOTE_STR_MAX_LEN];
     TPB_DTYPE dtype;
     TPB_UNIT_T unit;
@@ -421,7 +451,8 @@ int tpb_k_register(const char *name, const char *note, TPB_K_CTRL kctrl);
  *
  * @param name         Argument local name (unique vs other args/outputs; no ':').
  * @param tag          Optional user tags (comma-separated; NULL/"" allowed).
- *                     System appends TPBARG then normalizes (dedupe/upper/sort).
+ *                     System appends TPBINPUT (and TPBENVVAR when source is
+ *                     TPB_PARM_ENV) then normalizes (dedupe/upper/sort).
  * @param note         Human-readable argument description
  * @param default_val  String representation of default value
  * @param dtype        Combined data type: source | check | type
@@ -444,7 +475,8 @@ int tpb_k_add_arg(const char *name, const char *tag, const char *note,
  *
  * @param name   Output local name (lookup key for alloc; no ':').
  * @param tag    Optional user tags (comma-separated; NULL/"" allowed).
- *               System appends TPBOUT then normalizes.
+ *               System appends TPBOUTPUT then normalizes. Use TPBFOM /
+ *               TPBVERIFYVAR / TPBINPUT in user tags when applicable.
  * @param note   Human-readable description.
  * @param dtype  Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.).
  * @param unit   Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.).

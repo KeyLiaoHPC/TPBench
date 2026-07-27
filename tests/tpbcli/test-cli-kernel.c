@@ -192,13 +192,14 @@ test_b5_3_set_and_get_metadata(void)
              TPB_TEST_TPB_HOME, TPB_TEST_KERNEL_WORKSPACE);
     code = run_cmd_capture(cmd, buf, sizeof(buf));
     if (code != 0 || strstr(buf, "Kernel: stream") == NULL ||
-        strstr(buf, "Parameters::CLI") == NULL) {
+        strstr(buf, "Parameters::CLI") == NULL ||
+        strstr(buf, "Data Records") == NULL) {
         FAIL("B5.3 get verbose missing kernel info");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
     if (strstr(buf, "Type/Description") == NULL ||
-        strstr(buf, "Tags/Unit/Description") == NULL) {
+        strstr(buf, "Tags/Type/Unit/Description") == NULL) {
         FAIL("B5.3 get verbose missing column headers");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
@@ -208,8 +209,19 @@ test_b5_3_set_and_get_metadata(void)
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
-    if (strstr(buf, "Data throughput (e.g. MB/s, GB/s)") == NULL) {
-        FAIL("B5.3 get verbose missing unit category description");
+    if (strstr(buf, "Data throughput (e.g. MB/s, GB/s)") == NULL ||
+        strstr(buf, "TPBFOM") == NULL ||
+        strstr(buf, "TPBINPUT") == NULL ||
+        strstr(buf, "TPBOUTPUT") == NULL) {
+        FAIL("B5.3 get verbose missing unit category or preset tags");
+        fprintf(stderr, "    output: %.500s\n", buf);
+        return 1;
+    }
+    if (strstr(buf, "\nMetrics\n") != NULL ||
+        strstr(buf, "Metrics\n---") != NULL ||
+        strstr(buf, "INPARM") != NULL ||
+        strstr(buf, "TPBARG") != NULL) {
+        FAIL("B5.3 get verbose still uses old Metrics/tags");
         fprintf(stderr, "    output: %.500s\n", buf);
         return 1;
     }
@@ -320,12 +332,15 @@ test_b5_5_init_and_build_template(void)
         FAIL("B5.5 get verbose missing kernel info");
         return 1;
     }
-    if (strstr(buf, "Tags/Unit/Description") == NULL) {
-        FAIL("B5.5 get verbose missing metric column header");
+    if (strstr(buf, "Tags/Type/Unit/Description") == NULL ||
+        strstr(buf, "Data Records") == NULL) {
+        FAIL("B5.5 get verbose missing Data Records column header");
         return 1;
     }
-    if (strstr(buf, "Unspecified unit") == NULL) {
-        FAIL("B5.5 get verbose missing unspecified unit category");
+    if (strstr(buf, "Unspecified unit") == NULL ||
+        strstr(buf, "TPBFOM") == NULL ||
+        strstr(buf, "TPBOUTPUT") == NULL) {
+        FAIL("B5.5 get verbose missing unit category or preset tags");
         return 1;
     }
 

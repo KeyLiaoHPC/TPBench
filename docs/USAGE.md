@@ -107,7 +107,20 @@ tpbcli run <tpbench_options> \
 - `-P`: Select PLI-integrated kernels (default, kept for backward compatibility).
 - `--timer`: Select timing method named `<timer_name>`, default is `clock_gettime`.
 - `-d` / `--dry-run`: Parse arguments, expand dimensions, print `Exec:` lines for each handle, but do not fork the kernel or write auto-record batches.
-- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints detailed kernel help (parameters, metrics, version/variation when recorded) in the same layout as **`tpbcli kernel get -v`**.
+- `--help` / `-h` (at `run` level): Print run subcommand help. Under `--kernel`, `-h` / `--help` prints detailed kernel help (configurable parameters plus a **Data Records** table of schema entries tagged with the preset roles below) in the same layout as **`tpbcli kernel get -v`**.
+
+Preset data-record tags (stored uppercase, comma-joined, sorted):
+
+| Tag | Meaning |
+| --- | --- |
+| **TPBINPUT** | Input parameters / input snapshots recorded as data |
+| **TPBENVVAR** | Environment variables (ENV-sourced args and task env snapshots) |
+| **TPBOUTPUT** | Output data columns |
+| **TPBFOM** | Figure of merit |
+| **TPBVERIFYVAR** | Correctness / precision verification variables |
+| **TPBLINK** | Links to other records (`TaskID` / `KernelID` / `DeriveTo`) |
+
+`tpb_k_add_arg` always appends **TPBINPUT** (and **TPBENVVAR** when the source is `TPB_PARM_ENV`). `tpb_k_add_output` always appends **TPBOUTPUT**. Kernels may add **TPBFOM**, **TPBINPUT** (for input snapshots), or **TPBVERIFYVAR** in the user tag. Orthogonal classifiers such as `EVENT`, `TIME`, `BANDWIDTH`, and `COUNT` remain valid. Older tags `TPBARG`, `TPBOUT`, `FOM`, and `INPARM` are not accepted; clear the workspace rafdb and re-register kernels after upgrading.
 - `--outargs`: Log and data output format settings
     - `unit_cast=[0/1]`: Whether to perform automatic unit conversion, default is 0, no conversion.
     - `sigbit_trim=<x>`: Limit the number of significant digits in output data. Integer parts exceeding the number of digits will be represented in scientific notation.
@@ -593,7 +606,7 @@ tpbcli kernel get -v --kernel <name>    # detailed active/latest record + versio
 tpbcli kernel get -v --id <hex>         # detailed record by KernelID + versions
 ```
 
-**`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it prints only parameter and metric names for the active record (or the newest if none are active). With **`-v`**, it prints the full kernel help layout and a **`Kernel Versions:`** table listing all known IDs and variation tags for that kernel name.
+**`get` never scans `.so` files and never calls registration.** It reads only `rafdb/kernel/kernel.tpbe` and the matching `.tpbr` files. Without **`-v`**, it prints only parameter and metric names for the active record (or the newest if none are active). With **`-v`**, it prints the full kernel help layout (**Parameters::*** plus a single **Data Records** table listing every schema entry that carries a preset tag) and a **`Kernel Versions:`** table listing all known IDs and variation tags for that kernel name.
 
 ### 2.5.3 Set compile metadata
 
@@ -646,7 +659,7 @@ export TPB_HOME=/path/to/tpbench    # or rely on $HOME/.tpbench default
 tpbcli kernel init --dir ./mykern --kernel mykern
 ```
 
-Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (argument **`n`**, metric name **`Value`** with tags **`FOM,COUNT`**).
+Creates `CMakeLists.txt` and `tpbk_mykern.c` with a minimal registerable kernel (argument **`n`**, metric name **`Value`** with tags **`TPBFOM,COUNT`** plus system **`TPBOUTPUT`**).
 
 ### 2.5.6 Build kernel(s)
 

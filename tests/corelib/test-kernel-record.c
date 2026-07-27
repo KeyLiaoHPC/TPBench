@@ -88,17 +88,18 @@ test_build_attr_counts(void)
 
     memset(parms, 0, sizeof(parms));
     snprintf(parms[0].name, sizeof(parms[0].name), "%s", "ntest");
-    snprintf(parms[0].tag, sizeof(parms[0].tag), "%s", TPB_TAG_ARG);
+    snprintf(parms[0].tag, sizeof(parms[0].tag), "%s", TPB_TAG_INPUT);
     parms[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T;
     parms[0].value.i64 = 10;
     snprintf(parms[1].name, sizeof(parms[1].name), "%s", "size");
-    snprintf(parms[1].tag, sizeof(parms[1].tag), "%s", TPB_TAG_ARG);
+    snprintf(parms[1].tag, sizeof(parms[1].tag), "%s", TPB_TAG_INPUT);
     parms[1].ctrlbits = TPB_PARM_CLI | TPB_UINT32_T;
     parms[1].value.u64 = 1024;
 
     memset(outs, 0, sizeof(outs));
     snprintf(outs[0].name, sizeof(outs[0].name), "%s", "bandwidth");
-    snprintf(outs[0].tag, sizeof(outs[0].tag), "%s", "BANDWIDTH,TPBOUT");
+    snprintf(outs[0].tag, sizeof(outs[0].tag), "%s",
+             "BANDWIDTH,TPBFOM,TPBOUTPUT");
     outs[0].dtype = TPB_DOUBLE_T;
     outs[0].unit = TPB_UNIT_MBPS;
 
@@ -120,9 +121,9 @@ test_build_attr_counts(void)
         return 1;
     }
     if (strcmp(attr.headers[0].name, "ntest") != 0 ||
-        strcmp(attr.headers[0].tag, TPB_TAG_ARG) != 0 ||
+        strcmp(attr.headers[0].tag, TPB_TAG_INPUT) != 0 ||
         strcmp(attr.headers[attr.narg].name, "bandwidth") != 0 ||
-        strcmp(attr.headers[attr.narg].tag, "BANDWIDTH,TPBOUT") != 0 ||
+        strcmp(attr.headers[attr.narg].tag, "BANDWIDTH,TPBFOM,TPBOUTPUT") != 0 ||
         !_sf_kernel_meta_headers_ok(&attr)) {
         tpb_raf_kernel_free_built_attr(&attr, data);
         return 1;
@@ -147,6 +148,10 @@ test_stream_register_record(void)
     void *data = NULL;
     uint64_t datasize = 0;
     int err;
+    int i;
+    int found_input = 0;
+    int found_inparm_out = 0;
+    int found_fom = 0;
 
     snprintf(workspace, sizeof(workspace), "%s", g_test_dir);
     setenv("TPB_WORKSPACE", workspace, 1);
@@ -195,6 +200,80 @@ test_stream_register_record(void)
         !_sf_kernel_meta_headers_ok(&attr) ||
         attr.utc_bits == 0 || entries[0].utc_bits == 0 ||
         entries[0].utc_bits != attr.utc_bits) {
+        tpb_raf_free_headers(attr.headers, attr.nheader);
+        free(data);
+        free(entries);
+        tpb_free_kernel(kernel);
+        free(kernel);
+        return 1;
+    }
+
+    for (i = 0; i < (int)attr.narg; i++) {
+        if (strcmp(attr.headers[i].tag, TPB_TAG_INPUT) != 0) {
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            free(entries);
+            tpb_free_kernel(kernel);
+            free(kernel);
+            return 1;
+        }
+        if (strstr(attr.headers[i].tag, "TPBARG") != NULL) {
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            free(entries);
+            tpb_free_kernel(kernel);
+            free(kernel);
+            return 1;
+        }
+        found_input = 1;
+    }
+    for (i = 0; i < (int)attr.nmetric; i++) {
+        const tpb_meta_header_t *h = &attr.headers[attr.narg + i];
+
+        if (strstr(h->tag, "TPBOUT") != NULL &&
+            strstr(h->tag, "TPBOUTPUT") == NULL) {
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            free(entries);
+            tpb_free_kernel(kernel);
+            free(kernel);
+            return 1;
+        }
+        if (strcmp(h->name, "Allocated memory size") == 0) {
+            if (strcmp(h->tag, "TPBINPUT,TPBOUTPUT") != 0) {
+                tpb_raf_free_headers(attr.headers, attr.nheader);
+                free(data);
+                free(entries);
+                tpb_free_kernel(kernel);
+                free(kernel);
+                return 1;
+            }
+            found_inparm_out = 1;
+        }
+        if (strcmp(h->name, "Triad bandwidth") == 0) {
+            if (strcmp(h->tag, "BANDWIDTH,TPBFOM,TPBOUTPUT") != 0) {
+                tpb_raf_free_headers(attr.headers, attr.nheader);
+                free(data);
+                free(entries);
+                tpb_free_kernel(kernel);
+                free(kernel);
+                return 1;
+            }
+            found_fom = 1;
+        }
+        if (strstr(h->tag, "INPARM") != NULL ||
+            (strstr(h->tag, ",FOM") != NULL ||
+             strncmp(h->tag, "FOM,", 4) == 0 ||
+             strcmp(h->tag, "FOM") == 0)) {
+            tpb_raf_free_headers(attr.headers, attr.nheader);
+            free(data);
+            free(entries);
+            tpb_free_kernel(kernel);
+            free(kernel);
+            return 1;
+        }
+    }
+    if (!found_input || !found_inparm_out || !found_fom) {
         tpb_raf_free_headers(attr.headers, attr.nheader);
         free(data);
         free(entries);

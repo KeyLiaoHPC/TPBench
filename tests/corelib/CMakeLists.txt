@@ -246,6 +246,8 @@ tpb_add_subcase(A11 A11.1 normalize   test-tag-norm corelib)
 tpb_add_subcase(A11 A11.2 validate    test-tag-norm corelib)
 tpb_add_subcase(A11 A11.3 display     test-tag-norm corelib)
 tpb_add_subcase(A11 A11.4 idempotent  test-tag-norm corelib)
+tpb_add_subcase(A11 A11.5 preset_macros test-tag-norm corelib)
+tpb_add_subcase(A11 A11.6 dedupe_combo  test-tag-norm corelib)
 
 # Aggregate targets
 add_custom_target(test_corelib

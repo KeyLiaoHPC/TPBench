@@ -44,15 +44,18 @@ int _sf_validate_header_name(const char *name);
 int _sf_validate_user_tags(const char *tag);
 
 /**
- * @brief Append a system role tag and normalize into dst.
+ * @brief Append system role tag(s) and normalize into dst.
  *
  * Concatenates user_tag with "," and sys_tag (when user_tag non-empty),
- * then runs _sf_normalize_tags.
+ * then runs _sf_normalize_tags. sys_tag may be a single token or a
+ * comma-separated list (e.g. "TPBINPUT,TPBENVVAR"); normalize dedupes
+ * and sorts the combined set.
  *
  * @param dst      Output buffer for canonical tags.
  * @param dst_sz   Size of dst.
  * @param user_tag User tags (may be NULL/empty).
- * @param sys_tag  System role tag (e.g. TPB_TAG_ARG / TPB_TAG_OUT); required.
+ * @param sys_tag  Required system role tag(s), e.g. TPB_TAG_INPUT /
+ *                 TPB_TAG_OUTPUT or "TPBINPUT,TPBENVVAR".
  * @return 0 on success, -1 on validation/overflow failure.
  */
 int _sf_finalize_role_tags(char *dst, size_t dst_sz,

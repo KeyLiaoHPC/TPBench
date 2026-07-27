@@ -1119,11 +1119,11 @@ A hybrid kernel (multi-process x multi-thread) may use capsules per process then
 
 ```
 name = Triad bandwidth
-tag  = BANDWIDTH,FOM,TPBOUT   (storage)
-Tags: BANDWIDTH, FOM, TPBOUT  (CLI display)
+tag  = BANDWIDTH,TPBFOM,TPBOUTPUT   (storage)
+Tags: BANDWIDTH, TPBFOM, TPBOUTPUT  (CLI display)
 ```
 
-Kernel registration: `tpb_k_add_arg(name, user_tag, …)` / `tpb_k_add_output(name, user_tag, …)`. System appends role tags **TPBARG** (argument) or **TPBOUT** (output), then normalizes. User tag text ≤191 characters (room for system tags).
+Kernel registration: `tpb_k_add_arg(name, user_tag, …)` / `tpb_k_add_output(name, user_tag, …)`. System appends role tags **TPBINPUT** (argument; plus **TPBENVVAR** when source is `TPB_PARM_ENV`) or **TPBOUTPUT** (output), then normalizes. User tag text ≤191 characters (room for system tags). Older names `TPBARG` / `TPBOUT` / `FOM` / `INPARM` are retired without aliases; clear the workspace and re-register after upgrade.
 
 ### 6.3. Lexical Rules
 
@@ -1133,15 +1133,16 @@ Prefer letters, digits, underscores, and spaces in `name`. **Comma** separates t
 
 | Tag | Meaning |
 | --- | --- |
-| **TPBARG** | System role: kernel argument (CLI/recorded input). |
-| **TPBOUT** | System role: kernel output metric. |
+| **TPBINPUT** | Input parameters, or input snapshots recorded as output columns. |
+| **TPBENVVAR** | Environment variables (ENV-sourced args; task env snapshot headers). |
+| **TPBOUTPUT** | System role: kernel output metric / recorded data column. |
+| **TPBFOM** | Figure of merit; primary outcome metrics. |
+| **TPBVERIFYVAR** | Correctness / precision verification variables persisted in the record. |
 | **TPBLINK** | Internal linkage (name=`TaskID` / `KernelID` / `DeriveTo`). |
-| **FOM** | Figure of merit; primary outcome metrics. |
-| **INPARM** | Input snapshot recorded as data (output column). |
 | **EVENT** | In-run samples (counters, markers). |
 | **PERF** | Performance-related metrics, figures, indicators, and counters. |
 | **POWER** | Energy / power. |
-| **PRECISION** | Precision / error metrics. |
+| **PRECISION** | Precision / error metrics (optional classifier; prefer TPBVERIFYVAR for recorded verify data). |
 | **TIME** | Time, tick, duration, and intervals. |
 | **BANDWIDTH** | Volume per time (e.g. MB/s). |
 | **RATE** | Volume per counter tick (e.g. MB/s, physical_day/ns, token/s). |
@@ -1156,7 +1157,7 @@ Runtime APIs match **name** exactly (`strcmp`). Tag is not part of the lookup ke
 
 ### 6.6. Example (STREAM-style Names)
 
-Examples: name=`Copy` tag=`EVENT,TIME,TPBOUT`; name=`Triad bandwidth` tag=`BANDWIDTH,FOM,TPBOUT`. `tpbcli run` prints fixed-width **Input** / **Output** tables (`tpblog_printf_ctab`); Output stats use `mean`/`min`/`max`/`p25`…`p99`. `tpbcli database dump` prints both `name` and `tag` fields as stored. Benchmark scoring reads rafdb payloads, not the run log.
+Examples: name=`Copy` tag=`EVENT,TIME,TPBOUTPUT`; name=`Triad bandwidth` tag=`BANDWIDTH,TPBFOM,TPBOUTPUT`; name=`Allocated memory size` tag=`TPBINPUT,TPBOUTPUT`. Kernel help (`run --kernel … --help` / `kernel get -v`) prints **Parameters::*** then a single **Data Records** table of every schema entry that carries a preset role tag. `tpbcli run` prints fixed-width **Input** / **Output** tables (`tpblog_printf_ctab`); Output stats use `mean`/`min`/`max`/`p25`…`p99`. `tpbcli database dump` prints both `name` and `tag` fields as stored. Benchmark scoring reads rafdb payloads, not the run log.
 
 ### 6.7. CLI dump layout (`.tpbr`, `-i`)
 

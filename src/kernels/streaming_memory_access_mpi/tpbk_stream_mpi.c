@@ -99,22 +99,22 @@ static const char *const s_summary_names[16] = {
 };
 
 static const char *const s_summary_tags[16] = {
-    "FOM,BANDWIDTH",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,BANDWIDTH",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,BANDWIDTH",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,BANDWIDTH",
-    "FOM,TIME",
-    "FOM,TIME",
-    "FOM,TIME",
+    TPB_TAG_FOM ",BANDWIDTH",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",BANDWIDTH",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",BANDWIDTH",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",BANDWIDTH",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
+    TPB_TAG_FOM ",TIME",
 };
 
 int
@@ -148,13 +148,13 @@ tpbk_pli_register_stream_mpi(void)
         return err;
     }
 
-    err = tpb_k_add_output("Allocated memory size", "INPARM", "Local memory footprint of three stream arrays (bytes).",
+    err = tpb_k_add_output("Allocated memory size", TPB_TAG_INPUT, "Local memory footprint of three stream arrays (bytes).",
         TPB_UINT64_T,
         TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) {
         return err;
     }
-    err = tpb_k_add_output("STREAM array size", "INPARM", "Local number of elements per array on this rank.",
+    err = tpb_k_add_output("STREAM array size", TPB_TAG_INPUT, "Local number of elements per array on this rank.",
         TPB_UINT64_T,
         TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N
             | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);

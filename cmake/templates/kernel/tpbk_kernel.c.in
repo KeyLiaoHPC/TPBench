@@ -33,7 +33,7 @@ tpbk_pli_register_@KERNEL_NAME@(void)
         return err;
     }
 
-    err = tpb_k_add_output("Value", "FOM,COUNT",
+    err = tpb_k_add_output("Value", TPB_TAG_FOM ",COUNT",
                            "Sum of integers from 1 through n.",
                            TPB_DOUBLE_T,
                            TPB_UNAME_UNDEF | TPB_UBASE_BASE |

@@ -713,7 +713,7 @@ int tpb_k_add_arg(const char *name, const char *tag, const char *note,
 
 **Parameters:**
 - `name`: Argument local name (CLI / lookup key; no `:`; unique vs outputs)
-- `tag`: Optional user tags (comma-separated; `NULL`/`""` allowed). System appends `TPBARG` then normalizes.
+- `tag`: Optional user tags (comma-separated; `NULL`/`""` allowed). System appends `TPBINPUT` (and `TPBENVVAR` when the source is `TPB_PARM_ENV`) then normalizes.
 - `note`: Human-readable argument description
 - `default_val`: String representation of default value
 - `dtype`: Combined data type: source | check | type (`TPB_PARM_*` encoding)
@@ -800,7 +800,7 @@ int tpb_k_add_output(const char *name, const char *tag, const char *note,
 
 **Parameters:**
 - `name`: Output local name (lookup key for `tpb_k_alloc_output`; no `:`)
-- `tag`: Optional user tags (`NULL`/`""` allowed). System appends `TPBOUT` then normalizes.
+- `tag`: Optional user tags (`NULL`/`""` allowed). System appends `TPBOUTPUT` then normalizes. Use `TPBFOM`, `TPBVERIFYVAR`, or `TPBINPUT` in user tags when applicable.
 - `note`: Human-readable description
 - `dtype`: Data type of the output (TPB_INT64_T, TPB_DOUBLE_T, etc.)
 - `unit`: Unit type (TPB_UNIT_NS, TPB_UNIT_BYTE, etc.)

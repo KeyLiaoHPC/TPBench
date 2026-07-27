@@ -53,8 +53,9 @@
 
 - **Breaking:** `tpb_meta_header_t` stores separate `name` and `tag` fields (256 bytes each). On-disk header layout grows (`TPB_RAF_HDR_FIXED_SIZE` 2840→3096). **Clear existing rafdb** (`rm -rf ~/.tpbench/rafdb` or workspace rafdb) before use; old `.tpbr` files are not readable.
 - **Breaking (API):** `tpb_k_add_parm` replaced by `tpb_k_add_arg(name, tag, note, …)`; `tpb_k_add_output(name, tag, note, …)`. Lookup (`alloc_output` / `get_arg` / `--kargs`) uses local **name** only. Runtime type `tpb_rt_arg_t`; kernel attr/entry field `narg` (was `nparm`).
-- **Tags:** User tags (≤191 chars) plus system role tags `TPBARG` (arguments) / `TPBOUT` (outputs); stored form is deduped, uppercase, comma-joined, sorted ascending. Link headers use `tag=TPBLINK` with local names `TaskID` / `KernelID` / `DeriveTo`.
-- **Tests:** Pack **A11** covers tag normalize/validate/display.
+- **Tags:** User tags (≤191 chars) plus system role tags `TPBINPUT` (arguments; also `TPBENVVAR` for `TPB_PARM_ENV`) / `TPBOUTPUT` (outputs). Preset vocabulary also includes `TPBFOM`, `TPBVERIFYVAR`, and `TPBLINK`. Stored form is deduped, uppercase, comma-joined, sorted ascending. Retired without aliases: `TPBARG`, `TPBOUT`, `FOM`, `INPARM` — clear workspace rafdb and rebuild/re-register kernels.
+- **Kernel help:** `run --kernel … --help` / `kernel get -v` print **Parameters::*** plus a single **Data Records** table of schema entries carrying preset tags.
+- **Tests:** Pack **A11** covers tag normalize/validate/display (plus A11.5–A11.6 preset macros); B2.13 / B5.3 assert Data Records layout.
 
 ### Frontend: tpbcli
 

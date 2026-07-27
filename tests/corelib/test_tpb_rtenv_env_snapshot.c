@@ -86,11 +86,20 @@ _sf_extract_env_headers(tpb_meta_header_t *hdrs, uint32_t nhdr, void *data,
 
     for (i = 0; i < nhdr; i++) {
         if (strcmp(hdrs[i].name, "environment_variable_key") == 0) {
+            if (strcmp(hdrs[i].tag, TPB_TAG_ENVVAR) != 0) {
+                return -1;
+            }
             *key_blob = (const char *)data + off;
         } else if (strcmp(hdrs[i].name, "environment_variable_count") == 0) {
+            if (strcmp(hdrs[i].tag, TPB_TAG_ENVVAR) != 0) {
+                return -1;
+            }
             *counts = (const int32_t *)((const char *)data + off);
             *nkeys = (size_t)hdrs[i].dimsizes[0];
         } else if (strcmp(hdrs[i].name, "environment_variable_value") == 0) {
+            if (strcmp(hdrs[i].tag, TPB_TAG_ENVVAR) != 0) {
+                return -1;
+            }
             *value_blob = (const char *)data + off;
         }
         off += (size_t)hdrs[i].data_size;

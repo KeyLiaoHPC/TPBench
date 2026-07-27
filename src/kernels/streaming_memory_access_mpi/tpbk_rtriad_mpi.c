@@ -98,10 +98,10 @@ _tpbk_register_rtriad_mpi(void)
     err = tpb_k_add_output("real_total_memsize", NULL, "Actual memory footprint of three rtriad arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Array size", "INPARM", "Actual number of elements per array per rank.",
+    err = tpb_k_add_output("Array size", TPB_TAG_INPUT, "Actual number of elements per array per rank.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Repeat factor", "INPARM", "Actual repeat factor used.",
+    err = tpb_k_add_output("Repeat factor", TPB_TAG_INPUT, "Actual repeat factor used.",
                            TPB_INT64_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
 

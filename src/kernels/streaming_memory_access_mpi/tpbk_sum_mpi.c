@@ -89,10 +89,11 @@ _tpbk_register_sum_mpi(void)
     err = tpb_k_add_output("real_total_memsize", NULL, "Actual memory footprint of sum array.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("Array size", "INPARM", "Actual number of elements per array per rank.",
+    err = tpb_k_add_output("Array size", TPB_TAG_INPUT, "Actual number of elements per array per rank.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("result_sum", NULL, "Global sum result per iteration (for verification).",
+    err = tpb_k_add_output("result_sum", TPB_TAG_VERIFYVAR,
+                     "Global sum result per iteration (for verification).",
                            TPB_DOUBLE_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 

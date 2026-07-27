@@ -55,10 +55,10 @@ tpbk_pli_register_triad(void)
                          (int64_t)0, (int64_t)600000);
     if (err != 0) return err;
 
-    err = tpb_k_add_output("Allocated memory size", "INPARM", "Actual memory footprint of three triad arrays.",
+    err = tpb_k_add_output("Allocated memory size", TPB_TAG_INPUT, "Actual memory footprint of three triad arrays.",
                            TPB_UINT64_T, TPB_UNIT_B | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
-    err = tpb_k_add_output("TRIAD array size", "INPARM", "Actual number of elements per array.",
+    err = tpb_k_add_output("TRIAD array size", TPB_TAG_INPUT, "Actual number of elements per array.",
                            TPB_UINT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_N | TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
     if (err != 0) return err;
     err = tpb_k_add_output("Total", "EVENT,TIME", "Measured runtime of the outer loop (all steps).",
@@ -67,10 +67,10 @@ tpbk_pli_register_triad(void)
     err = tpb_k_add_output("Step", "EVENT,TIME", "Measured runtime of per loop step.",
                            TPB_DTYPE_TIMER_T, TPB_UNIT_TIMER | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_Y | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Walltime", "FOM,BANDWIDTH", "Measured sustainable memory bandwidth in decimal based MB/s.",
+    err = tpb_k_add_output("Walltime", TPB_TAG_FOM ",BANDWIDTH", "Measured sustainable memory bandwidth in decimal based MB/s.",
                            TPB_DOUBLE_T, TPB_UNIT_MBPS | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
-    err = tpb_k_add_output("Phystime", "FOM,BANDWIDTH", "Measured sustainable memory bandwidth in binary based Byte/cy.",
+    err = tpb_k_add_output("Phystime", TPB_TAG_FOM ",BANDWIDTH", "Measured sustainable memory bandwidth in binary based Byte/cy.",
                            TPB_DOUBLE_T, TPB_UNIT_BYTEPCY | TPB_UATTR_CAST_N | TPB_UATTR_SHAPE_1D);
     if (err != 0) return err;
 

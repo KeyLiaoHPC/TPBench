@@ -312,7 +312,8 @@ tpb_register_common()
 
     /* ntest: number of test iterations */
     snprintf(kernel_common.info.args[0].name, TPBM_NAME_STR_MAX_LEN, "ntest");
-    snprintf(kernel_common.info.args[0].tag, TPBM_NAME_STR_MAX_LEN, "%s", TPB_TAG_ARG);
+    snprintf(kernel_common.info.args[0].tag, TPBM_NAME_STR_MAX_LEN, "%s",
+             TPB_TAG_INPUT);
     snprintf(kernel_common.info.args[0].note, TPBM_NOTE_STR_MAX_LEN, "Number of test iterations");
     kernel_common.info.args[0].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.args[0].value.i64 = 10;
@@ -326,7 +327,8 @@ tpb_register_common()
 
     /* twarm: warmup time in milliseconds */
     snprintf(kernel_common.info.args[1].name, TPBM_NAME_STR_MAX_LEN, "twarm");
-    snprintf(kernel_common.info.args[1].tag, TPBM_NAME_STR_MAX_LEN, "%s", TPB_TAG_ARG);
+    snprintf(kernel_common.info.args[1].tag, TPBM_NAME_STR_MAX_LEN, "%s",
+             TPB_TAG_INPUT);
     snprintf(kernel_common.info.args[1].note, TPBM_NOTE_STR_MAX_LEN, "Warm-up time in milliseconds");
     kernel_common.info.args[1].ctrlbits = TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_RANGE;
     kernel_common.info.args[1].value.i64 = 100;
@@ -341,7 +343,8 @@ tpb_register_common()
 
     /* total_memsize: memory size in KiB */
     snprintf(kernel_common.info.args[2].name, TPBM_NAME_STR_MAX_LEN, "total_memsize");
-    snprintf(kernel_common.info.args[2].tag, TPBM_NAME_STR_MAX_LEN, "%s", TPB_TAG_ARG);
+    snprintf(kernel_common.info.args[2].tag, TPBM_NAME_STR_MAX_LEN, "%s",
+             TPB_TAG_INPUT);
     snprintf(kernel_common.info.args[2].note, TPBM_NOTE_STR_MAX_LEN, "Memory size in KiB");
     kernel_common.info.args[2].ctrlbits = TPB_PARM_CLI | TPB_DOUBLE_T | TPB_PARM_RANGE;
     kernel_common.info.args[2].value.u64 = 32;
@@ -655,8 +658,11 @@ tpb_k_add_arg(const char *name, const char *tag, const char *note,
     }
     /*
      * Argument local name must be unique across args+outputs, contain no ':',
-     * and fit in 255 chars. User tag max 191; system appends TPBARG then
-     * normalizes (dedupe, uppercase, sort).
+     * and fit in 255 chars. User tag max 191.
+     *
+     * Data role vs parameter source: every argument is TPBINPUT. TPBENVVAR is
+     * an additional role for ENV-sourced arguments, not a mutually exclusive
+     * replacement for TPBINPUT.
      */
     if (_sf_validate_header_name(name) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
@@ -668,10 +674,23 @@ tpb_k_add_arg(const char *name, const char *tag, const char *note,
                    "At tpb_k_add_arg: duplicate name '%s'.\n", name);
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERN_ARG_FAIL, NULL);
     }
-    if (_sf_finalize_role_tags(norm_tag, sizeof(norm_tag), tag, TPB_TAG_ARG) != 0) {
-        tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
-                   "At tpb_k_add_arg: invalid tag for '%s'.\n", name);
-        TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERN_ARG_FAIL, NULL);
+    {
+        const char *sys_tag = TPB_TAG_INPUT;
+        char sys_combo[64];
+
+        if ((dtype & TPB_PARM_SOURCE_MASK) ==
+            (TPB_PARM_ENV & TPB_PARM_SOURCE_MASK)) {
+            snprintf(sys_combo, sizeof(sys_combo), "%s,%s",
+                     TPB_TAG_INPUT, TPB_TAG_ENVVAR);
+            sys_tag = sys_combo;
+        }
+        if (_sf_finalize_role_tags(norm_tag, sizeof(norm_tag), tag,
+                                   sys_tag) != 0) {
+            tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
+                            TPBLOG_FLAG_TSTAG,
+                            "At tpb_k_add_arg: invalid tag for '%s'.\n", name);
+            TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERN_ARG_FAIL, NULL);
+        }
     }
 
     nargs = current_kernel->info.nargs;
@@ -834,7 +853,8 @@ tpb_k_add_output(const char *name, const char *tag, const char *note,
                    "At tpb_k_add_output: duplicate name '%s'.\n", name);
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERN_ARG_FAIL, NULL);
     }
-    if (_sf_finalize_role_tags(norm_tag, sizeof(norm_tag), tag, TPB_TAG_OUT) != 0) {
+    if (_sf_finalize_role_tags(norm_tag, sizeof(norm_tag), tag,
+                               TPB_TAG_OUTPUT) != 0) {
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "At tpb_k_add_output: invalid tag for '%s'.\n", name);
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERN_ARG_FAIL, NULL);
