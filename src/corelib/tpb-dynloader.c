@@ -440,14 +440,13 @@ _sf_load_register_fn(void *handle, const char *kernel_name,
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_NULLPTR_ARG, NULL);
     }
 
+    (void)quiet;
     snprintf(func_name, sizeof(func_name), "tpbk_pli_register_%s", kernel_name);
     *reg_out = (tpb_pli_register_fn_t)dlsym(handle, func_name);
     if (*reg_out == NULL) {
-        if (!quiet) {
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                       "In tpb_dl_scan: No PLI registration function %s in %s\n",
-                       func_name, path_label);
-        }
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                   "In tpb_dl_scan: No PLI registration function %s in %s: %s\n",
+                   func_name, path_label, dlerror());
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 
@@ -473,11 +472,9 @@ _sf_try_load_from_path(const char *kernel_name, const char *path,
 
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
-        if (!quiet) {
-            tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
-                       "In tpb_dl_scan: Failed to load %s: %s\n",
-                       path, dlerror());
-        }
+        tpblog_printf_f(TPB_LOG_LEVEL_WARN, TPBLOG_TYPE_WARN, TPBLOG_FLAG_TSTAG,
+                   "In tpb_dl_scan: Failed to load %s: %s\n",
+                   path, dlerror());
         TPB_FAIL(TPB_MOD_DRIVER, TPBE_KERNEL_NE_FAIL, NULL);
     }
 

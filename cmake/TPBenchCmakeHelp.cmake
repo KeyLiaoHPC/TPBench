@@ -15,6 +15,8 @@ set(_tpb_cmake_help_doc_lines
     "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
     "TPB_KERNEL_FFLAGS|Fortran kernel compile options (reserved; empty = -O2 when Fortran kernels exist)"
     "TPB_KERNEL_LDFLAGS|Link options for CPU kernels (empty = none)"
+    "TPB_CORE_STATIC_LIBS|Extra .a files linked into libtpbench.so (never MPI)"
+    "TPB_KERNEL_STATIC_LIBS|Extra .a files linked into every CPU kernel .so (ordinary archive). Post-link audit fails the target if the load group has a strong unsatisfied U"
     "TPB_MPI_PATH|MPI install root for selected MPI kernel targets only (libtpbench does not link MPI; empty = auto-detect)"
     "TPB_ROCM_PATH|ROCm root when a rocm-tagged GPU kernel is selected (empty = auto-detect)"
     "TPB_ENABLE_OPENMP|Add OpenMP to built kernel targets (does not select which kernels build)"

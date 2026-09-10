@@ -8,6 +8,7 @@
 #       NAME        mykern
 #       SOURCES     tpbk_mykern.c
 #       [LINK_LIBS  extra_lib ...]
+#       [STATIC_LIBS extra.a ...]
 #   )
 #
 # Creates one shared library target:
@@ -24,6 +25,8 @@ set(TPB_KERNEL_CFLAGS "" CACHE STRING "C compile options for out-of-tree kernels
 set(TPB_KERNEL_CXXFLAGS "" CACHE STRING "C++/HIP compile options for out-of-tree kernels")
 set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for out-of-tree kernels")
 set(TPB_KERNEL_LDFLAGS "" CACHE STRING "Link options for out-of-tree kernels")
+
+include("${CMAKE_CURRENT_LIST_DIR}/TPBenchStaticArchive.cmake")
 
 function(_tpbench_kernel_apply_c_options _tgt)
     if("${TPB_KERNEL_CFLAGS}" STREQUAL "")
@@ -60,7 +63,7 @@ function(_tpbench_kernel_apply_ld_options _tgt)
 endfunction()
 
 function(tpbench_add_kernel)
-    cmake_parse_arguments(_K "" "NAME" "SOURCES;LINK_LIBS" ${ARGN})
+    cmake_parse_arguments(_K "SKIP_INSTALL" "NAME" "SOURCES;LINK_LIBS;STATIC_LIBS" ${ARGN})
 
     if(NOT _K_NAME)
         message(FATAL_ERROR "tpbench_add_kernel: NAME is required")
@@ -92,7 +95,16 @@ function(tpbench_add_kernel)
     _tpbench_kernel_apply_fortran_options(${_lib_target})
     _tpbench_kernel_apply_ld_options(${_lib_target})
 
-    install(TARGETS ${_lib_target}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    set(_static_joined "")
+    if(_K_STATIC_LIBS)
+        list(JOIN _K_STATIC_LIBS " " _static_joined)
+    endif()
+    tpb_apply_kernel_runtimes(${_lib_target} "${CMAKE_C_COMPILER}"
+                              "${_static_joined}" "${_K_LINK_LIBS}")
+
+    if(NOT _K_SKIP_INSTALL)
+        install(TARGETS ${_lib_target}
+                LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+                ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+    endif()
 endfunction()

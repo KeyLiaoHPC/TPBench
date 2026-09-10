@@ -523,7 +523,7 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
   [--ldflags "-Wl,--as-needed"] [--cflags "-O2"]
 ```
 
-**`--kernel`** 与 **`--kernel-tag`** 互斥且必须指定其一；均支持逗号分隔，可用单/双引号包裹。**`--dir`** 默认为 **`TPB_HOME`**；默认时按 **`kernel_list.cmake.in`** 解析 **`$TPB_HOME/src/kernels/<PATH>`**。多内核顺序构建，逐个输出 PASS/FAIL 及汇总。 **`--ldflags`** 映射为 **`TPB_KERNEL_LDFLAGS`** 并写入 **`compilation.kernel_ldflags`**。
+**`--kernel`** 与 **`--kernel-tag`** 互斥且必须指定其一；均支持逗号分隔，可用单/双引号包裹。**`--dir`** 默认为 **`TPB_HOME`**；默认时按 **`kernel_list.cmake.in`** 解析 **`$TPB_HOME/src/kernels/<PATH>`**。多内核顺序构建，逐个输出 PASS/FAIL 及汇总。 **`--ldflags`** 映射为 **`TPB_KERNEL_LDFLAGS`** 并写入 **`compilation.kernel_ldflags`**。kernel 编译器与其直接科学依赖（MPI、netcdf 等）必须属于同一工具链族（`gcc` / `clang_rt` / `intel`）；gcc kernel 链接 AOCC/Intel `libmpi` 会在配置/链接阶段失败。**`--static-libs`** 只接受同族 `.a`，按普通归档按需链接。链接后会递归检查 `dlopen` 加载组：若存在未被默认可见定义满足的强 `U` 符号，构建失败并删除 `.so`，不会安装。应重编译依赖（例如把 compiler-rt 链进 OpenMPI/`libmpi.so`，消除残留 `U`），不要把运行时 `.a` 塞进 kernel。`libtpbench.so` 不链接 MPI。`tpbcli run --kernel stream_mpi` 仍需 **`--wrapper mpirun`**。
 
 ## 2.6 tpbcli task
 

@@ -8,6 +8,7 @@
 
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelSelect.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelRegistry.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernel.cmake)
 
 if(TPB_RECORD_KERNEL_COMPILE_HISTORY)
     include(${CMAKE_SOURCE_DIR}/cmake/TPBenchKernelPostBuild.cmake)
@@ -143,25 +144,22 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
 
     set(_so_target "tpbk_${_kname}")
 
-    add_library(${_so_target} SHARED "${_kernel_source}")
-    target_link_libraries(${_so_target} PRIVATE tpbench m)
-    set_target_properties(${_so_target} PROPERTIES
-        OUTPUT_NAME "tpbk_${_kname}"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-    )
-    # GNU ld: export dynamic symbols for PLI dlsym. Apple ld rejects
-    # --export-dynamic; macOS dylibs export globals by default.
-    if(UNIX AND NOT APPLE)
-        target_link_options(${_so_target} PRIVATE "-Wl,--export-dynamic")
+    if(NOT "${_kextra}" STREQUAL "")
+        tpbench_add_kernel(
+            NAME ${_kname}
+            SOURCES "${_kernel_source}"
+            LINK_LIBS ${_kextra}
+            SKIP_INSTALL
+        )
+    else()
+        tpbench_add_kernel(
+            NAME ${_kname}
+            SOURCES "${_kernel_source}"
+            SKIP_INSTALL
+        )
     endif()
-    tpb_kernel_apply_c_options(${_so_target})
-    tpb_kernel_apply_ld_options(${_so_target})
     if(TPB_ENABLE_OPENMP AND OpenMP_C_FOUND)
         target_link_libraries(${_so_target} PRIVATE OpenMP::OpenMP_C)
-    endif()
-    if(NOT "${_kextra}" STREQUAL "")
-        target_link_libraries(${_so_target} PRIVATE ${_kextra})
     endif()
     if(TPB_SHOW_DEBUG)
         target_compile_definitions(${_so_target} PRIVATE TPB_K_DEBUG=1)

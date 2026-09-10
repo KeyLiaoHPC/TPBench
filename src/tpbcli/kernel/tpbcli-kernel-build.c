@@ -33,6 +33,7 @@ typedef struct {
     const char *fc;
     const char *fcflags;
     const char *ldflags;
+    const char *static_libs;
     const char *cmake_defs[TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS];
     int ncmake_defs;
 } tpbcli_kernel_build_opts_t;
@@ -108,14 +109,26 @@ _sf_print_build_usage(void)
                     "[--tpb-home <path>] [--ldflags <flags>] [-D<var>=<value> ...] "
                     "[--cc <compiler>] [--cflags <flags>] "
                     "[--cxx <compiler>] [--cxxflags <flags>] "
-                    "[--fc <compiler>] [--fcflags <flags>]\n"
+                    "[--fc <compiler>] [--fcflags <flags>] "
+                    "[--static-libs <archives>]\n"
                     "\n"
                     "  --dir defaults to TPB_HOME; with the default, kernel source "
                     "dirs are resolved from\n"
                     "  $TPB_HOME/src/kernels/kernel_list.cmake.in.\n"
                     "  --kernel and --kernel-tag are mutually exclusive; each accepts "
                     "comma-separated values\n"
-                    "  optionally wrapped in single or double quotes.\n");
+                    "  optionally wrapped in single or double quotes.\n"
+                    "  The kernel compiler and its direct scientific libraries "
+                    "(MPI, netcdf, ...) must\n"
+                    "  share one toolchain family (gcc / clang_rt / intel).\n"
+                    "  After link, a strong unsatisfied U in the kernel load group "
+                    "fails the build and\n"
+                    "  the .so is not installed. Recompile the dependency "
+                    "(for example OpenMPI) so it\n"
+                    "  provides the symbol body; do not stuff a runtime .a into "
+                    "the kernel.\n"
+                    "  --static-libs lists same-family .a files linked as ordinary "
+                    "archives.\n");
 }
 
 static int
@@ -215,6 +228,8 @@ _sf_parse_build_args(int argc, char **argv,
             args->opts.fc = argv[++i];
         } else if (strcmp(argv[i], "--fcflags") == 0 && i + 1 < argc) {
             args->opts.fcflags = argv[++i];
+        } else if (strcmp(argv[i], "--static-libs") == 0 && i + 1 < argc) {
+            args->opts.static_libs = argv[++i];
         } else if (strncmp(argv[i], "-D", 2) == 0) {
             if (args->opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: too many -D options.\n");
@@ -419,6 +434,14 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
                 TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }
         }
+        if (opts->static_libs != NULL && opts->static_libs[0] != '\0') {
+            n += snprintf(cmd + n, cmdlen - (size_t)n,
+                          " -DTPB_KERNEL_STATIC_LIBS=\"%s\"",
+                          opts->static_libs);
+            if (n < 0 || (size_t)n >= cmdlen) {
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+            }
+        }
         for (i = 0; i < opts->ncmake_defs; i++) {
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -D%s", opts->cmake_defs[i]);
@@ -501,6 +524,12 @@ _sf_register_compile_meta(const char *kernel_name,
     argv[argc++] = "--key";
     argv[argc++] = "compilation.kernel_ldflags";
     argv[argc++] = (char *)ldflags;
+    argv[argc++] = "--key";
+    argv[argc++] = "compilation.static_libs";
+    argv[argc++] = (opts->static_libs != NULL) ? (char *)opts->static_libs : "";
+    argv[argc++] = "--key";
+    argv[argc++] = "compilation.toolchain";
+    argv[argc++] = (char *)cc;
     argv[argc++] = "--key";
     argv[argc++] = "dependency.tpbench";
     argv[argc++] = "libtpbench" TPB_SHLIB_EXT;
@@ -689,6 +718,9 @@ _sf_build_one_kernel(const char *kernel_name,
         tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_TSTAG,
                    "kernel build: failed to install '%s'.\n", dest_so);
         TPB_PROPAGATE(TPB_MOD_CLI_KERNEL, err, "_sf_copy_file");
+    }
+    if (chmod(dest_so, 0755) != 0) {
+        TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
     }
 
     err = _sf_activate_installed_kernel(kernel_name, dest_so);

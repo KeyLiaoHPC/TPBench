@@ -62,6 +62,8 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | `-DTPB_KERNEL_CXXFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** ROCm/HIP kernel compile options (`cmake/TPBenchGpuKernelsRocm.cmake`). |
 | `-DTPB_KERNEL_FFLAGS="..."` | *(empty → `-O2`)* | Reserved for future Fortran kernels. |
 | `-DTPB_KERNEL_LDFLAGS="..."` | *(empty)* | Link options for CPU kernel targets and out-of-tree **`tpbench_add_kernel`**. |
+| `-DTPB_KERNEL_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into CPU kernels as ordinary archives (same toolchain family). Post-link audit fails the target if the load group has a strong unsatisfied `U`. |
+| `-DTPB_CORE_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into `libtpbench.so` (never MPI; referenced objects only). |
 | `-DTPB_ENABLE_OPENMP=ON` | `OFF` | Add OpenMP compile/link to selected benchmark kernels. |
 | `-DTPB_USE_AVX512=ON` | `OFF` | Define `TPB_USE_AVX512` project-wide. |
 | `-DTPB_USE_AVX2=ON` | `OFF` | Define `TPB_USE_AVX2`. |
@@ -179,6 +181,7 @@ Subcommands: `list`/`ls`, `get`, `set`, `init`, `build`, `backup-inactive`. **`l
 | ------ | ------- |
 | `--dir <path>` | Source/project directory; defaults to **`TPB_HOME`**. When defaulted, each kernel uses **`$TPB_HOME/src/kernels/<PATH>`** from **`kernel_list.cmake.in`**. |
 | `--ldflags <flags>` | Link flags → **`-DTPB_KERNEL_LDFLAGS=...`** and **`compilation.kernel_ldflags`**. |
+| `--static-libs <archives>` | Same-family `.a` → **`-DTPB_KERNEL_STATIC_LIBS`** (ordinary archive). Does not override the kernel/dep toolchain check or load-group audit. |
 | `--tpb-home <path>` | Install root for **`find_package(TPBench)`** and **`lib/`** install (only on **`build`**). |
 | `--cc`, `--cflags`, `--cxx`, `--cxxflags`, `--fc`, `--fcflags` | Compiler overrides forwarded to CMake configure. |
 | `-D<var>=<value>` | Extra CMake cache definitions (repeatable). |

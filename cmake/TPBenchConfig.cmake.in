@@ -20,6 +20,7 @@
 get_filename_component(_TPBENCH_PREFIX "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(TPBENCH_INCLUDE_DIR "${_TPBENCH_PREFIX}/include")
 set(TPBENCH_LIB_DIR     "${_TPBENCH_PREFIX}/lib")
+set(TPBENCH_ELF_EXPORT  "${_TPBENCH_PREFIX}/bin/tpb-elf-export")
 
 if(NOT TARGET tpbench)
     add_library(tpbench SHARED IMPORTED)

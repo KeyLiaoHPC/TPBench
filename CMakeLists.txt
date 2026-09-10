@@ -204,6 +204,9 @@ configure_file(
     @ONLY
 )
 
+# Host tools (tpb-elf-export) before corelib / kernels post-link hooks
+add_subdirectory(src/utils)
+
 # Core library (libtpbench.so) defined in sub-CMakeLists
 add_subdirectory(src/corelib)
 
@@ -271,6 +274,8 @@ configure_file(
 )
 install(FILES ${CMAKE_BINARY_DIR}/cmake/TPBenchConfig.cmake
               ${CMAKE_SOURCE_DIR}/cmake/TPBenchKernel.cmake
+              ${CMAKE_SOURCE_DIR}/cmake/TPBenchStaticArchive.cmake
+              ${CMAKE_SOURCE_DIR}/cmake/TPBenchAuditKernel.cmake
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TPBench)
 
 # Stage CMake package under build/lib/cmake/TPBench for build-tree out-of-tree kernels
@@ -280,6 +285,10 @@ add_custom_target(copy_cmake_package ALL
             ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchConfig.cmake
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/cmake/TPBenchKernel.cmake
             ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchKernel.cmake
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/cmake/TPBenchStaticArchive.cmake
+            ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchStaticArchive.cmake
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/cmake/TPBenchAuditKernel.cmake
+            ${CMAKE_BINARY_DIR}/lib/cmake/TPBench/TPBenchAuditKernel.cmake
     COMMENT "Staging TPBench CMake package under build/lib/cmake/TPBench"
 )
 add_dependencies(copy_cmake_package copy_yaml_files)

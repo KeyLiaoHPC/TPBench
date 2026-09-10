@@ -131,6 +131,14 @@ test_b5_6_build_missing_args(void)
         FAIL("B5.6 missing selector hint");
         return 1;
     }
+    if (strstr(buf, "--static-libs") == NULL) {
+        FAIL("B5.6 missing --static-libs");
+        return 1;
+    }
+    if (strstr(buf, "--no-auto-runtime") != NULL) {
+        FAIL("B5.6 unexpected --no-auto-runtime");
+        return 1;
+    }
     PASS();
     return 0;
 }
@@ -293,6 +301,46 @@ test_b5_9_build_unknown_tag_hint(void)
     return 0;
 }
 
+static int
+test_b5_10_build_runtime_flags_usage(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR "\" kernel build",
+                               buf, sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.10 expected nonzero");
+        return 1;
+    }
+    if (strstr(buf, "--static-libs") == NULL) {
+        FAIL("B5.10 missing --static-libs");
+        return 1;
+    }
+    if (strstr(buf, "--no-auto-runtime") != NULL) {
+        FAIL("B5.10 unexpected --no-auto-runtime");
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
+static int
+test_b5_11_build_static_libs_needs_value(void)
+{
+    char buf[4096];
+    int code = run_cmd_capture("\"" TPB_TEST_TPBCLI_STR
+                               "\" kernel build --kernel stream "
+                               "--static-libs",
+                               buf, sizeof(buf));
+
+    if (code == 0) {
+        FAIL("B5.11 expected nonzero");
+        return 1;
+    }
+    PASS();
+    return 0;
+}
+
 int
 main(int argc, char **argv)
 {
@@ -316,11 +364,19 @@ main(int argc, char **argv)
     if (strcmp(id, "B5.9") == 0) {
         return test_b5_9_build_unknown_tag_hint();
     }
+    if (strcmp(id, "B5.10") == 0) {
+        return test_b5_10_build_runtime_flags_usage();
+    }
+    if (strcmp(id, "B5.11") == 0) {
+        return test_b5_11_build_static_libs_needs_value();
+    }
 
     test_b5_2_get_no_register_side_effect();
     test_b5_3_set_and_get_metadata();
     test_b5_6_build_missing_args();
     test_b5_7_build_mutually_exclusive_selectors();
     test_b5_9_build_unknown_tag_hint();
+    test_b5_10_build_runtime_flags_usage();
+    test_b5_11_build_static_libs_needs_value();
     return (g_fail > 0) ? 1 : 0;
 }

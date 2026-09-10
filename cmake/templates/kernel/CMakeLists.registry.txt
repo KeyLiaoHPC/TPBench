@@ -17,8 +17,14 @@ if(DEFINED TPB_KERNEL_LINK_LIBS AND NOT "${TPB_KERNEL_LINK_LIBS}" STREQUAL "")
     endif()
 endif()
 
+set(_kernel_static_libs "")
+if(DEFINED TPB_KERNEL_STATIC_LIBS AND NOT "${TPB_KERNEL_STATIC_LIBS}" STREQUAL "")
+    set(_kernel_static_libs ${TPB_KERNEL_STATIC_LIBS})
+endif()
+
 tpbench_add_kernel(
-    NAME      ${TPB_KERNEL_NAME}
-    SOURCES   tpbk_${TPB_KERNEL_NAME}.c
-    LINK_LIBS ${_kernel_link_libs}
+    NAME        ${TPB_KERNEL_NAME}
+    SOURCES     tpbk_${TPB_KERNEL_NAME}.c
+    LINK_LIBS   ${_kernel_link_libs}
+    STATIC_LIBS ${_kernel_static_libs}
 )

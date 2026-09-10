@@ -178,6 +178,7 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 | ---- | ---- |
 | `--dir <path>` | 默认 **`TPB_HOME`**；默认时按 registry 解析 **`$TPB_HOME/src/kernels/<PATH>`**。 |
 | `--ldflags <flags>` | 链接选项 → **`TPB_KERNEL_LDFLAGS`** / **`compilation.kernel_ldflags`**。 |
+| `--static-libs <archives>` | 同族 `.a` → **`TPB_KERNEL_STATIC_LIBS`**（普通归档按需链接）。不能用来绕过工具链检查或加载组审计。 |
 | `--tpb-home`、`-D`、编译器选项 | 同英文 cheatsheet。 |
 
 

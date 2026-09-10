@@ -223,12 +223,35 @@ tpb_add_subcase(A11 A11.2 validate    test-tag-norm corelib)
 tpb_add_subcase(A11 A11.5 preset_macros test-tag-norm corelib)
 tpb_add_subcase(A11 A11.6 dedupe_combo  test-tag-norm corelib)
 
+# --- ELF export / toolchain fixture (Pack A12) ---
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(test-elf-export EXCLUDE_FROM_ALL
+        test_elf_export.c
+    )
+    target_compile_definitions(test-elf-export PRIVATE
+        "TPB_TEST_ELF_EXPORT=\"$<TARGET_FILE:tpb-elf-export>\""
+        "TPB_TEST_WORKDIR=\"${CMAKE_BINARY_DIR}/tests/elf_export_ws\""
+    )
+    add_dependencies(test-elf-export tpb-elf-export)
+    set_target_properties(test-elf-export PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+        LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+        ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+    )
+    tpb_add_subcase(A12 A12.1 audit_unsatisfied test-elf-export corelib)
+    tpb_add_subcase(A12 A12.2 classify_dso   test-elf-export corelib)
+    tpb_add_subcase(A12 A12.3 classify_mismatch test-elf-export corelib)
+endif()
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
             test-kernel-record test-tpblog test-errcode test-rtenv-env-snapshot
             test-tag-norm
 )
+if(TARGET test-elf-export)
+    add_dependencies(test_corelib test-elf-export)
+endif()
 
 add_custom_target(check_corelib
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -L "^corelib$"

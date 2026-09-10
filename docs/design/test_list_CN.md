@@ -81,6 +81,9 @@
 | A11.2 | `corelib/tpb-tag-norm.c` | 验证 name/tag 合法性（禁止 `:`、长度上限）。 |
 | A11.5 | `include/tpb-public.h` | 验证六个预设 tag 宏字符串。 |
 | A11.6 | `corelib/tpb-tag-norm.c` | 验证角色 tag 与用户 tag 去重组合。 |
+| A12.1 | `utils/tpb-elf-export.c` | 验证 `libdep.so` 含强 `U` 且 plugin `DT_NEEDED` 它时，`audit-needed` 非零退出，stderr 含 `undefined symbol` 与 `libdep`。 |
+| A12.2 | `utils/tpb-elf-export.c` | 验证 `classify-dso` 根据 `.comment` / `libirc` 输出 `gcc` / `clang_rt` / `intel` 之一。 |
+| A12.3 | `utils/tpb-elf-export.c` | 验证去掉原 `.comment` 后，写入 Intel / clang 注释的两个 DSO 分类族不同。 |
 
 ## B 类 — CLI 单元与功能测试
 
@@ -127,6 +130,8 @@
 | B5.6 | `tpbcli/kernel/` | 验证 `kernel build`/`set`/`init` 缺少参数时失败并显示用法提示。 |
 | B5.7 | `tpbcli/kernel/` | 验证 `kernel build --kernel` 和 `--kernel-tag` 同时使用报互斥错误。 |
 | B5.9 | `tpbcli/kernel/` | 验证 `kernel build` 使用未知 tag 时报 "no kernels matched" 错误。 |
+| B5.10 | `tpbcli/kernel/` | 验证 `kernel build` 缺参用法含 `--static-libs`，且不含 `--no-auto-runtime`。 |
+| B5.11 | `tpbcli/kernel/` | 验证 `kernel build --static-libs` 缺少取值时失败。 |
 | B6.2 | `tpbcli/rtenv/` | 验证 `rtenv --help` 概览及缺子命令用法提示。 |
 | B6.3 | `tpbcli/rtenv/` | 验证 `rtenv new` 输出 `name=`/`var=` 模板行。 |
 | B6.4 | `tpbcli/rtenv/` | 验证 `rtenv new -f` 从文件创建记录。 |

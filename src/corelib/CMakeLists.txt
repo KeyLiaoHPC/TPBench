@@ -61,3 +61,6 @@ if(APPLE)
     target_link_options(tpbench PRIVATE "LINKER:-flat_namespace")
 endif()
 target_compile_definitions(tpbench PRIVATE TPB_HOME="${TPB_HOME_RESOLVED}")
+
+include(${CMAKE_SOURCE_DIR}/cmake/TPBenchStaticArchive.cmake)
+tpb_apply_core_runtimes(tpbench "${CMAKE_C_COMPILER}")

@@ -679,6 +679,22 @@ tpbcli kernel build --dir ./mykern --kernel mykern \
 tpbcli kernel build --kernel stream_mpi --cc mpicc
 ```
 
+The kernel compiler and every **direct** scientific dependency (MPI, netcdf, HDF5, …) must be the same toolchain family (`gcc`, `clang_rt`, or `intel`). A gcc kernel linked against AOCC/Intel `libmpi` is a **configure/link error**. `--static-libs` may only add same-family `.a` files, linked as ordinary archives. `libtpbench.so` does not link MPI.
+
+After the kernel `.so` is linked, TPBench walks the `dlopen` load group (`DT_NEEDED`, recursive). A **strong** unsatisfied `U` symbol fails the build, deletes the `.so`, and does not install it. Rebuild the **dependency** so it contains the function body (for example rebuild OpenMPI / AOCC `libmpi.so` with compiler-rt linked in so those `U`s disappear). Do not copy compiler-rt into the kernel `.so`. Hidden definitions in the kernel do not bind for `dlopen(RTLD_NOW|RTLD_LOCAL)`.
+
+Typical audit error:
+
+```text
+Error: undefined symbol '__extendhfsf2' in libmpi.so.40
+  not provided as a default-visible definition in this kernel
+  or its loaded dependency group.
+  Recompile that dependency so it contains the function body,
+  or rebuild the kernel against a library that provides the symbol.
+```
+
+`tpbcli run --kernel stream_mpi` still needs `--wrapper mpirun --wrapper-args '-np N'`. The kernel does not launch MPI itself.
+
 Kernel source files should include only the installed flat header **`#include "tpbench.h"`** (under **`$TPB_HOME/include`**). Do not include **`tpb-public.h`** or corelib private headers in kernel code.
 
 **Selector (required, mutually exclusive):**
@@ -690,6 +706,7 @@ Kernel source files should include only the installed flat header **`#include "t
 
 - **`--dir <path>`** — defaults to resolved **`TPB_HOME`**. When defaulted, each kernel’s source directory is **`$TPB_HOME/src/kernels/<PATH>`** from **`kernel_list.cmake.in`**. When explicit, the same directory is used for every selected kernel (typical out-of-tree layout).
 - **`--ldflags <flags>`** — passed to CMake as **`-DTPB_KERNEL_LDFLAGS=...`** and recorded as **`compilation.kernel_ldflags`**.
+- **`--static-libs <archives>`** — same-family `.a` files, passed as **`-DTPB_KERNEL_STATIC_LIBS`** and recorded as **`compilation.static_libs`**. Linked as ordinary archives (as-needed). Cannot paper over a mismatched `libmpi` or leftover `U` in a dependency.
 - **`--tpb-home`** — accepted only on **`kernel build`**. Priority: **`--tpb-home`**, then **`$TPB_HOME`**, then **`$HOME/.tpbench`**.
 
 Multiple kernels build sequentially; each prints **PASS** or **FAIL**, followed by a summary line. The command exits nonzero if any selected kernel failed.
