@@ -504,6 +504,99 @@ int tpb_k_get_arg(const char *name, TPB_DTYPE dtype, void *argptr);
 int tpb_k_get_timer(tpb_timer_t *timer);
 
 /**
+ * @brief Call timer->tick if the timer is valid.
+ * @param timer Timer from tpb_k_get_timer (non-NULL, tick non-NULL).
+ * @param ts    Stamp location passed to tick.
+ * @return TPBE_SUCCESS, or TPBE_NULLPTR_ARG if timer/tick/ts is NULL.
+ */
+int tpb_timer_tick(tpb_timer_t *timer, int64_t *ts);
+
+/**
+ * @brief Call timer->tock if the timer is valid.
+ * @param timer Timer from tpb_k_get_timer (non-NULL, tock non-NULL).
+ * @param ts    Stamp location passed to tock (elapsed on return).
+ * @return TPBE_SUCCESS, or TPBE_NULLPTR_ARG if timer/tock/ts is NULL.
+ */
+int tpb_timer_tock(tpb_timer_t *timer, int64_t *ts);
+
+/**
+ * @brief Convert a tock elapsed value to seconds.
+ * @param timer    Timer whose unit encodes the elapsed scale.
+ * @param elapsed  Value written by tock (same unit as timer->unit).
+ * @param seconds  Output seconds; non-NULL.
+ * @return TPBE_SUCCESS, TPBE_NULLPTR_ARG, or TPBE_KERN_ARG_FAIL if the
+ *         timer is not a wall-clock unit that can be converted.
+ */
+int tpb_timer_elapsed_seconds(const tpb_timer_t *timer, int64_t elapsed,
+                              double *seconds);
+
+/**
+ * @brief Register a CLI int64 argument with range check (no varargs).
+ * @param name         Argument name.
+ * @param tag          Optional user tags.
+ * @param note         Description.
+ * @param default_val  Default as a decimal string.
+ * @param lo           Inclusive lower bound.
+ * @param hi           Inclusive upper bound.
+ * @return Same as tpb_k_add_arg.
+ */
+int tpb_k_add_arg_i64_range(const char *name, const char *tag,
+                            const char *note, const char *default_val,
+                            int64_t lo, int64_t hi);
+
+/**
+ * @brief Register a CLI int64 argument with a value list (no varargs).
+ * @param name         Argument name.
+ * @param tag          Optional user tags.
+ * @param note         Description.
+ * @param default_val  Default as a decimal string.
+ * @param n            Number of allowed values.
+ * @param list         Array of n allowed int64 values.
+ * @return Same as tpb_k_add_arg.
+ */
+int tpb_k_add_arg_i64_list(const char *name, const char *tag,
+                           const char *note, const char *default_val,
+                           int n, const int64_t *list);
+
+/**
+ * @brief Register a CLI char argument with a value list (no varargs).
+ * @param name         Argument name.
+ * @param tag          Optional user tags.
+ * @param note         Description.
+ * @param default_val  Default string; first character is stored.
+ * @param n            Number of allowed characters.
+ * @param list         String or array of n allowed characters.
+ * @return Same as tpb_k_add_arg.
+ */
+int tpb_k_add_arg_char_list(const char *name, const char *tag,
+                            const char *note, const char *default_val,
+                            int n, const char *list);
+
+/**
+ * @brief Read a registered int64 argument.
+ * @param name Argument name.
+ * @param out  Non-NULL destination.
+ * @return Same as tpb_k_get_arg.
+ */
+int tpb_k_get_arg_i64(const char *name, int64_t *out);
+
+/**
+ * @brief Read a registered char argument.
+ * @param name Argument name.
+ * @param out  Non-NULL destination.
+ * @return Same as tpb_k_get_arg.
+ */
+int tpb_k_get_arg_char(const char *name, char *out);
+
+/**
+ * @brief Read a registered double argument.
+ * @param name Argument name.
+ * @param out  Non-NULL destination.
+ * @return Same as tpb_k_get_arg.
+ */
+int tpb_k_get_arg_double(const char *name, double *out);
+
+/**
  * @brief Allocate memory for output data in the TPB framework.
  * @param name The name of an output variable.
  * @param n The number of elements with 'dtype' defined in tpb_k_add_output.

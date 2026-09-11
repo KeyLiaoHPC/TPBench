@@ -84,7 +84,10 @@ function(tpbench_add_kernel)
         OUTPUT_NAME "tpbk_${_K_NAME}"
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
+        Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/mod/${_lib_target}"
     )
+    target_include_directories(${_lib_target} PRIVATE
+        "${CMAKE_BINARY_DIR}/mod/${_lib_target}")
     # GNU ld only; Apple ld has no --export-dynamic (dylibs export by default).
     if(UNIX AND NOT APPLE)
         target_link_options(${_lib_target} PRIVATE "-Wl,--export-dynamic")

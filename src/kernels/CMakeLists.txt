@@ -16,7 +16,7 @@ endif()
 
 set(TPB_KERNEL_CFLAGS "" CACHE STRING "C compile options for CPU kernels (empty = -O2 only)")
 set(TPB_KERNEL_CXXFLAGS "" CACHE STRING "C++/HIP compile options for ROCm kernels (empty = -O2 only)")
-set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for Fortran kernels (reserved; empty = -O2 only)")
+set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for Fortran kernels (empty = -O2 only)")
 set(TPB_KERNEL_LDFLAGS "" CACHE STRING "Link options for CPU kernels (empty = none)")
 
 function(tpb_kernel_apply_c_options _tgt)
@@ -45,6 +45,7 @@ function(tpb_kernel_lookup_link_def _kname _extra_out _cond_out)
             list(LENGTH _parts _n)
             if(_n GREATER 1)
                 list(GET _parts 1 _extra)
+                string(REPLACE "," ";" _extra "${_extra}")
             endif()
             if(_n GREATER 2)
                 list(GET _parts 2 _cond)
@@ -141,20 +142,26 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
     if(NOT EXISTS "${_kernel_source}")
         message(FATAL_ERROR "Kernel source not found: ${_kernel_source}")
     endif()
+    set(_kernel_sources "${_kernel_source}")
+    if("${_kpath}" STREQUAL "npb_mpi")
+        include(${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/npb_mpi_sources.cmake)
+        tpb_npb_mpi_sources("${_kname}" _npb_extra)
+        list(APPEND _kernel_sources ${_npb_extra})
+    endif()
 
     set(_so_target "tpbk_${_kname}")
 
     if(NOT "${_kextra}" STREQUAL "")
         tpbench_add_kernel(
             NAME ${_kname}
-            SOURCES "${_kernel_source}"
+            SOURCES ${_kernel_sources}
             LINK_LIBS ${_kextra}
             SKIP_INSTALL
         )
     else()
         tpbench_add_kernel(
             NAME ${_kname}
-            SOURCES "${_kernel_source}"
+            SOURCES ${_kernel_sources}
             SKIP_INSTALL
         )
     endif()
@@ -163,6 +170,32 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
     endif()
     if(TPB_SHOW_DEBUG)
         target_compile_definitions(${_so_target} PRIVATE TPB_K_DEBUG=1)
+    endif()
+    if("${_kpath}" STREQUAL "npb_mpi")
+        tpb_npb_mpi_bench_dir("${_kname}" _npb_bench)
+        string(TOUPPER "${_npb_bench}" _npb_bench_u)
+        target_include_directories(${_so_target} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/common
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/include
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/include/${_kname}
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/vendor/${_npb_bench}
+            ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/vendor/common
+            ${CMAKE_SOURCE_DIR}/src/include)
+        target_compile_definitions(${_so_target} PRIVATE
+            TPB_NPB_KERNEL_${_npb_bench_u})
+        if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+            target_compile_options(${_so_target} PRIVATE
+                $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>)
+        endif()
+        if(NOT "${_kname}" MATCHES "^(is_mpi|dt_mpi)$")
+            set_property(TARGET ${_so_target} PROPERTY LINKER_LANGUAGE Fortran)
+        endif()
+        if("${_kname}" STREQUAL "dt_mpi")
+            set_source_files_properties(
+                ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/vendor/common/randdp.c
+                PROPERTIES COMPILE_FLAGS "-std=gnu89")
+        endif()
     endif()
 
     tpb_set_install_rpath_tpbench_shlib(${_so_target})

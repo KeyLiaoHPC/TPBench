@@ -13,7 +13,7 @@ set(_tpb_cmake_help_doc_lines
     "TPB_KERNEL_TAGS|Comma-separated tags to select kernels (union with TPB_KERNELS)"
     "TPB_KERNEL_CFLAGS|C compile options for CPU kernels (empty = -O2 only; if set, replaces kernel C flags)"
     "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
-    "TPB_KERNEL_FFLAGS|Fortran kernel compile options (reserved; empty = -O2 when Fortran kernels exist)"
+    "TPB_KERNEL_FFLAGS|Fortran compile options for Fortran kernels (empty = -O2 only; if set, replaces kernel Fortran flags)"
     "TPB_KERNEL_LDFLAGS|Link options for CPU kernels (empty = none)"
     "TPB_CORE_STATIC_LIBS|Extra .a files linked into libtpbench.so (never MPI)"
     "TPB_KERNEL_STATIC_LIBS|Extra .a files linked into every CPU kernel .so (ordinary archive). Post-link audit fails the target if the load group has a strong unsatisfied U"

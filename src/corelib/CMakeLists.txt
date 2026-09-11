@@ -1,5 +1,6 @@
 set(TPB_CORELIB_SOURCES
     tpb-driver.c
+    tpb-fortran-abi.c
     tpb_corelib_state.c
     tpb-io.c
     tpb-stat.c

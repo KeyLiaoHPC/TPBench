@@ -1,0 +1,11 @@
+NPB 3.4.4 MPI sources in this directory are the NAS Parallel Benchmarks
+from NASA Ames. See README and README.install.
+
+Official archive:
+  https://www.nas.nasa.gov/assets/npb/NPB3.4.4.tar.gz
+
+SHA256 of that archive is recorded in NPB3.4.4.tar.gz.sha256.
+
+NASA grants permission to use, copy, distribute, and modify this software
+for any purpose with or without fee. Derived work should reference NPB 3.4.
+The software is provided "as is" without express or implied warranty.

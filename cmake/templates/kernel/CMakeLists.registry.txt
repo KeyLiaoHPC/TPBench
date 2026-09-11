@@ -2,18 +2,34 @@
 cmake_minimum_required(VERSION 3.16)
 project(tpbk_registry C)
 
-find_package(TPBench REQUIRED)
-
 if(NOT DEFINED TPB_KERNEL_NAME OR TPB_KERNEL_NAME STREQUAL "")
     message(FATAL_ERROR "TPB_KERNEL_NAME must be set, e.g. -DTPB_KERNEL_NAME=stream")
 endif()
 
+set(_kernel_sources tpbk_${TPB_KERNEL_NAME}.c)
+set(_npb_extra "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi_sources.cmake")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi_sources.cmake")
+    tpb_npb_mpi_sources("${TPB_KERNEL_NAME}" _npb_extra)
+    list(APPEND _kernel_sources ${_npb_extra})
+    if(NOT TPB_KERNEL_NAME MATCHES "^(is_mpi|dt_mpi)$")
+        enable_language(Fortran)
+    endif()
+endif()
+
+find_package(TPBench REQUIRED)
+
 # Optional link extras from kernel_link_defs.txt (-DTPB_KERNEL_LINK_LIBS=...)
 set(_kernel_link_libs "")
 if(DEFINED TPB_KERNEL_LINK_LIBS AND NOT "${TPB_KERNEL_LINK_LIBS}" STREQUAL "")
-    set(_kernel_link_libs ${TPB_KERNEL_LINK_LIBS})
+    string(REPLACE "," ";" _kernel_link_libs "${TPB_KERNEL_LINK_LIBS}")
     if("${TPB_KERNEL_LINK_LIBS}" MATCHES "MPI")
-        find_package(MPI REQUIRED)
+        if("${TPB_KERNEL_LINK_LIBS}" MATCHES "Fortran")
+            enable_language(Fortran)
+            find_package(MPI REQUIRED COMPONENTS C Fortran)
+        else()
+            find_package(MPI REQUIRED)
+        endif()
     endif()
 endif()
 
@@ -24,7 +40,24 @@ endif()
 
 tpbench_add_kernel(
     NAME        ${TPB_KERNEL_NAME}
-    SOURCES     tpbk_${TPB_KERNEL_NAME}.c
+    SOURCES     ${_kernel_sources}
     LINK_LIBS   ${_kernel_link_libs}
     STATIC_LIBS ${_kernel_static_libs}
 )
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi_sources.cmake")
+    tpb_npb_mpi_bench_dir("${TPB_KERNEL_NAME}" _npb_bench)
+    string(TOUPPER "${_npb_bench}" _npb_bench_u)
+    target_include_directories(tpbk_${TPB_KERNEL_NAME} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/common
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/${TPB_KERNEL_NAME}
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/${_npb_bench}
+        ${CMAKE_CURRENT_SOURCE_DIR}/vendor/common)
+    target_compile_definitions(tpbk_${TPB_KERNEL_NAME} PRIVATE
+        TPB_NPB_KERNEL_${_npb_bench_u})
+    if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+        target_compile_options(tpbk_${TPB_KERNEL_NAME} PRIVATE
+            $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>)
+    endif()
+endif()

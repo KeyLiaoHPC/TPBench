@@ -98,6 +98,7 @@ string(REPLACE "," ";" _tpb_sel_names "${TPB_KERNELS}")
 string(REPLACE "," ";" _tpb_sel_tags "${TPB_KERNEL_TAGS}")
 
 set(TPB_NEED_MPI FALSE)
+set(TPB_NEED_FORTRAN FALSE)
 file(STRINGS "${CMAKE_SOURCE_DIR}/src/kernels/kernel_list.cmake.in"
      _tpb_scan_kernel_lines)
 foreach(_line IN LISTS _tpb_scan_kernel_lines)
@@ -119,6 +120,9 @@ foreach(_line IN LISTS _tpb_scan_kernel_lines)
                     list(GET _lparts 2 _scan_kcond)
                     if(_scan_kcond STREQUAL "MPI_C_FOUND")
                         set(TPB_NEED_MPI TRUE)
+                    elseif(_scan_kcond STREQUAL "MPI_Fortran_FOUND")
+                        set(TPB_NEED_MPI TRUE)
+                        set(TPB_NEED_FORTRAN TRUE)
                     endif()
                 endif()
                 break()
@@ -139,11 +143,20 @@ foreach(_def IN LISTS TPB_ROCM_KERNEL_DEFS)
     endif()
 endforeach()
 
+if(TPB_NEED_FORTRAN)
+    enable_language(Fortran)
+    message(STATUS "Fortran enabled for selected Fortran kernel target(s)")
+endif()
+
 if(TPB_NEED_MPI)
     if(TPB_MPI_PATH AND IS_DIRECTORY "${TPB_MPI_PATH}")
         set(MPI_ROOT "${TPB_MPI_PATH}")
     endif()
-    find_package(MPI REQUIRED)
+    if(TPB_NEED_FORTRAN)
+        find_package(MPI REQUIRED COMPONENTS C Fortran)
+    else()
+        find_package(MPI REQUIRED)
+    endif()
     message(STATUS "MPI enabled for selected MPI kernel target(s) only (not linked to libtpbench)")
 endif()
 
@@ -265,6 +278,7 @@ install(TARGETS tpbench
 
 # Install only the generated flat tpbench.h (not separate tpb-unitdefs.h or tpb-public.h)
 install(FILES ${CMAKE_BINARY_DIR}/include/tpbench.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES ${CMAKE_SOURCE_DIR}/src/include/tpb.F90 DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Install CMake package config for out-of-tree kernel builds
 configure_file(

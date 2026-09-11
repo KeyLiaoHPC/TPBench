@@ -16,3 +16,12 @@ sum|default,bandwidth|simple
 staxpy|bandwidth,stanza|simple
 striad|bandwidth,stanza|simple
 stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
+bt_mpi|npb,mpi|npb_mpi
+sp_mpi|npb,mpi|npb_mpi
+lu_mpi|npb,mpi|npb_mpi
+cg_mpi|npb,mpi|npb_mpi
+mg_mpi|npb,mpi|npb_mpi
+ft_mpi|npb,mpi|npb_mpi
+ep_mpi|npb,mpi|npb_mpi
+is_mpi|npb,mpi|npb_mpi
+dt_mpi|npb,mpi|npb_mpi

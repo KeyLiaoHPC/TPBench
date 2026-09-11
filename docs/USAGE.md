@@ -591,6 +591,7 @@ CPU kernel names, tags, and source locations are declared in **`src/kernels/kern
 # Format: NAME|TAGS|PATH
 stream|default,bandwidth|simple
 stream_mpi|bandwidth,mpi|streaming_memory_access_mpi
+bt_mpi|npb,mpi|npb_mpi
 ```
 
 **`PATH`** is relative to `src/kernels/` and must contain **`tpbk_<NAME>.c`**. Special link libraries and build conditions (for example MPI) remain in **`cmake/TPBenchKernelRegistry.cmake`** as **`TPB_CPU_KERNEL_LINK_DEFS`**.

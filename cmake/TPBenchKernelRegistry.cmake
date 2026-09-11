@@ -12,6 +12,15 @@ set(TPB_CPU_KERNEL_LINK_DEFS
     # "axpy_mpi|MPI::MPI_C|MPI_C_FOUND"
     # "rtriad_mpi|MPI::MPI_C|MPI_C_FOUND"
     # "sum_mpi|MPI::MPI_C|MPI_C_FOUND"
+    "bt_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "sp_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "lu_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "cg_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "mg_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "ft_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "ep_mpi|MPI::MPI_C,MPI::MPI_Fortran|MPI_Fortran_FOUND"
+    "is_mpi|MPI::MPI_C|MPI_C_FOUND"
+    "dt_mpi|MPI::MPI_C|MPI_C_FOUND"
 )
 
 set(TPB_ROCM_KERNEL_DEFS

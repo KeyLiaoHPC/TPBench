@@ -60,7 +60,7 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | `-DCMAKE_C_FLAGS="..."` | *(empty)* | Global C compile options; post-build writes `compilation.c_flags`. |
 | `-DTPB_KERNEL_CFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** CPU kernel C compile options (`src/kernels/CMakeLists.txt`). |
 | `-DTPB_KERNEL_CXXFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** ROCm/HIP kernel compile options (`cmake/TPBenchGpuKernelsRocm.cmake`). |
-| `-DTPB_KERNEL_FFLAGS="..."` | *(empty → `-O2`)* | Reserved for future Fortran kernels. |
+| `-DTPB_KERNEL_FFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** Fortran kernel compile options. Such as NPB-MPI Fortran kernels. |
 | `-DTPB_KERNEL_LDFLAGS="..."` | *(empty)* | Link options for CPU kernel targets and out-of-tree **`tpbench_add_kernel`**. |
 | `-DTPB_KERNEL_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into CPU kernels as ordinary archives (same toolchain family). Post-link audit fails the target if the load group has a strong unsatisfied `U`. |
 | `-DTPB_CORE_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into `libtpbench.so` (never MPI; referenced objects only). |

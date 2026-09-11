@@ -60,7 +60,7 @@ TPBench 配置、编译和测试。
 | `-DCMAKE_C_FLAGS="..."`                      | *（空）*         | 全局 C 编译选项；post-build 写入 `compilation.c_flags`。                               |
 | `-DTPB_KERNEL_CFLAGS="..."`                  | *（空 → `-O2`）* | 非空时**替换** CPU kernel 的 C 编译选项（`src/kernels/CMakeLists.txt`）。                 |
 | `-DTPB_KERNEL_CXXFLAGS="..."`                | *（空 → `-O2`）* | 非空时**替换** ROCm/HIP kernel 编译选项（`cmake/TPBenchGpuKernelsRocm.cmake`）。         |
-| `-DTPB_KERNEL_FFLAGS="..."`                  | *（空 → `-O2`）* | 预留给未来 Fortran kernel。                                                        |
+| `-DTPB_KERNEL_FFLAGS="..."`                  | *（空 → `-O2`）* | 非空时替换 Fortran kernel 编译选项。                 |
 | `-DTPB_ENABLE_OPENMP=ON`                     | `OFF`         | 为已选中的测试内核添加 OpenMP 编译/链接。                                                    |
 | `-DTPB_USE_AVX512=ON`                        | `OFF`         | 全工程定义 `TPB_USE_AVX512`。                                                      |
 | `-DTPB_USE_AVX2=ON`                          | `OFF`         | 定义 `TPB_USE_AVX2`。                                                           |

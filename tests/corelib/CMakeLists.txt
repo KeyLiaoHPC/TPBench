@@ -243,11 +243,27 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     tpb_add_subcase(A12 A12.3 classify_mismatch test-elf-export corelib)
 endif()
 
+# --- Fortran/typed ABI (Pack A13) ---
+add_executable(test-fortran-abi EXCLUDE_FROM_ALL
+    test_fortran_abi.c
+)
+target_include_directories(test-fortran-abi PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test-fortran-abi PRIVATE tpbench m)
+set_target_properties(test-fortran-abi PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${TPB_TEST_RUNTIME_OUTPUT_DIRECTORY}"
+    LIBRARY_OUTPUT_DIRECTORY "${TPB_TEST_LIBRARY_OUTPUT_DIRECTORY}"
+    ARCHIVE_OUTPUT_DIRECTORY "${TPB_TEST_ARCHIVE_OUTPUT_DIRECTORY}"
+)
+tpb_add_subcase(A13 A13.1 elapsed_ns      test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.2 elapsed_scaled  test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.3 elapsed_reject  test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.4 get_arg_null    test-fortran-abi corelib)
+
 # Aggregate targets
 add_custom_target(test_corelib
     DEPENDS test-tpb-run-pli test-strftime test-raf test-1d-array test-capsule
             test-kernel-record test-tpblog test-errcode test-rtenv-env-snapshot
-            test-tag-norm
+            test-tag-norm test-fortran-abi
 )
 if(TARGET test-elf-export)
     add_dependencies(test_corelib test-elf-export)

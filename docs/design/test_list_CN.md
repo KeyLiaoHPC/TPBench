@@ -84,6 +84,10 @@
 | A12.1 | `utils/tpb-elf-export.c` | 验证 `libdep.so` 含强 `U` 且 plugin `DT_NEEDED` 它时，`audit-needed` 非零退出，stderr 含 `undefined symbol` 与 `libdep`。 |
 | A12.2 | `utils/tpb-elf-export.c` | 验证 `classify-dso` 根据 `.comment` / `libirc` 输出 `gcc` / `clang_rt` / `intel` 之一。 |
 | A12.3 | `utils/tpb-elf-export.c` | 验证去掉原 `.comment` 后，写入 Intel / clang 注释的两个 DSO 分类族不同。 |
+| A13.1 | `corelib/tpb-fortran-abi.c` | 验证 `tpb_timer_elapsed_seconds` 将纳秒 elapsed 转为秒。 |
+| A13.2 | `corelib/tpb-fortran-abi.c` | 验证微秒、毫秒、秒单位换算。 |
+| A13.3 | `corelib/tpb-fortran-abi.c` | 验证空指针与非墙钟单位返回错误。 |
+| A13.4 | `corelib/tpb-fortran-abi.c` | 验证 typed `tpb_k_get_arg_*` 拒绝 NULL 输出指针。 |
 
 ## B 类 — CLI 单元与功能测试
 
@@ -202,3 +206,4 @@
 | C4.2 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake`, `cmake/` | 验证构建树已 stage CMake 包与 kernel 模板；同名模板从两个目录构建后 active 版本可切换，非活跃版本存入 `lib/inactive/`，版本计数正确跟踪。 |
 | C5.1 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证 `kernel list` 显示 Tags 列和 N/A 状态，多 kernel 构建（staxpy,striad）生成 `.so` 并消除 N/A。 |
 | C6.1 | `cmake/`, `corelib/rafdb/` | 验证 `cmake --install` 将 kernel/runtime_environment 元数据同步至空/部分前缀，并尊重 `TPB_INSTALL_RAFDB` 覆盖策略。 |
+| C7.1 | `kernels/npb_mpi/`, `tpbcli/run/` | 验证 NPB-MPI 九个 kernel 已登记；同一 `.so` 可跑 class S 与 W；`ep_mpi`/`is_mpi`/`cg_mpi`/`bt_mpi`/`sp_mpi` 在 4 进程 Class S 下 Verification 成功并写入 Time/Mop/s/verified；非法 class 或非法进程数失败。 |
