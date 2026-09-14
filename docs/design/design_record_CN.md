@@ -1054,6 +1054,8 @@ Start Time (UTC)     TBatch ID                                 Type        NTask
 | **TPBFOM** | 关键指标 |
 | **TPBVERIFYVAR** | 写入 record 的正确性/精度验证变量 |
 | **TPBLINK** | 跨记录链接（`TaskID` / `KernelID` / `DeriveTo`） |
+| **PERRANK** | 本 MPI rank 自己测得的值 |
+| **AGGREGATE** | 跨 rank 归约后的值，仅 rank 0 写入 |
 
 `tpb_k_add_arg` 自动追加 **TPBINPUT**（ENV 来源再追加 **TPBENVVAR**）；`tpb_k_add_output` 自动追加 **TPBOUTPUT**。旧标签 `TPBARG`/`TPBOUT`/`FOM`/`INPARM` 已直接替换，无兼容别名；升级后请清理工作区 rafdb 并重新注册。内核帮助在 `Parameters::*` 之外打印一张 **Data Records** 表，列出带上述预设 tag 的静态定义。
 

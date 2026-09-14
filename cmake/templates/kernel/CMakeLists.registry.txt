@@ -6,6 +6,8 @@ if(NOT DEFINED TPB_KERNEL_NAME OR TPB_KERNEL_NAME STREQUAL "")
     message(FATAL_ERROR "TPB_KERNEL_NAME must be set, e.g. -DTPB_KERNEL_NAME=stream")
 endif()
 
+set(TPB_NPB_TIMER_FLAG "0" CACHE STRING "NPB section timers for npb kernels: 0=off, 1=on")
+
 set(_kernel_sources tpbk_${TPB_KERNEL_NAME}.c)
 set(_npb_extra "")
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi_sources.cmake")
@@ -55,7 +57,8 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi_sources.cmake")
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/${_npb_bench}
         ${CMAKE_CURRENT_SOURCE_DIR}/vendor/common)
     target_compile_definitions(tpbk_${TPB_KERNEL_NAME} PRIVATE
-        TPB_NPB_KERNEL_${_npb_bench_u})
+        TPB_NPB_KERNEL_${_npb_bench_u}
+        NPB_TIMER_FLAG=${TPB_NPB_TIMER_FLAG})
     if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
         target_compile_options(tpbk_${TPB_KERNEL_NAME} PRIVATE
             $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>)

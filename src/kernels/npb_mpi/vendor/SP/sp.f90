@@ -229,6 +229,8 @@
      &                 0, comm_setup, error)
        call MPI_Reduce(t1, tmaxg, t_last+2, dp_type, MPI_MAX,  &
      &                 0, comm_setup, error)
+       call tpb_npb_set_timer_vectors_f(t_last+2, t1, tming, tmaxg,  &
+     &      tsum, no_nodes)
 
        if (node .eq. 0) then
           write(*, 800) no_nodes

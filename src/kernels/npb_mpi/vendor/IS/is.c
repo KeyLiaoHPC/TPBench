@@ -1113,6 +1113,8 @@ int npb_is_run( void )
                     MPI_MAX,
                     0,
                     comm_work );
+        tpb_npb_set_timer_vectors(T_LAST + 1, t1, tmin, tmax, tsum,
+                                  comm_size);
 
         if( my_rank == 0 )
         {

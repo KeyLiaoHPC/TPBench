@@ -61,6 +61,13 @@
       subroutine check_timer_flag(timeron)
       implicit none
       logical timeron
-      timeron = .false.
+      interface
+         function tpb_npb_check_timer_flag()  &
+     &        bind(C, name="tpb_npb_check_timer_flag")
+            use iso_c_binding
+            integer(c_int) :: tpb_npb_check_timer_flag
+         end function tpb_npb_check_timer_flag
+      end interface
+      timeron = (tpb_npb_check_timer_flag() .ne. 0)
       return
       end

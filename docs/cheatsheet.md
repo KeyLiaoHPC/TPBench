@@ -61,6 +61,7 @@ Each CTest case first builds its target via `tests/RunBuiltTest.cmake`, then run
 | `-DTPB_KERNEL_CFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** CPU kernel C compile options (`src/kernels/CMakeLists.txt`). |
 | `-DTPB_KERNEL_CXXFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** ROCm/HIP kernel compile options (`cmake/TPBenchGpuKernelsRocm.cmake`). |
 | `-DTPB_KERNEL_FFLAGS="..."` | *(empty → `-O2`)* | When non-empty, **replaces** Fortran kernel compile options. Such as NPB-MPI Fortran kernels. |
+| `-DTPB_NPB_TIMER_FLAG=0\|1` | `0` | Compile NPB section timers into npb kernels (`NPB_TIMER_FLAG`). |
 | `-DTPB_KERNEL_LDFLAGS="..."` | *(empty)* | Link options for CPU kernel targets and out-of-tree **`tpbench_add_kernel`**. |
 | `-DTPB_KERNEL_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into CPU kernels as ordinary archives (same toolchain family). Post-link audit fails the target if the load group has a strong unsatisfied `U`. |
 | `-DTPB_CORE_STATIC_LIBS="..."` | *(empty)* | Extra `.a` files linked into `libtpbench.so` (never MPI; referenced objects only). |
@@ -184,6 +185,7 @@ Subcommands: `list`/`ls`, `get`, `set`, `init`, `build`, `backup-inactive`. **`l
 | `--static-libs <archives>` | Same-family `.a` → **`-DTPB_KERNEL_STATIC_LIBS`** (ordinary archive). Does not override the kernel/dep toolchain check or load-group audit. |
 | `--tpb-home <path>` | Install root for **`find_package(TPBench)`** and **`lib/`** install (only on **`build`**). |
 | `--cc`, `--cflags`, `--cxx`, `--cxxflags`, `--fc`, `--fcflags` | Compiler overrides forwarded to CMake configure. |
+| `--npb-timer-flag <0\|1>` | Compile NPB section timers; forwarded as **`-DTPB_NPB_TIMER_FLAG`**. |
 | `-D<var>=<value>` | Extra CMake cache definitions (repeatable). |
 
 

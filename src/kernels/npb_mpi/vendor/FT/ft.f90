@@ -777,6 +777,8 @@
      &                MPI_MIN, 0, comm_solve, ierr)
       call MPI_Reduce(t1, tmaxg, t_max+2, MPI_DOUBLE_PRECISION,  &
      &                MPI_MAX, 0, comm_solve, ierr)
+      call tpb_npb_set_timer_vectors_f(t_max+2, t1, tming, tmaxg,  &
+     &     tsum, np_min)
 
       if (me .ne. 0) return
       write(*, 800) np_min

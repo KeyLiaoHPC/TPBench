@@ -206,4 +206,3 @@
 | C4.2 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake`, `cmake/` | 验证构建树已 stage CMake 包与 kernel 模板；同名模板从两个目录构建后 active 版本可切换，非活跃版本存入 `lib/inactive/`，版本计数正确跟踪。 |
 | C5.1 | `tpbcli/kernel/`, `cmake/TPBenchKernelRegistry.cmake` | 验证 `kernel list` 显示 Tags 列和 N/A 状态，多 kernel 构建（staxpy,striad）生成 `.so` 并消除 N/A。 |
 | C6.1 | `cmake/`, `corelib/rafdb/` | 验证 `cmake --install` 将 kernel/runtime_environment 元数据同步至空/部分前缀，并尊重 `TPB_INSTALL_RAFDB` 覆盖策略。 |
-| C7.1 | `kernels/npb_mpi/`, `tpbcli/run/` | 验证 NPB-MPI 九个 kernel 已登记；同一 `.so` 可跑 class S 与 W；`ep_mpi`/`is_mpi`/`cg_mpi`/`bt_mpi`/`sp_mpi` 在 4 进程 Class S 下 Verification 成功并写入 Time/Mop/s/verified；非法 class 或非法进程数失败。 |

@@ -1251,6 +1251,8 @@ Prefer letters, digits, underscores, and spaces in `name`. **Comma** separates t
 | **TPBFOM**       | Figure of merit; primary outcome metrics.                                                      |
 | **TPBVERIFYVAR** | Correctness / precision verification variables persisted in the record.                        |
 | **TPBLINK**      | Internal linkage (name=`TaskID` / `KernelID` / `DeriveTo`).                                    |
+| **PERRANK**      | Value measured by and belonging to this MPI rank alone.                                        |
+| **AGGREGATE**    | Value reduced across ranks; recorded on rank 0 only.                                           |
 | **EVENT**        | In-run samples (counters, markers).                                                            |
 | **PERF**         | Performance-related metrics, figures, indicators, and counters.                                |
 | **POWER**        | Energy / power.                                                                                |

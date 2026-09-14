@@ -18,6 +18,7 @@ set(TPB_KERNEL_CFLAGS "" CACHE STRING "C compile options for CPU kernels (empty 
 set(TPB_KERNEL_CXXFLAGS "" CACHE STRING "C++/HIP compile options for ROCm kernels (empty = -O2 only)")
 set(TPB_KERNEL_FFLAGS "" CACHE STRING "Fortran compile options for Fortran kernels (empty = -O2 only)")
 set(TPB_KERNEL_LDFLAGS "" CACHE STRING "Link options for CPU kernels (empty = none)")
+set(TPB_NPB_TIMER_FLAG "0" CACHE STRING "NPB section timers for npb kernels: 0=off, 1=on")
 
 function(tpb_kernel_apply_c_options _tgt)
     if("${TPB_KERNEL_CFLAGS}" STREQUAL "")
@@ -183,7 +184,8 @@ foreach(_line IN LISTS _tpb_kernel_list_lines)
             ${CMAKE_CURRENT_SOURCE_DIR}/npb_mpi/vendor/common
             ${CMAKE_SOURCE_DIR}/src/include)
         target_compile_definitions(${_so_target} PRIVATE
-            TPB_NPB_KERNEL_${_npb_bench_u})
+            TPB_NPB_KERNEL_${_npb_bench_u}
+            NPB_TIMER_FLAG=${TPB_NPB_TIMER_FLAG})
         if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
             target_compile_options(${_so_target} PRIVATE
                 $<$<COMPILE_LANGUAGE:Fortran>:-ffree-line-length-none>)

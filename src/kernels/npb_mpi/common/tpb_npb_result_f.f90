@@ -24,3 +24,21 @@
      &     cls)
       return
       end
+
+      subroutine tpb_npb_set_timer_vectors_f(nslot, t1, tming, tmaxg,  &
+     &     tsum, nprocs_div)
+      implicit none
+      integer nslot, nprocs_div
+      double precision t1(*), tming(*), tmaxg(*), tsum(*)
+      interface
+         subroutine tpb_npb_set_timer_vectors(nslot, t1, tming, tmaxg,  &
+     &        tsum, nprocs_div) bind(C, name="tpb_npb_set_timer_vectors")
+            use iso_c_binding
+            integer(c_int), value :: nslot, nprocs_div
+            real(c_double) :: t1(*), tming(*), tmaxg(*), tsum(*)
+         end subroutine tpb_npb_set_timer_vectors
+      end interface
+      call tpb_npb_set_timer_vectors(nslot, t1, tming, tmaxg, tsum,  &
+     &     nprocs_div)
+      return
+      end

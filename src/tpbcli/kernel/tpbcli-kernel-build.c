@@ -34,6 +34,7 @@ typedef struct {
     const char *fcflags;
     const char *ldflags;
     const char *static_libs;
+    const char *npb_timer_flag;
     const char *cmake_defs[TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS];
     int ncmake_defs;
 } tpbcli_kernel_build_opts_t;
@@ -110,6 +111,7 @@ _sf_print_build_usage(void)
                     "[--cc <compiler>] [--cflags <flags>] "
                     "[--cxx <compiler>] [--cxxflags <flags>] "
                     "[--fc <compiler>] [--fcflags <flags>] "
+                    "[--npb-timer-flag <0|1>] "
                     "[--static-libs <archives>]\n"
                     "\n"
                     "  --dir defaults to TPB_HOME; with the default, kernel source "
@@ -128,7 +130,9 @@ _sf_print_build_usage(void)
                     "  provides the symbol body; do not stuff a runtime .a into "
                     "the kernel.\n"
                     "  --static-libs lists same-family .a files linked as ordinary "
-                    "archives.\n");
+                    "archives.\n"
+                    "  --npb-timer-flag compiles NPB section timers into npb "
+                    "kernels (0=off, 1=on).\n");
 }
 
 static int
@@ -230,6 +234,15 @@ _sf_parse_build_args(int argc, char **argv,
             args->opts.fcflags = argv[++i];
         } else if (strcmp(argv[i], "--static-libs") == 0 && i + 1 < argc) {
             args->opts.static_libs = argv[++i];
+        } else if (strcmp(argv[i], "--npb-timer-flag") == 0 && i + 1 < argc) {
+            args->opts.npb_timer_flag = argv[++i];
+            if (strcmp(args->opts.npb_timer_flag, "0") != 0 &&
+                strcmp(args->opts.npb_timer_flag, "1") != 0) {
+                tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO,
+                    TPBLOG_FLAG_DIRECT,
+                    "kernel build: --npb-timer-flag must be 0 or 1.\n");
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_CLI_FAIL, NULL);
+            }
         } else if (strncmp(argv[i], "-D", 2) == 0) {
             if (args->opts.ncmake_defs >= TPBCLI_KERNEL_BUILD_MAX_CMAKE_DEFS) {
                 tpblog_printf_f(TPB_LOG_LEVEL_ERROR, TPBLOG_TYPE_ERRO, TPBLOG_FLAG_DIRECT, "kernel build: too many -D options.\n");
@@ -438,6 +451,14 @@ _sf_build_cmake_cmd(char *cmd, size_t cmdlen,
             n += snprintf(cmd + n, cmdlen - (size_t)n,
                           " -DTPB_KERNEL_STATIC_LIBS=\"%s\"",
                           opts->static_libs);
+            if (n < 0 || (size_t)n >= cmdlen) {
+                TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
+            }
+        }
+        if (opts->npb_timer_flag != NULL) {
+            n += snprintf(cmd + n, cmdlen - (size_t)n,
+                          " -DTPB_NPB_TIMER_FLAG=%s",
+                          opts->npb_timer_flag);
             if (n < 0 || (size_t)n >= cmdlen) {
                 TPB_FAIL(TPB_MOD_CLI_KERNEL, TPBE_FILE_IO_FAIL, NULL);
             }

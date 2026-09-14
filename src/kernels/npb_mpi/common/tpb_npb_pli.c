@@ -3,30 +3,60 @@
  * Shared NPB-MPI PLI registration, entry, and MPI capsule write.
  */
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __linux__
+#include <sched.h>
+#endif
 #include <mpi.h>
 
 #include "tpb_npb_pli.h"
 #include "tpb_npb_class.h"
 #include "tpb_npb_result.h"
 #include "tpb_npb_timers.h"
+#include "tpb_npb_timer_meta.h"
 
+#ifndef NPB_TIMER_FLAG
+#define NPB_TIMER_FLAG 0
+#endif
+
+#define TPB_NPB_TAG_AGG_FOM  TPB_TAG_AGGREGATE "," TPB_TAG_FOM
+#define TPB_NPB_TAG_AGG_VER  TPB_TAG_AGGREGATE "," TPB_TAG_VERIFYVAR
+#define TPB_NPB_TAG_AGG_IN   TPB_TAG_AGGREGATE "," TPB_TAG_INPUT
+#define TPB_NPB_SAMP_DEF     1048576
+
+static int _sf_add_scalar_out(const char *name, const char *tag,
+                              const char *note, TPB_DTYPE dtype,
+                              TPB_UNIT_T unit);
+static int _sf_alloc_dbl_point(const char *name, double val);
+static int _sf_alloc_i32_point(const char *name, int32_t val);
+static int _sf_bcast_result(MPI_Comm comm, int rank);
+static int _sf_cpu_id(void);
+static int _sf_emit_darr(const char *name, const char *tag,
+                         const char *note, const double *src,
+                         uint64_t n);
+static int _sf_emit_dpoint(const char *name, const char *tag,
+                           const char *note, double val);
+static int _sf_emit_i64point(const char *name, const char *tag,
+                             const char *note, int64_t val);
+static int _sf_fill_identity(int rank, int nprocs, const char *bench);
+static int _sf_fill_official(void);
+static int _sf_fill_outputs(int rank, int nprocs, const char *bench);
+static int _sf_fill_timers(int rank, const char *bench);
 static int _sf_mpi_fail_if(int mpi_rc);
 static int _sf_mpik_corelib_init(MPI_Comm comm,
                                  const char *tpb_workspace_path);
 static int _sf_mpik_write_task(tpb_k_rthdl_t *hdl, int exit_code,
                                unsigned char *task_id_out,
                                unsigned char *tcap_id_out);
-static int _sf_add_scalar_out(const char *name, const char *tag,
-                              const char *note, TPB_DTYPE dtype,
-                              TPB_UNIT_T unit);
-static int _sf_fill_outputs(void);
-static int _sf_bcast_result(MPI_Comm comm, int rank);
 
 static int
 _sf_mpi_fail_if(int mpi_rc)
@@ -51,7 +81,6 @@ tpb_npb_pli_register(const char *kname, const char *note,
 {
     int err;
     int nclass;
-    int64_t dtimer[2];
 
     if (kname == NULL || note == NULL || class_list == NULL) {
         return TPBE_NULLPTR_ARG;
@@ -69,11 +98,9 @@ tpb_npb_pli_register(const char *kname, const char *note,
         return err;
     }
 
-    dtimer[0] = 0;
-    dtimer[1] = 1;
-    err = tpb_k_add_arg("detailed_timer", NULL,
-        "NPB extra timers (dummy in first draft)", "0",
-        TPB_PARM_CLI | TPB_INT64_T | TPB_PARM_LIST, 2, dtimer);
+    err = tpb_k_add_arg_i64_range("timer_sample_max", NULL,
+        "Max per-call samples stored per NPB timer slot", "1048576",
+        1, (int64_t)1 << 30);
     if (err != 0) {
         return err;
     }
@@ -87,50 +114,84 @@ tpb_npb_pli_register(const char *kname, const char *note,
         }
     }
 
-    err = _sf_add_scalar_out("Time", TPB_TAG_FOM,
-        "Official NPB Time in seconds (MPI_MAX of the total-timer slot).",
+    err = _sf_add_scalar_out("mpi_rank", TPB_TAG_PERRANK,
+        "MPI rank of this process (join key for per-rank analysis).",
+        TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_add_scalar_out("mpi_nprocs", TPB_TAG_PERRANK,
+        "MPI communicator size for this run.",
+        TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_add_scalar_out("cpu_id", TPB_TAG_PERRANK,
+        "sched_getcpu() at record time; -1 if unavailable.",
+        TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_add_scalar_out("Time_local", TPB_TAG_PERRANK,
+        "This rank's official total-timer slot (timer_read, not reduced).",
         TPB_DOUBLE_T, TPB_UNIT_SS);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("Mop/s", TPB_TAG_FOM,
-        "Official NPB Mop/s (DT: bytes transmitted rate).",
+    err = _sf_add_scalar_out("npb_timer_flag", TPB_TAG_INPUT,
+        "Compiled NPB_TIMER_FLAG (0=section timers off, 1=on).",
+        TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_add_scalar_out("Time", TPB_NPB_TAG_AGG_FOM,
+        "Official NPB Time in seconds (MPI_MAX of the total-timer slot). "
+        "Recorded on rank 0 only.",
+        TPB_DOUBLE_T, TPB_UNIT_SS);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_add_scalar_out("Mop/s", TPB_NPB_TAG_AGG_FOM,
+        "Official NPB Mop/s (DT: bytes transmitted rate). "
+        "Recorded on rank 0 only.",
         TPB_DOUBLE_T, TPB_UNIT_OPS);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("verified", TPB_TAG_VERIFYVAR,
-        "Official NPB verification flag (1=SUCCESSFUL).",
+    err = _sf_add_scalar_out("verified", TPB_NPB_TAG_AGG_VER,
+        "Official NPB verification flag (1=SUCCESSFUL). "
+        "Recorded on rank 0 only.",
         TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("niter", TPB_TAG_INPUT,
-        "Official NPB iteration count.",
+    err = _sf_add_scalar_out("niter", TPB_NPB_TAG_AGG_IN,
+        "Official NPB iteration count. Recorded on rank 0 only.",
         TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("n1", TPB_TAG_INPUT,
-        "Official NPB size n1 (or problem size).",
+    err = _sf_add_scalar_out("n1", TPB_NPB_TAG_AGG_IN,
+        "Official NPB size n1 (or problem size). Recorded on rank 0 only.",
         TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("n2", TPB_TAG_INPUT,
-        "Official NPB size n2 (0 if unused).",
+    err = _sf_add_scalar_out("n2", TPB_NPB_TAG_AGG_IN,
+        "Official NPB size n2 (0 if unused). Recorded on rank 0 only.",
         TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("n3", TPB_TAG_INPUT,
-        "Official NPB size n3 (0 if unused).",
+    err = _sf_add_scalar_out("n3", TPB_NPB_TAG_AGG_IN,
+        "Official NPB size n3 (0 if unused). Recorded on rank 0 only.",
         TPB_INT32_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
     }
-    err = _sf_add_scalar_out("npb_class", TPB_TAG_INPUT,
-        "NPB problem class letter recorded from the official report.",
+    err = _sf_add_scalar_out("npb_class", TPB_NPB_TAG_AGG_IN,
+        "NPB problem class letter from the official report. "
+        "Recorded on rank 0 only.",
         TPB_CHAR_T, TPB_UNAME_UNDEF | TPB_UBASE_BASE);
     if (err != 0) {
         return err;
@@ -140,7 +201,138 @@ tpb_npb_pli_register(const char *kname, const char *note,
 }
 
 static int
-_sf_fill_outputs(void)
+_sf_cpu_id(void)
+{
+#ifdef __linux__
+    return sched_getcpu();
+#else
+    return -1;
+#endif
+}
+
+static int
+_sf_alloc_i32_point(const char *name, int32_t val)
+{
+    int err;
+    int32_t *p;
+
+    p = NULL;
+    err = tpb_k_alloc_output(name, 1, &p);
+    if (err != 0 || p == NULL) {
+        return (err != 0) ? err : TPBE_MALLOC_FAIL;
+    }
+    *p = val;
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_alloc_dbl_point(const char *name, double val)
+{
+    int err;
+    double *p;
+
+    p = NULL;
+    err = tpb_k_alloc_output(name, 1, &p);
+    if (err != 0 || p == NULL) {
+        return (err != 0) ? err : TPBE_MALLOC_FAIL;
+    }
+    *p = val;
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_emit_dpoint(const char *name, const char *tag, const char *note,
+                double val)
+{
+    int err;
+
+    err = tpb_k_add_output(name, tag, note, TPB_DOUBLE_T,
+        TPB_UNIT_SS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N |
+        TPB_UATTR_SHAPE_POINT);
+    if (err != 0) {
+        return err;
+    }
+    return _sf_alloc_dbl_point(name, val);
+}
+
+static int
+_sf_emit_darr(const char *name, const char *tag, const char *note,
+              const double *src, uint64_t n)
+{
+    int err;
+    double *p;
+
+    if (n == 0 || src == NULL) {
+        return TPBE_SUCCESS;
+    }
+    err = tpb_k_add_output(name, tag, note, TPB_DOUBLE_T,
+        TPB_UNIT_SS | TPB_UATTR_CAST_Y | TPB_UATTR_TRIM_N |
+        TPB_UATTR_SHAPE_1D);
+    if (err != 0) {
+        return err;
+    }
+    p = NULL;
+    err = tpb_k_alloc_output(name, n, &p);
+    if (err != 0 || p == NULL) {
+        return (err != 0) ? err : TPBE_MALLOC_FAIL;
+    }
+    memcpy(p, src, (size_t)n * sizeof(double));
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_emit_i64point(const char *name, const char *tag, const char *note,
+                  int64_t val)
+{
+    int err;
+    int64_t *p;
+
+    err = tpb_k_add_output(name, tag, note, TPB_INT64_T,
+        TPB_UNAME_UNDEF | TPB_UBASE_BASE | TPB_UATTR_CAST_Y |
+        TPB_UATTR_TRIM_N | TPB_UATTR_SHAPE_POINT);
+    if (err != 0) {
+        return err;
+    }
+    p = NULL;
+    err = tpb_k_alloc_output(name, 1, &p);
+    if (err != 0 || p == NULL) {
+        return (err != 0) ? err : TPBE_MALLOC_FAIL;
+    }
+    *p = val;
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_fill_identity(int rank, int nprocs, const char *bench)
+{
+    int err;
+
+    err = _sf_alloc_i32_point("mpi_rank", (int32_t)rank);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_alloc_i32_point("mpi_nprocs", (int32_t)nprocs);
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_alloc_i32_point("cpu_id", (int32_t)_sf_cpu_id());
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_alloc_dbl_point("Time_local",
+        tpb_npb_timer_read(tpb_npb_timer_total_slot(bench)));
+    if (err != 0) {
+        return err;
+    }
+    err = _sf_alloc_i32_point("npb_timer_flag", (int32_t)NPB_TIMER_FLAG);
+    if (err != 0) {
+        return err;
+    }
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_fill_official(void)
 {
     int err;
     double *ptime;
@@ -203,6 +395,132 @@ _sf_fill_outputs(void)
     *pn3 = tpb_npb_result_n3();
     *pclass = tpb_npb_result_class();
     return TPBE_SUCCESS;
+}
+
+static int
+_sf_fill_timers(int rank, const char *bench)
+{
+    const tpb_npb_timer_meta_t *rows;
+    int n;
+    int i;
+    int base;
+    int vi;
+    int err;
+    char nbuf[64];
+    size_t nsamp;
+    uint64_t ndrop;
+
+    if (NPB_TIMER_FLAG == 0) {
+        return TPBE_SUCCESS;
+    }
+    rows = tpb_npb_timer_meta(bench, &n);
+    if (rows == NULL || n <= 0) {
+        return TPBE_SUCCESS;
+    }
+    base = tpb_npb_timer_slot_base(bench);
+    for (i = 0; i < n; i++) {
+        vi = rows[i].slot - base;
+        if (rows[i].derived == 0) {
+            nsamp = tpb_npb_timer_nsample(rows[i].slot);
+            err = _sf_emit_darr(rows[i].name, TPB_TAG_PERRANK,
+                rows[i].note, tpb_npb_timer_samples(rows[i].slot),
+                (uint64_t)nsamp);
+            if (err != 0) {
+                return err;
+            }
+            if (snprintf(nbuf, sizeof(nbuf), "%s_total",
+                    rows[i].name) >= (int)sizeof(nbuf)) {
+                return TPBE_KERN_ARG_FAIL;
+            }
+            err = _sf_emit_dpoint(nbuf, TPB_TAG_PERRANK, rows[i].note,
+                tpb_npb_timer_read(rows[i].slot));
+            if (err != 0) {
+                return err;
+            }
+            if (snprintf(nbuf, sizeof(nbuf), "%s_ncall",
+                    rows[i].name) >= (int)sizeof(nbuf)) {
+                return TPBE_KERN_ARG_FAIL;
+            }
+            err = _sf_emit_i64point(nbuf, TPB_TAG_PERRANK,
+                "Number of timer_stop calls for this slot on this rank.",
+                (int64_t)tpb_npb_timer_ncall(rows[i].slot));
+            if (err != 0) {
+                return err;
+            }
+            ndrop = tpb_npb_timer_ndropped(rows[i].slot);
+            if (ndrop != 0) {
+                if (snprintf(nbuf, sizeof(nbuf), "%s_ndropped",
+                        rows[i].name) >= (int)sizeof(nbuf)) {
+                    return TPBE_KERN_ARG_FAIL;
+                }
+                err = _sf_emit_i64point(nbuf, TPB_TAG_PERRANK,
+                    "Samples dropped after timer_sample_max on this rank.",
+                    (int64_t)ndrop);
+                if (err != 0) {
+                    return err;
+                }
+            }
+        }
+        if (tpb_npb_timer_vec_has()) {
+            if (snprintf(nbuf, sizeof(nbuf), "%s_derived",
+                    rows[i].name) >= (int)sizeof(nbuf)) {
+                return TPBE_KERN_ARG_FAIL;
+            }
+            err = _sf_emit_dpoint(nbuf, TPB_TAG_PERRANK, rows[i].note,
+                tpb_npb_timer_vec_local(vi));
+            if (err != 0) {
+                return err;
+            }
+            if (rank == 0) {
+                if (snprintf(nbuf, sizeof(nbuf), "%s_min",
+                        rows[i].name) >= (int)sizeof(nbuf)) {
+                    return TPBE_KERN_ARG_FAIL;
+                }
+                err = _sf_emit_dpoint(nbuf, TPB_TAG_AGGREGATE,
+                    rows[i].note, tpb_npb_timer_vec_min(vi));
+                if (err != 0) {
+                    return err;
+                }
+                if (snprintf(nbuf, sizeof(nbuf), "%s_max",
+                        rows[i].name) >= (int)sizeof(nbuf)) {
+                    return TPBE_KERN_ARG_FAIL;
+                }
+                err = _sf_emit_dpoint(nbuf, TPB_TAG_AGGREGATE,
+                    rows[i].note, tpb_npb_timer_vec_max(vi));
+                if (err != 0) {
+                    return err;
+                }
+                if (snprintf(nbuf, sizeof(nbuf), "%s_avg",
+                        rows[i].name) >= (int)sizeof(nbuf)) {
+                    return TPBE_KERN_ARG_FAIL;
+                }
+                err = _sf_emit_dpoint(nbuf, TPB_TAG_AGGREGATE,
+                    rows[i].note, tpb_npb_timer_vec_avg(vi));
+                if (err != 0) {
+                    return err;
+                }
+            }
+        }
+    }
+    return TPBE_SUCCESS;
+}
+
+static int
+_sf_fill_outputs(int rank, int nprocs, const char *bench)
+{
+    int err;
+
+    err = _sf_fill_identity(rank, nprocs, bench);
+    if (err != 0) {
+        return err;
+    }
+    if (rank == 0) {
+        err = _sf_fill_official();
+        if (err != 0) {
+            return err;
+        }
+    }
+    return _sf_fill_timers(rank, bench);
 }
 
 static int
@@ -284,7 +602,7 @@ tpb_npb_pli_entry(int argc, char **argv, const char *kname,
     const char *ev;
     char cls;
     char graph;
-    int64_t detailed;
+    int64_t sample_max;
     int run_rc;
     int rec_err;
 
@@ -298,7 +616,7 @@ tpb_npb_pli_entry(int argc, char **argv, const char *kname,
     memset(kernel_id_bin, 0, sizeof(kernel_id_bin));
     handle_index = 0;
     graph = 'B';
-    detailed = 0;
+    sample_max = TPB_NPB_SAMP_DEF;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -399,8 +717,10 @@ tpb_npb_pli_entry(int argc, char **argv, const char *kname,
             MPI_Finalize();
             return err;
         }
-        (void)tpb_k_get_arg_i64("detailed_timer", &detailed);
-        (void)detailed;
+        if (tpb_k_get_arg_i64("timer_sample_max", &sample_max) != 0) {
+            sample_max = TPB_NPB_SAMP_DEF;
+        }
+        tpb_npb_timers_set_sample_cap((size_t)sample_max);
         if (has_graph) {
             err = tpb_k_get_arg_char("graph", &graph);
             if (err != 0) {
@@ -459,8 +779,9 @@ tpb_npb_pli_entry(int argc, char **argv, const char *kname,
             return err;
         }
 
-        err = _sf_fill_outputs();
+        err = _sf_fill_outputs(rank, nprocs, bench);
         if (err != 0) {
+            tpb_npb_timers_free();
             tpb_driver_clean_handle(&handle);
             MPI_Finalize();
             return err;
@@ -492,6 +813,7 @@ tpb_npb_pli_entry(int argc, char **argv, const char *kname,
                 handle_index);
         }
 
+        tpb_npb_timers_free();
         tpb_driver_clean_handle(&handle);
         MPI_Finalize();
         if (cap_err != TPBE_SUCCESS) {

@@ -15,6 +15,7 @@ set(_tpb_cmake_help_doc_lines
     "TPB_KERNEL_CXXFLAGS|C++/HIP compile options for ROCm kernels (empty = -O2 only; if set, replaces)"
     "TPB_KERNEL_FFLAGS|Fortran compile options for Fortran kernels (empty = -O2 only; if set, replaces kernel Fortran flags)"
     "TPB_KERNEL_LDFLAGS|Link options for CPU kernels (empty = none)"
+    "TPB_NPB_TIMER_FLAG|NPB section timers compiled into npb kernels: 0=off (default), 1=on"
     "TPB_CORE_STATIC_LIBS|Extra .a files linked into libtpbench.so (never MPI)"
     "TPB_KERNEL_STATIC_LIBS|Extra .a files linked into every CPU kernel .so (ordinary archive). Post-link audit fails the target if the load group has a strong unsatisfied U"
     "TPB_MPI_PATH|MPI install root for selected MPI kernel targets only (libtpbench does not link MPI; empty = auto-detect)"

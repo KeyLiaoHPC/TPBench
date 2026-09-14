@@ -463,6 +463,8 @@
      &                0, comm_solve, ierr)
       call MPI_Reduce(t1, tmaxg, t_last+2, dp_type, MPI_MAX,  &
      &                0, comm_solve, ierr)
+      call tpb_npb_set_timer_vectors_f(t_last+2, t1, tming, tmaxg,  &
+     &     tsum, nprocs)
 
       if (me .eq. 0) then
          write(*, 800) nprocs

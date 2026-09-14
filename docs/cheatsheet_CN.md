@@ -61,6 +61,7 @@ TPBench 配置、编译和测试。
 | `-DTPB_KERNEL_CFLAGS="..."`                  | *（空 → `-O2`）* | 非空时**替换** CPU kernel 的 C 编译选项（`src/kernels/CMakeLists.txt`）。                 |
 | `-DTPB_KERNEL_CXXFLAGS="..."`                | *（空 → `-O2`）* | 非空时**替换** ROCm/HIP kernel 编译选项（`cmake/TPBenchGpuKernelsRocm.cmake`）。         |
 | `-DTPB_KERNEL_FFLAGS="..."`                  | *（空 → `-O2`）* | 非空时替换 Fortran kernel 编译选项。                 |
+| `-DTPB_NPB_TIMER_FLAG=0\|1`                  | `0`           | 将 NPB 分段计时器编进 npb kernel（`NPB_TIMER_FLAG`）。 |
 | `-DTPB_ENABLE_OPENMP=ON`                     | `OFF`         | 为已选中的测试内核添加 OpenMP 编译/链接。                                                    |
 | `-DTPB_USE_AVX512=ON`                        | `OFF`         | 全工程定义 `TPB_USE_AVX512`。                                                      |
 | `-DTPB_USE_AVX2=ON`                          | `OFF`         | 定义 `TPB_USE_AVX2`。                                                           |
@@ -180,6 +181,7 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 | `--ldflags <flags>` | 链接选项 → **`TPB_KERNEL_LDFLAGS`** / **`compilation.kernel_ldflags`**。 |
 | `--static-libs <archives>` | 同族 `.a` → **`TPB_KERNEL_STATIC_LIBS`**（普通归档按需链接）。不能用来绕过工具链检查或加载组审计。 |
 | `--tpb-home`、`-D`、编译器选项 | 同英文 cheatsheet。 |
+| `--npb-timer-flag <0\|1>` | 编译 NPB 分段计时器，转发为 **`-DTPB_NPB_TIMER_FLAG`**。 |
 
 
 Registry：**`src/kernels/kernel_list.cmake.in`**（`NAME|TAGS|PATH`）。

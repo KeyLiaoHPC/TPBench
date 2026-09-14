@@ -25,6 +25,7 @@ TPBench 支持通过 CMake 启用 SIMD（`TPB_USE_AVX512` 等）以及为已选�
 | `-DTPB_USE_KP_SVE=ON` | OFF | 启用ARM SVE指令集（aarch64） |
 | `-DTPB_ENABLE_OPENMP=ON` | OFF | 为已选中的 kernel 目标添加 OpenMP（不决定编哪些内核） |
 | `-DTPB_MPI_PATH=</path/to/mpi>` | 空 | 选中 MPI kernel 时的 MPI 根目录（仅 kernel .so 链接 MPI，libtpbench 不链接；空则自动探测） |
+| `-DTPB_NPB_TIMER_FLAG=0\|1` | 0 | 将 NPB 分段计时器编进 npb kernel（`NPB_TIMER_FLAG`）。0=关，1=开。问题规模仍用 `--kargs class=`，不是编译期 CLASS。 |
 
 示例：在 x86_64 平台上启用 AVX-512 指令集编译
 ```bash
@@ -520,8 +521,11 @@ tpbcli kernel build --kernel-tag bandwidth
 
 # 树外工程（显式源码目录）：
 tpbcli kernel build --dir ./mykern --kernel mykern \
-  [--ldflags "-Wl,--as-needed"] [--cflags "-O2"]
+  [--ldflags "-Wl,--as-needed"] [--cflags "-O2"] \
+  [--npb-timer-flag 0]
 ```
+
+**`--npb-timer-flag <0|1>`** 把 NPB 分段计时器编进 npb kernel，对应 **`-DTPB_NPB_TIMER_FLAG`**。默认 0。
 
 **`--kernel`** 与 **`--kernel-tag`** 互斥且必须指定其一；均支持逗号分隔，可用单/双引号包裹。**`--dir`** 默认为 **`TPB_HOME`**；默认时按 **`kernel_list.cmake.in`** 解析 **`$TPB_HOME/src/kernels/<PATH>`**。多内核顺序构建，逐个输出 PASS/FAIL 及汇总。 **`--ldflags`** 映射为 **`TPB_KERNEL_LDFLAGS`** 并写入 **`compilation.kernel_ldflags`**。kernel 编译器与其直接科学依赖（MPI、netcdf 等）必须属于同一工具链族（`gcc` / `clang_rt` / `intel`）；gcc kernel 链接 AOCC/Intel `libmpi` 会在配置/链接阶段失败。**`--static-libs`** 只接受同族 `.a`，按普通归档按需链接。链接后会递归检查 `dlopen` 加载组：若存在未被默认可见定义满足的强 `U` 符号，构建失败并删除 `.so`，不会安装。应重编译依赖（例如把 compiler-rt 链进 OpenMPI/`libmpi.so`，消除残留 `U`），不要把运行时 `.a` 塞进 kernel。`libtpbench.so` 不链接 MPI。`tpbcli run --kernel stream_mpi` 仍需 **`--wrapper mpirun`**。
 

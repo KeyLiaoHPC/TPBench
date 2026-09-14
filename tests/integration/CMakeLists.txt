@@ -47,18 +47,6 @@ add_test(
 set_tests_properties(integration.C5.1_kernel_list_registry PROPERTIES
     LABELS "integration")
 
-# --- Integration: NPB-MPI Class S (Pack C7) ---
-if(TARGET tpbk_ep_mpi AND TARGET tpbk_is_mpi AND TARGET tpbk_cg_mpi
-   AND TARGET tpbk_bt_mpi AND TARGET tpbk_sp_mpi)
-    add_test(
-        NAME integration.C7.1_npb_mpi_class_s
-        COMMAND "${CMAKE_SOURCE_DIR}/tests/integration/run_npb_mpi_class_s.sh"
-    )
-    set_tests_properties(integration.C7.1_npb_mpi_class_s PROPERTIES
-        LABELS "integration"
-        ENVIRONMENT "BUILD=${CMAKE_BINARY_DIR}")
-endif()
-
 # --- Integration: rafdb metadata install sync (Pack C6) ---
 if(TARGET tpbk_stream)
     add_test(

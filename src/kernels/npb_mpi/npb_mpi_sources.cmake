@@ -19,6 +19,7 @@ function(tpb_npb_mpi_sources _kname _outvar)
         "${_common}/tpb_npb_timers.c"
         "${_common}/tpb_npb_class.c"
         "${_common}/tpb_npb_result.c"
+        "${_common}/tpb_npb_timer_meta.c"
         "${_common}/tpb_npb_pli.c"
     )
 

@@ -25,6 +25,7 @@ TPBench supports enabling SIMD instruction sets (`TPB_USE_AVX512`, `TPB_USE_AVX2
 | `-DTPB_USE_KP_SVE=ON` | OFF | Enable ARM SVE instruction set (aarch64) |
 | `-DTPB_ENABLE_OPENMP=ON` | OFF | Add OpenMP to built kernel targets (does not select kernels) |
 | `-DTPB_MPI_PATH=</path/to/mpi>` | empty | MPI root for selected MPI kernel targets only (`libtpbench` does not link MPI; empty = auto-detect) |
+| `-DTPB_NPB_TIMER_FLAG=0\|1` | 0 | Compile NPB section timers into npb kernels (`NPB_TIMER_FLAG`). 0=off, 1=on. Class is still `--kargs class=`, not a compile-time CLASS. |
 
 Example: Enable AVX-512 instruction set compilation on x86_64 platform
 ```bash
@@ -674,7 +675,8 @@ tpbcli kernel build --kernel-tag bandwidth
 tpbcli kernel build --dir ./mykern --kernel mykern \
   [--tpb-home /path/to/tpbench] \
   [--ldflags "-Wl,--as-needed"] \
-  [-DTPB_KERNEL_CFLAGS=-O3] [--cc gcc] [--cflags "-O3 -march=native"]
+  [-DTPB_KERNEL_CFLAGS=-O3] [--cc gcc] [--cflags "-O3 -march=native"] \
+  [--npb-timer-flag 0]
 
 # MPI kernel from installed registry (use MPI wrapper compiler):
 tpbcli kernel build --kernel stream_mpi --cc mpicc
@@ -709,6 +711,7 @@ Kernel source files should include only the installed flat header **`#include "t
 - **`--ldflags <flags>`** — passed to CMake as **`-DTPB_KERNEL_LDFLAGS=...`** and recorded as **`compilation.kernel_ldflags`**.
 - **`--static-libs <archives>`** — same-family `.a` files, passed as **`-DTPB_KERNEL_STATIC_LIBS`** and recorded as **`compilation.static_libs`**. Linked as ordinary archives (as-needed). Cannot paper over a mismatched `libmpi` or leftover `U` in a dependency.
 - **`--tpb-home`** — accepted only on **`kernel build`**. Priority: **`--tpb-home`**, then **`$TPB_HOME`**, then **`$HOME/.tpbench`**.
+- **`--npb-timer-flag <0|1>`** — compile NPB section timers into npb kernels; forwarded as **`-DTPB_NPB_TIMER_FLAG=<v>`**. Default is 0 (off). Equivalent to **`cmake -B … -DTPB_NPB_TIMER_FLAG=1`**.
 
 Multiple kernels build sequentially; each prints **PASS** or **FAIL**, followed by a summary line. The command exits nonzero if any selected kernel failed.
 

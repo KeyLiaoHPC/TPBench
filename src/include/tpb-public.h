@@ -70,6 +70,18 @@ typedef uint32_t TPB_DTYPE_U32;
  * @brief Preset tag: cross-record links (TaskID / KernelID / DeriveTo).
  */
 #define TPB_TAG_LINK       "TPBLINK"
+/**
+ * @brief Preset tag: value measured by and belonging to this rank alone.
+ *
+ * Used on MPI per-rank outputs. Combines with TPBOUTPUT after normalize.
+ */
+#define TPB_TAG_PERRANK    "PERRANK"
+/**
+ * @brief Preset tag: value reduced across ranks; present only on rank 0.
+ *
+ * Used on MPI aggregate outputs. Combines with TPBOUTPUT after normalize.
+ */
+#define TPB_TAG_AGGREGATE  "AGGREGATE"
 
 /* tpblog line tag types; rendered as [INFO], [WARN], or [ERRO] */
 #define TPB_LOG_TAG_NOTE  0x00U
