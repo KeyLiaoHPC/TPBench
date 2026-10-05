@@ -453,6 +453,14 @@ tpb_argp_set_timer(const char *timer_name)
         timer.tick = tick_clock_gettime;
         timer.tock = tock_clock_gettime;
         timer.get_stamp = get_time_clock_gettime;
+    } else if (strcmp(timer_name, "mpi_wtime") == 0) {
+        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "mpi_wtime");
+        timer.unit = TPB_UNIT_NS;
+        timer.dtype = TPB_INT64_T;
+        timer.init = init_timer_mpi_wtime;
+        timer.tick = tick_mpi_wtime;
+        timer.tock = tock_mpi_wtime;
+        timer.get_stamp = get_time_mpi_wtime;
 #if defined(__x86_64__) || defined(_M_X64)
     } else if (strcmp(timer_name, "tsc_asym") == 0) {
         snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "tsc_asym");
@@ -462,6 +470,24 @@ tpb_argp_set_timer(const char *timer_name)
         timer.tick = tick_tsc_asym;
         timer.tock = tock_tsc_asym;
         timer.get_stamp = get_time_tsc_asym;
+    } else if (strcmp(timer_name, "rdtscp") == 0) {
+        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "rdtscp");
+        timer.unit = TPB_UNIT_NS;
+        timer.dtype = TPB_INT64_T;
+        timer.init = init_timer_rdtscp;
+        timer.tick = tick_rdtscp;
+        timer.tock = tock_rdtscp;
+        timer.get_stamp = get_time_rdtscp;
+#endif
+#ifdef __aarch64__
+    } else if (strcmp(timer_name, "cntvct_el0") == 0) {
+        snprintf(timer.name, TPBM_NAME_STR_MAX_LEN, "cntvct_el0");
+        timer.unit = TPB_UNIT_NS;
+        timer.dtype = TPB_INT64_T;
+        timer.init = init_timer_cntvct_el0;
+        timer.tick = tick_cntvct_el0;
+        timer.tock = tock_cntvct_el0;
+        timer.get_stamp = get_time_cntvct_el0;
 #endif
     } else {
         TPB_FAIL(TPB_MOD_ARGP, TPBE_CLI_FAIL, NULL);

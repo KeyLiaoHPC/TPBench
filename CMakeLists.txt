@@ -196,11 +196,18 @@ endif()
 # Timer-related sources (absolute paths for use in sub-CMakeLists)
 set(TPB_TIMER_SOURCES
     ${CMAKE_SOURCE_DIR}/src/timers/clock_gettime.c
+    ${CMAKE_SOURCE_DIR}/src/timers/mpi_wtime.c
 )
 
-# Add TSC timer for x86_64/amd64 platforms
+# Add TSC timers for x86_64/amd64 platforms
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64|AMD64")
     list(APPEND TPB_TIMER_SOURCES ${CMAKE_SOURCE_DIR}/src/timers/tsc_asym.c)
+    list(APPEND TPB_TIMER_SOURCES ${CMAKE_SOURCE_DIR}/src/timers/rdtscp.c)
+endif()
+
+# Add CNTVCT timer for aarch64 platforms
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+    list(APPEND TPB_TIMER_SOURCES ${CMAKE_SOURCE_DIR}/src/timers/cntvct_el0.c)
 endif()
 
 # ============================================================================

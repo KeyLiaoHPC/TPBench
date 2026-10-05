@@ -876,7 +876,10 @@ Timer functions for precise timing measurements. Defined in `timers/timers.h`.
 | Timer Name | Platform | Description |
 |------------|----------|-------------|
 | `TIMER_CLOCK_GETTIME` | All | POSIX clock_gettime timer |
-| `TIMER_TSC_ASYM` | x86_64 | Time Stamp Counter timer |
+| `TIMER_MPI_WTIME` | All | MPI_Wtime (symbol resolved at init; needs MPI loaded) |
+| `TIMER_TSC_ASYM` | x86_64 | Paoloni TSC timer (cycles) |
+| `TIMER_RDTSCP` | x86_64 | RDTSCP timer (converted to nanoseconds) |
+| `TIMER_CNTVCT_EL0` | aarch64 | CNTVCT_EL0 timer (converted to nanoseconds) |
 
 ---
 

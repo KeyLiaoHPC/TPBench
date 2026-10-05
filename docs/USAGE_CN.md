@@ -185,11 +185,11 @@ TPBench 默认使用 `clock_gettime` 获取 `CLOCK_MONOTONIC_RAW` 时钟（Linux
 
 | `<timer_name>` | 单位（缩写） | 描述 |
 | -------- | -------- | -------- |
-| clock_gettime | nanosecond(ns) | POSIX clock_gettime with CLOCK_MONOTONIC_RAW |
-| tsc_asym | cycle(cy) | A RDTSCP-based timing method provided by Gabriele Paoloni in Intel White Paper 324264-001 |
-| cpu_clk_p | cycle(cy) | Count the CPU_CLK_UNHALTED.THREAD_P event. |
-| cntvct | tick(tk) | The CNTVCT counter. Only available on the aarch64 platform. |
-| pncctr | cycle(cy) | The CNTVCT counter. Only available on the aarch64 platform. |
+| clock_gettime | nanosecond(ns) | POSIX clock_gettime with CLOCK_MONOTONIC |
+| mpi_wtime | nanosecond(ns) | MPI_Wtime（进程中需已加载 MPI） |
+| tsc_asym | cycle(cy) | Paoloni CPUID+RDTSC / RDTSCP+CPUID（仅 x86_64） |
+| rdtscp | nanosecond(ns) | RDTSCP 计数换算为 ns（仅 x86_64） |
+| cntvct_el0 | nanosecond(ns) | CNTVCT_EL0 计数换算为 ns（仅 aarch64） |
 
 一种计时方法定义了时钟源、读取时钟源的函数、数据格式、存储格式、存储方法和时钟计算方法。因此，相同的评测内核和参数在使用不同的计时方法时，可能得到不一样的输出结果和输出单位。
 

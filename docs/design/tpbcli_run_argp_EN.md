@@ -94,7 +94,7 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // Current kernel name
 | `--wrapper <app>` | Before first `--kernel`: append to global chain; after a kernel: append to segment chain for that kernel | Immediate |
 | `--wrapper-args '...'` | Child of `--wrapper`; append args to most recent link in the active chain | Immediate |
 | `-og` / `--override-global` | Kernel child; skip global chain when binding wrappers to this kernel | Immediate |
-| `--timer <name>` | Set timer backend (clock_gettime / tsc_asym) | Immediate |
+| `--timer <name>` | Set timer backend (clock_gettime / mpi_wtime / tsc_asym / rdtscp / cntvct_el0) | Immediate |
 | `--outargs ...` | Set output formatting (unit_cast, sigbit_trim) | Immediate |
 
 **Key design**: `--kargs-dim` uses **deferred expansion** — it only collects configurations until the next `--kernel` or the end of parsing triggers `expand_dim_handles()`. This allows `--kargs`-set parameters to serve as a common base across all dim combinations.

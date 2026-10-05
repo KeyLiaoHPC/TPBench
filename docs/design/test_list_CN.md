@@ -88,6 +88,9 @@
 | A13.2 | `corelib/tpb-fortran-abi.c` | 验证微秒、毫秒、秒单位换算。 |
 | A13.3 | `corelib/tpb-fortran-abi.c` | 验证空指针与非墙钟单位返回错误。 |
 | A13.4 | `corelib/tpb-fortran-abi.c` | 验证 typed `tpb_k_get_arg_*` 拒绝 NULL 输出指针。 |
+| A13.5 | `corelib/tpb-argp.c` | 验证 `rdtscp` 仅在 x86_64 上可设置，`cntvct_el0` 仅在 aarch64 上可设置。 |
+| A13.6 | `src/timers/mpi_wtime.c` | 验证无 MPI 时 `init_timer_mpi_wtime` 返回非零。 |
+| A13.7 | `src/timers/rdtscp.c`, `src/timers/cntvct_el0.c` | 验证本架构 tick 计时器 init 后短循环的 elapsed 秒数大于 0 且小于 10。 |
 
 ## B 类 — CLI 单元与功能测试
 

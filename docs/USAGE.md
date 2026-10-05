@@ -252,11 +252,11 @@ TPBench defaults to using `clock_gettime` to get the `CLOCK_MONOTONIC_RAW` clock
 
 | `<timer_name>` | Unit (abbr.) | Description |
 | -------- | -------- | -------- |
-| clock_gettime | nanosecond(ns) | POSIX clock_gettime with CLOCK_MONOTONIC_RAW |
-| tsc_asym | cycle(cy) | A RDTSCP-based timing method provided by Gabriele Paoloni in Intel White Paper 324264-001 |
-| cpu_clk_p | cycle(cy) | Count the CPU_CLK_UNHALTED.THREAD_P event. |
-| cntvct | tick(tk) | The CNTVCT counter. Only available on the aarch64 platform. |
-| pncctr | cycle(cy) | The CNTVCT counter. Only available on the aarch64 platform. |
+| clock_gettime | nanosecond(ns) | POSIX clock_gettime with CLOCK_MONOTONIC |
+| mpi_wtime | nanosecond(ns) | MPI_Wtime (requires MPI in the process) |
+| tsc_asym | cycle(cy) | Paoloni CPUID+RDTSC / RDTSCP+CPUID (x86_64 only) |
+| rdtscp | nanosecond(ns) | RDTSCP ticks converted to ns (x86_64 only) |
+| cntvct_el0 | nanosecond(ns) | CNTVCT_EL0 ticks converted to ns (aarch64 only) |
 
 One timing method defines clock source, function to read clock source, data format, storage format, storage method, and clock calculation method. Therefore, the same evaluation kernel and parameters using different timing methods may produce different output results and output units.
 

@@ -94,7 +94,7 @@ char pending_kernel_name[TPBM_NAME_STR_MAX_LEN]; // 当前内核名
 | `--wrapper <app>` | 第一个 `--kernel` 前：追加到全局链；某 `--kernel` 后：追加到该 kernel 的局部链 | 立即 |
 | `--wrapper-args '...'` | `--wrapper` 子选项；向当前链中最近的 wrapper 追加参数 | 立即 |
 | `-og` / `--override-global` | `--kernel` 子选项；绑定 wrapper 时跳过全局链 | 立即 |
-| `--timer <name>` | 设置定时器类型（clock_gettime / tsc_asym） | 立即 |
+| `--timer <name>` | 设置定时器类型（clock_gettime / mpi_wtime / tsc_asym / rdtscp / cntvct_el0） | 立即 |
 | `--outargs ...` | 设置输出格式（unit_cast, sigbit_trim） | 立即 |
 
 **关键设计**：`--kargs-dim` 是**延迟展开**的——它只收集配置，直到遇到下一个 `--kernel` 或解析结束时才触发 `expand_dim_handles()`。这使得 `--kargs` 设置的参数可以作为所有 dim 组合的公共基础。

@@ -131,7 +131,7 @@ Workspace resolution order: `--workspace` → `$TPB_WORKSPACE` → `$HOME/.tpben
 | `--wrapper <app>` | Start a PLI wrapper link (chains in order; global before first `--kernel`, local after `--kernel`). |
 | `--wrapper-args '<args>'` | Arguments for the most recent `--wrapper` (quoted string). |
 | `-og` / `--override-global` | Skip global wrapper chain for the current kernel (keep local wrappers). |
-| `--timer <name>` | Timer backend; preset default `clock_gettime`. Candidates: `clock_gettime`; `tsc_asym` (x86_64 only). |
+| `--timer <name>` | Timer backend; preset default `clock_gettime`. Candidates: `clock_gettime`; `mpi_wtime` (MPI in process); `tsc_asym` / `rdtscp` (x86_64); `cntvct_el0` (aarch64). |
 | `--outargs <key=val,...>` | Output format: `unit_cast=<int>`, `sigbit_trim=<int>` (defaults 0 and 5). |
 | `--dry-run` / `-d` | Validate arguments and print commands without executing kernels. |
 | `--help` / `-h` | Subcommand or per-kernel help (`--kernel <name> --help` lists parameters/outputs). |

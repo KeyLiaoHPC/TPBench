@@ -95,7 +95,10 @@ tpb_npb_timers_bind(void)
         return TPBE_KERN_ARG_FAIL;
     }
     if (s_timer.init != NULL) {
-        (void)s_timer.init();
+        if (s_timer.init() != 0) {
+            s_bound = 0;
+            return TPBE_KERN_ARG_FAIL;
+        }
     }
     for (i = 0; i < TPB_NPB_NTIMER; i++) {
         s_start[i] = 0;

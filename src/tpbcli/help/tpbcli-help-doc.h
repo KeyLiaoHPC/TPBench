@@ -34,7 +34,8 @@
     "        --outdir    <PATH> (Default: $CWD/workspace/<tpbrun-YYYYMMDDThhmmss>)\n" \
     "                    Optional.Path to the data directory of the current test. \n" \
     "        --timer     <timer_name> (Optional, default: clock_gettime)\n" \
-    "                    Optional. Timer name. Supported: clock_gettime, tsc_asym.\n" \
+    "                    Optional. Timer name. Supported: clock_gettime, mpi_wtime,\n" \
+    "                    tsc_asym (x86_64), rdtscp (x86_64), cntvct_el0 (aarch64).\n" \
     "        -l          List available kernels.\n" \
     "        -h, --help  Print usages of the `tpbcli run` subcommand.\n" \
     "    b, benchmark: Run predefined benchmark suites.\n" \

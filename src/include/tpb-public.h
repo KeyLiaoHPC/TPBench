@@ -714,7 +714,7 @@ int tpb_k_finalize_pli(void);
  * Intended to be called from PLI kernel entry functions. Sets up the timer based
  * on the provided timer name.
  *
- * @param timer_name Timer name (e.g., "clock_gettime", "tsc_asym")
+ * @param timer_name Timer name (e.g., "clock_gettime", "mpi_wtime", "rdtscp")
  * @return 0 on success, error code otherwise.
  */
 int tpb_k_pli_set_timer(const char *timer_name);
@@ -888,7 +888,8 @@ int tpb_argp_set_kargs_tokstr(int nchar, char *tokstr, int *narg);
 
 /**
  * @brief Set the timer for the driver by name.
- * @param timer_name Timer name ("clock_gettime", "tsc_asym").
+ * @param timer_name Timer name ("clock_gettime", "mpi_wtime", "tsc_asym",
+ *                   "rdtscp", "cntvct_el0").
  * @return TPBE_SUCCESS or error code.
  */
 int tpb_argp_set_timer(const char *timer_name);

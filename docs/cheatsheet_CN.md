@@ -128,7 +128,7 @@ tpbcli [--workspace PATH] <run/r>|<kernel/k>|<databases/db>|<benchmark/b>|<help/
 | `--wrapper <app>` | 启动 PLI wrapper 链（按顺序链接；第一个 `--kernel` 之前为全局，之后为当前 kernel 局部）。 |
 | `--wrapper-args '<args>'` | 追加到最近一个 `--wrapper` 的参数（引号字符串）。 |
 | `-og` / `--override-global` | 当前 kernel 忽略全局 wrapper 链（保留局部 wrapper）。 |
-| `--timer <name>`          | 计时后端；预设默认 `clock_gettime`。候选：`clock_gettime`；`tsc_asym`（仅 x86_64）。 |
+| `--timer <name>`          | 计时后端；预设默认 `clock_gettime`。候选：`clock_gettime`；`mpi_wtime`（进程需 MPI）；`tsc_asym` / `rdtscp`（仅 x86_64）；`cntvct_el0`（仅 aarch64）。 |
 | `--outargs <key=val,...>` | 输出格式：`unit_cast=<int>`、`sigbit_trim=<int>`（默认 0 和 5）。              |
 | `--dry-run` / `-d`        | 校验参数并打印命令，不实际执行 kernel。                                            |
 | `--help` / `-h`           | 子命令或 per-kernel 帮助（`--kernel <name> --help` 列出参数/输出）。              |

@@ -258,6 +258,9 @@ tpb_add_subcase(A13 A13.1 elapsed_ns      test-fortran-abi corelib)
 tpb_add_subcase(A13 A13.2 elapsed_scaled  test-fortran-abi corelib)
 tpb_add_subcase(A13 A13.3 elapsed_reject  test-fortran-abi corelib)
 tpb_add_subcase(A13 A13.4 get_arg_null    test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.5 set_timer_arch  test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.6 mpi_wtime_no_mpi test-fortran-abi corelib)
+tpb_add_subcase(A13 A13.7 tick_ns_positive test-fortran-abi corelib)
 
 # Aggregate targets
 add_custom_target(test_corelib
